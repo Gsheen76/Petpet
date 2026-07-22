@@ -1,8 +1,10 @@
-# 🐶 Sheen 桌面宠物
+# 🐶 Pet陪它
 
-一只住在桌面上的陪伴小狗 Sheen，会走路、撒娇、陪你聊天、要吃的要贴贴。
+一只住在桌面上的陪伴小狗，会走路、撒娇、陪你聊天、要吃的要贴贴。
 
-![Sheen](icons/icon-256.png)
+<p align="center">
+  <img src="banner.png" width="300" alt="Pet陪它">
+</p>
 
 ## ✨ 功能
 
@@ -79,13 +81,12 @@ Petpet/
 ├── pet.py              主程序
 ├── buddy_ai.py         AI 引擎（人设/记忆/流式）
 ├── chat_poc.py         命令行聊天测试
-├── config.json         API key 配置
+├── config.json         API key 配置（需自填）
+├── banner.png          宣传图
 ├── poses/              7 张姿势 PNG
 │   ├── idle.png  happy.png  sad.png
 │   ├── eat.png   sleep.png  drag.png  close.png
-├── icons/              各尺寸图标
-├── make_pet_svg.py     SVG 生成脚本（备用）
-└── make_icons.py       图标生成脚本
+└── icons/              各尺寸图标
 ```
 
 ## 📜 许可
