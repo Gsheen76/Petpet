@@ -1,0 +1,21 @@
+# build artifacts
+build/
+dist/
+__pycache__/
+*.pyc
+*.spec
+
+# user data (generated at runtime)
+pet_state.json
+pet_settings.json
+memory.json
+config.json
+
+# packaged output
+*.zip
+SheenPet.exe
+
+# temp
+*.log
+*.bak
+poses/clean/
