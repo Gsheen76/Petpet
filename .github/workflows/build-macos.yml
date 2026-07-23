@@ -1,0 +1,43 @@
+name: Build macOS app
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15-intel
+            arch: intel
+          - runner: macos-15
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Build Petpet.app
+        run: |
+          chmod +x scripts/build_macos.sh
+          ./scripts/build_macos.sh
+
+      - name: Create portable zip
+        run: |
+          VERSION="$(python3 -c 'import pet; print(pet.VERSION)')"
+          ditto -c -k --sequesterRsrc --keepParent dist/Petpet.app "dist/Petpet-v${VERSION}-macOS-${{ matrix.arch }}.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Petpet-macOS-${{ matrix.arch }}
+          path: |
+            dist/Petpet.app
+            dist/Petpet-v*-macOS-${{ matrix.arch }}.zip

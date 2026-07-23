@@ -14,11 +14,17 @@ Config: set env ZHIPU_API_KEY, or create config.json next to this file:
 import os, sys, json, time, urllib.request, urllib.error
 import hmac, hashlib, base64
 
-# data files next to exe (frozen) or script (dev)
+# Writable data lives beside the exe on Windows and in Application Support
+# inside a packaged macOS app.
 if getattr(sys, 'frozen', False):
-    _DATA_DIR = os.path.dirname(sys.executable)
+    if sys.platform == "darwin":
+        _DATA_DIR = os.path.join(
+            os.path.expanduser("~/Library/Application Support"), "Petpet")
+    else:
+        _DATA_DIR = os.path.dirname(sys.executable)
 else:
     _DATA_DIR = os.path.dirname(os.path.abspath(__file__))
+os.makedirs(_DATA_DIR, exist_ok=True)
 CONFIG_PATH = os.path.join(_DATA_DIR, "config.json")
 MEMORY_PATH = os.path.join(_DATA_DIR, "memory.json")
 

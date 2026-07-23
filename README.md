@@ -26,13 +26,26 @@
 
 ## 🚀 使用
 
-### 方式一：直接运行 exe（推荐）
+### Windows：直接运行 exe
 
 1. 下载 `Petpet.exe` 和 `config.json`
 2. 放在同一个文件夹
 3. 双击 `Petpet.exe`
 
-### 方式二：从源码运行
+### macOS：运行 App
+
+1. 下载并解压 macOS 发布包
+2. 将 `Petpet.app` 拖入“应用程序”
+3. 首次启动若被 Gatekeeper 拦截，请在“系统设置 → 隐私与安全性”中选择“仍要打开”
+4. 点击菜单栏中的 Sheen 图标，可打开数据文件夹并编辑 `config.json`
+
+macOS 的配置、记忆和状态保存在：
+
+```text
+~/Library/Application Support/Petpet
+```
+
+### 从源码运行
 
 ```bash
 pip install PyQt5
@@ -64,6 +77,8 @@ python pet.py
 
 ## 📦 打包
 
+### Windows
+
 ```bash
 pip install pyinstaller
 pyinstaller --onefile --noconsole --name Petpet ^
@@ -74,9 +89,37 @@ pyinstaller --onefile --noconsole --name Petpet ^
   pet.py
 ```
 
+### macOS
+
+必须在 macOS 上构建，PyInstaller 不支持从 Windows 交叉生成 `.app`：
+
+```bash
+chmod +x scripts/build_macos.sh
+./scripts/build_macos.sh
+```
+
+输出文件为：
+
+```text
+dist/Petpet.app
+```
+
+GitHub 仓库中的 `.github/workflows/build-macos.yml` 也可以手动触发构建，会分别生成 Intel 与 Apple 芯片原生版本。
+
+若要公开分发，还需要在 macOS 上使用 Apple Developer ID 进行代码签名和公证。
+
 ## 🔄 更新机制
 
-程序启动后自动检查 GitHub Releases，有新版弹窗提示，一键下载替换重启。
+程序启动后自动检查 GitHub Releases。Windows 版本支持下载替换重启；macOS
+版本会打开对应的 `.dmg` 或 macOS `.zip` 下载地址，由用户完成替换。
+
+## 🍎 macOS 兼容说明
+
+- 支持透明置顶宠物窗口、拖拽与弹跳、聊天、状态养成、音效和菜单栏托盘
+- 登录时启动使用 `~/Library/LaunchAgents/com.gsheen.petpet.plist`
+- 可写数据统一放在 `~/Library/Application Support/Petpet`
+- 应用以菜单栏工具运行，不在 Dock 中常驻显示
+- 多屏幕坐标与不同 macOS 缩放比例仍建议在真机上继续测试
 
 ## 🩹 v1.1.1 修复内容
 
@@ -102,6 +145,9 @@ Petpet/
 ├── buddy_ai.py         AI 引擎（人设/记忆/流式）
 ├── chat_poc.py         命令行聊天测试
 ├── config.json         API key 配置（需自填）
+├── packaging/          Windows/macOS PyInstaller 配置
+├── scripts/            macOS 构建脚本
+├── requirements-macos.txt
 ├── banner.png          宣传图
 ├── poses/              7 张姿势 PNG
 │   ├── idle.png  happy.png  sad.png

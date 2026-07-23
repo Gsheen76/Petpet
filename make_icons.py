@@ -23,7 +23,7 @@ cw, ch = crop.size
 # make square
 side = max(cw, ch)
 
-for size in [16, 32, 48, 64, 128, 256]:
+for size in [16, 32, 48, 64, 128, 256, 512, 1024]:
     # white rounded background
     bg = Image.new("RGBA", (size, size), (255, 255, 255, 0))
     mask = Image.new("L", (size, size), 0)

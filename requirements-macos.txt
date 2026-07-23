@@ -1,0 +1,4 @@
+PyQt5>=5.15,<6
+Pillow>=10
+numpy>=1.26
+pyinstaller>=6

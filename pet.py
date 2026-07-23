@@ -17,9 +17,29 @@ import sys, os, math, time, json, random, threading, urllib.request, urllib.erro
 
 # ---------- version & update ----------
 VERSION = "1.1.1"
+IS_WINDOWS = sys.platform.startswith("win")
+IS_MACOS = sys.platform == "darwin"
+APP_NAME = "Petpet"
+MAC_BUNDLE_ID = "com.gsheen.petpet"
 # GitHub Releases API endpoint. Replace USER/REPO with your repo.
 # Format: https://api.github.com/repos/USER/REPO/releases/latest
 RELEASES_URL = "https://api.github.com/repos/Gsheen76/Petpet/releases/latest"
+
+
+def select_release_asset(assets, platform_name=None):
+    """Return the download URL for the current platform's release asset."""
+    platform_name = platform_name or sys.platform
+    for asset in assets:
+        name = (asset.get("name") or "").lower()
+        if platform_name.startswith("win") and name.endswith(".exe"):
+            return asset.get("browser_download_url")
+        if (platform_name == "darwin" and
+                ("mac" in name or "darwin" in name) and
+                name.endswith((".dmg", ".zip"))):
+            return asset.get("browser_download_url")
+    if not (platform_name.startswith("win") or platform_name == "darwin"):
+        return assets[0].get("browser_download_url") if assets else None
+    return None
 
 
 def check_update_async(on_result):
@@ -36,13 +56,7 @@ def check_update_async(on_result):
             data = json.loads(r.read().decode("utf-8"))
             tag = (data.get("tag_name") or "").lstrip("v")
             assets = data.get("assets", [])
-            dl_url = None
-            for a in assets:
-                name = a.get("name", "").lower()
-                if name.endswith(".exe"):
-                    dl_url = a.get("browser_download_url"); break
-            if not dl_url and assets:
-                dl_url = assets[0].get("browser_download_url")
+            dl_url = select_release_asset(assets)
             notes = (data.get("body") or "")[:500]
             if tag and tag != VERSION and dl_url:
                 # compare version: simple string compare works for "1.2.3"
@@ -71,6 +85,8 @@ def download_and_update(download_url, on_progress=None):
     """Download new exe to <name>_new.exe next to current exe, then run
     update.bat which replaces the running exe and restarts.
     Returns True on success (will have quit the app)."""
+    if not IS_WINDOWS:
+        return False  # macOS updates are downloaded via the browser
     if getattr(sys, 'frozen', False):
         exe_dir = os.path.dirname(sys.executable)
         cur_exe = sys.executable
@@ -116,7 +132,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtSvg import QSvgRenderer
 from PyQt5.QtGui import (
     QPainter, QPixmap, QImage, QCursor, QIcon, QColor, QFont, QFontMetrics, QPen,
-    QLinearGradient, QRadialGradient, QTextDocument
+    QLinearGradient, QRadialGradient, QTextDocument, QDesktopServices
 )
 from PyQt5.QtCore import (
     Qt, QTimer, QPoint, QPointF, QRect, QRectF, QByteArray, QSize, pyqtSignal, QObject, QUrl
@@ -134,20 +150,36 @@ except Exception:
     HAS_SOUND = False
 
 # ---------- paths ----------
-# resources (poses, icons) bundled inside exe by PyInstaller;
-# data files (state, settings) go next to exe so they persist across runs.
+# Resources are bundled by PyInstaller. On macOS, writable user data lives in
+# ~/Library/Application Support/Petpet because the .app bundle is read-only.
 if getattr(sys, 'frozen', False):
     RES_DIR = sys._MEIPASS
-    DATA_DIR = os.path.dirname(sys.executable)
+    if IS_MACOS:
+        DATA_DIR = os.path.join(
+            os.path.expanduser("~/Library/Application Support"), APP_NAME)
+    else:
+        DATA_DIR = os.path.dirname(sys.executable)
 else:
     RES_DIR = os.path.dirname(os.path.abspath(__file__))
     DATA_DIR = RES_DIR
+os.makedirs(DATA_DIR, exist_ok=True)
 HERE = RES_DIR
 SVG_PATH = os.path.join(RES_DIR, "pet.svg")
 POSES_DIR = os.path.join(RES_DIR, "poses")
 ICON_PATH = os.path.join(RES_DIR, "icons", "icon-64.png")
 SAVE_PATH = os.path.join(DATA_DIR, "pet_state.json")
 SETTINGS_PATH = os.path.join(DATA_DIR, "pet_settings.json")
+
+# Seed a safe editable config on first packaged launch.
+if getattr(sys, 'frozen', False):
+    _config_path = os.path.join(DATA_DIR, "config.json")
+    _config_example = os.path.join(RES_DIR, "config.json.example")
+    if not os.path.exists(_config_path) and os.path.exists(_config_example):
+        try:
+            import shutil
+            shutil.copyfile(_config_example, _config_path)
+        except Exception:
+            pass
 POSE_NAMES = ["idle", "happy", "sad", "eat", "sleep", "drag", "close"]
 POSE = {name: i for i, name in enumerate(POSE_NAMES)}
 CELL = 200  # each pose is 200x200; spritesheet is 1200x200
@@ -465,7 +497,7 @@ class ChatWindow(QWidget):
     def show_near_pet(self):
         g = self.pet.geometry()
         # clamp window size to screen so it always fits
-        screen = QApplication.primaryScreen().geometry()
+        screen = self.pet.current_screen_rect()
         max_w = screen.width() - 20
         max_h = screen.height() - 80
         w = min(self.s["chat_width"], max_w)
@@ -474,12 +506,12 @@ class ChatWindow(QWidget):
             self.setFixedSize(w, h)
         x = g.right() + 16
         y = g.top()
-        if x + w > screen.width():
+        if x + w > screen.right():
             x = g.left() - w - 16
-        if y + h > screen.height() - 40:
-            y = screen.height() - h - 40
-        if x < 0: x = 0
-        if y < 0: y = 0
+        if y + h > screen.bottom() - 40:
+            y = screen.bottom() - h - 40
+        if x < screen.left(): x = screen.left()
+        if y < screen.top(): y = screen.top()
         self.move(int(x), int(y))
         self.show()
         self.raise_()
@@ -885,7 +917,7 @@ class SettingsWindow(QWidget):
             cw = self.pet.chat_win
             cw.s = self.s  # re-bind to latest settings dict
             # clamp to screen
-            screen = QApplication.primaryScreen().geometry()
+            screen = self.pet.current_screen_rect()
             w = min(self.s["chat_width"], screen.width() - 20)
             h = min(self.s["chat_height"], screen.height() - 80)
             cw.setFixedSize(w, h)
@@ -918,7 +950,7 @@ class SettingsWindow(QWidget):
         if self.pet.chat_win is not None:
             cw = self.pet.chat_win
             cw.s = self.s
-            screen = QApplication.primaryScreen().geometry()
+            screen = self.pet.current_screen_rect()
             w = min(self.s["chat_width"], screen.width() - 20)
             h = min(self.s["chat_height"], screen.height() - 80)
             cw.setFixedSize(w, h)
@@ -1423,7 +1455,7 @@ class InteractiveBubble(QWidget):
         """Place bubble to the side of the pet that has more room.
         If pet is in left half of screen -> bubble goes right; else left."""
         g = self.pet.geometry()
-        scr = QApplication.primaryScreen().availableGeometry()
+        scr = self.pet.current_screen_rect()
         pet_cx = g.center().x()
         screen_cx = scr.center().x()
         toward_pet = 12
@@ -2141,8 +2173,7 @@ class PetWindow(QWidget):
     # ---------- physics tick ----------
     def on_tick(self):
         now = time.time()
-        # use primary screen geometry directly (fast, no per-frame screen detection)
-        screen = QApplication.primaryScreen().availableGeometry()
+        screen = self.current_screen_rect()
         g = self.geometry()
         x, y = float(g.x()), float(g.y())
         w, h = g.width(), g.height()
@@ -2553,15 +2584,17 @@ class PetWindow(QWidget):
             self.stats_win = StatsWindow(self)
         # position beside the pet (prefer right side, fall back to left)
         g = self.geometry()
-        screen = QApplication.primaryScreen().geometry()
+        screen = self.current_screen_rect()
         sw, sh = self.stats_win.width(), self.stats_win.height()
         x = g.right() + 16
         y = g.center().y() - sh // 2
-        if x + sw > screen.width():
+        if x + sw > screen.right():
             x = g.left() - sw - 16
-        if x < 0:
-            x = max(0, min(g.center().x() - sw // 2, screen.width() - sw))
-        y = max(8, min(y, screen.height() - sh - 40))
+        if x < screen.left():
+            x = max(screen.left(), min(g.center().x() - sw // 2,
+                                       screen.right() - sw))
+        y = max(screen.top() + 8,
+                min(y, screen.bottom() - sh - 40))
         self.stats_win.move(int(x), int(y))
         self.stats_win.show()
         self.stats_win.raise_()
@@ -2651,10 +2684,14 @@ class TrayApp:
         notes = info.get("notes", "").strip() or "（暂无更新说明）"
         msg.setText(f"发现新版本 v{v}（当前 v{VERSION}）\n\n更新内容：\n{notes[:300]}")
         msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-        msg.button(QMessageBox.Yes).setText("立即更新")
+        msg.button(QMessageBox.Yes).setText(
+            "打开下载" if IS_MACOS else "立即更新")
         msg.button(QMessageBox.No).setText("以后再说")
         msg.setDefaultButton(QMessageBox.Yes)
         if msg.exec_() != QMessageBox.Yes:
+            return
+        if IS_MACOS:
+            QDesktopServices.openUrl(QUrl(info["download_url"]))
             return
         # download with progress dialog
         prog = QProgressDialog("正在下载新版本…", "取消", 0, 100, self.pet)
@@ -2771,11 +2808,13 @@ class TrayApp:
         a_recall = QAction("🎯 回到屏幕中央", m); a_recall.triggered.connect(self.pet.recall); m.addAction(a_recall)
         a_hide = QAction("👁 显示/隐藏", m); a_hide.triggered.connect(self.toggle_visible); m.addAction(a_hide)
         a_settings = QAction("⚙️ 设置", m); a_settings.triggered.connect(self.pet.open_settings); m.addAction(a_settings)
+        a_data = QAction("📁 打开数据文件夹", m); a_data.triggered.connect(self.open_data_folder); m.addAction(a_data)
         m.addSeparator()
 
         # ---- 系统 ----
         a_update = QAction("🔄 检查更新", m); a_update.triggered.connect(self._check_update); m.addAction(a_update)
-        a_autostart = QAction("↻ 开机自启", m); a_autostart.setCheckable(True)
+        autostart_label = "↻ 登录时启动" if IS_MACOS else "↻ 开机自启"
+        a_autostart = QAction(autostart_label, m); a_autostart.setCheckable(True)
         a_autostart.setChecked(self.state.get("autostart", False))
         a_autostart.triggered.connect(lambda: self.toggle_autostart(a_autostart))
         m.addAction(a_autostart)
@@ -2860,17 +2899,30 @@ class TrayApp:
         else:
             self.pet.show()
 
+    def open_data_folder(self):
+        QDesktopServices.openUrl(QUrl.fromLocalFile(DATA_DIR))
+
     def toggle_autostart(self, action):
         on = action.isChecked()
         self.state["autostart"] = on
         save_state(self.state)
         try:
-            self.set_autostart_registry(on)
-            self.pet.say("已设置开机自启" if on else "已取消开机自启", 1500)
+            self.set_autostart(on)
+            enabled_text = "已设置登录时启动" if IS_MACOS else "已设置开机自启"
+            disabled_text = "已取消登录时启动" if IS_MACOS else "已取消开机自启"
+            self.pet.say(enabled_text if on else disabled_text, 1500)
         except Exception as e:
             self.pet.say("设置失败：" + str(e)[:20], 2000)
 
-    def set_autostart_registry(self, on):
+    def set_autostart(self, on):
+        if IS_WINDOWS:
+            self._set_windows_autostart(on)
+        elif IS_MACOS:
+            self._set_macos_autostart(on)
+        else:
+            raise RuntimeError("当前系统暂不支持自动启动")
+
+    def _set_windows_autostart(self, on):
         import winreg
         key = winreg.HKEY_CURRENT_USER
         sub = r"Software\Microsoft\Windows\CurrentVersion\Run"
@@ -2887,6 +2939,31 @@ class TrayApp:
             else:
                 try: winreg.DeleteValue(k, name)
                 except FileNotFoundError: pass
+
+    def _set_macos_autostart(self, on):
+        import plistlib
+        launch_agents = os.path.expanduser("~/Library/LaunchAgents")
+        plist_path = os.path.join(launch_agents, MAC_BUNDLE_ID + ".plist")
+        if not on:
+            try:
+                os.remove(plist_path)
+            except FileNotFoundError:
+                pass
+            return
+
+        os.makedirs(launch_agents, exist_ok=True)
+        if getattr(sys, "frozen", False):
+            program_args = [sys.executable]
+        else:
+            program_args = [sys.executable, os.path.abspath(__file__)]
+        payload = {
+            "Label": MAC_BUNDLE_ID,
+            "ProgramArguments": program_args,
+            "RunAtLoad": True,
+            "ProcessType": "Interactive",
+        }
+        with open(plist_path, "wb") as f:
+            plistlib.dump(payload, f)
 
     def quit(self):
         if self.pet.chat_win is not None:
