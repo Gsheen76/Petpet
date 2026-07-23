@@ -16,7 +16,7 @@ Run: python pet.py
 import sys, os, math, time, json, random, threading, urllib.request, urllib.error
 
 # ---------- version & update ----------
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 # GitHub Releases API endpoint. Replace USER/REPO with your repo.
 # Format: https://api.github.com/repos/USER/REPO/releases/latest
 RELEASES_URL = "https://api.github.com/repos/Gsheen76/Petpet/releases/latest"
@@ -39,7 +39,7 @@ def check_update_async(on_result):
             dl_url = None
             for a in assets:
                 name = a.get("name", "").lower()
-                if name.endswith(".exe") and "sheen" in name:
+                if name.endswith(".exe"):
                     dl_url = a.get("browser_download_url"); break
             if not dl_url and assets:
                 dl_url = assets[0].get("browser_download_url")
@@ -68,7 +68,7 @@ def check_update_async(on_result):
 
 
 def download_and_update(download_url, on_progress=None):
-    """Download new exe to SheenPet_new.exe next to current exe, then run
+    """Download new exe to <name>_new.exe next to current exe, then run
     update.bat which replaces the running exe and restarts.
     Returns True on success (will have quit the app)."""
     if getattr(sys, 'frozen', False):
@@ -76,7 +76,7 @@ def download_and_update(download_url, on_progress=None):
         cur_exe = sys.executable
     else:
         return False  # dev mode, no update
-    new_path = os.path.join(exe_dir, "SheenPet_new.exe")
+    new_path = os.path.join(exe_dir, os.path.basename(cur_exe).replace(".exe", "_new.exe"))
     try:
         req = urllib.request.Request(download_url, headers={"User-Agent": "SheenPet"})
         r = urllib.request.urlopen(req, timeout=60)
@@ -115,16 +115,23 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtSvg import QSvgRenderer
 from PyQt5.QtGui import (
-    QPainter, QPixmap, QImage, QCursor, QIcon, QColor, QFont, QPen,
+    QPainter, QPixmap, QImage, QCursor, QIcon, QColor, QFont, QFontMetrics, QPen,
     QLinearGradient, QRadialGradient, QTextDocument
 )
 from PyQt5.QtCore import (
-    Qt, QTimer, QPoint, QPointF, QRect, QRectF, QByteArray, QSize, pyqtSignal, QObject
+    Qt, QTimer, QPoint, QPointF, QRect, QRectF, QByteArray, QSize, pyqtSignal, QObject, QUrl
 )
 
 # AI engine (same folder)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import buddy_ai as ai
+
+# Sound (optional — QtMultimedia may not be installed)
+try:
+    from PyQt5.QtMultimedia import QSoundEffect
+    HAS_SOUND = True
+except Exception:
+    HAS_SOUND = False
 
 # ---------- paths ----------
 # resources (poses, icons) bundled inside exe by PyInstaller;
@@ -153,6 +160,11 @@ DEFAULT_SETTINGS = {
     "chat_font_size": 20,
     "ui_font_size": 20,        # settings panel font size
     "always_on_top": True,     # pet window stays on top of other windows
+    # health reminders (minutes; 0 = off)
+    "remind_drink_min": 60,    # remind to drink water every N min
+    "remind_rest_min": 90,     # remind to rest eyes every N min
+    "remind_stand_min": 45,    # remind to stand up every N min
+    "sound_enabled": True,     # sound effects on/off
     # stat decay per tick (tick = 2s). Lower = slower.
     "decay_hunger": 0.14,     # was 0.7 -> /5
     "decay_energy": 0.10,     # was 0.5 -> /5
@@ -162,6 +174,8 @@ DEFAULT_SETTINGS = {
     # how often pet emits spontaneous speech bubbles (0..1 chance per decay tick).
     # Lower = quieter. Reduced ~3x from original 0.4.
     "needy_speak_chance": 0.13,
+    # Small global boost for spontaneous chatter while preserving user settings.
+    "chatter_frequency_boost": 1.2,
     # autonomy "ask" behavior weight (lower = less random barks)
     "ask_weight_normal": 0.5,    # was 0.3
     "ask_weight_needy":  0.5,    # was 1.5 (also lowered so total chatter drops ~3x)
@@ -170,7 +184,39 @@ DEFAULT_SETTINGS = {
     "nudge_gap_min":  10800,  # 3h
 }
 
-SETTINGS_PATH = os.path.join(HERE, "pet_settings.json")
+WARM_MENU_STYLE = """
+    QMenu {
+        background:#fffaf0;
+        color:#65483b;
+        border:1px solid #edc9ad;
+        border-radius:12px;
+        padding:8px;
+        font-family:'Microsoft YaHei';
+        font-size:14px;
+    }
+    QMenu::item {
+        padding:8px 28px 8px 12px;
+        border-radius:8px;
+        margin:1px 2px;
+    }
+    QMenu::item:selected {
+        background:#ffe2d8;
+        color:#8a4f40;
+    }
+    QMenu::item:disabled {
+        color:#b98f7a;
+        background:#fff3e4;
+    }
+    QMenu::separator {
+        height:1px;
+        background:#efd8c4;
+        margin:6px 8px;
+    }
+    QMenu::indicator:checked {
+        background:#f28f76;
+        border-radius:5px;
+    }
+"""
 
 def load_settings():
     try:
@@ -262,43 +308,45 @@ class ChatWindow(QWidget):
         fs = self.s["chat_font_size"]
         self.setStyleSheet(f"""
             QWidget#chat {{
-                background:#ffffff;
-                border:1px solid #e4e7ee;
-                border-radius:16px;
+                background:#fff8ec;
+                border:1px solid #efc5a5;
+                border-radius:20px;
             }}
             QTextEdit {{
-                background:#fbfbfd;
-                border:1px solid #e8eaf0;
-                border-radius:12px;
-                padding:10px;
+                background:#fffdf8;
+                border:1px solid #f0d8c2;
+                border-radius:16px;
+                padding:12px;
                 font-family:'Microsoft YaHei',sans-serif;
                 font-size:{fs}px;
-                color:#2a2a2a;
+                color:#5f463b;
+                selection-background-color:#ffc9b8;
             }}
             QLineEdit {{
-                background:#fbfbfd;
-                border:1px solid #e8eaf0;
-                border-radius:12px;
-                padding:8px 12px;
+                background:#ffffff;
+                border:1px solid #edcdb3;
+                border-radius:15px;
+                padding:9px 13px;
                 font-family:'Microsoft YaHei',sans-serif;
                 font-size:{fs}px;
-                color:#2a2a2a;
+                color:#65483b;
             }}
-            QLineEdit:focus {{ border:1px solid #4aa8ff; }}
+            QLineEdit:focus {{ border:2px solid #f39b80; }}
             QPushButton#send {{
-                background:#4aa8ff; color:#fff; border:0;
-                border-radius:12px;
-                padding:8px 20px; font-weight:600; font-size:{fs}px;
+                background:#f28f76; color:#fff; border:0;
+                border-radius:15px;
+                padding:9px 22px; font-weight:700; font-size:{fs}px;
             }}
-            QPushButton#send:disabled {{ background:#c4ccd4; }}
-            QPushButton#send:pressed {{ background:#3a98ef; }}
+            QPushButton#send:hover {{ background:#f59f88; }}
+            QPushButton#send:disabled {{ background:#d9c6bb; }}
+            QPushButton#send:pressed {{ background:#df7d67; }}
             QPushButton#clear {{
-                background:transparent; color:#9aa3af; border:0;
-                padding:4px 8px; font-size:{max(fs-3,10)}px;
+                background:transparent; color:#b58b79; border:0;
+                padding:5px 9px; font-size:{max(fs-3,10)}px;
             }}
-            QPushButton#clear:hover {{ color:#d44; }}
+            QPushButton#clear:hover {{ color:#d96868; background:#ffebe5; border-radius:10px; }}
             QLabel#title {{
-                font-size:{fs+2}px; font-weight:700; color:#3a4252;
+                font-size:{fs+2}px; font-weight:700; color:#7a4d3b;
                 padding:6px 12px;
             }}
         """)
@@ -309,9 +357,10 @@ class ChatWindow(QWidget):
         self.title.setFixedHeight(38)
         self.title.setStyleSheet(
             "background:qlineargradient(x1:0,y1:0,x2:1,y2:0,"
-            "stop:0 #eef4ff, stop:1 #e4edff);"
-            "border-top-left-radius:15px;"
-            "border-top-right-radius:15px;"
+            "stop:0 #fff0df, stop:1 #ffe2d8);"
+            "color:#7a4d3b;"
+            "border-top-left-radius:18px;"
+            "border-top-right-radius:18px;"
             "padding:6px 10px;")
         self._drag_off = None
         self.title.mousePressEvent = self._title_press
@@ -323,9 +372,9 @@ class ChatWindow(QWidget):
         self.close_btn.setCursor(Qt.PointingHandCursor)
         self.close_btn.setToolTip("关闭")
         self.close_btn.setStyleSheet(
-            "QPushButton{background:transparent;border:0;color:#7a8494;"
+            "QPushButton{background:transparent;border:0;color:#a47b69;"
             "font-size:22px;font-weight:700;padding:0;}"
-            "QPushButton:hover{background:#ffd0d0;color:#c30;border-radius:14px;}"
+            "QPushButton:hover{background:#ffcfc5;color:#bf5c52;border-radius:14px;}"
         )
         self.close_btn.clicked.connect(self.close)
 
@@ -391,12 +440,12 @@ class ChatWindow(QWidget):
         W = self.s["chat_bubble_max"]  # bubble max width
         if role == "user":
             return (f'<div style="margin:6px 0;text-align:right;">'
-                    f'<span style="background:#4aa8ff;color:#fff;padding:8px 14px;'
+                    f'<span style="background:#f28f76;color:#fff;padding:8px 14px;'
                     f'border-radius:14px 14px 4px 14px;display:inline-block;'
                     f'max-width:{W}px;white-space:pre-wrap;'
-                    f'box-shadow:0 1px 2px rgba(74,168,255,0.25);">{_esc(text)}</span></div>')
+                    f'box-shadow:0 1px 2px rgba(242,143,118,0.25);">{_esc(text)}</span></div>')
         return (f'<div style="margin:6px 0;text-align:left;">'
-                f'<span style="background:#f0f2f6;color:#2a2a2a;padding:8px 14px;'
+                f'<span style="background:#fff0df;color:#5f463b;padding:8px 14px;'
                 f'border-radius:14px 14px 14px 4px;display:inline-block;'
                 f'max-width:{W}px;white-space:pre-wrap;">'
                 f'🐶 {_esc(text)}</span></div>')
@@ -549,31 +598,31 @@ class StatsWindow(QWidget):
         self.s = pet_window.settings
 
         self.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.Tool)
-        self.setWindowTitle("Sheen · 状态")
-        self.setFixedSize(420, 540)
+        self.setWindowTitle("Sheen · 温暖成长档案")
+        self.setFixedSize(460, 580)
 
         # stats panel uses its own larger font scale (not ui_font_size)
         fs = 16
         self.setStyleSheet(f"""
-            QWidget {{ background:#fff; font-family:'Microsoft YaHei',sans-serif;
-                       font-size:{fs}px; color:#2a2a2a; }}
+            QWidget {{ background:#fff8ec; font-family:'Microsoft YaHei',sans-serif;
+                       font-size:{fs}px; color:#65483b; }}
             QLabel {{ padding:2px 0; }}
-            QFrame#card {{ background:#f7f9fc; border:1px solid #e6ebf2;
-                            border-radius:14px; }}
-            QProgressBar {{ background:#eef2f7; border:0; border-radius:8px;
+            QFrame#card {{ background:#fffdf8; border:1px solid #efd1b8;
+                            border-radius:17px; }}
+            QProgressBar {{ background:#f3e3d5; border:0; border-radius:8px;
                             height:16px; text-align:center; color:#fff;
                             font-size:{max(11, fs-2)}px; font-weight:700; }}
             QProgressBar::chunk {{ border-radius:8px; }}
-            QLabel#h1 {{ font-size:{fs+8}px; font-weight:800; color:#2a2a2a; }}
-            QLabel#h2 {{ font-size:{fs+3}px; font-weight:700; color:#5a6a7a; }}
-            QLabel#big {{ font-size:{fs+24}px; font-weight:900; color:#4aa8ff; }}
-            QLabel#gold {{ font-size:{fs+2}px; font-weight:800; color:#d4a017; }}
-            QLabel#small {{ font-size:{max(11,fs-2)}px; color:#8a99a8; }}
+            QLabel#h1 {{ font-size:{fs+7}px; font-weight:800; color:#744d3e; }}
+            QLabel#h2 {{ font-size:{fs+2}px; font-weight:700; color:#a46c58; }}
+            QLabel#big {{ font-size:{fs+22}px; font-weight:900; color:#f28f76; }}
+            QLabel#gold {{ font-size:{fs+1}px; font-weight:800; color:#c68a38; }}
+            QLabel#small {{ font-size:{max(11,fs-2)}px; color:#aa8170; }}
         """)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(18, 16, 18, 16)
-        layout.setSpacing(10)
+        layout.setContentsMargins(22, 20, 22, 20)
+        layout.setSpacing(12)
 
         # Header: level + title
         head = QHBoxLayout()
@@ -581,7 +630,7 @@ class StatsWindow(QWidget):
         self.lvl_label = QLabel()
         self.lvl_label.setObjectName("big")
         self.lvl_label.setAlignment(Qt.AlignCenter)
-        self.lvl_label.setFixedWidth(70)
+        self.lvl_label.setFixedWidth(105)
         head.addWidget(self.lvl_label)
         title_col = QVBoxLayout()
         title_col.setSpacing(0)
@@ -608,9 +657,9 @@ class StatsWindow(QWidget):
         # Stat cards
         self.bars = {}
         for key, name, emoji, color in [
-            ("hunger", "饱腹", "🍗", "#ff8c42"),
-            ("mood",   "心情", "😊", "#4aa8ff"),
-            ("energy", "精力", "⚡", "#9b6bff"),
+            ("hunger", "饱腹", "🍗", "#f49a62"),
+            ("mood",   "心情", "🌷", "#ef8fa2"),
+            ("energy", "精力", "⚡", "#9b8ade"),
         ]:
             card = QFrame()
             card.setObjectName("card")
@@ -628,7 +677,7 @@ class StatsWindow(QWidget):
             bar = QProgressBar()
             bar.setTextVisible(False)
             bar.setStyleSheet(f"""
-                QProgressBar {{ background:#eef2f7; border:0; border-radius:7px; height:12px; }}
+                QProgressBar {{ background:#f2e3d7; border:0; border-radius:7px; height:12px; }}
                 QProgressBar::chunk {{ background:{color}; border-radius:7px; }}
             """)
             cl.addWidget(bar)
@@ -636,7 +685,7 @@ class StatsWindow(QWidget):
             self.bars[key] = (bar, val, color)
 
         # footer
-        hint = QLabel("💡 维持三项高分，经验涨得更快")
+        hint = QLabel("♡ 每一次照顾，都在积累温暖的陪伴")
         hint.setObjectName("small")
         hint.setAlignment(Qt.AlignCenter)
         layout.addWidget(hint)
@@ -653,22 +702,27 @@ class StatsWindow(QWidget):
         xp = st.get("xp", 0)
         need = xp_to_next(lvl)
         self.lvl_label.setText(f"Lv.{lvl}")
-        self.title_label.setText("Sheen 的成长档案")
+        self.title_label.setText("Sheen 的成长小屋")
         self.subtitle_label.setText(f"距离下一级：{max(0, need-xp)} EXP")
         self.subtitle_label.setObjectName("gold")
-        self.subtitle_label.setStyleSheet(f"font-size:{16+2}px; font-weight:800; color:#d4a017;")
-        self.xp_bar.setRange(0, max(1, need))
-        self.xp_bar.setValue(int(xp))
+        self.subtitle_label.setStyleSheet(
+            "font-size:17px; font-weight:800; color:#c68a38;")
+        # QProgressBar uses 32-bit integers; render a normalized ratio so very
+        # high levels cannot overflow while the label still shows real values.
+        progress_scale = 10000
+        self.xp_bar.setRange(0, progress_scale)
+        self.xp_bar.setValue(int(max(0.0, min(1.0, xp / max(1, need))) *
+                                 progress_scale))
         self.xp_bar.setFormat(f"EXP {int(xp)} / {need}")
         self.xp_bar.setStyleSheet("""
-            QProgressBar { background:#eef2f7; border:0; border-radius:8px; height:20px;
-                           text-align:center; color:#d4a017; font-weight:800;
+            QProgressBar { background:#f1dfcf; border:0; border-radius:9px; height:21px;
+                           text-align:center; color:#9a672f; font-weight:800;
                            font-size:14px; }
             QProgressBar::chunk { background:qlineargradient(x1:0,y1:0,x2:1,y2:0,
-                stop:0 #d4a017, stop:0.5 #f4c430, stop:1 #ffe066); border-radius:8px; }
+                stop:0 #ffc05c, stop:0.5 #ffd36f, stop:1 #ffe59b); border-radius:9px; }
         """)
         days = max(1, int((time.time() - st.get("born", time.time())) / 86400))
-        self.days_label.setText(f"📅 已陪伴你 {days} 天")
+        self.days_label.setText(f"♡ 已经温暖陪伴你 {days} 天")
         for key, (bar, val, color) in self.bars.items():
             v = int(st.get(key, 0))
             bar.setValue(v)
@@ -687,12 +741,16 @@ class SettingsWindow(QWidget):
         ("chat_font_size",  "聊天字体大小",   10, 40, 1, "px (10-40)"),
         ("ui_font_size",    "设置面板字体大小", 10, 28, 1, "px (10-28)"),
         ("always_on_top",   "始终置顶 (1是 0否)",  0, 1, 1, "1=总在最前 0=可被遮挡"),
+        ("sound_enabled",   "音效开关 (1开 0关)",  0, 1, 1, "1=有声 0=静音"),
+        ("remind_drink_min","喝水提醒间隔(分钟)", 0, 300, 5, "0=关 60=每小时"),
+        ("remind_rest_min", "休息眼睛间隔(分钟)", 0, 300, 5, "0=关 90=每1.5小时"),
+        ("remind_stand_min","起身活动间隔(分钟)", 0, 300, 5, "0=关 45=每45分钟"),
         ("decay_hunger", "饱腹下降速度",     0.02, 2.0, 0.02, "每2秒降低（越小越慢）"),
         ("decay_energy", "精力下降速度",     0.02, 2.0, 0.02, "每2秒降低"),
         ("decay_mood",   "心情下降速度",     0.02, 2.0, 0.02, "每2秒降低"),
-        ("needy_speak_chance", " spontaneous 弹话概率", 0.0, 1.0, 0.05, "0=安静 1=每次都弹"),
+        ("needy_speak_chance", "需求自言自语概率", 0.0, 1.0, 0.05, "0=安静 1=每次都说"),
         ("ask_weight_normal", "自主搭话权重(平时)", 0.0, 3.0, 0.1, "越大越爱搭话"),
-        ("ask_weight_needy",  "自主搭话权重( needy)", 0.0, 3.0, 0.1, "饿了/无聊时权重"),
+        ("ask_weight_needy",  "自主搭话权重(需要照顾)", 0.0, 3.0, 0.1, "饿了/无聊时权重"),
         ("nudge_idle_min", "AI 主动找你最短闲置(秒)", 300, 7200, 300, "多久不理它才会主动找你"),
         ("nudge_gap_min",  "AI 主动找你最小间隔(秒)", 1800, 21600, 1800, "两次主动找你的最小间隔"),
     ]
@@ -704,45 +762,60 @@ class SettingsWindow(QWidget):
         self.inputs = {}
 
         self.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.Tool)
-        self.setWindowTitle("Sheen · 设置")
+        self.setWindowTitle("Sheen · 温馨设置")
         self._apply_font()
-        self.setFixedWidth(460)
+        self._build_ui()
+        self.setFixedWidth(500)
 
     def _apply_font(self):
         fs = self.s.get("ui_font_size", 13)
         self.setStyleSheet(f"""
-            QWidget {{ background:#fafafa; font-family:'Microsoft YaHei',sans-serif; font-size:{fs}px; color:#2a2a2a; }}
+            QWidget {{ background:#fff8ec; font-family:'Microsoft YaHei',sans-serif;
+                       font-size:{fs}px; color:#65483b; }}
             QLabel {{ padding:4px 0; }}
             QDoubleSpinBox, QSpinBox {{
-                background:#fff; border:1px solid #d0d0d8; border-radius:6px;
-                padding:4px 6px; min-width:90px;
+                background:#fffdf8; border:1px solid #edc9ad; border-radius:9px;
+                padding:6px 8px; min-width:100px; color:#65483b;
+                selection-background-color:#ffc9b8;
+            }}
+            QDoubleSpinBox:focus, QSpinBox:focus {{
+                border:2px solid #f39b80;
             }}
             QPushButton {{
-                background:#4aa8ff; color:#fff; border:0; border-radius:8px;
-                padding:8px 16px; font-weight:600;
+                background:#f28f76; color:#fff; border:0; border-radius:11px;
+                padding:9px 18px; font-weight:700;
             }}
-            QPushButton:pressed {{ background:#3a98ef; }}
-            QPushButton#reset {{ background:#aaa; }}
-            QPushButton#reset:pressed {{ background:#888; }}
+            QPushButton:hover {{ background:#f5a08a; }}
+            QPushButton:pressed {{ background:#df7d67; }}
+            QPushButton#reset {{ background:#d7b9a6; color:#6d5145; }}
+            QPushButton#reset:hover {{ background:#e2c8b8; }}
+            QPushButton#reset:pressed {{ background:#c9a892; }}
             QGroupBox {{
-                border:1px solid #d8d8e0; border-radius:10px;
-                margin-top:10px; padding:10px;
+                background:#fffdf8; border:1px solid #edcfb5; border-radius:15px;
+                margin-top:12px; padding:13px 12px 10px 12px;
             }}
-            QGroupBox::title {{ left:10px; padding:0 4px; }}
+            QGroupBox::title {{
+                color:#9b6651; font-weight:700; left:14px;
+                padding:0 7px; background:#fff8ec;
+            }}
         """)
-        self.setFixedWidth(460)
+        self.setFixedWidth(500)
 
+    def _build_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 14, 16, 14)
-        layout.setSpacing(10)
+        layout.setContentsMargins(20, 18, 20, 18)
+        layout.setSpacing(12)
 
-        title = QLabel("⚙️ Sheen 设置")
-        title.setStyleSheet("font-size:16px; font-weight:700; padding:0 0 6px 0;")
+        title = QLabel("🌼 Sheen 的温馨设置")
+        title.setStyleSheet(
+            "font-size:19px; font-weight:800; color:#7a4d3b; padding:0 0 7px 0;")
         layout.addWidget(title)
 
-        # group: chat (the only user-tunable group now)
-        layout.addWidget(self._group("界面", [
-            "chat_width","chat_height","chat_bubble_max","chat_font_size","ui_font_size","always_on_top"]))
+        layout.addWidget(self._group("🍑 界面与声音", [
+            "chat_width","chat_height","chat_bubble_max","chat_font_size","ui_font_size",
+            "always_on_top","sound_enabled"]))
+        layout.addWidget(self._group("🌿 健康提醒", [
+            "remind_drink_min","remind_rest_min","remind_stand_min"]))
 
         # buttons
         btn_row = QHBoxLayout()
@@ -755,12 +828,13 @@ class SettingsWindow(QWidget):
 
         # status line (shows "已保存" feedback)
         self.status_label = QLabel("")
-        self.status_label.setStyleSheet("color:#2aa852; font-size:13px; font-weight:700; padding:2px 0;")
+        self.status_label.setStyleSheet(
+            "color:#cf765e; font-size:13px; font-weight:700; padding:2px 0;")
         self.status_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.status_label)
 
-        hint = QLabel("提示：保存后立即生效。若聊天窗已打开，会自动套用新尺寸和字体。")
-        hint.setStyleSheet("color:#888; font-size:11px; padding:4px 0;")
+        hint = QLabel("♡ 保存后立即生效，Sheen 会乖乖记住你的偏好。")
+        hint.setStyleSheet("color:#aa8170; font-size:11px; padding:4px 0;")
         layout.addWidget(hint)
 
     def _group(self, title, keys):
@@ -856,6 +930,391 @@ class SettingsWindow(QWidget):
         self.pet.say("已恢复默认~", 1500)
 
 
+class StatBubble(QWidget):
+    """A warm, readable growth card shown above the right-click actions."""
+    def __init__(self, pet):
+        super().__init__()
+        self.pet = pet
+        self.setWindowFlags(
+            Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint |
+            Qt.Tool | Qt.WindowDoesNotAcceptFocus
+        )
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setAttribute(Qt.WA_ShowWithoutActivating, True)
+        self.setAttribute(Qt.WA_DeleteOnClose, True)
+        self.setFixedSize(580, 310)
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._tick)
+        self._timer.start(500)  # refresh stats 2x/sec
+        self._place()
+        self.show()
+        self.raise_()
+
+    def _tick(self):
+        self.update()
+
+    def _place(self):
+        """Place above the action bubbles, centered on the pet."""
+        g = self.pet.geometry()
+        scr = self.pet.current_screen_rect()
+        w, h = self.width(), self.height()
+        x = g.center().x() - w // 2
+        y = g.top() - h - 112
+        x = max(scr.left(), min(x, scr.right() - w))
+        y = max(scr.top(), min(y, scr.bottom() - h))
+        self.move(int(x), int(y))
+
+    @staticmethod
+    def _fit_font(text, preferred_size, max_width, weight=QFont.Normal,
+                  minimum_size=8):
+        """Return the largest font that keeps dynamic text fully visible."""
+        size = preferred_size
+        while size > minimum_size:
+            font = QFont("Microsoft YaHei", size, weight)
+            if QFontMetrics(font).horizontalAdvance(str(text)) <= max_width:
+                return font
+            size -= 1
+        return QFont("Microsoft YaHei", minimum_size, weight)
+
+    def paintEvent(self, e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        st = self.pet.state
+        W, H = self.width(), self.height()
+        outer = QRectF(7, 5, W - 14, H - 13)
+
+        # Soft cocoa shadow and warm milk-card background.
+        p.setBrush(QColor(92, 60, 42, 42))
+        p.setPen(Qt.NoPen)
+        p.drawRoundedRect(outer.adjusted(3, 4, 3, 4), 24, 24)
+        bg = QLinearGradient(outer.topLeft(), outer.bottomRight())
+        bg.setColorAt(0.0, QColor(255, 252, 242, 252))
+        bg.setColorAt(0.55, QColor(255, 244, 224, 252))
+        bg.setColorAt(1.0, QColor(255, 237, 219, 252))
+        p.setBrush(bg)
+        p.setPen(QPen(QColor(235, 190, 154), 1.3))
+        p.drawRoundedRect(outer, 24, 24)
+
+        lvl = st.get("level", 1)
+        xp = int(st.get("xp", 0))
+        need = xp_to_next(lvl)
+        days = max(1, int((time.time() - st.get("born", time.time())) / 86400))
+
+        # ---- Header: title and companionship badge never share a text rect. ----
+        title_rect = QRectF(27, 15, 330, 40)
+        p.setPen(QColor("#7b4d3a"))
+        p.setFont(QFont("Microsoft YaHei", 16, QFont.Bold))
+        p.drawText(title_rect, Qt.AlignLeft | Qt.AlignVCenter,
+                   "🐾 Sheen 的成长小屋")
+
+        days_text = f"♡ 陪伴第 {days} 天"
+        days_rect = QRectF(W - 179, 18, 153, 33)
+        p.setBrush(QColor(255, 224, 214, 235))
+        p.setPen(QPen(QColor("#e9a494"), 1))
+        p.drawRoundedRect(days_rect, 16, 16)
+        p.setPen(QColor("#a95f55"))
+        p.setFont(self._fit_font(days_text, 11, days_rect.width() - 18,
+                                 QFont.Bold, 6))
+        p.drawText(days_rect.adjusted(9, 0, -9, 0),
+                   Qt.AlignCenter | Qt.TextSingleLine, days_text)
+
+        # ---- Growth card: level badge, XP label/value, then progress bar. ----
+        growth = QRectF(22, 64, W - 44, 80)
+        p.setBrush(QColor(255, 255, 255, 178))
+        p.setPen(QPen(QColor(242, 209, 174), 1))
+        p.drawRoundedRect(growth, 18, 18)
+
+        level_rect = QRectF(34, 77, 104, 54)
+        level_grad = QLinearGradient(level_rect.topLeft(), level_rect.bottomRight())
+        level_grad.setColorAt(0.0, QColor("#ffb989"))
+        level_grad.setColorAt(1.0, QColor("#ff8f70"))
+        p.setBrush(level_grad)
+        p.setPen(Qt.NoPen)
+        p.drawRoundedRect(level_rect, 16, 16)
+        level_text = f"LV.{lvl}"
+        p.setPen(QColor(255, 255, 255))
+        p.setFont(self._fit_font(level_text, 18, level_rect.width() - 16,
+                                 QFont.Bold, 6))
+        p.drawText(level_rect.adjusted(8, 0, -8, 0),
+                   Qt.AlignCenter | Qt.TextSingleLine, level_text)
+
+        xp_area_x = 158
+        xp_area_w = W - xp_area_x - 34
+        p.setPen(QColor("#8a6654"))
+        p.setFont(QFont("Microsoft YaHei", 10, QFont.Bold))
+        p.drawText(QRectF(xp_area_x, 76, 104, 23),
+                   Qt.AlignLeft | Qt.AlignVCenter, "成长经验")
+        xp_text = f"{xp} / {need} EXP"
+        xp_value_rect = QRectF(xp_area_x + 108, 76, xp_area_w - 108, 23)
+        p.setFont(self._fit_font(xp_text, 10, xp_value_rect.width(),
+                                 QFont.Bold, 6))
+        p.setPen(QColor("#b47b31"))
+        p.drawText(xp_value_rect, Qt.AlignRight | Qt.AlignVCenter |
+                   Qt.TextSingleLine, xp_text)
+
+        xp_rect = QRectF(xp_area_x, 111, xp_area_w, 14)
+        p.setBrush(QColor(244, 226, 207))
+        p.setPen(Qt.NoPen)
+        p.drawRoundedRect(xp_rect, 6.5, 6.5)
+        progress = max(0.0, min(1.0, xp / max(1, need)))
+        xp_fill = QRectF(xp_rect.left(), xp_rect.top(),
+                         xp_rect.width() * progress, xp_rect.height())
+        xp_grad = QLinearGradient(xp_rect.topLeft(), xp_rect.topRight())
+        xp_grad.setColorAt(0.0, QColor("#ffc55c"))
+        xp_grad.setColorAt(1.0, QColor("#ffdf85"))
+        p.setBrush(xp_grad)
+        p.drawRoundedRect(xp_fill, 7, 7)
+
+        # ---- Three stat cards with dedicated name/value/status regions. ----
+        stats = [
+            ("🍗", "饱腹", st.get("hunger", 0), "#f49a62",
+             ("肚肚空空", "刚刚好", "肚肚饱饱")),
+            ("🌷", "心情", st.get("mood", 0), "#ef8fa2",
+             ("想要抱抱", "心情不错", "开心摇尾巴")),
+            ("⚡", "精力", st.get("energy", 0), "#9b8ade",
+             ("需要充电", "精神还好", "元气满满")),
+        ]
+        pad = 20
+        gap = 12
+        card_w = (W - pad * 2 - gap * 2) / 3
+        card_y = 157
+        card_h = 125
+        for i, (emoji, name, val, color, moods) in enumerate(stats):
+            val = max(0.0, min(100.0, float(val)))
+            cx = pad + i * (card_w + gap)
+            card = QRectF(cx, card_y, card_w, card_h)
+            tint = QColor(color)
+            tint.setAlpha(30)
+            p.setBrush(tint)
+            p.setPen(QPen(QColor(color).lighter(125), 1))
+            p.drawRoundedRect(card, 16, 16)
+
+            icon_rect = QRectF(cx + 13, card_y + 12, 38, 38)
+            p.setBrush(QColor(255, 255, 255, 190))
+            p.setPen(Qt.NoPen)
+            p.drawEllipse(icon_rect)
+            p.setFont(QFont("Microsoft YaHei", 15))
+            p.drawText(icon_rect, Qt.AlignCenter, emoji)
+
+            name_rect = QRectF(cx + 59, card_y + 12, 42, 26)
+            p.setPen(QColor("#76584b"))
+            p.setFont(QFont("Microsoft YaHei", 11, QFont.Bold))
+            p.drawText(name_rect, Qt.AlignLeft | Qt.AlignVCenter, name)
+
+            value_text = f"{int(round(val))}%"
+            value_rect = QRectF(cx + 104, card_y + 11, card_w - 117, 28)
+            p.setPen(QColor(color))
+            p.setFont(self._fit_font(value_text, 14, value_rect.width(),
+                                     QFont.Bold, 8))
+            p.drawText(value_rect, Qt.AlignRight | Qt.AlignVCenter |
+                       Qt.TextSingleLine, value_text)
+
+            br = QRectF(cx + 15, card_y + 65, card_w - 30, 11)
+            p.setBrush(QColor(255, 255, 255, 190))
+            p.setPen(Qt.NoPen)
+            p.drawRoundedRect(br, 5, 5)
+            fill = QRectF(br.left(), br.top(), br.width() * val / 100, br.height())
+            p.setBrush(QColor(color))
+            p.drawRoundedRect(fill, 5, 5)
+
+            mood_text = moods[0] if val < 35 else (moods[1] if val < 70 else moods[2])
+            mood_rect = QRectF(cx + 12, card_y + 88, card_w - 24, 25)
+            p.setPen(QColor("#8a6f62"))
+            p.setFont(self._fit_font(mood_text, 9, mood_rect.width(),
+                                     QFont.Normal, 8))
+            p.drawText(mood_rect, Qt.AlignCenter | Qt.TextSingleLine, mood_text)
+
+
+class BubbleMenu(QWidget):
+    """Five soft candy-style action buttons with a warm growth card."""
+    def __init__(self, pet):
+        super().__init__()
+        self.pet = pet
+        self.actions = [
+            ("💬", "聊天", "chat", "#ef8fa2"),
+            ("🍖", "喂食", "feed", "#f49a62"),
+            ("🎾", "玩耍", "play", "#72bf9b"),
+            ("💤", "睡觉", "sleep", "#9b8ade"),
+            ("⚙️", "设置", "settings", "#e7ae64"),
+        ]
+        self.setWindowFlags(
+            Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint |
+            Qt.Tool | Qt.WindowDoesNotAcceptFocus
+        )
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setAttribute(Qt.WA_ShowWithoutActivating, True)
+        self.setAttribute(Qt.WA_DeleteOnClose, True)
+
+        # Larger hit targets with room for both icon and label.
+        self.W = 590
+        self.H = 112
+        self.resize(self.W, self.H)
+        self._bubble_rects = []
+        self._hover = -1
+        self._press = -1
+        self._hover_scales = [0.0] * len(self.actions)
+        self._anim = QTimer(self)
+        self._anim.timeout.connect(self._tick)
+        self._anim.start(16)
+
+        # stat bubble (follows pet too)
+        self.stat_bubble = StatBubble(pet)
+
+        self._place()
+        self.show()
+        self.raise_()
+        self.setMouseTracking(True)
+        self.grabMouse()
+
+    def _tick(self):
+        # ease hover scales
+        target = [1.0 if i == self._hover else 0.0 for i in range(len(self.actions))]
+        changed = False
+        for i in range(len(self.actions)):
+            diff = target[i] - self._hover_scales[i]
+            if abs(diff) > 0.01:
+                self._hover_scales[i] += diff * 0.25
+                changed = True
+        if changed:
+            self.update()
+
+    def follow_pet(self):
+        """Reposition both the bubble menu and stat bubble to follow the pet."""
+        self._place()
+        try:
+            self.stat_bubble._place()
+        except Exception:
+            pass
+
+    def _place(self):
+        """Position the row of bubbles just above the pet's head."""
+        g = self.pet.geometry()
+        x = g.center().x() - self.W // 2
+        y = g.top() - self.H + 19
+        scr = self.pet.current_screen_rect()
+        x = max(scr.left(), min(x, scr.right() - self.W))
+        y = max(scr.top(), min(y, scr.bottom() - self.H))
+        self.move(int(x), int(y))
+
+    def paintEvent(self, e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        self._bubble_rects = []
+        n = len(self.actions)
+        button_w = 102
+        button_h = 78
+        gap = 10
+        total_w = n * button_w + (n - 1) * gap
+        start_x = (self.W - total_w) / 2
+        cy = self.H / 2
+        for i, (emoji, label, action, color) in enumerate(self.actions):
+            bx = start_x + i * (button_w + gap)
+            scale = 1.0 + self._hover_scales[i] * 0.07
+            if self._press == i:
+                scale *= 0.96
+            bw = button_w * scale
+            bh = button_h * scale
+            rect = QRectF(
+                bx + (button_w - bw) / 2,
+                cy - bh / 2,
+                bw, bh,
+            )
+            self._bubble_rects.append((i, rect, action, color, emoji))
+
+            # Warm soft shadow.
+            p.setBrush(QColor(92, 60, 42, 48))
+            p.setPen(Qt.NoPen)
+            p.drawRoundedRect(rect.adjusted(2, 4, 2, 4), 23, 23)
+
+            # Pastel candy surface.
+            c = QColor(color)
+            grad = QLinearGradient(rect.topLeft(), rect.bottomRight())
+            grad.setColorAt(0.0, c.lighter(145))
+            grad.setColorAt(1.0, c.lighter(108))
+            p.setBrush(grad)
+            p.setPen(QPen(c.darker(120), 1.2))
+            p.drawRoundedRect(rect, 23, 23)
+
+            # Top gloss makes each button feel like a soft candy.
+            gloss = QRectF(rect.x() + 8, rect.y() + 5,
+                           rect.width() - 16, rect.height() * 0.38)
+            gloss_grad = QLinearGradient(gloss.topLeft(), gloss.bottomLeft())
+            gloss_grad.setColorAt(0.0, QColor(255, 255, 255, 105))
+            gloss_grad.setColorAt(1.0, QColor(255, 255, 255, 0))
+            p.setBrush(gloss_grad)
+            p.setPen(Qt.NoPen)
+            p.drawRoundedRect(gloss, 16, 16)
+
+            p.setPen(QColor(255, 255, 255))
+            p.setFont(QFont("Microsoft YaHei", 17, QFont.Bold))
+            p.drawText(QRectF(rect.x(), rect.y() + 7, rect.width(), 34),
+                       Qt.AlignCenter, emoji)
+            p.setFont(QFont("Microsoft YaHei", 10, QFont.Bold))
+            p.drawText(QRectF(rect.x() + 5, rect.y() + 43,
+                              rect.width() - 10, 25),
+                       Qt.AlignCenter | Qt.TextSingleLine, label)
+
+    def mouseMoveEvent(self, e):
+        pos = e.pos()
+        new_hover = -1
+        for i, rect, _, _, _ in self._bubble_rects:
+            if rect.contains(QPointF(pos)):
+                new_hover = i; break
+        if new_hover != self._hover:
+            self._hover = new_hover
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.LeftButton:
+            pos = e.pos()
+            for i, rect, action, _, _ in self._bubble_rects:
+                if rect.contains(QPointF(pos)):
+                    self._press = i
+                    self.update()
+                    return
+            self._close()
+
+    def mouseReleaseEvent(self, e):
+        if e.button() == Qt.LeftButton:
+            pos = e.pos()
+            for i, rect, action, _, _ in self._bubble_rects:
+                if rect.contains(QPointF(pos)) and self._press == i:
+                    self._press = -1
+                    self._run_action(action)
+                    return
+            self._press = -1
+            if not any(rect.contains(QPointF(pos)) for _, rect, _, _, _ in self._bubble_rects):
+                self._close()
+
+    def _run_action(self, action):
+        pet = self.pet
+        if action == "chat":
+            pet.chat()
+        elif action == "feed":
+            pet.feed()
+        elif action == "play":
+            pet.play()
+        elif action == "sleep":
+            pet.toggle_sleep()
+        elif action == "settings":
+            pet.open_settings()
+        self._close()
+
+    def _close(self):
+        try:
+            self.stat_bubble.close()
+        except Exception:
+            pass
+        try:
+            self.releaseMouse()
+        except Exception:
+            pass
+        self.close()
+
+    def keyPressEvent(self, e):
+        if e.key() == Qt.Key_Escape:
+            self._close()
+
+
 class BonusBubble(QWidget):
     """A floating '+25 饱腹' style bubble that drifts up and fades out.
     Shown after the user interacts with the pet via an InteractiveBubble."""
@@ -927,7 +1386,7 @@ class BonusBubble(QWidget):
 
 class InteractiveBubble(QWidget):
     """A clickable bubble floating above the pet, e.g. '🦴 喂我'.
-    Refined style: soft shadow, gradient, pulse animation, rounded pill.
+    Refined style: soft shadow, gradient, pulse animation, oval shape.
     Clicking triggers the associated action and shows a BonusBubble."""
     def __init__(self, pet, label, action_name, color, bonus_text):
         super().__init__()
@@ -945,9 +1404,9 @@ class InteractiveBubble(QWidget):
         self.setCursor(Qt.PointingHandCursor)
         self.setFont(QFont("Microsoft YaHei", 12, QFont.Bold))
         fm = self.fontMetrics()
-        w = fm.horizontalAdvance(label) + 36
-        h = fm.height() + 20
-        self.resize(w + 8, h + 10)  # extra room for shadow + pulse
+        w = fm.horizontalAdvance(label) + 52
+        h = fm.height() + 30
+        self.resize(w + 10, h + 10)  # extra room for shadow + pulse
         self.label = label
         self._pulse = 0.0
         self._anim = QTimer(self)
@@ -961,14 +1420,37 @@ class InteractiveBubble(QWidget):
         self.update()
 
     def _place_above_pet(self):
+        """Place bubble to the side of the pet that has more room.
+        If pet is in left half of screen -> bubble goes right; else left."""
         g = self.pet.geometry()
-        x = g.center().x() - self.width() // 2
-        y = g.top() - self.height() + 4
+        scr = QApplication.primaryScreen().availableGeometry()
+        pet_cx = g.center().x()
+        screen_cx = scr.center().x()
+        toward_pet = 12
+        if pet_cx < screen_cx:
+            # Bubble is on the right, so shift it left toward the pet.
+            x = g.right() + 8 - toward_pet
+        else:
+            # Bubble is on the left, so shift it right toward the pet.
+            x = g.left() - self.width() - 8 + toward_pet
+        y = g.center().y() - self.height() // 2 + 15
+        # clamp to screen
+        x = max(scr.left(), min(x, scr.right() - self.width()))
+        y = max(scr.top(), min(y, scr.bottom() - self.height()))
         self.move(int(x), int(y))
 
     def mousePressEvent(self, e):
-        if e.button() == Qt.LeftButton:
+        if (e.button() == Qt.LeftButton and
+                self._ellipse_rect().contains(QPointF(e.pos()))):
             self._trigger()
+
+    def _ellipse_rect(self):
+        margin = 5
+        return QRectF(
+            margin, margin,
+            self.width() - margin * 2,
+            self.height() - margin * 2 - 4,
+        )
 
     def _trigger(self):
         """Execute the action and pop a BonusBubble with explicit deltas.
@@ -1047,36 +1529,35 @@ class InteractiveBubble(QWidget):
         p.translate(cx, cy)
         p.scale(scale, scale)
         p.translate(-cx, -cy)
-        # main pill rect
-        margin = 5
-        r = QRectF(margin, margin, self.width() - margin*2, self.height() - margin*2 - 6)
+        # main oval
+        r = self._ellipse_rect()
         # soft outer glow (pulse-driven)
         glow_alpha = int(60 + math.sin(self._pulse) * 20)
         c = QColor(self.color)
         glow = QColor(c); glow.setAlpha(glow_alpha)
         p.setBrush(glow)
         p.setPen(Qt.NoPen)
-        p.drawRoundedRect(r.adjusted(-2, -2, 2, 2), 18, 18)
+        p.drawEllipse(r.adjusted(-2, -2, 2, 2))
         # shadow
         shadow = QRectF(r.x()+2, r.y()+3, r.width(), r.height())
         p.setBrush(QColor(0, 0, 0, 50))
         p.setPen(Qt.NoPen)
-        p.drawRoundedRect(shadow, 16, 16)
-        # gradient pill
+        p.drawEllipse(shadow)
+        # gradient oval
         grad = QLinearGradient(r.topLeft(), r.bottomRight())
         grad.setColorAt(0.0, c.lighter(135))
         grad.setColorAt(1.0, c)
         p.setBrush(grad)
         p.setPen(QPen(c.darker(150), 1.0))
-        p.drawRoundedRect(r, 16, 16)
+        p.drawEllipse(r)
         # inner highlight (top gloss)
-        gloss = QRectF(r.x()+4, r.y()+2, r.width()-8, r.height()/2.2)
+        gloss = QRectF(r.x()+10, r.y()+3, r.width()-20, r.height()/2.2)
         gloss_grad = QLinearGradient(gloss.topLeft(), gloss.bottomLeft())
         gloss_grad.setColorAt(0.0, QColor(255, 255, 255, 90))
         gloss_grad.setColorAt(1.0, QColor(255, 255, 255, 0))
         p.setBrush(gloss_grad)
         p.setPen(Qt.NoPen)
-        p.drawRoundedRect(gloss, 12, 12)
+        p.drawEllipse(gloss)
         # white text with subtle shadow
         p.setPen(QColor(0, 0, 0, 80))
         p.setFont(self.font())
@@ -1084,15 +1565,6 @@ class InteractiveBubble(QWidget):
         p.drawText(text_rect, Qt.AlignCenter, self.label)
         p.setPen(QColor(255, 255, 255))
         p.drawText(r, Qt.AlignCenter, self.label)
-        # tail (pointing down to the pet)
-        tail_c = QColor(c)
-        tcx = r.center().x()
-        tail_top = r.bottom() - 1
-        p.setBrush(grad)
-        p.setPen(QPen(c.darker(150), 1.0))
-        p.drawPolygon([QPointF(tcx-7, tail_top),
-                       QPointF(tcx+7, tail_top),
-                       QPointF(tcx, tail_top+10)])
 
     def enterEvent(self, e):
         self.setCursor(Qt.PointingHandCursor)
@@ -1102,6 +1574,84 @@ def _esc(text):
     """HTML-escape user content for safe bubble rendering."""
     return (text.replace("&","&amp;").replace("<","&lt;")
                 .replace(">","&gt;").replace("\n","<br>"))
+
+
+class SpeechBubble(QWidget):
+    """A single-line speech bubble that grows horizontally with its text."""
+    def __init__(self, pet):
+        super().__init__()
+        self.pet = pet
+        self.text = ""
+        self.setWindowFlags(
+            Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint |
+            Qt.Tool | Qt.WindowDoesNotAcceptFocus
+        )
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setAttribute(Qt.WA_ShowWithoutActivating, True)
+        self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self.setFont(QFont("Microsoft YaHei", 11, QFont.Bold))
+        self._hide_timer = QTimer(self)
+        self._hide_timer.setSingleShot(True)
+        self._hide_timer.timeout.connect(self.hide)
+
+    def show_text(self, text, ms):
+        # Flatten all input so the bubble can never wrap onto a second line.
+        text = " ".join(str(text).replace("\r", "\n").splitlines()).strip()
+        screen = self.pet.current_screen_rect()
+        fm = self.fontMetrics()
+        padding_x = 18
+        max_text_width = max(80, screen.width() - padding_x * 2 - 24)
+        self.text = fm.elidedText(text, Qt.ElideRight, max_text_width)
+        text_width = fm.horizontalAdvance(self.text)
+        self.resize(text_width + padding_x * 2 + 10, fm.height() + 28)
+        self.follow_pet()
+        self.show()
+        self.raise_()
+        self._hide_timer.start(max(1, int(ms)))
+        self.update()
+
+    def follow_pet(self):
+        if not self.pet.isVisible():
+            self.hide()
+            return
+        g = self.pet.geometry()
+        screen = self.pet.current_screen_rect()
+        x = g.center().x() - self.width() // 2
+        # Keep the one-line bubble inside the pet window's reserved head space.
+        y = g.top() + 3
+        x = max(screen.left() + 4, min(x, screen.right() - self.width() - 4))
+        y = max(screen.top() + 4, min(y, screen.bottom() - self.height() - 4))
+        self.move(int(x), int(y))
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        body = QRectF(4, 3, self.width() - 8, self.height() - 12)
+
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor(0, 0, 0, 38))
+        p.drawRoundedRect(body.adjusted(2, 3, 2, 3), 13, 13)
+
+        grad = QLinearGradient(body.topLeft(), body.bottomRight())
+        grad.setColorAt(0.0, QColor(255, 250, 232))
+        grad.setColorAt(1.0, QColor(255, 236, 180))
+        p.setBrush(grad)
+        p.setPen(QPen(QColor(230, 180, 80), 1.2))
+        p.drawRoundedRect(body, 13, 13)
+
+        tail_x = body.center().x()
+        p.setBrush(QColor(255, 241, 198))
+        p.drawPolygon([
+            QPointF(tail_x - 6, body.bottom() - 1),
+            QPointF(tail_x + 6, body.bottom() - 1),
+            QPointF(tail_x, body.bottom() + 8),
+        ])
+
+        p.setFont(self.font())
+        p.setPen(QColor(80, 50, 20))
+        p.drawText(body.adjusted(18, 0, -18, 0),
+                   Qt.AlignVCenter | Qt.AlignHCenter | Qt.TextSingleLine,
+                   self.text)
 
 
 class PetWindow(QWidget):
@@ -1150,6 +1700,18 @@ class PetWindow(QWidget):
         self.blink = False
         self.blink_t = 0.0
 
+        # sound effects
+        self.sounds = {}
+        if HAS_SOUND:
+            sound_dir = os.path.join(POSES_DIR, "sounds")
+            for name in ["bark", "eat", "sleep", "pet", "bounce"]:
+                p = os.path.join(sound_dir, f"{name}.wav")
+                if os.path.exists(p):
+                    se = QSoundEffect(self)
+                    se.setSource(QUrl.fromLocalFile(p))
+                    se.setVolume(0.5)
+                    self.sounds[name] = se
+
         # physics
         self.vx = 0.0
         self.vy = 0.0
@@ -1176,12 +1738,13 @@ class PetWindow(QWidget):
         self.settings_win = None  # lazy-created on first settings open
         self.stats_win = None     # lazy-created on first stats open
         self._interactive_bubble = None  # current floating action bubble
+        self._bubble_menu = None         # radial bubble menu (right-click)
         self._last_interactive_t = 0.0   # throttle: don't spam
         self._ctx_menu_cb = None  # set by TrayApp to provide a right-click menu
 
-        # last speech bubble
-        self.bubble_text = ""
-        self.bubble_until = 0.0
+        # Single-line speech bubble is a separate window so it can grow wider
+        # than the pet widget without clipping or wrapping.
+        self._speech_bubble = None
 
         # resize to pet size; place at saved pos
         self.resize(int(self.PET_W), int(self.PET_H))
@@ -1208,8 +1771,50 @@ class PetWindow(QWidget):
         self.xp_timer.timeout.connect(self.on_passive_xp)
         self.xp_timer.start(60000)
 
+        # health reminders
+        self._last_drink_t = time.time()
+        self._last_rest_t = time.time()
+        self._last_stand_t = time.time()
+        self._health_timer = QTimer(self)
+        self._health_timer.timeout.connect(self.on_health_check)
+        self._health_timer.start(30000)  # check every 30s
+
         # multi-sample drag velocity: track mouse move events
         # (handled in mouseMoveEvent)
+
+    def on_health_check(self):
+        """Check if it's time to remind the user to drink/rest/stand."""
+        if self.state.get("sleeping"):
+            return
+        s = self.settings
+        now = time.time()
+        drink_min = s.get("remind_drink_min", 60)
+        rest_min = s.get("remind_rest_min", 90)
+        stand_min = s.get("remind_stand_min", 45)
+        msgs = []
+        if drink_min > 0 and now - self._last_drink_t > drink_min * 60:
+            msgs.append(random.choice([
+                "主人，该喝口水啦～💧",
+                "喝杯水吧，对身体好哦💧",
+                "汪…你已经很久没喝水了💧",
+            ]))
+            self._last_drink_t = now
+        if stand_min > 0 and now - self._last_stand_t > stand_min * 60:
+            msgs.append(random.choice([
+                "站起来活动一下呀！🧘",
+                "坐太久不好，站起来伸个懒腰～",
+                "汪汪！陪我站着玩一会儿？",
+            ]))
+            self._last_stand_t = now
+        if rest_min > 0 and now - self._last_rest_t > rest_min * 60:
+            msgs.append(random.choice([
+                "眼睛累了，看看远处休息一下👀",
+                "闭眼休息 20 秒吧～",
+                "屏幕看久了不好，歇会儿吧",
+            ]))
+            self._last_rest_t = now
+        if msgs:
+            self.say(random.choice(msgs), 4500)
 
     def add_xp(self, amount):
         """Add XP, level up if threshold met. Returns True if leveled up."""
@@ -1246,24 +1851,47 @@ class PetWindow(QWidget):
 
     # ---------- placement ----------
     def place_initial(self):
-        screen = QApplication.primaryScreen().geometry()
+        virt = self.screen_rect()  # all screens
         x = self.state.get("x")
         y = self.state.get("y")
         if x is None or y is None:
-            x = screen.width() - 260
-            y = screen.height() - self.PET_H - 120
-        x = max(0, min(int(x), screen.width() - self.PET_W))
-        y = max(0, min(int(y), screen.height() - self.PET_H - 40))
+            # default: bottom-right of primary screen
+            ps = QApplication.primaryScreen().availableGeometry()
+            x = ps.right() - self.PET_W - 40
+            y = ps.bottom() - self.PET_H - 20
+        # clamp within virtual desktop
+        x = max(virt.left(), min(int(x), virt.right() - self.PET_W))
+        y = max(virt.top(), min(int(y), virt.bottom() - self.PET_H))
         self.move(x, y)
 
     def screen_rect(self):
-        return QApplication.primaryScreen().geometry()
+        """Return the virtual bounding rect of all screens (multi-monitor)."""
+        return QApplication.primaryScreen().virtualGeometry()
+
+    def screen_at(self, pos):
+        """Return the QScreen that contains pos, or the nearest one."""
+        for scr in QApplication.screens():
+            if scr.geometry().contains(pos):
+                return scr
+        return QApplication.primaryScreen()
+
+    def current_screen_rect(self):
+        """Geometry of the screen the pet is currently on (cached per tick)."""
+        # cache for ~1 second to avoid calling screen_at every frame
+        now = time.time()
+        if hasattr(self, "_cached_screen_t") and now - self._cached_screen_t < 1.0:
+            return self._cached_screen
+        g = self.geometry()
+        scr = self.screen_at(g.center())
+        self._cached_screen = scr.availableGeometry()
+        self._cached_screen_t = now
+        return self._cached_screen
 
     def recall(self):
-        """Move pet to a safe, visible position at the bottom-center of the screen."""
-        screen = self.screen_rect()
-        x = screen.width()//2 - self.PET_W//2
-        y = screen.height() - self.PET_H - 120
+        """Move pet to a safe, visible position at the bottom-center of the current screen."""
+        screen = self.current_screen_rect()
+        x = screen.center().x() - self.PET_W // 2
+        y = screen.bottom() - self.PET_H - 20
         self.move(x, y)
         self.vx = 0; self.vy = 0
         self.state["x"] = x; self.state["y"] = y
@@ -1346,29 +1974,29 @@ class PetWindow(QWidget):
         if self.facing < 0:
             p.restore()
 
-        # speech bubble (drawn in the top reserved area)
-        if self.bubble_text and time.time() < self.bubble_until:
-            self._draw_bubble(p)
-
         p.end()
 
     def _draw_bubble(self, p):
         """Draw speech bubble in the top reserved area, with word wrap and
-        max-width so long text doesn't overflow."""
+        max-width so long text doesn't overflow. Caches QTextDocument."""
         text = self.bubble_text
         font = QFont("Microsoft YaHei", 11, QFont.Bold)
         p.setFont(font)
-        fm = p.fontMetrics()
-        # max bubble width: widget width + some, but cap so it never runs off
         max_bw = max(self.PET_W + 80, 260)
-        # wrap text into lines that fit within max_bw - 24 (padding)
         wrap_w = max_bw - 24
-        # QTextDocument for proper wrapping
-        doc = QTextDocument()
-        doc.setDefaultFont(font)
-        doc.setTextWidth(wrap_w)
-        # escape & preserve
-        doc.setPlainText(text)
+        # cache the QTextDocument; rebuild only when text changes
+        if (not hasattr(self, "_bubble_doc") or
+                getattr(self, "_bubble_doc_text", None) != text):
+            doc = QTextDocument()
+            doc.setDefaultFont(font)
+            doc.setTextWidth(wrap_w)
+            doc.setPlainText(text)
+            self._bubble_doc = doc
+            self._bubble_doc_text = text
+        else:
+            doc = self._bubble_doc
+            if doc.textWidth() != wrap_w:
+                doc.setTextWidth(wrap_w)
         text_h = doc.size().height()
         text_w = doc.idealWidth()
         bw = int(min(max_bw, text_w + 24))
@@ -1379,11 +2007,6 @@ class PetWindow(QWidget):
             bh = max_bh
         bx = (self.PET_W - bw) / 2
         by = 4
-        # if bubble wider than widget, clamp bx so it stays roughly centered
-        # (may extend outside widget bounds, but widget is transparent so it's fine
-        # as long as we don't clip — Qt clips to widget rect by default though)
-        # To avoid clipping, we draw within widget; if bw > PET_W, center anyway
-        # and accept edges may be clipped. Better: cap bw to PET_W and wrap harder.
         if bw > self.PET_W:
             bw = self.PET_W
             wrap_w = bw - 24
@@ -1427,10 +2050,19 @@ class PetWindow(QWidget):
         p.restore()
 
     # ---------- say ----------
+    def play_sound(self, name):
+        if not self.settings.get("sound_enabled", True):
+            return
+        se = self.sounds.get(name)
+        if se is not None:
+            se.stop()
+            se.play()
+
+
     def say(self, text, ms=2200):
-        self.bubble_text = text
-        self.bubble_until = time.time() + ms/1000.0
-        self.update()
+        if self._speech_bubble is None:
+            self._speech_bubble = SpeechBubble(self)
+        self._speech_bubble.show_text(text, ms)
 
     # ---------- mouse ----------
     def mousePressEvent(self, e):
@@ -1509,15 +2141,16 @@ class PetWindow(QWidget):
     # ---------- physics tick ----------
     def on_tick(self):
         now = time.time()
-        screen = self.screen_rect()
+        # use primary screen geometry directly (fast, no per-frame screen detection)
+        screen = QApplication.primaryScreen().availableGeometry()
         g = self.geometry()
         x, y = float(g.x()), float(g.y())
         w, h = g.width(), g.height()
 
         dt = 0.033           # ~30 fps
         G = 2200.0           # gravity, px/s^2
-        GROUND_PAD = 40      # pixels above bottom (taskbar clearance)
-        ground_y = screen.height() - h - GROUND_PAD
+        GROUND_PAD = 10      # pixels above taskbar
+        ground_y = screen.bottom() - h - GROUND_PAD
         BOUNCE = 0.55        # energy retained on wall bounce
         BOUNCE_FLOOR = 0.45  # energy retained on floor bounce
         FRICTION = 0.88      # per-tick ground friction
@@ -1563,20 +2196,28 @@ class PetWindow(QWidget):
                 self.on_ground = False
 
             # ---- left / right walls ----
-            if new_x < 0:
-                new_x = 0
+            if new_x < screen.left():
+                new_x = screen.left()
                 if self.vx < 0:
                     self.vx = -self.vx * BOUNCE
-                    if abs(self.vx) > 80: self.say("哎哟！", 800)
-            elif new_x > screen.width() - w:
-                new_x = screen.width() - w
+                    if abs(self.vx) > 80:
+                        now2 = time.time()
+                        if not hasattr(self, "_last_wall_t") or now2 - self._last_wall_t > 0.5:
+                            self._last_wall_t = now2
+                            self.say("哎哟！", 800)
+            elif new_x > screen.right() - w:
+                new_x = screen.right() - w
                 if self.vx > 0:
                     self.vx = -self.vx * BOUNCE
-                    if abs(self.vx) > 80: self.say("哎哟！", 800)
+                    if abs(self.vx) > 80:
+                        now2 = time.time()
+                        if not hasattr(self, "_last_wall_t") or now2 - self._last_wall_t > 0.5:
+                            self._last_wall_t = now2
+                            self.say("哎哟！", 800)
 
             # ---- ceiling ----
-            if new_y < 0:
-                new_y = 0
+            if new_y < screen.top():
+                new_y = screen.top()
                 if self.vy < 0:
                     self.vy = -self.vy * BOUNCE
 
@@ -1607,6 +2248,23 @@ class PetWindow(QWidget):
                     self._interactive_bubble = None
             except RuntimeError:
                 self._interactive_bubble = None
+
+        # keep bubble menu + stat bubble following the pet
+        if self._bubble_menu is not None:
+            try:
+                if self._bubble_menu.isVisible():
+                    self._bubble_menu.follow_pet()
+                else:
+                    self._bubble_menu = None
+            except RuntimeError:
+                self._bubble_menu = None
+
+        # keep the single-line speech bubble following the pet
+        if self._speech_bubble is not None and self._speech_bubble.isVisible():
+            try:
+                self._speech_bubble.follow_pet()
+            except RuntimeError:
+                self._speech_bubble = None
 
         # update blink occasionally
         self.blink_t += 0.033
@@ -1639,13 +2297,26 @@ class PetWindow(QWidget):
         self.refresh_pose_from_state()
         # occasional needy remarks (rate-controlled by settings)
         if not self.state["sleeping"]:
-            chance = s["needy_speak_chance"]
+            boost = s.get("chatter_frequency_boost", 1.2)
+            chance = min(1.0, s["needy_speak_chance"] * boost)
             if self.state["hunger"] < 20 and random.random() < chance:
-                self.say(random.choice(["好饿啊…🍗","给我点吃的嘛","肚子饿了…"]))
+                self.say(random.choice([
+                    "好饿啊…🍗", "给我点吃的嘛", "肚子咕咕叫了…",
+                    "闻到好吃的味道了吗？", "想啃一块小肉干", "饭饭什么时候来呀",
+                    "我的小肚子空空的", "主人，投喂时间到啦",
+                ]))
             elif self.state["mood"] < 20 and random.random() < chance:
-                self.say(random.choice(["呜呜…陪我玩嘛🥺","好无聊…","我想贴贴…"]))
+                self.say(random.choice([
+                    "呜呜…陪我玩嘛🥺", "好无聊呀…", "我想贴贴…",
+                    "小球是不是藏起来了？", "陪我闹一会儿嘛", "尾巴都无聊得不摇了",
+                    "主人看看我嘛", "摸摸头就会开心一点",
+                ]))
             elif self.state["energy"] < 20 and random.random() < chance:
-                self.say(random.choice(["困死了…💤","想睡觉…","眼皮打架了…"]))
+                self.say(random.choice([
+                    "困死了…💤", "想睡觉了…", "眼皮开始打架了…",
+                    "我的小窝在叫我", "要变成一只瞌睡狗了", "打个哈欠先…哈呜",
+                    "可以陪我眯一会儿吗", "电量快要见底啦",
+                ]))
         # maybe show a clickable interactive bubble when a stat is low
         if not self.state["sleeping"]:
             self.maybe_show_interactive_bubble()
@@ -1720,7 +2391,9 @@ class PetWindow(QWidget):
         # pick a new behavior
         if now >= self.next_behavior_at:
             s = self.settings
-            ask_w = s["ask_weight_needy"] if self.needy() else s["ask_weight_normal"]
+            boost = s.get("chatter_frequency_boost", 1.2)
+            ask_w = (s["ask_weight_needy"] if self.needy()
+                     else s["ask_weight_normal"]) * boost
             choice = random.choices(
                 ["idle","walk","sit","ask"],
                 weights=[4, 4, 2, ask_w],
@@ -1740,13 +2413,34 @@ class PetWindow(QWidget):
                 self.behavior = "ask"
                 self.behavior_until = now + 1.5
                 if self.state["hunger"] < 50:
-                    self.say("想吃东西🍗")
+                    self.say(random.choice([
+                        "想吃东西🍗", "今天有小零食吗？", "鼻子闻到香味啦",
+                        "一小口就好嘛", "要是有肉干就好啦",
+                    ]))
                 elif self.state["mood"] < 50:
-                    self.say("想玩🎾")
+                    self.say(random.choice([
+                        "想玩🎾", "我们来追小球吧", "陪我玩一小会儿嘛",
+                        "尾巴已经准备好摇啦", "主人，来碰个爪！",
+                    ]))
                 elif self.state["energy"] < 40:
-                    self.say("想睡觉💤")
+                    self.say(random.choice([
+                        "想睡觉💤", "找个舒服的姿势趴下", "我先眯一小会儿",
+                        "困意追上我啦", "小狗也要充充电",
+                    ]))
                 else:
-                    self.say(random.choice(["汪！","想贴贴❤️","你好呀","陪我玩嘛"]))
+                    h = time.localtime().tm_hour
+                    normal_lines = [
+                        "汪！我在这里", "想贴贴❤️", "偷偷看主人一眼",
+                        "尾巴今天摇得很有精神", "主人现在在忙什么呀",
+                        "我刚刚发了一会儿呆", "有我陪着你呢", "今天也要开心一点",
+                        "路过，蹭一下主人", "我的耳朵刚才动了一下",
+                        "嘿嘿，突然想叫你一声", "要不要摸摸我的头？",
+                    ]
+                    if 5 <= h < 11:
+                        normal_lines.extend(["早上的空气真好呀", "主人吃早饭了吗？"])
+                    elif 18 <= h < 23:
+                        normal_lines.extend(["晚上也陪着你呀", "今天辛苦啦，蹭蹭"])
+                    self.say(random.choice(normal_lines))
             else:
                 self.behavior = "idle"
                 self.target_vx = 0
@@ -1773,6 +2467,7 @@ class PetWindow(QWidget):
         self.behavior = "eat"
         self.behavior_until = time.time() + 1.8
         self.say("嗷呜嗷呜！🍖", 1800)
+        self.play_sound("eat")
         self.add_xp(8)
         save_state(self.state)
         self.refresh_pose_from_state()
@@ -1790,6 +2485,7 @@ class PetWindow(QWidget):
         self.vx = random.choice([-1,1]) * 350
         self.on_ground = False
         self.say("汪汪！接球！🎾", 1500)
+        self.play_sound("bark")
         self.add_xp(12)
         save_state(self.state)
         # happy pose briefly, then back to idle
@@ -1801,8 +2497,10 @@ class PetWindow(QWidget):
         if self.state["sleeping"]:
             self.behavior = "idle"; self.target_vx = 0; self.vx = 0
             self.say("zzz…晚安💤", 2000)
+            self.play_sound("sleep")
         else:
             self.say("精神百倍！☀️", 1800)
+            self.play_sound("bark")
         save_state(self.state)
         self.refresh_pose_from_state()
 
@@ -1814,6 +2512,7 @@ class PetWindow(QWidget):
         self.last_user_t = time.time()
         self.say(random.choice(["汪汪！","好舒服～","再摸摸！","嘿嘿","爱你哟","蹭蹭你"]),
                  random.randint(1000, 1800))
+        self.play_sound("pet")
         # happy pose briefly
         self.pose = POSE["happy"]
         QTimer.singleShot(1200, self.refresh_pose_from_state)
@@ -1821,11 +2520,8 @@ class PetWindow(QWidget):
         save_state(self.state)
 
     def contextMenuEvent(self, event):
-        """Right-click on the pet shows the same menu as the tray icon."""
-        if self._ctx_menu_cb is not None:
-            menu = self._ctx_menu_cb()
-            if menu is not None:
-                menu.exec_(event.globalPos())
+        """Right-click on the pet -> show the radial bubble menu."""
+        self._bubble_menu = BubbleMenu(self)
         super().contextMenuEvent(event)
 
     def chat(self):
@@ -1913,14 +2609,30 @@ class TrayApp:
         self.tray.setToolTip("我的小狗 Sheen — 双击显示/隐藏")
         self.tray.activated.connect(self.on_tray_activated)
         self.menu = QMenu()
+        self.menu.setStyleSheet(WARM_MENU_STYLE)
         self.build_menu()
         self.tray.setContextMenu(self.menu)
         self.tray.show()
         # share the menu with the pet so right-click on pet shows it too
         self.pet._ctx_menu_cb = lambda: self._fresh_menu()
+        self._install_interaction_handlers()
 
         # auto-check for updates after 5 seconds (silent, only prompts if newer)
         QTimer.singleShot(5000, self._check_update)
+
+    def _install_interaction_handlers(self):
+        """Install click, double-click, drag, and right-long-press handling."""
+        self._press_pos = None
+        self._press_t = 0
+        self._press_button = None
+        self._right_long_timer = None
+        self._right_long_fired = False
+        self._last_left_click_t = 0
+        self._pending_single_click = None
+        self.pet.mousePressEvent_orig = self.pet.mousePressEvent
+        self.pet.mouseReleaseEvent_orig = self.pet.mouseReleaseEvent
+        self.pet.mousePressEvent = self._wrap_press
+        self.pet.mouseReleaseEvent = self._wrap_release
 
     def _check_update(self):
         if RELEASES_URL.startswith("https://api.github.com/repos/USER/REPO"):
@@ -1964,23 +2676,6 @@ class TrayApp:
                 QMessageBox.warning(self.pet, "更新失败", "下载失败，请稍后重试或手动下载。")
         # run download in thread so GUI stays responsive
         threading.Thread(target=do_download, daemon=True).start()
-
-        # interaction handling:
-        #   left single click -> pet; left double click -> chat; left drag -> move
-        #   right short press  -> menu; right long press (>=500ms) -> stats page
-        self._press_pos = None
-        self._press_t = 0
-        self._press_button = None
-        self._right_long_timer = None
-        self._right_long_fired = False
-        self._last_left_click_t = 0
-        self._pending_single_click = None  # QTimer to fire pet_click after delay
-        self.pet.mousePressEvent_orig = self.pet.mousePressEvent
-        self.pet.mouseReleaseEvent_orig = self.pet.mouseReleaseEvent
-        self.pet.mousePressEvent = self._wrap_press
-        self.pet.mouseReleaseEvent = self._wrap_release
-        # suppress default context menu (we handle right click ourselves)
-        self.pet.contextMenuEvent = lambda e: None
 
     def _wrap_press(self, e):
         if e.button() == Qt.LeftButton:
@@ -2046,35 +2741,51 @@ class TrayApp:
         self.pet.open_stats()
 
     def _show_pet_menu(self, pos):
-        """Pop up the action menu (feed/play/chat/sleep/...) at pos."""
-        menu = self._fresh_menu()
-        menu.exec_(pos)
+        """Pop up the radial bubble menu (stat bar + 6 round bubbles)."""
+        self.pet._bubble_menu = BubbleMenu(self.pet)
 
-    def build_menu(self):
-        m = self.menu
-        m.clear()
+    def _populate_menu(self, m, include_status=False):
+        """Shared menu layout — used by both tray and pet right-click menu.
+        Order: status summary > 互动 > 管理 > 系统."""
+        if include_status:
+            # Optional status summary for standalone menus; the tray stays clean.
+            lvl = self.state.get('level', 1)
+            xp = int(self.state.get('xp', 0))
+            need = xp_to_next(lvl)
+            a_sum = QAction(f"📊 Lv.{lvl}  EXP {xp}/{need}", m)
+            a_sum.setEnabled(False); m.addAction(a_sum)
+            days = max(1, int((time.time() - self.state.get("born", time.time())) / 86400))
+            a_age = QAction(f"📅 陪伴第 {days} 天", m)
+            a_age.setEnabled(False); m.addAction(a_age)
+            m.addSeparator()
+
+        # ---- 互动 ----
+        a_chat = QAction("💬 聊聊天", m); a_chat.triggered.connect(self.pet.chat); m.addAction(a_chat)
         a_feed = QAction("🍖 喂食", m); a_feed.triggered.connect(self.pet.feed); m.addAction(a_feed)
         a_play = QAction("🎾 玩耍", m); a_play.triggered.connect(self.pet.play); m.addAction(a_play)
-        a_chat = QAction("💬 聊聊天", m); a_chat.triggered.connect(self.pet.chat); m.addAction(a_chat)
         a_sleep = QAction("💤 睡觉/起床", m); a_sleep.triggered.connect(self.pet.toggle_sleep); m.addAction(a_sleep)
         m.addSeparator()
+
+        # ---- 管理 ----
+        a_stats = QAction("📊 状态页", m); a_stats.triggered.connect(self.pet.open_stats); m.addAction(a_stats)
         a_recall = QAction("🎯 回到屏幕中央", m); a_recall.triggered.connect(self.pet.recall); m.addAction(a_recall)
         a_hide = QAction("👁 显示/隐藏", m); a_hide.triggered.connect(self.toggle_visible); m.addAction(a_hide)
-        a_stats = QAction("📊 状态", m); a_stats.triggered.connect(self.pet.open_stats); m.addAction(a_stats)
         a_settings = QAction("⚙️ 设置", m); a_settings.triggered.connect(self.pet.open_settings); m.addAction(a_settings)
+        m.addSeparator()
+
+        # ---- 系统 ----
         a_update = QAction("🔄 检查更新", m); a_update.triggered.connect(self._check_update); m.addAction(a_update)
         a_autostart = QAction("↻ 开机自启", m); a_autostart.setCheckable(True)
         a_autostart.setChecked(self.state.get("autostart", False))
         a_autostart.triggered.connect(lambda: self.toggle_autostart(a_autostart))
         m.addAction(a_autostart)
-        m.addSeparator()
-        a_summary = QAction(f"Lv.{self.state.get('level',1)}  EXP {int(self.state.get('xp',0))}/{xp_to_next(self.state.get('level',1))}", m)
-        a_summary.setEnabled(False); m.addAction(a_summary)
-        days = max(1, int((time.time() - self.state.get("born", time.time())) / 86400))
-        a_age = QAction(f"陪伴第 {days} 天", m); a_age.setEnabled(False); m.addAction(a_age)
-        m.addSeparator()
         self._add_debug_menu(m)
+        m.addSeparator()
         a_quit = QAction("✕ 退出", m); a_quit.triggered.connect(self.quit); m.addAction(a_quit)
+
+    def build_menu(self):
+        self.menu.clear()
+        self._populate_menu(self.menu, include_status=False)
 
     def refresh_menu(self):
         self.build_menu()
@@ -2133,26 +2844,10 @@ class TrayApp:
         self.pet._last_interactive_t = time.time()
 
     def _fresh_menu(self):
-        """Build a fresh standalone menu for right-click on pet (avoids reusing tray's)."""
+        """Build a fresh standalone menu for right-click on pet."""
         m = QMenu()
-        a_feed = QAction("🍖 喂食", m); a_feed.triggered.connect(self.pet.feed); m.addAction(a_feed)
-        a_play = QAction("🎾 玩耍", m); a_play.triggered.connect(self.pet.play); m.addAction(a_play)
-        a_chat = QAction("💬 聊聊天", m); a_chat.triggered.connect(self.pet.chat); m.addAction(a_chat)
-        a_sleep = QAction("💤 睡觉/起床", m); a_sleep.triggered.connect(self.pet.toggle_sleep); m.addAction(a_sleep)
-        m.addSeparator()
-        a_recall = QAction("🎯 回到屏幕中央", m); a_recall.triggered.connect(self.pet.recall); m.addAction(a_recall)
-        a_hide = QAction("👁 显示/隐藏", m); a_hide.triggered.connect(self.toggle_visible); m.addAction(a_hide)
-        a_stats = QAction("📊 状态", m); a_stats.triggered.connect(self.pet.open_stats); m.addAction(a_stats)
-        a_settings = QAction("⚙️ 设置", m); a_settings.triggered.connect(self.pet.open_settings); m.addAction(a_settings)
-        a_update = QAction("🔄 检查更新", m); a_update.triggered.connect(self._check_update); m.addAction(a_update)
-        m.addSeparator()
-        a_summary = QAction(f"Lv.{self.state.get('level',1)}  EXP {int(self.state.get('xp',0))}/{xp_to_next(self.state.get('level',1))}", m)
-        a_summary.setEnabled(False); m.addAction(a_summary)
-        days = max(1, int((time.time() - self.state.get("born", time.time())) / 86400))
-        a_age = QAction(f"陪伴第 {days} 天", m); a_age.setEnabled(False); m.addAction(a_age)
-        m.addSeparator()
-        self._add_debug_menu(m)
-        a_quit = QAction("✕ 退出", m); a_quit.triggered.connect(self.quit); m.addAction(a_quit)
+        m.setStyleSheet(WARM_MENU_STYLE)
+        self._populate_menu(m, include_status=True)
         return m
 
     def on_tray_activated(self, reason):
@@ -2203,8 +2898,6 @@ class TrayApp:
         self.app.quit()
 
     def run(self):
-        # refresh tray menu periodically to show updated stats
-        t = QTimer(); t.timeout.connect(self.refresh_menu); t.start(5000)
         sys.exit(self.app.exec_())
 
 

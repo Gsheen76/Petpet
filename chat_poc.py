@@ -13,7 +13,7 @@ Type to chat. Commands:
 """
 import sys, os, time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import Sheen_ai as ai
+import buddy_ai as ai
 
 def print_streaming(text):
     sys.stdout.write(text)
