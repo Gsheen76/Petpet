@@ -16,7 +16,7 @@ Run: python pet.py
 import sys, os, math, time, json, random, threading, urllib.request, urllib.error
 
 # ---------- version & update ----------
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 # GitHub Releases API endpoint. Replace USER/REPO with your repo.
 # Format: https://api.github.com/repos/USER/REPO/releases/latest
 RELEASES_URL = "https://api.github.com/repos/Gsheen76/Petpet/releases/latest"

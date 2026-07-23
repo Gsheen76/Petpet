@@ -78,6 +78,12 @@ pyinstaller --onefile --noconsole --name Petpet ^
 
 程序启动后自动检查 GitHub Releases，有新版弹窗提示，一键下载替换重启。
 
+## 🩹 v1.1.1 修复内容
+
+- 修复 Windows 编辑器或 PowerShell 保存的 `config.json` 带 UTF-8 BOM 时，API Key 无法读取的问题
+- 配置读取现在同时兼容普通 UTF-8 和 UTF-8 BOM
+- 已通过智谱 GLM 流式聊天实测
+
 ## 🌷 v1.1.0 更新内容
 
 - 重做右键成长卡，扩大属性区域并保证等级、经验和状态文字完整显示

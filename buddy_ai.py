@@ -107,7 +107,9 @@ def get_api_key():
     if key:
         return key.strip()
     try:
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+        # utf-8-sig accepts both regular UTF-8 and files saved with a BOM
+        # (common when config.json is created by Windows editors/PowerShell).
+        with open(CONFIG_PATH, "r", encoding="utf-8-sig") as f:
             return json.load(f).get("api_key", "").strip()
     except Exception:
         return ""
