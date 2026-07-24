@@ -1,10 +1,10 @@
-"""Regenerate app icons from poses/idle.png with WHITE rounded background."""
+"""Regenerate app icons from assets/poses/idle.png."""
 import os
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-POSES_DIR = os.path.join(HERE, "poses")
-ICON_DIR = os.path.join(HERE, "icons")
+PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+POSES_DIR = os.path.join(PROJECT_DIR, "assets", "poses")
+ICON_DIR = os.path.join(PROJECT_DIR, "assets", "icons")
 os.makedirs(ICON_DIR, exist_ok=True)
 
 src = os.path.join(POSES_DIR, "idle.png")

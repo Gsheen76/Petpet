@@ -1,0 +1,26 @@
+{
+  "idle":  {"folder": "idle",  "fps": 5,  "loop": true,  "fallback": "idle"},
+  "walk":  {
+    "folder": "walk",
+    "fps": 6,
+    "loop": true,
+    "fallback": "idle",
+    "scale": 1.56,
+    "anchor_bottom": true
+  },
+  "eat": {
+    "folder": "eat",
+    "fps": 4,
+    "loop": true,
+    "fallback": "eat",
+    "scale": 1.2,
+    "anchor_bottom": true
+  },
+  "play":  {"folder": "play",  "fps": 10, "loop": false, "fallback": "happy"},
+  "happy": {"folder": "happy", "fps": 8,  "loop": true,  "fallback": "happy"},
+  "sleep": {"folder": "sleep", "fps": 4,  "loop": true,  "fallback": "sleep"},
+  "drag":  {"folder": "drag",  "fps": 6,  "loop": true,  "fallback": "drag"},
+  "sad":   {"folder": "sad",   "fps": 5,  "loop": true,  "fallback": "sad"},
+  "sit":   {"folder": "sit",   "fps": 6,  "loop": true,  "fallback": "idle"},
+  "ask":   {"folder": "ask",   "fps": 8,  "loop": false, "fallback": "idle"}
+}

@@ -1,11 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
 from pathlib import Path
-import re
+
 
 project_root = Path(SPECPATH).resolve().parent
-icon_path = project_root / "build" / "Petpet.icns"
-source_text = (project_root / "pet.py").read_text(encoding="utf-8")
-version = re.search(r'^VERSION\s*=\s*"([^"]+)"', source_text, re.MULTILINE).group(1)
 assets_root = project_root / "assets"
 animation_root = assets_root / "animations"
 asset_datas = [
@@ -48,22 +45,5 @@ exe = EXE(
     strip=False,
     upx=False,
     console=False,
-    argv_emulation=False,
-    target_arch=None,
-    codesign_identity=None,
-    entitlements_file=None,
-)
-
-app = BUNDLE(
-    exe,
-    name="Petpet.app",
-    icon=str(icon_path),
-    bundle_identifier="com.gsheen.petpet",
-    info_plist={
-        "CFBundleDisplayName": "Pet陪它",
-        "CFBundleShortVersionString": version,
-        "CFBundleVersion": version,
-        "LSUIElement": True,
-        "NSHighResolutionCapable": True,
-    },
+    icon=str(project_root / "assets" / "icons" / "icon-256.png"),
 )

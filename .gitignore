@@ -1,25 +1,33 @@
-# build artifacts
-build/
-dist/
+# Python caches and local build dependencies
 __pycache__/
 .build_deps/
-*.pyc
+*.py[cod]
+
+# Build artifacts
+build/
+dist/
 *.spec
 !packaging/*.spec
-icons/icon-512.png
-icons/icon-1024.png
+*.exe
+*.app
+*.dmg
+*.zip
+assets/icons/icon-512.png
+assets/icons/icon-1024.png
 
-# user data (generated at runtime)
+# Local user data and secrets
+data/
+# Legacy locations kept ignored for automatic migration
 pet_state.json
 pet_settings.json
 memory.json
 config.json
 
-# packaged output
-*.zip
-SheenPet.exe
-
-# temp
+# Editor and temporary files
+.DS_Store
+.idea/
+.vscode/
+.agents/
 *.log
 *.bak
-poses/clean/
+assets/poses/clean/

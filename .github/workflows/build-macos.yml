@@ -24,7 +24,7 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-          cache-dependency-path: requirements-macos.txt
+          cache-dependency-path: requirements/build.txt
 
       - name: Build Petpet.app
         run: |
@@ -39,6 +39,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: Petpet-macOS-${{ matrix.arch }}
-          path: |
-            dist/Petpet.app
-            dist/Petpet-v*-macOS-${{ matrix.arch }}.zip
+          path: dist/Petpet-v*-macOS-${{ matrix.arch }}.zip
+          if-no-files-found: error

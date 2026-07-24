@@ -13,126 +13,39 @@ Features:
 Requirements: PyQt5
 Run: python pet.py
 """
-import sys, os, math, time, json, random, threading, urllib.request, urllib.error
+import sys, os, math, time, json, random, threading
+from app_paths import (
+    ANIMATIONS_DIR,
+    APP_NAME,
+    DATA_DIR,
+    ICONS_DIR,
+    MAC_BUNDLE_ID,
+    POSES_DIR,
+    RESOURCE_DIR,
+    SOUNDS_DIR,
+)
+from updater import (
+    check_for_updates_async,
+    download_release,
+    launch_windows_replacement,
+    open_macos_update,
+)
 
 # ---------- version & update ----------
-VERSION = "1.1.1"
+VERSION = "1.2.0"
 IS_WINDOWS = sys.platform.startswith("win")
 IS_MACOS = sys.platform == "darwin"
-APP_NAME = "Petpet"
-MAC_BUNDLE_ID = "com.gsheen.petpet"
-# GitHub Releases API endpoint. Replace USER/REPO with your repo.
-# Format: https://api.github.com/repos/USER/REPO/releases/latest
-RELEASES_URL = "https://api.github.com/repos/Gsheen76/Petpet/releases/latest"
-
-
-def select_release_asset(assets, platform_name=None):
-    """Return the download URL for the current platform's release asset."""
-    platform_name = platform_name or sys.platform
-    for asset in assets:
-        name = (asset.get("name") or "").lower()
-        if platform_name.startswith("win") and name.endswith(".exe"):
-            return asset.get("browser_download_url")
-        if (platform_name == "darwin" and
-                ("mac" in name or "darwin" in name) and
-                name.endswith((".dmg", ".zip"))):
-            return asset.get("browser_download_url")
-    if not (platform_name.startswith("win") or platform_name == "darwin"):
-        return assets[0].get("browser_download_url") if assets else None
-    return None
-
-
-def check_update_async(on_result):
-    """Check GitHub Releases for a newer version. Runs in background thread.
-    on_result(info_or_None) is called on the main thread via QTimer.
-    info = {'version':str, 'download_url':str, 'notes':str} or None if no update."""
-    def worker():
-        try:
-            req = urllib.request.Request(RELEASES_URL, headers={
-                "User-Agent": "SheenPet/%s" % VERSION,
-                "Accept": "application/vnd.github+json",
-            })
-            r = urllib.request.urlopen(req, timeout=10)
-            data = json.loads(r.read().decode("utf-8"))
-            tag = (data.get("tag_name") or "").lstrip("v")
-            assets = data.get("assets", [])
-            dl_url = select_release_asset(assets)
-            notes = (data.get("body") or "")[:500]
-            if tag and tag != VERSION and dl_url:
-                # compare version: simple string compare works for "1.2.3"
-                # but to be safe, compare tuples
-                def parse(s): return tuple(int(x) for x in s.split(".") if x.isdigit())
-                try:
-                    if parse(tag) > parse(VERSION):
-                        info = {"version": tag, "download_url": dl_url, "notes": notes}
-                    else:
-                        info = None
-                except Exception:
-                    if tag > VERSION:
-                        info = {"version": tag, "download_url": dl_url, "notes": notes}
-                    else:
-                        info = None
-            else:
-                info = None
-        except Exception as e:
-            info = None
-        # marshal back to main thread
-        QTimer.singleShot(0, lambda: on_result(info))
-    threading.Thread(target=worker, daemon=True).start()
-
-
-def download_and_update(download_url, on_progress=None):
-    """Download new exe to <name>_new.exe next to current exe, then run
-    update.bat which replaces the running exe and restarts.
-    Returns True on success (will have quit the app)."""
-    if not IS_WINDOWS:
-        return False  # macOS updates are downloaded via the browser
-    if getattr(sys, 'frozen', False):
-        exe_dir = os.path.dirname(sys.executable)
-        cur_exe = sys.executable
-    else:
-        return False  # dev mode, no update
-    new_path = os.path.join(exe_dir, os.path.basename(cur_exe).replace(".exe", "_new.exe"))
-    try:
-        req = urllib.request.Request(download_url, headers={"User-Agent": "SheenPet"})
-        r = urllib.request.urlopen(req, timeout=60)
-        total = int(r.headers.get("Content-Length", 0))
-        done = 0
-        with open(new_path, "wb") as f:
-            while True:
-                chunk = r.read(65536)
-                if not chunk: break
-                f.write(chunk)
-                done += len(chunk)
-                if on_progress and total:
-                    on_progress(done, total)
-        # write update.bat
-        bat = os.path.join(exe_dir, "update_sheen.bat")
-        with open(bat, "w", encoding="ascii") as f:
-            f.write('@echo off\r\n')
-            f.write('timeout /t 2 /nobreak >nul\r\n')
-            f.write('del "%s"\r\n' % cur_exe)
-            f.write('ren "%s" "%s"\r\n' % (new_path, os.path.basename(cur_exe)))
-            f.write('start "" "%s"\r\n' % cur_exe)
-            f.write('del "%s"\r\n' % bat)
-        # launch the bat and quit
-        import subprocess
-        subprocess.Popen(['cmd', '/c', bat], cwd=exe_dir,
-                         creationflags=0x08000000)  # CREATE_NO_WINDOW
-        return True
-    except Exception as e:
-        try: os.remove(new_path)
-        except Exception: pass
-        return False
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, QTextEdit, QMenu, QAction,
     QSystemTrayIcon, QVBoxLayout, QHBoxLayout, QPushButton, QFrame,
-    QGroupBox, QSpinBox, QDoubleSpinBox, QMessageBox, QProgressBar
+    QGroupBox, QSpinBox, QDoubleSpinBox, QMessageBox, QProgressBar,
+    QProgressDialog, QComboBox, QScrollArea, QAbstractSpinBox,
+    QAbstractButton
 )
 from PyQt5.QtSvg import QSvgRenderer
 from PyQt5.QtGui import (
     QPainter, QPixmap, QImage, QCursor, QIcon, QColor, QFont, QFontMetrics, QPen,
-    QLinearGradient, QRadialGradient, QTextDocument, QDesktopServices
+    QLinearGradient, QRadialGradient, QTextDocument, QDesktopServices, QRegion
 )
 from PyQt5.QtCore import (
     Qt, QTimer, QPoint, QPointF, QRect, QRectF, QByteArray, QSize, pyqtSignal, QObject, QUrl
@@ -150,48 +63,38 @@ except Exception:
     HAS_SOUND = False
 
 # ---------- paths ----------
-# Resources are bundled by PyInstaller. On macOS, writable user data lives in
-# ~/Library/Application Support/Petpet because the .app bundle is read-only.
-if getattr(sys, 'frozen', False):
-    RES_DIR = sys._MEIPASS
-    if IS_MACOS:
-        DATA_DIR = os.path.join(
-            os.path.expanduser("~/Library/Application Support"), APP_NAME)
-    else:
-        DATA_DIR = os.path.dirname(sys.executable)
-else:
-    RES_DIR = os.path.dirname(os.path.abspath(__file__))
-    DATA_DIR = RES_DIR
-os.makedirs(DATA_DIR, exist_ok=True)
-HERE = RES_DIR
+RES_DIR = RESOURCE_DIR
 SVG_PATH = os.path.join(RES_DIR, "pet.svg")
-POSES_DIR = os.path.join(RES_DIR, "poses")
-ICON_PATH = os.path.join(RES_DIR, "icons", "icon-64.png")
+ICON_PATH = os.path.join(ICONS_DIR, "icon-64.png")
 SAVE_PATH = os.path.join(DATA_DIR, "pet_state.json")
 SETTINGS_PATH = os.path.join(DATA_DIR, "pet_settings.json")
-
-# Seed a safe editable config on first packaged launch.
-if getattr(sys, 'frozen', False):
-    _config_path = os.path.join(DATA_DIR, "config.json")
-    _config_example = os.path.join(RES_DIR, "config.json.example")
-    if not os.path.exists(_config_path) and os.path.exists(_config_example):
-        try:
-            import shutil
-            shutil.copyfile(_config_example, _config_path)
-        except Exception:
-            pass
 POSE_NAMES = ["idle", "happy", "sad", "eat", "sleep", "drag", "close"]
 POSE = {name: i for i, name in enumerate(POSE_NAMES)}
 CELL = 200  # each pose is 200x200; spritesheet is 1200x200
+
+DEFAULT_ANIMATIONS = {
+    "idle":  {"fps": 5,  "loop": True,  "fallback": "idle"},
+    "walk":  {"fps": 6,  "loop": True,  "fallback": "idle",
+              "scale": 1.56, "anchor_bottom": True},
+    "eat":   {"fps": 4,  "loop": True,  "fallback": "eat",
+              "scale": 1.2, "anchor_bottom": True},
+    "play":  {"fps": 10, "loop": False, "fallback": "happy"},
+    "happy": {"fps": 8,  "loop": True,  "fallback": "happy"},
+    "sleep": {"fps": 4,  "loop": True,  "fallback": "sleep"},
+    "drag":  {"fps": 6,  "loop": True,  "fallback": "drag"},
+    "sad":   {"fps": 5,  "loop": True,  "fallback": "sad"},
+    "sit":   {"fps": 6,  "loop": True,  "fallback": "idle"},
+    "ask":   {"fps": 8,  "loop": False, "fallback": "idle"},
+}
 
 # ---------- settings (user-tunable) ----------
 DEFAULT_SETTINGS = {
     "chat_width": 640,
     "chat_height": 820,
-    "chat_bubble_max": 500,
     "chat_font_size": 20,
     "ui_font_size": 20,        # settings panel font size
     "always_on_top": True,     # pet window stays on top of other windows
+    "auto_check_updates": True, # check GitHub Releases shortly after launch
     # health reminders (minutes; 0 = off)
     "remind_drink_min": 60,    # remind to drink water every N min
     "remind_rest_min": 90,     # remind to rest eyes every N min
@@ -255,10 +158,12 @@ def load_settings():
         with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
             loaded = json.load(f)
         s = {**DEFAULT_SETTINGS, **loaded}
+        # Removed in v1.2: bubble width now follows the selected chat size.
+        s.pop("chat_bubble_max", None)
         # one-time migration: if user has old font values outside new range, reset them
-        if not (10 <= s.get("ui_font_size", 20) <= 28):
+        if not (12 <= s.get("ui_font_size", 20) <= 24):
             s["ui_font_size"] = DEFAULT_SETTINGS["ui_font_size"]
-        if not (10 <= s.get("chat_font_size", 20) <= 40):
+        if not (12 <= s.get("chat_font_size", 20) <= 32):
             s["chat_font_size"] = DEFAULT_SETTINGS["chat_font_size"]
         return s
     except Exception:
@@ -311,6 +216,9 @@ class _Bridge(QObject):
     token = pyqtSignal(str)        # one chunk of reply text
     done  = pyqtSignal(str)        # full reply (finished)
     error = pyqtSignal(str)        # error message
+    update_checked = pyqtSignal(object)
+    update_progress = pyqtSignal(int)
+    update_finished = pyqtSignal(object)
 
 bridge = None  # set in main
 
@@ -469,7 +377,8 @@ class ChatWindow(QWidget):
         return "".join(html)
 
     def _bubble_html(self, role, text):
-        W = self.s["chat_bubble_max"]  # bubble max width
+        # Keep bubbles proportional to the selected chat window size.
+        W = max(260, min(620, int(self.width() * 0.72)))
         if role == "user":
             return (f'<div style="margin:6px 0;text-align:right;">'
                     f'<span style="background:#f28f76;color:#fff;padding:8px 14px;'
@@ -761,25 +670,97 @@ class StatsWindow(QWidget):
             val.setText(f"{v}/100")
 
 
+class ToggleSwitch(QAbstractButton):
+    """Compact iOS-style on/off control used for boolean settings."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setCheckable(True)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFixedSize(56, 30)
+        self.setFocusPolicy(Qt.StrongFocus)
+        self.toggled.connect(lambda _checked: self.update())
+
+    def sizeHint(self):
+        return QSize(56, 30)
+
+    def paintEvent(self, _event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        track = QRectF(1, 2, self.width() - 2, self.height() - 4)
+        track_color = QColor("#f08e72") if self.isChecked() else QColor("#d8c8bd")
+        if not self.isEnabled():
+            track_color.setAlpha(120)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(track_color)
+        painter.drawRoundedRect(track, 13, 13)
+        knob_size = 22
+        knob_x = self.width() - knob_size - 4 if self.isChecked() else 4
+        painter.setBrush(QColor("#fffdf9"))
+        painter.drawEllipse(QRectF(knob_x, 4, knob_size, knob_size))
+        painter.end()
+
+
+class StepperControl(QWidget):
+    """Spin box with large, friendly minus/plus buttons."""
+
+    def __init__(self, minimum, maximum, step, value, parent=None):
+        super().__init__(parent)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(5)
+        self.minus = QPushButton("−")
+        self.plus = QPushButton("+")
+        for button in (self.minus, self.plus):
+            button.setObjectName("stepButton")
+            button.setFixedSize(34, 34)
+            button.setAutoRepeat(True)
+            button.setAutoRepeatDelay(350)
+            button.setAutoRepeatInterval(90)
+
+        if isinstance(step, float):
+            self.spin = QDoubleSpinBox()
+            self.spin.setDecimals(2 if step < 0.1 else 1)
+        else:
+            self.spin = QSpinBox()
+        self.spin.setButtonSymbols(QAbstractSpinBox.NoButtons)
+        self.spin.setAlignment(Qt.AlignCenter)
+        self.spin.setRange(minimum, maximum)
+        self.spin.setSingleStep(step)
+        self.spin.setValue(value)
+        self.spin.setFixedSize(92, 34)
+        self.minus.clicked.connect(self.spin.stepDown)
+        self.plus.clicked.connect(self.spin.stepUp)
+        layout.addWidget(self.minus)
+        layout.addWidget(self.spin)
+        layout.addWidget(self.plus)
+
+    def value(self):
+        return self.spin.value()
+
+    def setValue(self, value):
+        self.spin.setValue(value)
+
+    def setToolTip(self, text):
+        super().setToolTip(text)
+        self.minus.setToolTip(text)
+        self.spin.setToolTip(text)
+        self.plus.setToolTip(text)
+
+
 class SettingsWindow(QWidget):
     """Tunable settings panel — chat window size, decay rates, chatter frequency, etc."""
     CHANGED = pyqtSignal()
 
     FIELDS = [
         # (key, label, min, max, step, hint)
-        ("chat_width",   "聊天窗口宽度",    320, 1200, 20, "像素"),
-        ("chat_height",  "聊天窗口高度",    400, 1000, 20, "像素"),
-        ("chat_bubble_max", "聊天气泡最大宽度", 240, 900, 20, "像素"),
-        ("chat_font_size",  "聊天字体大小",   10, 40, 1, "px (10-40)"),
-        ("ui_font_size",    "设置面板字体大小", 10, 28, 1, "px (10-28)"),
-        ("always_on_top",   "始终置顶 (1是 0否)",  0, 1, 1, "1=总在最前 0=可被遮挡"),
-        ("sound_enabled",   "音效开关 (1开 0关)",  0, 1, 1, "1=有声 0=静音"),
+        ("chat_font_size", "聊天字体大小", 12, 32, 1,
+         "聊天记录、输入框和按钮的文字大小"),
+        ("ui_font_size", "设置页字体大小", 12, 24, 1,
+         "调整当前设置页面的整体文字大小"),
         ("remind_drink_min","喝水提醒间隔(分钟)", 0, 300, 5, "0=关 60=每小时"),
         ("remind_rest_min", "休息眼睛间隔(分钟)", 0, 300, 5, "0=关 90=每1.5小时"),
         ("remind_stand_min","起身活动间隔(分钟)", 0, 300, 5, "0=关 45=每45分钟"),
-        ("decay_hunger", "饱腹下降速度",     0.02, 2.0, 0.02, "每2秒降低（越小越慢）"),
-        ("decay_energy", "精力下降速度",     0.02, 2.0, 0.02, "每2秒降低"),
-        ("decay_mood",   "心情下降速度",     0.02, 2.0, 0.02, "每2秒降低"),
         ("needy_speak_chance", "需求自言自语概率", 0.0, 1.0, 0.05, "0=安静 1=每次都说"),
         ("ask_weight_normal", "自主搭话权重(平时)", 0.0, 3.0, 0.1, "越大越爱搭话"),
         ("ask_weight_needy",  "自主搭话权重(需要照顾)", 0.0, 3.0, 0.1, "饿了/无聊时权重"),
@@ -787,110 +768,344 @@ class SettingsWindow(QWidget):
         ("nudge_gap_min",  "AI 主动找你最小间隔(秒)", 1800, 21600, 1800, "两次主动找你的最小间隔"),
     ]
 
+    SWITCHES = [
+        ("always_on_top", "小狗始终置顶", "关闭后允许其他窗口遮挡小狗"),
+        ("sound_enabled", "互动音效", "喂食、玩耍和抚摸时播放声音"),
+        ("auto_check_updates", "启动时检查更新", "开启后每次启动都会检查 GitHub 最新版本"),
+    ]
+
+    CHAT_SIZES = [
+        ("小巧 · 480 × 620", (480, 620)),
+        ("舒适 · 560 × 720", (560, 720)),
+        ("标准 · 640 × 820", (640, 820)),
+        ("宽敞 · 720 × 900", (720, 900)),
+        ("超大 · 800 × 980", (800, 980)),
+    ]
+
     def __init__(self, pet_window):
         super().__init__()
         self.pet = pet_window
         self.s = pet_window.settings
         self.inputs = {}
+        self.switch_labels = {}
+        self.chat_size_combo = None
 
-        self.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.Tool)
-        self.setWindowTitle("Sheen · 温馨设置")
+        self._drag_offset = None
+        self.setWindowFlags(
+            Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
+        )
+        self.setObjectName("settingsWindow")
+        self.setWindowTitle("温馨设置")
         self._apply_font()
         self._build_ui()
-        self.setFixedWidth(500)
+        screen = QApplication.primaryScreen().availableGeometry()
+        self.setFixedSize(
+            max(480, min(640, screen.width() - 40)),
+            max(560, min(720, screen.height() - 100)),
+        )
 
     def _apply_font(self):
-        fs = self.s.get("ui_font_size", 13)
+        fs = int(self.s.get("ui_font_size", 20))
         self.setStyleSheet(f"""
-            QWidget {{ background:#fff8ec; font-family:'Microsoft YaHei',sans-serif;
-                       font-size:{fs}px; color:#65483b; }}
-            QLabel {{ padding:4px 0; }}
-            QDoubleSpinBox, QSpinBox {{
-                background:#fffdf8; border:1px solid #edc9ad; border-radius:9px;
-                padding:6px 8px; min-width:100px; color:#65483b;
+            QWidget {{
+                background:transparent;
+                font-family:'Microsoft YaHei',sans-serif;
+                font-size:{fs}px;
+                color:#65483b;
+            }}
+            QWidget#settingsWindow {{
+                background:#fff8ec;
+                border:1px solid #e7c4ad;
+                border-radius:18px;
+            }}
+            QScrollArea, QScrollArea > QWidget > QWidget {{
+                background:transparent;
+                border:0;
+            }}
+            QLabel {{ background:transparent; }}
+            QComboBox, QDoubleSpinBox, QSpinBox {{
+                background:#fffdf9;
+                border:1px solid #e7c6ad;
+                border-radius:10px;
+                padding:5px 10px;
+                color:#65483b;
                 selection-background-color:#ffc9b8;
             }}
-            QDoubleSpinBox:focus, QSpinBox:focus {{
+            QComboBox:focus, QDoubleSpinBox:focus, QSpinBox:focus {{
                 border:2px solid #f39b80;
             }}
+            QComboBox::drop-down {{
+                width:34px;
+                border:0;
+            }}
+            QComboBox QAbstractItemView {{
+                background:#fffdf9;
+                border:1px solid #e7c6ad;
+                selection-background-color:#ffe1d4;
+                selection-color:#65483b;
+                padding:6px;
+            }}
             QPushButton {{
-                background:#f28f76; color:#fff; border:0; border-radius:11px;
-                padding:9px 18px; font-weight:700;
+                background:#f28f76;
+                color:#fff;
+                border:0;
+                border-radius:11px;
+                padding:9px 18px;
+                font-weight:700;
             }}
             QPushButton:hover {{ background:#f5a08a; }}
             QPushButton:pressed {{ background:#df7d67; }}
+            QPushButton#stepButton {{
+                background:#fff0e6;
+                color:#b36650;
+                border:1px solid #efc8b3;
+                border-radius:10px;
+                padding:0;
+                font-size:{max(16, fs)}px;
+                font-weight:900;
+            }}
+            QPushButton#stepButton:hover {{
+                background:#ffe1d3;
+                border-color:#e8a88b;
+            }}
+            QPushButton#stepButton:pressed {{ background:#ffd1bf; }}
+            QPushButton#closeButton {{
+                background:#ffe5dc;
+                color:#a96254;
+                border:1px solid #efc6b8;
+                border-radius:16px;
+                padding:0;
+                font-size:22px;
+                font-weight:600;
+            }}
+            QPushButton#closeButton:hover {{
+                background:#f49a84;
+                color:#ffffff;
+                border-color:#ed8a73;
+            }}
+            QPushButton#closeButton:pressed {{
+                background:#dc765f;
+                color:#ffffff;
+            }}
             QPushButton#reset {{ background:#d7b9a6; color:#6d5145; }}
             QPushButton#reset:hover {{ background:#e2c8b8; }}
             QPushButton#reset:pressed {{ background:#c9a892; }}
             QGroupBox {{
-                background:#fffdf8; border:1px solid #edcfb5; border-radius:15px;
-                margin-top:12px; padding:13px 12px 10px 12px;
+                background:#fffdf8;
+                border:1px solid #edcfb5;
+                border-radius:17px;
+                margin-top:15px;
+                padding:18px 15px 12px 15px;
             }}
             QGroupBox::title {{
-                color:#9b6651; font-weight:700; left:14px;
-                padding:0 7px; background:#fff8ec;
+                color:#925d49;
+                font-weight:800;
+                left:15px;
+                padding:0 8px;
+                background:#fff8ec;
+            }}
+            QScrollBar:vertical {{
+                background:transparent;
+                width:10px;
+                margin:4px 0;
+            }}
+            QScrollBar::handle:vertical {{
+                background:#e8bfa8;
+                border-radius:5px;
+                min-height:36px;
+            }}
+            QScrollBar::add-line:vertical,
+            QScrollBar::sub-line:vertical {{
+                height:0;
             }}
         """)
-        self.setFixedWidth(500)
 
     def _build_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 18, 20, 18)
-        layout.setSpacing(12)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(22, 14, 22, 14)
+        root.setSpacing(6)
 
-        title = QLabel("🌼 Sheen 的温馨设置")
+        title_bar = QFrame()
+        title_bar.setCursor(Qt.SizeAllCursor)
+        title_row = QHBoxLayout(title_bar)
+        title_row.setContentsMargins(0, 0, 0, 0)
+        title_row.setSpacing(8)
+        title = QLabel("🌼 温馨设置")
         title.setStyleSheet(
-            "font-size:19px; font-weight:800; color:#7a4d3b; padding:0 0 7px 0;")
-        layout.addWidget(title)
+            "font-size:22px; font-weight:900; color:#754b3a;")
+        title.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        close_button = QPushButton("×")
+        close_button.setObjectName("closeButton")
+        close_button.setToolTip("关闭温馨设置")
+        close_button.setFixedSize(32, 32)
+        close_button.clicked.connect(self.close)
+        title_row.addWidget(title)
+        title_row.addStretch(1)
+        title_row.addWidget(close_button)
+        title_bar.mousePressEvent = self._title_bar_press
+        title_bar.mouseMoveEvent = self._title_bar_move
+        title_bar.mouseReleaseEvent = self._title_bar_release
+        root.addWidget(title_bar)
 
-        layout.addWidget(self._group("🍑 界面与声音", [
-            "chat_width","chat_height","chat_bubble_max","chat_font_size","ui_font_size",
-            "always_on_top","sound_enabled"]))
-        layout.addWidget(self._group("🌿 健康提醒", [
-            "remind_drink_min","remind_rest_min","remind_stand_min"]))
+        subtitle = QLabel("每一项都会保存并立即应用，按需要慢慢调就好。")
+        subtitle.setStyleSheet("color:#a27a68; font-size:13px;")
+        root.addWidget(subtitle)
 
-        # buttons
-        btn_row = QHBoxLayout()
-        btn_row.setSpacing(8)
-        reset_btn = QPushButton("恢复默认"); reset_btn.setObjectName("reset")
-        reset_btn.clicked.connect(self.reset_defaults)
-        ok_btn = QPushButton("保存并应用"); ok_btn.clicked.connect(self.apply)
-        btn_row.addWidget(reset_btn); btn_row.addStretch(1); btn_row.addWidget(ok_btn)
-        layout.addLayout(btn_row)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(0, 2, 8, 2)
+        content_layout.setSpacing(8)
+        content_layout.setAlignment(Qt.AlignTop)
 
-        # status line (shows "已保存" feedback)
+        content_layout.addWidget(self._interface_group())
+        content_layout.addWidget(self._group("🌿 健康提醒", [
+            "remind_drink_min", "remind_rest_min", "remind_stand_min"
+        ]))
+        content_layout.addWidget(self._group("💬 日常互动", [
+            "needy_speak_chance", "ask_weight_normal", "ask_weight_needy"
+        ]))
+        content_layout.addWidget(self._group("✨ AI 主动陪伴", [
+            "nudge_idle_min", "nudge_gap_min"
+        ]))
+        scroll.setWidget(content)
+        root.addWidget(scroll, 1)
+
         self.status_label = QLabel("")
         self.status_label.setStyleSheet(
-            "color:#cf765e; font-size:13px; font-weight:700; padding:2px 0;")
+            "color:#cf765e; font-size:13px; font-weight:800; padding:0;")
         self.status_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self.status_label)
+        root.addWidget(self.status_label)
 
-        hint = QLabel("♡ 保存后立即生效，Sheen 会乖乖记住你的偏好。")
-        hint.setStyleSheet("color:#aa8170; font-size:11px; padding:4px 0;")
-        layout.addWidget(hint)
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(10)
+        reset_btn = QPushButton("恢复全部默认值")
+        reset_btn.setObjectName("reset")
+        reset_btn.clicked.connect(self.reset_defaults)
+        ok_btn = QPushButton("保存并立即应用")
+        ok_btn.clicked.connect(self.apply)
+        btn_row.addWidget(reset_btn)
+        btn_row.addStretch(1)
+        btn_row.addWidget(ok_btn)
+        root.addLayout(btn_row)
+
+    def _title_bar_press(self, event):
+        if event.button() == Qt.LeftButton:
+            self._drag_offset = (
+                event.globalPos() - self.frameGeometry().topLeft()
+            )
+            event.accept()
+
+    def _title_bar_move(self, event):
+        if self._drag_offset is not None and event.buttons() & Qt.LeftButton:
+            self.move(event.globalPos() - self._drag_offset)
+            event.accept()
+
+    def _title_bar_release(self, event):
+        self._drag_offset = None
+        event.accept()
+
+    def _interface_group(self):
+        group = QGroupBox("🍑 界面、声音与更新")
+        layout = QVBoxLayout(group)
+        layout.setSpacing(7)
+
+        combo = QComboBox()
+        combo.setMinimumWidth(220)
+        for label, size in self.CHAT_SIZES:
+            combo.addItem(label, size)
+        self.chat_size_combo = combo
+        self._select_chat_size(
+            int(self.s.get("chat_width", 640)),
+            int(self.s.get("chat_height", 820)),
+        )
+        self._add_row(
+            layout,
+            "聊天窗口大小",
+            "五档常用比例，从小巧到超大",
+            combo,
+        )
+
+        for key in ("chat_font_size", "ui_font_size"):
+            self._add_numeric_row(layout, key)
+        for key, label, hint in self.SWITCHES:
+            switch = ToggleSwitch()
+            switch.setChecked(bool(self.s.get(key, False)))
+            self.inputs[key] = switch
+            state = QLabel()
+            state.setFixedWidth(36)
+            state.setStyleSheet("color:#a36b58; font-size:12px; font-weight:700;")
+            self.switch_labels[key] = state
+            switch.toggled.connect(
+                lambda checked, setting=key:
+                self._update_switch_label(setting, checked)
+            )
+            self._update_switch_label(key, switch.isChecked())
+            control = QWidget()
+            control_layout = QHBoxLayout(control)
+            control_layout.setContentsMargins(0, 0, 0, 0)
+            control_layout.setSpacing(7)
+            control_layout.addWidget(state)
+            control_layout.addWidget(switch)
+            self._add_row(layout, label, hint, control)
+        return group
 
     def _group(self, title, keys):
-        gb = QGroupBox(title)
-        v = QVBoxLayout(gb); v.setSpacing(6)
+        group = QGroupBox(title)
+        layout = QVBoxLayout(group)
+        layout.setSpacing(7)
         for key in keys:
-            label, mn, mx, step, hint = self._field_meta(key)
-            row = QHBoxLayout()
-            row.setContentsMargins(0,0,0,0)
-            lbl = QLabel(label)
-            lbl.setMinimumWidth(150)
-            # choose spinbox type by step/decimal
-            if isinstance(step, float) or "." in str(step):
-                sb = QDoubleSpinBox()
-                sb.setDecimals(2 if step < 0.1 else (1 if step < 1 else 0))
-            else:
-                sb = QSpinBox()
-            sb.setRange(mn, mx); sb.setSingleStep(step)
-            sb.setValue(self.s.get(key, 0))
-            sb.setToolTip(hint)
-            self.inputs[key] = sb
-            row.addWidget(lbl); row.addStretch(1); row.addWidget(sb)
-            v.addLayout(row)
-        return gb
+            self._add_numeric_row(layout, key)
+        return group
+
+    def _add_numeric_row(self, layout, key):
+        label, minimum, maximum, step, hint = self._field_meta(key)
+        control = StepperControl(
+            minimum, maximum, step, self.s.get(key, 0)
+        )
+        control.setToolTip(hint)
+        self.inputs[key] = control
+        self._add_row(layout, label, hint, control)
+
+    def _add_row(self, layout, label, hint, control):
+        row_widget = QWidget()
+        row = QHBoxLayout(row_widget)
+        row.setContentsMargins(3, 3, 3, 3)
+        row.setSpacing(12)
+        text_layout = QVBoxLayout()
+        text_layout.setContentsMargins(0, 0, 0, 0)
+        text_layout.setSpacing(1)
+        title = QLabel(label)
+        title.setStyleSheet("font-weight:800; color:#704b3c;")
+        description = QLabel(hint)
+        description.setStyleSheet("color:#aa8270; font-size:12px;")
+        description.setWordWrap(True)
+        text_layout.addWidget(title)
+        text_layout.addWidget(description)
+        row.addLayout(text_layout, 1)
+        row.addWidget(control, 0, Qt.AlignRight | Qt.AlignVCenter)
+        layout.addWidget(row_widget)
+
+    def _update_switch_label(self, key, checked):
+        label = self.switch_labels.get(key)
+        if label is not None:
+            label.setText("开启" if checked else "关闭")
+
+    def _select_chat_size(self, width, height):
+        if self.chat_size_combo is None:
+            return
+        best_index = 0
+        best_distance = None
+        for index in range(self.chat_size_combo.count()):
+            size = self.chat_size_combo.itemData(index)
+            distance = abs(size[0] - width) + abs(size[1] - height)
+            if best_distance is None or distance < best_distance:
+                best_index = index
+                best_distance = distance
+        self.chat_size_combo.setCurrentIndex(best_index)
 
     def _field_meta(self, key):
         for k, label, mn, mx, step, hint in self.FIELDS:
@@ -898,68 +1113,53 @@ class SettingsWindow(QWidget):
         return key, 0, 100, 1, ""
 
     def apply(self):
-        for key, sb in self.inputs.items():
-            val = sb.value()
-            # QDoubleSpinBox may return float; convert int fields to int
-            if isinstance(self.s.get(key), int):
-                val = int(val)
-            self.s[key] = val
+        previous = dict(self.s)
+        width, height = self.chat_size_combo.currentData()
+        self.s["chat_width"] = int(width)
+        self.s["chat_height"] = int(height)
+        for key, control in self.inputs.items():
+            if isinstance(control, ToggleSwitch):
+                value = bool(control.isChecked())
+            else:
+                value = control.value()
+                default = DEFAULT_SETTINGS.get(key)
+                if isinstance(default, int) and not isinstance(default, bool):
+                    value = int(value)
+                elif isinstance(default, float):
+                    value = float(value)
+            self.s[key] = value
+        self.s.pop("chat_bubble_max", None)
         save_settings(self.s)
-        # self.s IS pet.settings (same ref), so pet already sees new values.
-        # But re-assign to be explicit & safe.
-        self.pet.settings = self.s
-        # apply always-on-top flag to pet window
-        self.pet.apply_window_flags()
-        # refresh this settings panel's own font live
+        self.pet.apply_runtime_settings(previous)
         self._apply_font()
-        # if chat window exists (open or not), update its size and style live
-        if self.pet.chat_win is not None:
-            cw = self.pet.chat_win
-            cw.s = self.s  # re-bind to latest settings dict
-            # clamp to screen
-            screen = self.pet.current_screen_rect()
-            w = min(self.s["chat_width"], screen.width() - 20)
-            h = min(self.s["chat_height"], screen.height() - 80)
-            cw.setFixedSize(w, h)
-            cw._apply_style()
-            cw._set_log_html(cw._render_history())
-            if cw.isVisible():
-                # reposition in case it no longer fits
-                cw.show_near_pet()
-                cw.update()
-                cw.repaint()
         self.CHANGED.emit()
         self.pet.say("好啦，记住了~", 1500)
-        # show an in-panel status line so user sees real feedback
-        if hasattr(self, "status_label"):
-            self.status_label.setText("✓ 已保存并应用")
-            QTimer.singleShot(1500, lambda: self.status_label.setText(""))
+        self.status_label.setText("✓ 所有设置已保存并立即应用")
+        QTimer.singleShot(1800, lambda: self.status_label.setText(""))
 
     def reset_defaults(self):
-        # mutate the SAME dict object so pet.settings (same ref) sees changes
+        previous = dict(self.s)
         self.s.clear()
         self.s.update(DEFAULT_SETTINGS)
+        self.s.pop("chat_bubble_max", None)
         save_settings(self.s)
         self.pet.settings = self.s
-        # refresh UI spinboxes
-        for key, sb in self.inputs.items():
-            sb.setValue(self.s.get(key, 0))
-        # refresh this panel's font
+        self._select_chat_size(
+            DEFAULT_SETTINGS["chat_width"],
+            DEFAULT_SETTINGS["chat_height"],
+        )
+        for key, control in self.inputs.items():
+            value = DEFAULT_SETTINGS.get(key, 0)
+            if isinstance(control, ToggleSwitch):
+                control.setChecked(bool(value))
+            else:
+                control.setValue(value)
+        self.pet.apply_runtime_settings(previous)
         self._apply_font()
-        # apply to chat window if exists
-        if self.pet.chat_win is not None:
-            cw = self.pet.chat_win
-            cw.s = self.s
-            screen = self.pet.current_screen_rect()
-            w = min(self.s["chat_width"], screen.width() - 20)
-            h = min(self.s["chat_height"], screen.height() - 80)
-            cw.setFixedSize(w, h)
-            cw._apply_style()
-            cw._set_log_html(cw._render_history())
-            if cw.isVisible():
-                cw.show_near_pet()
-                cw.update(); cw.repaint()
         self.pet.say("已恢复默认~", 1500)
+        self.status_label.setText("✓ 已恢复全部默认值并立即应用")
+        QTimer.singleShot(1800, lambda: self.status_label.setText(""))
+        self.CHANGED.emit()
 
 
 class StatBubble(QWidget):
@@ -1693,7 +1893,7 @@ class PetWindow(QWidget):
         super().__init__()
         self.state = state
         self.settings = load_settings()
-        self.PET_W, self.PET_H = 160, 220
+        self.PET_W, self.PET_H = 190, 220
         self.DOG_H = 160  # actual dog drawing height; top 60px is bubble space
         self.scale = 0.8  # render scale
 
@@ -1727,6 +1927,16 @@ class PetWindow(QWidget):
             if not self.renderer.isValid():
                 raise RuntimeError("no pose PNGs and pet.svg invalid")
 
+        # Optional multi-frame actions. Each action lives in
+        # assets/animations/<action>/ and falls back to the static pose above.
+        self.animation_specs = {}
+        self.animation_frames = {}
+        self._active_animation = None
+        self._animation_started_at = time.monotonic()
+        self._animation_override = None
+        self._animation_override_token = 0
+        self._load_animations()
+
         # current pose + blink timer
         self.pose = POSE["idle"]
         self.blink = False
@@ -1735,9 +1945,8 @@ class PetWindow(QWidget):
         # sound effects
         self.sounds = {}
         if HAS_SOUND:
-            sound_dir = os.path.join(POSES_DIR, "sounds")
             for name in ["bark", "eat", "sleep", "pet", "bounce"]:
-                p = os.path.join(sound_dir, f"{name}.wav")
+                p = os.path.join(SOUNDS_DIR, f"{name}.wav")
                 if os.path.exists(p):
                     se = QSoundEffect(self)
                     se.setSource(QUrl.fromLocalFile(p))
@@ -1773,6 +1982,7 @@ class PetWindow(QWidget):
         self._bubble_menu = None         # radial bubble menu (right-click)
         self._last_interactive_t = 0.0   # throttle: don't spam
         self._ctx_menu_cb = None  # set by TrayApp to provide a right-click menu
+        self._settings_applied_cb = None
 
         # Single-line speech bubble is a separate window so it can grow wider
         # than the pet widget without clipping or wrapping.
@@ -1951,6 +2161,44 @@ class PetWindow(QWidget):
         if was_visible:
             self.show()
 
+    def apply_runtime_settings(self, previous=None):
+        """Apply every user-facing setting immediately after save/reset."""
+        previous = previous or {}
+        self.apply_window_flags()
+
+        now = time.time()
+        reminder_keys = (
+            ("remind_drink_min", "_last_drink_t"),
+            ("remind_rest_min", "_last_rest_t"),
+            ("remind_stand_min", "_last_stand_t"),
+        )
+        for key, timestamp_name in reminder_keys:
+            if previous.get(key) != self.settings.get(key):
+                setattr(self, timestamp_name, now)
+
+        if self.chat_win is not None:
+            chat = self.chat_win
+            chat.s = self.settings
+            screen = self.current_screen_rect()
+            width = min(
+                int(self.settings["chat_width"]),
+                max(320, screen.width() - 20),
+            )
+            height = min(
+                int(self.settings["chat_height"]),
+                max(400, screen.height() - 80),
+            )
+            chat.setFixedSize(width, height)
+            chat._apply_style()
+            chat._set_log_html(chat._render_history())
+            if chat.isVisible():
+                chat.show_near_pet()
+                chat.update()
+                chat.repaint()
+
+        if callable(self._settings_applied_cb):
+            self._settings_applied_cb(previous, self.settings)
+
     def is_visible_on_screen(self):
         g = self.geometry()
         s = self.screen_rect()
@@ -1963,17 +2211,121 @@ class PetWindow(QWidget):
         g = self.geometry()
         return QPointF(g.x() + g.width()/2, g.y() + g.height()/2)
 
+    # ---------- action animation ----------
+    def _load_animations(self):
+        """Load optional PNG frame sequences without requiring them to exist."""
+        specs = {name: dict(values)
+                 for name, values in DEFAULT_ANIMATIONS.items()}
+        manifest_path = os.path.join(ANIMATIONS_DIR, "manifest.json")
+        if os.path.exists(manifest_path):
+            try:
+                with open(manifest_path, "r", encoding="utf-8-sig") as f:
+                    custom = json.load(f)
+                if isinstance(custom, dict):
+                    for name, values in custom.items():
+                        if isinstance(values, dict):
+                            specs.setdefault(name, {}).update(values)
+            except (OSError, ValueError):
+                pass
+
+        self.animation_specs = specs
+        for name, spec in specs.items():
+            folder = str(spec.get("folder", name))
+            frame_dir = os.path.join(ANIMATIONS_DIR, folder)
+            if not os.path.isdir(frame_dir):
+                continue
+            frame_paths = sorted(
+                (os.path.join(frame_dir, filename)
+                 for filename in os.listdir(frame_dir)
+                 if filename.lower().endswith(".png")),
+                key=lambda path: os.path.basename(path).lower(),
+            )
+            frames = []
+            for frame_path in frame_paths:
+                pixmap = QPixmap(frame_path)
+                if pixmap.isNull():
+                    continue
+                # AI source frames can be large. Retaining a 2x render size
+                # keeps Retina output sharp without consuming hundreds of MB.
+                if pixmap.width() > 512 or pixmap.height() > 512:
+                    pixmap = pixmap.scaled(
+                        512, 512, Qt.KeepAspectRatio,
+                        Qt.SmoothTransformation)
+                frames.append(pixmap)
+            if frames:
+                self.animation_frames[name] = frames
+
+    def trigger_animation(self, name, duration_ms):
+        """Temporarily override state-driven animation for an interaction."""
+        self._animation_override_token += 1
+        token = self._animation_override_token
+        self._animation_override = name
+        self._active_animation = None
+        self._animation_started_at = time.monotonic()
+
+        def finish():
+            if token == self._animation_override_token:
+                self._animation_override = None
+                self._active_animation = None
+                self._animation_started_at = time.monotonic()
+                self.refresh_pose_from_state()
+
+        QTimer.singleShot(max(1, int(duration_ms)), finish)
+        self.update()
+
+    def _current_animation_name(self):
+        if self._animation_override:
+            return self._animation_override
+        if self.state.get("sleeping"):
+            return "sleep"
+        if self.dragging:
+            return "drag"
+        if self.behavior == "eat":
+            return "eat"
+        if self.behavior == "walk":
+            return "walk"
+        if self.behavior in ("sit", "ask"):
+            return self.behavior
+        return POSE_NAMES[self.pose]
+
+    def _animation_frame(self, name):
+        frames = self.animation_frames.get(name)
+        if not frames:
+            return None
+        if self._active_animation != name:
+            self._active_animation = name
+            self._animation_started_at = time.monotonic()
+        spec = self.animation_specs.get(name, {})
+        try:
+            fps = max(1.0, float(spec.get("fps", 8)))
+        except (TypeError, ValueError):
+            fps = 8.0
+        index = int((time.monotonic() - self._animation_started_at) * fps)
+        if bool(spec.get("loop", True)):
+            index %= len(frames)
+        else:
+            index = min(index, len(frames) - 1)
+        return frames[index]
+
+    def _fallback_pose(self, animation_name):
+        spec = self.animation_specs.get(animation_name, {})
+        fallback = str(spec.get("fallback", animation_name))
+        return POSE.get(fallback, self.pose)
+
     # ---------- painting ----------
     def paintEvent(self, event):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         p.setRenderHint(QPainter.SmoothPixmapTransform)
 
-        # Determine pose for rendering
-        pose = self.pose
+        # Determine action animation and its static fallback.
+        animation_name = self._current_animation_name()
+        pose = self._fallback_pose(animation_name)
+        animation_pixmap = self._animation_frame(animation_name)
         # blink: briefly switch to "close" (eyes-closed) pose if available
         if self.blink and pose in (POSE["idle"], POSE["happy"]):
             pose = POSE["close"]
+            animation_pixmap = None
 
         # dog occupies lower part of widget; top is reserved for speech bubble
         dog_y = self.PET_H - self.DOG_H
@@ -1985,15 +2337,32 @@ class PetWindow(QWidget):
             p.translate(self.PET_W, 0)
             p.scale(-1, 1)
 
-        if self.use_png:
-            pm = self.pose_pixmaps.get(pose) or self.pose_pixmaps.get(POSE["idle"])
+        if animation_pixmap is not None or self.use_png:
+            pm = (animation_pixmap or self.pose_pixmaps.get(pose)
+                  or self.pose_pixmaps.get(POSE["idle"]))
             if pm is not None and not pm.isNull():
                 # scale pixmap to fit dst, keep aspect ratio (fit inside)
                 pw, ph = pm.width(), pm.height()
                 scale = min(self.PET_W / pw, self.DOG_H / ph)
+                spec = self.animation_specs.get(animation_name, {})
+                if animation_pixmap is not None:
+                    try:
+                        scale *= max(0.1, float(spec.get("scale", 1.0)))
+                    except (TypeError, ValueError):
+                        pass
                 dw, dh = pw * scale, ph * scale
                 dx = (self.PET_W - dw) / 2
-                dy = dog_y + (self.DOG_H - dh) / 2
+                if (animation_pixmap is not None and
+                        bool(spec.get("anchor_bottom", False))):
+                    # AI sprite sheets often leave different amounts of
+                    # transparent padding around each frame. Anchor the
+                    # visible alpha bounds instead of the full canvas so a
+                    # grounded walk cycle never hops between source rows.
+                    visible = QRegion(pm.mask()).boundingRect()
+                    visible_bottom = visible.y() + visible.height()
+                    dy = dog_y + self.DOG_H - visible_bottom * scale
+                else:
+                    dy = dog_y + (self.DOG_H - dh) / 2
                 p.drawPixmap(QRectF(dx, dy, dw, dh), pm,
                              QRectF(0, 0, pw, ph))
         else:
@@ -2264,8 +2633,10 @@ class PetWindow(QWidget):
             elif self.behavior == "walk":
                 self.facing = 1 if self.target_vx > 0 else -1
 
-            # walking bounce animation: small vertical bob when moving on ground
-            if self.on_ground and abs(self.vx) > 20:
+            # Preserve the legacy bob only while no real walk frames exist.
+            if (self.on_ground and abs(self.vx) > 20 and
+                    not (self.behavior == "walk" and
+                         self.animation_frames.get("walk"))):
                 new_y -= abs(math.sin(time.time() * 6)) * 4
 
             self.move(int(new_x), int(new_y))
@@ -2497,6 +2868,7 @@ class PetWindow(QWidget):
         self.state["mood"] = min(100, self.state["mood"] + 6)
         self.behavior = "eat"
         self.behavior_until = time.time() + 1.8
+        self.trigger_animation("eat", 1800)
         self.say("嗷呜嗷呜！🍖", 1800)
         self.play_sound("eat")
         self.add_xp(8)
@@ -2515,6 +2887,7 @@ class PetWindow(QWidget):
         self.vy = -950
         self.vx = random.choice([-1,1]) * 350
         self.on_ground = False
+        self.trigger_animation("play", 1500)
         self.say("汪汪！接球！🎾", 1500)
         self.play_sound("bark")
         self.add_xp(12)
@@ -2546,6 +2919,7 @@ class PetWindow(QWidget):
         self.play_sound("pet")
         # happy pose briefly
         self.pose = POSE["happy"]
+        self.trigger_animation("happy", 1200)
         QTimer.singleShot(1200, self.refresh_pose_from_state)
         self.add_xp(3)
         save_state(self.state)
@@ -2650,8 +3024,27 @@ class TrayApp:
         self.pet._ctx_menu_cb = lambda: self._fresh_menu()
         self._install_interaction_handlers()
 
-        # auto-check for updates after 5 seconds (silent, only prompts if newer)
-        QTimer.singleShot(5000, self._check_update)
+        self._update_checking = False
+        self._manual_update_check = False
+        self._update_progress_dialog = None
+        self._update_cancel_event = None
+        self.pet._settings_applied_cb = self._on_settings_applied
+        bridge.update_checked.connect(self._on_update_result)
+        bridge.update_progress.connect(self._on_update_progress)
+        bridge.update_finished.connect(self._on_update_finished)
+
+        # Keep launch fast, then check quietly when the user enables it.
+        if self.pet.settings.get("auto_check_updates", True):
+            QTimer.singleShot(
+                5000, lambda: self._check_update(manual=False)
+            )
+
+    def _on_settings_applied(self, previous, current):
+        """Handle app-level settings that PetWindow cannot apply itself."""
+        if (not bool(previous.get("auto_check_updates", True)) and
+                bool(current.get("auto_check_updates", True))):
+            self._check_update(manual=False)
+        self.refresh_menu()
 
     def _install_interaction_handlers(self):
         """Install click, double-click, drag, and right-long-press handling."""
@@ -2667,52 +3060,160 @@ class TrayApp:
         self.pet.mousePressEvent = self._wrap_press
         self.pet.mouseReleaseEvent = self._wrap_release
 
-    def _check_update(self):
-        if RELEASES_URL.startswith("https://api.github.com/repos/USER/REPO"):
-            return  # not configured yet
-        check_update_async(self._on_update_result)
+    def _check_update(self, manual=False):
+        """Check GitHub Releases without blocking the pet or the tray."""
+        if self._update_checking:
+            if manual:
+                self.pet.say("正在检查更新，请稍等一下～", 1800)
+            return
+        self._update_checking = True
+        self._manual_update_check = bool(manual)
+        if manual:
+            self.pet.say("正在检查新版本…", 1600)
+        check_for_updates_async(VERSION, bridge.update_checked.emit)
 
     def _on_update_result(self, info):
-        if info is None:
+        """Runs on the Qt thread through ``bridge.update_checked``."""
+        self._update_checking = False
+        manual = self._manual_update_check
+        self._manual_update_check = False
+        status = (info or {}).get("status", "error")
+
+        if status == "latest":
+            if manual:
+                QMessageBox.information(
+                    self.pet,
+                    "已经是最新版",
+                    f"当前版本 v{VERSION} 已经是最新版本。",
+                )
             return
-        # show a message box asking user to update
-        from PyQt5.QtWidgets import QMessageBox, QProgressDialog
+        if status in ("error", "unsupported"):
+            if manual:
+                message = info.get("message", "暂时无法获取更新信息。")
+                if info.get("release_url"):
+                    message += "\n\n可以前往 GitHub Releases 手动查看。"
+                QMessageBox.warning(self.pet, "检查更新失败", message)
+            return
+        if status != "update":
+            return
+
         msg = QMessageBox(self.pet)
         msg.setWindowTitle("Sheen 有新版本")
         msg.setIcon(QMessageBox.Information)
         v = info["version"]
         notes = info.get("notes", "").strip() or "（暂无更新说明）"
-        msg.setText(f"发现新版本 v{v}（当前 v{VERSION}）\n\n更新内容：\n{notes[:300]}")
+        asset_name = info.get("asset_name", "")
+        msg.setText(
+            f"发现新版本 v{v}（当前 v{VERSION}）\n\n"
+            f"更新包：{asset_name}\n\n更新内容：\n{notes[:500]}"
+        )
         msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
         msg.button(QMessageBox.Yes).setText(
-            "打开下载" if IS_MACOS else "立即更新")
+            "下载并打开" if IS_MACOS else "立即更新")
         msg.button(QMessageBox.No).setText("以后再说")
         msg.setDefaultButton(QMessageBox.Yes)
         if msg.exec_() != QMessageBox.Yes:
             return
-        if IS_MACOS:
-            QDesktopServices.openUrl(QUrl(info["download_url"]))
+
+        if not getattr(sys, "frozen", False):
+            QMessageBox.information(
+                self.pet,
+                "开发模式",
+                "当前是源码运行模式，不能自动替换程序本体。"
+                "\n已为你打开最新版下载页面；打包后的 Petpet 可以自动更新。",
+            )
+            QDesktopServices.openUrl(
+                QUrl(info.get("release_url") or info["download_url"])
+            )
             return
-        # download with progress dialog
-        prog = QProgressDialog("正在下载新版本…", "取消", 0, 100, self.pet)
-        prog.setWindowTitle("更新")
-        prog.setMinimumDuration(0)
-        prog.setValue(0)
-        def on_progress(done, total):
-            if prog.wasCanceled():
-                return
-            pct = int(done * 100 / total) if total else 0
-            prog.setValue(pct)
-        def do_download():
-            ok = download_and_update(info["download_url"], on_progress=on_progress)
-            prog.close()
-            if ok:
-                # quit; the bat will replace and restart
-                QApplication.quit()
-            else:
-                QMessageBox.warning(self.pet, "更新失败", "下载失败，请稍后重试或手动下载。")
-        # run download in thread so GUI stays responsive
-        threading.Thread(target=do_download, daemon=True).start()
+
+        self._start_update_download(info)
+
+    def _start_update_download(self, info):
+        self._update_cancel_event = threading.Event()
+        dialog = QProgressDialog(
+            f"正在下载 Petpet v{info['version']}…", "取消", 0, 100, self.pet
+        )
+        dialog.setWindowTitle("更新 Petpet")
+        dialog.setMinimumDuration(0)
+        dialog.setAutoClose(False)
+        dialog.setValue(0)
+        dialog.canceled.connect(self._update_cancel_event.set)
+        self._update_progress_dialog = dialog
+        dialog.show()
+
+        def worker():
+            update_dir = os.path.join(
+                DATA_DIR, "updates", f"v{info['version']}"
+            )
+
+            def progress(done, total):
+                if total:
+                    bridge.update_progress.emit(
+                        max(0, min(100, int(done * 100 / total)))
+                    )
+
+            result = download_release(
+                info,
+                update_dir,
+                progress=progress,
+                cancel_event=self._update_cancel_event,
+            )
+            if result.get("ok"):
+                try:
+                    if IS_WINDOWS:
+                        result = launch_windows_replacement(
+                            result["path"],
+                            sys.executable,
+                            update_dir,
+                        )
+                    elif IS_MACOS:
+                        result = open_macos_update(result["path"])
+                    else:
+                        result = {
+                            "ok": False,
+                            "message": "当前系统暂不支持自动更新",
+                        }
+                except Exception as exc:
+                    result = {"ok": False, "message": str(exc)}
+            bridge.update_finished.emit(result)
+
+        threading.Thread(
+            target=worker, daemon=True, name="Petpet-update-download"
+        ).start()
+
+    def _on_update_progress(self, value):
+        if self._update_progress_dialog is not None:
+            self._update_progress_dialog.setValue(value)
+
+    def _on_update_finished(self, result):
+        dialog = self._update_progress_dialog
+        self._update_progress_dialog = None
+        self._update_cancel_event = None
+        if dialog is not None:
+            dialog.close()
+
+        if result.get("cancelled"):
+            self.pet.say("已取消更新。", 1500)
+            return
+        if not result.get("ok"):
+            QMessageBox.warning(
+                self.pet,
+                "更新失败",
+                result.get("message", "下载失败，请稍后重试。"),
+            )
+            return
+        if result.get("action") == "restart":
+            self.pet.say("下载完成，马上重启到新版本～", 1800)
+            QTimer.singleShot(700, QApplication.quit)
+            return
+        if result.get("action") == "open":
+            QMessageBox.information(
+                self.pet,
+                "更新包已下载",
+                "已打开最新版 macOS 更新包。"
+                "\n请将 Petpet 拖入“应用程序”并替换旧版本。",
+            )
 
     def _wrap_press(self, e):
         if e.button() == Qt.LeftButton:
@@ -2812,7 +3313,11 @@ class TrayApp:
         m.addSeparator()
 
         # ---- 系统 ----
-        a_update = QAction("🔄 检查更新", m); a_update.triggered.connect(self._check_update); m.addAction(a_update)
+        a_update = QAction(f"🔄 检查更新（当前 v{VERSION}）", m)
+        a_update.triggered.connect(
+            lambda _checked=False: self._check_update(manual=True)
+        )
+        m.addAction(a_update)
         autostart_label = "↻ 登录时启动" if IS_MACOS else "↻ 开机自启"
         a_autostart = QAction(autostart_label, m); a_autostart.setCheckable(True)
         a_autostart.setChecked(self.state.get("autostart", False))

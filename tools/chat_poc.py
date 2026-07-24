@@ -4,15 +4,16 @@ Usage:
   1. Get a Zhipu API key at https://open.bigmodel.cn (free, GLM-4.7-Flash)
   2. Set it:  set ZHIPU_API_KEY=your.key.here   (PowerShell: $env:ZHIPU_API_KEY="...")
      OR create config.json:  {"api_key": "your.key.here"}
-  3. Run:     python chat_poc.py
+  3. Run:     python tools/chat_poc.py
 
 Type to chat. Commands:
   /reset   clear memory
   /show    show what Sheen remembers
   /quit    exit
 """
-import sys, os, time
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import sys, os
+PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, PROJECT_DIR)
 import buddy_ai as ai
 
 def print_streaming(text):
@@ -27,7 +28,7 @@ def main():
     if not ai.get_api_key():
         print("\n⚠  还没设置 API key。两种方式：")
         print("   1) PowerShell:  $env:ZHIPU_API_KEY=\"你的key\"")
-        print('   2) 在 desktop-pet 文件夹建 config.json:  {"api_key":"你的key"}')
+        print('   2) 编辑 data/config.json:  {"api_key":"你的key"}')
         print("\n没 key 也能试，Sheen 会用预设话术回复（不是真 AI）。")
     else:
         print("\n✓ 检测到 API key，已连接智谱 GLM-4.7-Flash。")

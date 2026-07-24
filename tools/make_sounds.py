@@ -2,8 +2,8 @@
 Uses stdlib wave + struct + math to synthesize cute sounds."""
 import wave, struct, math, os
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-SOUND_DIR = os.path.join(HERE, "poses", "sounds")
+PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SOUND_DIR = os.path.join(PROJECT_DIR, "assets", "sounds")
 os.makedirs(SOUND_DIR, exist_ok=True)
 
 SR = 22050  # sample rate

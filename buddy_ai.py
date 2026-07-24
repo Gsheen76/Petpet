@@ -8,25 +8,15 @@ Features:
   - Rule-based fallback when API fails / no key / offline
   - Zero third-party deps: uses only urllib + json from stdlib
 
-Config: set env ZHIPU_API_KEY, or create config.json next to this file:
+Config: set env ZHIPU_API_KEY, or create config.json in Petpet's data folder:
         {"api_key": "your.key.here"}
 """
-import os, sys, json, time, urllib.request, urllib.error
+import os, json, time, urllib.request, urllib.error
 import hmac, hashlib, base64
+from app_paths import DATA_DIR
 
-# Writable data lives beside the exe on Windows and in Application Support
-# inside a packaged macOS app.
-if getattr(sys, 'frozen', False):
-    if sys.platform == "darwin":
-        _DATA_DIR = os.path.join(
-            os.path.expanduser("~/Library/Application Support"), "Petpet")
-    else:
-        _DATA_DIR = os.path.dirname(sys.executable)
-else:
-    _DATA_DIR = os.path.dirname(os.path.abspath(__file__))
-os.makedirs(_DATA_DIR, exist_ok=True)
-CONFIG_PATH = os.path.join(_DATA_DIR, "config.json")
-MEMORY_PATH = os.path.join(_DATA_DIR, "memory.json")
+CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
+MEMORY_PATH = os.path.join(DATA_DIR, "memory.json")
 
 API_URL = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
 MODEL = "glm-4-flash"
