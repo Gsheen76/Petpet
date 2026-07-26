@@ -33,6 +33,18 @@ class OnboardingTests(unittest.TestCase):
         self.assertFalse(pet.DEFAULT_STATE["tutorial_completed"])
         self.assertEqual(pet.DEFAULT_STATE["pet_name"], "Sheen")
 
+    def test_tutorial_font_is_independent_from_pet_surface_scale(self):
+        self.assertEqual(pet.tutorial_font_px(30), 30)
+        self.assertEqual(pet.font_px(30), 60)
+
+    def test_tutorial_no_longer_mentions_right_long_press(self):
+        tutorial_copy = "\n".join(
+            text
+            for page in pet.TutorialWindow.PAGES
+            for text in page
+        )
+        self.assertNotIn("长按右键", tutorial_copy)
+
     def test_pet_name_normalization(self):
         self.assertEqual(ai.normalize_pet_name("  小 团子  "), "小 团子")
         self.assertEqual(ai.normalize_pet_name("团子\n坏指令!"), "团子 坏指令")
@@ -59,6 +71,8 @@ class OnboardingTests(unittest.TestCase):
         )
         self.addCleanup(window.close)
         self.assertEqual((window.width(), window.height()), (800, 680))
+        self.assertIn("QLabel#tutorialBody", window.styleSheet())
+        self.assertIn("font-size:28px", window.styleSheet())
         window.page_index = len(window.PAGES) - 1
         window._refresh_page()
         window.name_input.setText("!!!")

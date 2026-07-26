@@ -26,14 +26,16 @@ from app_paths import (
 )
 from updater import (
     check_for_updates_async,
+    cleanup_stale_windows_updates,
     download_release,
     launch_windows_replacement,
     open_macos_update,
+    repair_legacy_windows_install,
     update_cache_dir,
 )
 
 # ---------- version & update ----------
-VERSION = "1.2.2"
+VERSION = "1.2.3"
 IS_WINDOWS = sys.platform.startswith("win")
 IS_MACOS = sys.platform == "darwin"
 IS_FROZEN = bool(getattr(sys, "frozen", False))
@@ -66,6 +68,68 @@ try:
     HAS_SOUND = True
 except Exception:
     HAS_SOUND = False
+
+
+def configure_display_scaling():
+    """Keep Petpet's window geometry stable across Windows DPI settings."""
+    QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+    if not IS_WINDOWS:
+        return
+
+    # Window, control and pet geometry stay at their authored pixel sizes.
+    # Typography is enlarged independently through FIXED_FONT_SCALE.
+    QApplication.setAttribute(Qt.AA_DisableHighDpiScaling, True)
+    try:
+        import ctypes
+
+        user32 = ctypes.windll.user32
+        set_context = getattr(user32, "SetProcessDpiAwarenessContext", None)
+        if set_context is not None:
+            set_context.argtypes = [ctypes.c_void_p]
+            set_context.restype = ctypes.c_bool
+            if set_context(ctypes.c_void_p(-4)):
+                return
+        try:
+            ctypes.windll.shcore.SetProcessDpiAwareness(2)
+            return
+        except Exception:
+            user32.SetProcessDPIAware()
+    except Exception:
+        # The packaged EXE also carries a PerMonitorV2 manifest.
+        pass
+
+
+FIXED_FONT_SCALE = 2.0
+SETTINGS_FONT_SCALE = 1.08
+
+
+def font_px(size):
+    """Scale typography used by the pet's compact on-screen surfaces."""
+    return max(1, int(round(float(size) * FIXED_FONT_SCALE)))
+
+
+def independent_font_px(size):
+    """Keep full-window and system-menu typography at its authored size."""
+    return max(1, int(round(float(size))))
+
+
+def settings_font_px(size):
+    """Map the settings value 20 to the former value-12 visual size."""
+    return max(1, int(round(float(size) * SETTINGS_FONT_SCALE)))
+
+
+def tutorial_font_px(size):
+    """Keep tutorial typography independent from the compact pet scale."""
+    return independent_font_px(size)
+
+
+def pixel_font(size, weight=QFont.Normal, family="Microsoft YaHei"):
+    """Create a font whose rendered size is independent of monitor DPI."""
+    font = QFont(family)
+    font.setPixelSize(font_px(size))
+    font.setWeight(weight)
+    return font
+
 
 # ---------- paths ----------
 RES_DIR = RESOURCE_DIR
@@ -257,7 +321,7 @@ DEFAULT_SETTINGS = {
     "chat_width": 640,
     "chat_height": 820,
     "chat_font_size": 20,
-    "ui_font_size": 20,        # settings panel font size
+    "ui_font_size": 24,        # settings panel font size
     "always_on_top": True,     # pet window stays on top of other windows
     "auto_check_updates": True, # check GitHub Releases shortly after launch
     # health reminders (minutes; 0 = off)
@@ -327,7 +391,7 @@ def load_settings():
         # Removed in v1.2: bubble width now follows the selected chat size.
         s.pop("chat_bubble_max", None)
         # one-time migration: if user has old font values outside new range, reset them
-        if not (12 <= s.get("ui_font_size", 20) <= 24):
+        if not (20 <= s.get("ui_font_size", 24) <= 40):
             s["ui_font_size"] = DEFAULT_SETTINGS["ui_font_size"]
         if not (12 <= s.get("chat_font_size", 20) <= 32):
             s["chat_font_size"] = DEFAULT_SETTINGS["chat_font_size"]
@@ -423,7 +487,9 @@ class ChatWindow(QWidget):
         return self.pet.pet_name
 
     def _apply_style(self):
-        fs = self.s["chat_font_size"]
+        # The chat window has its own user-controlled font setting. Keep it
+        # independent from the compact pet-surface enlargement.
+        fs = independent_font_px(self.s["chat_font_size"])
         self.setStyleSheet(f"""
             QWidget#chat {{
                 background:#fff8ec;
@@ -491,7 +557,7 @@ class ChatWindow(QWidget):
         self.close_btn.setToolTip("关闭")
         self.close_btn.setStyleSheet(
             "QPushButton{background:transparent;border:0;color:#a47b69;"
-            "font-size:22px;font-weight:700;padding:0;}"
+            "font-size:26px;font-weight:700;padding:0;}"
             "QPushButton:hover{background:#ffcfc5;color:#bf5c52;border-radius:14px;}"
         )
         self.close_btn.clicked.connect(self.close)
@@ -747,19 +813,19 @@ class StatsWindow(QWidget):
         fs = 16
         self.setStyleSheet(f"""
             QWidget {{ background:#fff8ec; font-family:'Microsoft YaHei',sans-serif;
-                       font-size:{fs}px; color:#65483b; }}
+                       font-size:{font_px(fs)}px; color:#65483b; }}
             QLabel {{ padding:2px 0; }}
             QFrame#card {{ background:#fffdf8; border:1px solid #efd1b8;
                             border-radius:17px; }}
             QProgressBar {{ background:#f3e3d5; border:0; border-radius:8px;
                             height:16px; text-align:center; color:#fff;
-                            font-size:{max(11, fs-2)}px; font-weight:700; }}
+                            font-size:{font_px(max(11, fs-2))}px; font-weight:700; }}
             QProgressBar::chunk {{ border-radius:8px; }}
-            QLabel#h1 {{ font-size:{fs+7}px; font-weight:800; color:#744d3e; }}
-            QLabel#h2 {{ font-size:{fs+2}px; font-weight:700; color:#a46c58; }}
-            QLabel#big {{ font-size:{fs+22}px; font-weight:900; color:#f28f76; }}
-            QLabel#gold {{ font-size:{fs+1}px; font-weight:800; color:#c68a38; }}
-            QLabel#small {{ font-size:{max(11,fs-2)}px; color:#aa8170; }}
+            QLabel#h1 {{ font-size:{font_px(fs+7)}px; font-weight:800; color:#744d3e; }}
+            QLabel#h2 {{ font-size:{font_px(fs+2)}px; font-weight:700; color:#a46c58; }}
+            QLabel#big {{ font-size:{font_px(fs+22)}px; font-weight:900; color:#f28f76; }}
+            QLabel#gold {{ font-size:{font_px(fs+1)}px; font-weight:800; color:#c68a38; }}
+            QLabel#small {{ font-size:{font_px(max(11,fs-2))}px; color:#aa8170; }}
         """)
 
         layout = QVBoxLayout(self)
@@ -810,9 +876,13 @@ class StatsWindow(QWidget):
             cl.setSpacing(6)
             row = QHBoxLayout()
             nm = QLabel(f"{emoji}  {name}")
-            nm.setStyleSheet(f"font-size:{fs+1}px; font-weight:700;")
+            nm.setStyleSheet(
+                f"font-size:{font_px(fs+1)}px; font-weight:700;"
+            )
             val = QLabel()
-            val.setStyleSheet(f"font-size:{fs+2}px; font-weight:800; color:{color};")
+            val.setStyleSheet(
+                f"font-size:{font_px(fs+2)}px; font-weight:800; color:{color};"
+            )
             val.setAlignment(Qt.AlignRight)
             row.addWidget(nm); row.addStretch(1); row.addWidget(val)
             cl.addLayout(row)
@@ -850,7 +920,7 @@ class StatsWindow(QWidget):
         self.subtitle_label.setText(f"距离下一级：{max(0, need-xp)} EXP")
         self.subtitle_label.setObjectName("gold")
         self.subtitle_label.setStyleSheet(
-            "font-size:17px; font-weight:800; color:#c68a38;")
+            "font-size:34px; font-weight:800; color:#c68a38;")
         # QProgressBar uses 32-bit integers; render a normalized ratio so very
         # high levels cannot overflow while the label still shows real values.
         progress_scale = 10000
@@ -861,7 +931,7 @@ class StatsWindow(QWidget):
         self.xp_bar.setStyleSheet("""
             QProgressBar { background:#f1dfcf; border:0; border-radius:9px; height:21px;
                            text-align:center; color:#9a672f; font-weight:800;
-                           font-size:14px; }
+                           font-size:28px; }
             QProgressBar::chunk { background:qlineargradient(x1:0,y1:0,x2:1,y2:0,
                 stop:0 #ffc05c, stop:0.5 #ffd36f, stop:1 #ffe59b); border-radius:9px; }
         """)
@@ -954,16 +1024,16 @@ class StepperControl(QWidget):
 class SettingsWindow(QWidget):
     """Tunable settings panel — chat window size, decay rates, chatter frequency, etc."""
     CHANGED = pyqtSignal()
-    PREFERRED_WIDTH = 700
-    PREFERRED_HEIGHT = 800
-    COMPACT_MIN_WIDTH = 540
-    COMPACT_MIN_HEIGHT = 590
+    PREFERRED_WIDTH = 840
+    PREFERRED_HEIGHT = 960
+    COMPACT_MIN_WIDTH = 648
+    COMPACT_MIN_HEIGHT = 708
 
     FIELDS = [
         # (key, label, min, max, step, hint)
         ("chat_font_size", "聊天字体大小", 12, 32, 1,
          "聊天记录、输入框和按钮的文字大小"),
-        ("ui_font_size", "设置页字体大小", 12, 24, 1,
+        ("ui_font_size", "设置页字体大小", 20, 40, 1,
          "调整当前设置页面的整体文字大小"),
         ("remind_drink_min","喝水提醒间隔(分钟)", 0, 300, 5, "0=关 60=每小时"),
         ("remind_rest_min", "休息眼睛间隔(分钟)", 0, 300, 5, "0=关 90=每1.5小时"),
@@ -1003,8 +1073,8 @@ class SettingsWindow(QWidget):
         )
         self.setObjectName("settingsWindow")
         self.setWindowTitle("温馨设置")
-        self._apply_font()
         self._build_ui()
+        self._apply_font()
         screen = QApplication.primaryScreen().availableGeometry()
         self.setFixedSize(
             max(
@@ -1018,12 +1088,18 @@ class SettingsWindow(QWidget):
         )
 
     def _apply_font(self):
-        fs = int(self.s.get("ui_font_size", 20))
+        fs = int(self.s.get("ui_font_size", 24))
+        body_fs = settings_font_px(fs)
+        title_fs = max(1, int(round(body_fs * 24 / 22)))
+        subtitle_fs = max(1, int(round(body_fs * 14 / 22)))
+        status_fs = max(1, int(round(body_fs * 13 / 22)))
+        detail_fs = max(1, int(round(body_fs * 12 / 22)))
+        step_fs = max(1, int(round(body_fs * 16 / 22)))
         self.setStyleSheet(f"""
             QWidget {{
                 background:transparent;
                 font-family:'Microsoft YaHei',sans-serif;
-                font-size:{fs}px;
+                font-size:{body_fs}px;
                 color:#65483b;
             }}
             QWidget#settingsWindow {{
@@ -1036,6 +1112,30 @@ class SettingsWindow(QWidget):
                 border:0;
             }}
             QLabel {{ background:transparent; }}
+            QLabel#settingsTitle {{
+                font-size:{title_fs}px;
+                font-weight:900;
+                color:#754b3a;
+            }}
+            QLabel#settingsSubtitle {{
+                color:#a27a68;
+                font-size:{subtitle_fs}px;
+            }}
+            QLabel#settingsStatus {{
+                color:#cf765e;
+                font-size:{status_fs}px;
+                font-weight:800;
+                padding:0;
+            }}
+            QLabel#switchState {{
+                color:#a36b58;
+                font-size:{detail_fs}px;
+                font-weight:700;
+            }}
+            QLabel#settingDescription {{
+                color:#aa8270;
+                font-size:{detail_fs}px;
+            }}
             QComboBox, QDoubleSpinBox, QSpinBox {{
                 background:#fffdf9;
                 border:1px solid #e7c6ad;
@@ -1074,7 +1174,7 @@ class SettingsWindow(QWidget):
                 border:1px solid #efc8b3;
                 border-radius:10px;
                 padding:0;
-                font-size:{max(16, fs)}px;
+                font-size:{step_fs}px;
                 font-weight:900;
             }}
             QPushButton#stepButton:hover {{
@@ -1088,7 +1188,7 @@ class SettingsWindow(QWidget):
                 border:1px solid #efc6b8;
                 border-radius:16px;
                 padding:0;
-                font-size:22px;
+                font-size:26px;
                 font-weight:600;
             }}
             QPushButton#closeButton:hover {{
@@ -1139,16 +1239,17 @@ class SettingsWindow(QWidget):
         root.setSpacing(8)
 
         title_bar = QFrame()
-        title_bar.setCursor(Qt.SizeAllCursor)
+        title_bar.setObjectName("settingsTitleBar")
+        title_bar.setCursor(Qt.ArrowCursor)
         title_row = QHBoxLayout(title_bar)
         title_row.setContentsMargins(0, 0, 0, 0)
         title_row.setSpacing(10)
         title = QLabel("🌼 温馨设置")
-        title.setStyleSheet(
-            "font-size:24px; font-weight:900; color:#754b3a;")
+        title.setObjectName("settingsTitle")
         title.setAttribute(Qt.WA_TransparentForMouseEvents, True)
         close_button = QPushButton("×")
         close_button.setObjectName("closeButton")
+        close_button.setCursor(Qt.PointingHandCursor)
         close_button.setToolTip("关闭温馨设置")
         close_button.setFixedSize(36, 36)
         close_button.clicked.connect(self.close)
@@ -1161,7 +1262,7 @@ class SettingsWindow(QWidget):
         root.addWidget(title_bar)
 
         subtitle = QLabel("每一项都会保存并立即应用，按需要慢慢调就好。")
-        subtitle.setStyleSheet("color:#a27a68; font-size:14px;")
+        subtitle.setObjectName("settingsSubtitle")
         root.addWidget(subtitle)
 
         scroll = QScrollArea()
@@ -1188,8 +1289,7 @@ class SettingsWindow(QWidget):
         root.addWidget(scroll, 1)
 
         self.status_label = QLabel("")
-        self.status_label.setStyleSheet(
-            "color:#cf765e; font-size:13px; font-weight:800; padding:0;")
+        self.status_label.setObjectName("settingsStatus")
         self.status_label.setAlignment(Qt.AlignCenter)
         root.addWidget(self.status_label)
 
@@ -1252,7 +1352,7 @@ class SettingsWindow(QWidget):
             self.inputs[key] = switch
             state = QLabel()
             state.setFixedWidth(36)
-            state.setStyleSheet("color:#a36b58; font-size:12px; font-weight:700;")
+            state.setObjectName("switchState")
             self.switch_labels[key] = state
             switch.toggled.connect(
                 lambda checked, setting=key:
@@ -1296,7 +1396,7 @@ class SettingsWindow(QWidget):
         title = QLabel(label)
         title.setStyleSheet("font-weight:800; color:#704b3c;")
         description = QLabel(hint)
-        description.setStyleSheet("color:#aa8270; font-size:12px;")
+        description.setObjectName("settingDescription")
         description.setWordWrap(True)
         text_layout.addWidget(title)
         text_layout.addWidget(description)
@@ -1397,8 +1497,8 @@ class TutorialWindow(QWidget):
         (
             "🌷",
             "右键打开治愈互动",
-            "短按右键会显示状态卡和互动气泡，可以聊天、喂食、玩耍或睡觉。\n"
-            "点击“更多”可以进入设置、隐藏、教程等功能；长按右键会打开完整状态档案。",
+            "点击右键会显示状态卡和互动气泡，可以聊天、喂食、玩耍或睡觉。\n"
+            "点击“更多”可以进入设置、隐藏、教程等功能。",
         ),
         (
             "💬",
@@ -1435,25 +1535,25 @@ class TutorialWindow(QWidget):
                 font-family:'Microsoft YaHei',sans-serif;
             }
             QLabel { background:transparent; }
-            QLabel#tutorialIcon { font-size:88px; }
+            QLabel#tutorialIcon { font-size:%dpx; }
             QLabel#tutorialTitle {
                 color:#754b3a;
-                font-size:38px;
+                font-size:%dpx;
                 font-weight:900;
             }
             QLabel#tutorialBody {
                 color:#8e6959;
-                font-size:30px;
+                font-size:%dpx;
                 line-height:1.6;
             }
             QLabel#tutorialProgress {
                 color:#e18d76;
-                font-size:23px;
+                font-size:%dpx;
                 letter-spacing:5px;
             }
             QLabel#nameHint {
                 color:#b36f5b;
-                font-size:20px;
+                font-size:%dpx;
                 font-weight:700;
             }
             QFrame#nameCard {
@@ -1467,7 +1567,7 @@ class TutorialWindow(QWidget):
                 border-radius:14px;
                 padding:12px 16px;
                 color:#65483b;
-                font-size:28px;
+                font-size:%dpx;
                 selection-background-color:#ffc9b8;
             }
             QLineEdit:focus { border-color:#f19a7f; }
@@ -1478,7 +1578,7 @@ class TutorialWindow(QWidget):
                 border-radius:17px;
                 background:#f28f76;
                 color:#ffffff;
-                font-size:22px;
+                font-size:%dpx;
                 font-weight:800;
             }
             QPushButton:hover { background:#f5a08a; }
@@ -1498,7 +1598,15 @@ class TutorialWindow(QWidget):
                 background:#ffebe3;
                 color:#a45d4e;
             }
-        """)
+        """ % (
+            tutorial_font_px(88),
+            tutorial_font_px(38),
+            tutorial_font_px(28),
+            tutorial_font_px(23),
+            tutorial_font_px(20),
+            tutorial_font_px(28),
+            tutorial_font_px(22),
+        ))
 
         root = QVBoxLayout(self)
         root.setContentsMargins(38, 28, 38, 30)
@@ -1676,11 +1784,11 @@ class StatBubble(QWidget):
         """Return the largest font that keeps dynamic text fully visible."""
         size = preferred_size
         while size > minimum_size:
-            font = QFont("Microsoft YaHei", size, weight)
+            font = pixel_font(size, weight)
             if QFontMetrics(font).horizontalAdvance(str(text)) <= max_width:
                 return font
             size -= 1
-        return QFont("Microsoft YaHei", minimum_size, weight)
+        return pixel_font(minimum_size, weight)
 
     @staticmethod
     def _draw_stat_icon(painter, rect, kind, color):
@@ -1750,7 +1858,7 @@ class StatBubble(QWidget):
         # ---- Header: title and companionship badge never share a text rect. ----
         title_rect = QRectF(27, 15, 330, 40)
         p.setPen(QColor("#7b4d3a"))
-        p.setFont(QFont("Microsoft YaHei", 16, QFont.Bold))
+        p.setFont(pixel_font(16, QFont.Bold))
         p.drawText(title_rect, Qt.AlignLeft | Qt.AlignVCenter,
                    f"🐾 {self.pet.pet_name} 的小屋")
 
@@ -1788,7 +1896,7 @@ class StatBubble(QWidget):
         xp_area_x = 158
         xp_area_w = W - xp_area_x - 34
         p.setPen(QColor("#8a6654"))
-        p.setFont(QFont("Microsoft YaHei", 10, QFont.Bold))
+        p.setFont(pixel_font(10, QFont.Bold))
         p.drawText(QRectF(xp_area_x, 76, 104, 23),
                    Qt.AlignLeft | Qt.AlignVCenter, "经验")
         xp_text = f"{xp} / {need} EXP"
@@ -2021,10 +2129,10 @@ class BubbleMenu(QWidget):
             p.drawRoundedRect(gloss, 16, 16)
 
             p.setPen(QColor(255, 255, 255))
-            p.setFont(QFont("Microsoft YaHei", 17, QFont.Bold))
+            p.setFont(pixel_font(17, QFont.Bold))
             p.drawText(QRectF(rect.x(), rect.y() + 7, rect.width(), 34),
                        Qt.AlignCenter, emoji)
-            p.setFont(QFont("Microsoft YaHei", 10, QFont.Bold))
+            p.setFont(pixel_font(10, QFont.Bold))
             p.drawText(QRectF(rect.x() + 5, rect.y() + 43,
                               rect.width() - 10, 25),
                        Qt.AlignCenter | Qt.TextSingleLine, label)
@@ -2174,7 +2282,7 @@ class BonusBubble(QWidget):
         self.text = text
         self.color = QColor(color)
         self.life = 0
-        self.setFont(QFont("Microsoft YaHei", 14, QFont.Bold))
+        self.setFont(pixel_font(14, QFont.Bold))
         fm = self.fontMetrics()
         w = fm.horizontalAdvance(text) + 36
         h = fm.height() + 20
@@ -2246,7 +2354,7 @@ class InteractiveBubble(QWidget):
         self.setAttribute(Qt.WA_ShowWithoutActivating, True)
         self.setAttribute(Qt.WA_DeleteOnClose, True)
         self.setCursor(Qt.PointingHandCursor)
-        self.setFont(QFont("Microsoft YaHei", 12, QFont.Bold))
+        self.setFont(pixel_font(12, QFont.Bold))
         fm = self.fontMetrics()
         w = fm.horizontalAdvance(label) + 52
         h = fm.height() + 30
@@ -2433,7 +2541,7 @@ class SpeechBubble(QWidget):
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WA_ShowWithoutActivating, True)
         self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
-        self.setFont(QFont("Microsoft YaHei", 11, QFont.Bold))
+        self.setFont(pixel_font(11, QFont.Bold))
         self._hide_timer = QTimer(self)
         self._hide_timer.setSingleShot(True)
         self._hide_timer.timeout.connect(self.hide)
@@ -2609,7 +2717,6 @@ class PetWindow(QWidget):
         self.last_nudge_check = time.time()
         self.chat_win = None  # lazy-created on first chat
         self.settings_win = None  # lazy-created on first settings open
-        self.stats_win = None     # lazy-created on first stats open
         self._interactive_bubble = None  # current floating action bubble
         self._bubble_menu = None         # radial bubble menu (right-click)
         self._last_interactive_t = 0.0   # throttle: don't spam
@@ -2669,8 +2776,6 @@ class PetWindow(QWidget):
         ai.set_pet_name(name)
         if self.chat_win is not None:
             self.chat_win.refresh_pet_name()
-        if self.stats_win is not None:
-            self.stats_win.refresh()
         self.update()
         return name
 
@@ -3036,7 +3141,7 @@ class PetWindow(QWidget):
         """Draw speech bubble in the top reserved area, with word wrap and
         max-width so long text doesn't overflow. Caches QTextDocument."""
         text = self.bubble_text
-        font = QFont("Microsoft YaHei", 11, QFont.Bold)
+        font = pixel_font(11, QFont.Bold)
         p.setFont(font)
         max_bw = max(self.PET_W + 80, 260)
         wrap_w = max_bw - 24
@@ -3688,29 +3793,6 @@ class PetWindow(QWidget):
         self.settings_win.raise_()
         self.settings_win.activateWindow()
 
-    def open_stats(self):
-        """Open the stats / level panel near the pet."""
-        if self.stats_win is None:
-            self.stats_win = StatsWindow(self)
-        # position beside the pet (prefer right side, fall back to left)
-        g = self.geometry()
-        screen = self.current_screen_rect()
-        sw, sh = self.stats_win.width(), self.stats_win.height()
-        x = g.right() + 16
-        y = g.center().y() - sh // 2
-        if x + sw > screen.right():
-            x = g.left() - sw - 16
-        if x < screen.left():
-            x = max(screen.left(), min(g.center().x() - sw // 2,
-                                       screen.right() - sw))
-        y = max(screen.top() + 8,
-                min(y, screen.bottom() - sh - 40))
-        self.stats_win.move(int(x), int(y))
-        self.stats_win.show()
-        self.stats_win.raise_()
-        self.stats_win.activateWindow()
-        self.stats_win.refresh()
-
     def check_ai_nudge(self):
         """Called from autonomy timer; maybe send a proactive AI nudge."""
         if self.state.get("sleeping"):
@@ -3836,12 +3918,10 @@ class TrayApp:
         self.pet.say(f"以后我就叫 {name} 啦！请多多关照～", 3600)
 
     def _install_interaction_handlers(self):
-        """Install click, double-click, drag, and right-long-press handling."""
+        """Install click, double-click, drag, and right-click handling."""
         self._press_pos = None
         self._press_t = 0
         self._press_button = None
-        self._right_long_timer = None
-        self._right_long_fired = False
         self._last_left_click_t = 0
         self._pending_single_click = None
         self.pet.mousePressEvent_orig = self.pet.mousePressEvent
@@ -4014,12 +4094,6 @@ class TrayApp:
             self._press_pos = e.globalPos()
             self._press_t = time.time()
             self._press_button = "right"
-            self._right_long_fired = False
-            # start a timer; if not released within 500ms, fire stats page
-            self._right_long_timer = QTimer(self.app)
-            self._right_long_timer.setSingleShot(True)
-            self._right_long_timer.timeout.connect(self._on_right_long)
-            self._right_long_timer.start(500)
         self.pet.mousePressEvent_orig(e)
 
     def _wrap_release(self, e):
@@ -4046,13 +4120,7 @@ class TrayApp:
             self._press_button = None
             self._press_pos = None
         elif e.button() == Qt.RightButton and self._press_button == "right":
-            # stop the long-press timer
-            if self._right_long_timer is not None:
-                self._right_long_timer.stop()
-                self._right_long_timer = None
-            if not self._right_long_fired:
-                # short right press -> menu
-                self._show_pet_menu(e.globalPos())
+            self._show_pet_menu(e.globalPos())
             self._press_button = None
             self._press_pos = None
         self.pet.mouseReleaseEvent_orig(e)
@@ -4061,12 +4129,6 @@ class TrayApp:
         self._pending_single_click = None
         if not self.pet.state.get("sleeping"):
             self.pet.pet_click()
-
-    def _on_right_long(self):
-        """Long right press -> open stats page near the pet."""
-        self._right_long_fired = True
-        self._right_long_timer = None
-        self.pet.open_stats()
 
     def _show_pet_menu(self, pos):
         """Pop up the radial bubble menu (stat bar + 6 round bubbles)."""
@@ -4279,11 +4341,18 @@ class TrayApp:
 
 
 def main():
+    configure_display_scaling()
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     instance_server = SingleInstanceServer()
     if not instance_server.start():
         return 0
+    if IS_WINDOWS and IS_FROZEN:
+        repair_result = repair_legacy_windows_install(sys.executable)
+        if repair_result.get("action") == "restart":
+            instance_server.close()
+            return 0
+        cleanup_stale_windows_updates(sys.executable)
     tray_app = TrayApp(app)
     tray_app._instance_server = instance_server
     instance_server.activation_requested.connect(

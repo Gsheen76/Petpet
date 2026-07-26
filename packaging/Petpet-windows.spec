@@ -46,4 +46,5 @@ exe = EXE(
     upx=False,
     console=False,
     icon=str(project_root / "assets" / "icons" / "icon-256.png"),
+    manifest=str(project_root / "packaging" / "Petpet-windows.manifest"),
 )

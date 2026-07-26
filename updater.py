@@ -329,6 +329,21 @@ def update_cache_dir(version, temp_root=None):
     return root / "Petpet" / "updates" / f"v{safe_version}"
 
 
+def _legacy_update_cleanup_dir(current_executable):
+    """Return the obsolete update directory surrounding a cached executable."""
+    current = Path(current_executable).resolve()
+    executable_dir = current.parent
+    if executable_dir.parent.name.lower() in LEGACY_UPDATE_DIR_NAMES:
+        original = executable_dir.parent.parent / current.name
+        if original.is_file():
+            return executable_dir.parent.resolve()
+    elif executable_dir.name.lower() in LEGACY_UPDATE_DIR_NAMES:
+        original = executable_dir.parent / current.name
+        if original.is_file():
+            return executable_dir.resolve()
+    return None
+
+
 def _windows_replacement_target(current_executable):
     """Recover the real install EXE if an old cached update was launched."""
     current = Path(current_executable).resolve()
@@ -344,50 +359,196 @@ def _windows_replacement_target(current_executable):
     return current
 
 
+def cleanup_stale_windows_updates(current_executable=None, temp_root=None):
+    """Remove disposable update payloads without touching user data."""
+    current = Path(current_executable or sys.executable).resolve()
+    removed = []
+
+    # A failed helper can leave only its hidden, verified pending executable
+    # beside Petpet.exe. It is never user data and can be safely discarded on
+    # the next launch.
+    disposable_patterns = (
+        f".{current.stem}.update-*{current.suffix}",
+        f".{current.stem}.backup-*{current.suffix}",
+    )
+    for pattern in disposable_patterns:
+        for disposable in current.parent.glob(pattern):
+            try:
+                disposable.unlink()
+                removed.append(str(disposable))
+            except OSError:
+                pass
+
+    cache_root = (
+        Path(temp_root or tempfile.gettempdir()) / "Petpet" / "updates"
+    ).resolve()
+    try:
+        current.relative_to(cache_root)
+        current_is_in_cache = True
+    except ValueError:
+        current_is_in_cache = False
+
+    if cache_root.is_dir() and not current_is_in_cache:
+        try:
+            shutil.rmtree(cache_root)
+            removed.append(str(cache_root))
+        except OSError:
+            pass
+    return removed
+
+
+def repair_legacy_windows_install(current_executable=None, work_dir=None,
+                                  process_id=None):
+    """Move a build launched from an old update folder back over the real EXE."""
+    current = Path(current_executable or sys.executable).resolve()
+    if _windows_replacement_target(current) == current:
+        return {"ok": False, "action": "none"}
+    work_dir = work_dir or update_cache_dir("repair")
+    return launch_windows_replacement(
+        current,
+        current,
+        work_dir,
+        process_id=process_id,
+    )
+
+
 def launch_windows_replacement(download_path, current_executable, work_dir,
                                process_id=None):
-    """Launch a hidden helper that replaces the frozen executable after exit."""
+    """Atomically replace the frozen executable after every bootloader exits."""
     process_id = process_id or os.getpid()
-    work_path = Path(work_dir)
+    work_path = Path(work_dir).resolve()
     work_path.mkdir(parents=True, exist_ok=True)
     staged_executable = _extract_windows_executable(download_path, work_path)
-    helper_path = work_path / "apply-update.ps1"
-    current_executable = str(
-        _windows_replacement_target(current_executable)
+    helper_path = work_path.parent / f"apply-update-{int(process_id)}.ps1"
+    legacy_cleanup_dir = _legacy_update_cleanup_dir(current_executable)
+    target_executable = _windows_replacement_target(current_executable)
+    executable_dir = target_executable.parent
+    pending_executable = executable_dir / (
+        f".{target_executable.stem}.update-{int(process_id)}"
+        f"{target_executable.suffix}"
     )
-    staged_executable = str(staged_executable.resolve())
-    executable_dir = str(Path(current_executable).parent)
+    backup_executable = executable_dir / (
+        f".{target_executable.stem}.backup-{int(process_id)}"
+        f"{target_executable.suffix}"
+    )
+
+    # Prepare the verified replacement next to the target while the app is
+    # still alive. This proves the install directory is writable and lets the
+    # helper use File.Replace on the same volume once PyInstaller's parent
+    # bootloader releases Petpet.exe.
+    try:
+        shutil.copy2(staged_executable, pending_executable)
+        if pending_executable.stat().st_size != staged_executable.stat().st_size:
+            raise OSError("更新文件复制不完整")
+    except Exception:
+        try:
+            pending_executable.unlink()
+        except OSError:
+            pass
+        raise
+
     ps_quote = lambda value: str(value).replace("'", "''")
+    cleanup_value = str(legacy_cleanup_dir) if legacy_cleanup_dir else ""
     helper = (
         "$ErrorActionPreference = 'Stop'\n"
         f"$petProcessId = {int(process_id)}\n"
+        f"$targetExecutable = '{ps_quote(target_executable)}'\n"
+        f"$pendingExecutable = '{ps_quote(pending_executable)}'\n"
+        f"$backupExecutable = '{ps_quote(backup_executable)}'\n"
+        f"$executableDir = '{ps_quote(executable_dir)}'\n"
+        f"$workDir = '{ps_quote(work_path)}'\n"
+        f"$legacyCleanupDir = '{ps_quote(cleanup_value)}'\n"
         "Wait-Process -Id $petProcessId -ErrorAction SilentlyContinue\n"
-        "try {\n"
-        f"  Copy-Item -LiteralPath '{ps_quote(staged_executable)}' "
-        f"-Destination '{ps_quote(current_executable)}' -Force\n"
-        f"  Start-Process -FilePath '{ps_quote(current_executable)}' "
-        f"-WorkingDirectory '{ps_quote(executable_dir)}' -WindowStyle Hidden\n"
-        "} catch {\n"
-        f"  Start-Process explorer.exe -ArgumentList "
-        f"'/select,\"{ps_quote(staged_executable)}\"'\n"
+        "$updated = $false\n"
+        "$lastUpdateError = ''\n"
+        "for ($attempt = 1; $attempt -le 120; $attempt++) {\n"
+        "  try {\n"
+        "    if (Test-Path -LiteralPath $targetExecutable) {\n"
+        "      [System.IO.File]::Replace("
+        "$pendingExecutable, $targetExecutable, $backupExecutable, $true)\n"
+        "    } else {\n"
+        "      [System.IO.File]::Move($pendingExecutable, $targetExecutable)\n"
+        "    }\n"
+        "    $updated = $true\n"
+        "    break\n"
+        "  } catch {\n"
+        "    $lastUpdateError = $_.Exception.Message\n"
+        "    Start-Sleep -Milliseconds 500\n"
+        "  }\n"
         "}\n"
+        "if ($updated) {\n"
+        "  Start-Process -FilePath $targetExecutable "
+        "-WorkingDirectory $executableDir -WindowStyle Hidden\n"
+        "  for ($attempt = 1; $attempt -le 120; $attempt++) {\n"
+        "    try {\n"
+        "      if (Test-Path -LiteralPath $backupExecutable) {\n"
+        "        Remove-Item -LiteralPath $backupExecutable -Force "
+        "-ErrorAction Stop\n"
+        "      }\n"
+        "      break\n"
+        "    } catch {\n"
+        "      Start-Sleep -Milliseconds 500\n"
+        "    }\n"
+        "  }\n"
+        "} else {\n"
+        "  Remove-Item -LiteralPath $pendingExecutable -Force "
+        "-ErrorAction SilentlyContinue\n"
+        "  Remove-Item -LiteralPath $backupExecutable -Force "
+        "-ErrorAction SilentlyContinue\n"
+        "  if (Test-Path -LiteralPath $targetExecutable) {\n"
+        "    Start-Process -FilePath $targetExecutable "
+        "-WorkingDirectory $executableDir -WindowStyle Hidden\n"
+        "  }\n"
+        "  Add-Type -AssemblyName System.Windows.Forms\n"
+        "  [System.Windows.Forms.MessageBox]::Show("
+        "\"无法替换原来的 Petpet.exe。`n请确认程序所在文件夹可写后重试。"
+        "`n`n$lastUpdateError\", 'Petpet 更新失败', "
+        "[System.Windows.Forms.MessageBoxButtons]::OK, "
+        "[System.Windows.Forms.MessageBoxIcon]::Warning) | Out-Null\n"
+        "}\n"
+        "Set-Location ([System.IO.Path]::GetTempPath())\n"
+        "if ($updated -and $legacyCleanupDir) {\n"
+        "  for ($attempt = 1; $attempt -le 40; $attempt++) {\n"
+        "    try {\n"
+        "      if (Test-Path -LiteralPath $legacyCleanupDir) {\n"
+        "        Remove-Item -LiteralPath $legacyCleanupDir -Recurse -Force\n"
+        "      }\n"
+        "      break\n"
+        "    } catch {\n"
+        "      Start-Sleep -Milliseconds 500\n"
+        "    }\n"
+        "  }\n"
+        "}\n"
+        "Remove-Item -LiteralPath $workDir -Recurse -Force "
+        "-ErrorAction SilentlyContinue\n"
         "Remove-Item -LiteralPath $PSCommandPath -Force "
         "-ErrorAction SilentlyContinue\n"
     )
     helper_path.write_text(helper, encoding="utf-8-sig", newline="\r\n")
     creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
-    subprocess.Popen(
-        [
-            "powershell.exe",
-            "-NoProfile",
-            "-ExecutionPolicy", "Bypass",
-            "-WindowStyle", "Hidden",
-            "-File", str(helper_path),
-        ],
-        cwd=str(work_path),
-        creationflags=creation_flags,
-        close_fds=True,
-    )
+    try:
+        subprocess.Popen(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-ExecutionPolicy", "Bypass",
+                "-WindowStyle", "Hidden",
+                "-File", str(helper_path),
+            ],
+            cwd=str(work_path.parent),
+            creationflags=creation_flags,
+            close_fds=True,
+        )
+    except Exception:
+        try:
+            pending_executable.unlink()
+        except OSError:
+            pass
+        try:
+            helper_path.unlink()
+        except OSError:
+            pass
+        raise
     return {"ok": True, "action": "restart"}
 
 

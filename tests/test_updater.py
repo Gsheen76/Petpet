@@ -7,7 +7,9 @@ from unittest.mock import patch
 
 from updater import (
     _extract_windows_executable,
+    _legacy_update_cleanup_dir,
     _windows_replacement_target,
+    cleanup_stale_windows_updates,
     download_release,
     is_newer_version,
     launch_windows_replacement,
@@ -90,10 +92,22 @@ class UpdaterTests(unittest.TestCase):
             command = popen.call_args.args[0]
             self.assertEqual(command[0], "powershell.exe")
             self.assertIn("-WindowStyle", command)
-            helper = root / "更新缓存" / "apply-update.ps1"
+            helper = root / "apply-update-1234.ps1"
             script = helper.read_text(encoding="utf-8-sig")
             self.assertIn("Wait-Process -Id $petProcessId", script)
-            self.assertIn("Copy-Item -LiteralPath", script)
+            self.assertIn("[System.IO.File]::Replace(", script)
+            self.assertIn("$backupExecutable", script)
+            self.assertIn("$attempt -le 120", script)
+            self.assertIn(
+                "Remove-Item -LiteralPath $backupExecutable -Force",
+                script,
+            )
+            self.assertIn("Remove-Item -LiteralPath $workDir", script)
+            self.assertIn("Remove-Item -LiteralPath $PSCommandPath", script)
+            self.assertNotIn("explorer.exe", script)
+            pending = list(current.parent.glob(".Petpet.update-*.exe"))
+            self.assertEqual(len(pending), 1)
+            self.assertEqual(pending[0].read_bytes(), b"new executable")
 
     def test_update_cache_is_in_temp_root_not_install_or_data_dir(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -115,6 +129,38 @@ class UpdaterTests(unittest.TestCase):
             self.assertEqual(
                 _windows_replacement_target(cached), original.resolve()
             )
+            self.assertEqual(
+                _legacy_update_cleanup_dir(cached),
+                (root / "updates").resolve(),
+            )
+
+    def test_cleanup_removes_only_pending_payloads_and_temp_cache(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            install = root / "install"
+            install.mkdir()
+            current = install / "Petpet.exe"
+            current.write_bytes(b"current")
+            pending = install / ".Petpet.update-123.exe"
+            pending.write_bytes(b"pending")
+            backup = install / ".Petpet.backup-123.exe"
+            backup.write_bytes(b"backup")
+            user_data = install / "pet_state.json"
+            user_data.write_text('{"level": 8}', encoding="utf-8")
+            cache = update_cache_dir("1.2.3", temp_root=root / "temp")
+            cache.mkdir(parents=True)
+            (cache / "Petpet.exe").write_bytes(b"cache")
+
+            cleanup_stale_windows_updates(
+                current,
+                temp_root=root / "temp",
+            )
+
+            self.assertTrue(current.exists())
+            self.assertTrue(user_data.exists())
+            self.assertFalse(pending.exists())
+            self.assertFalse(backup.exists())
+            self.assertFalse(cache.parent.exists())
 
 
 if __name__ == "__main__":

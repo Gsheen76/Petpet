@@ -57,6 +57,10 @@ class MenuUiTests(unittest.TestCase):
             ["back", "quit"],
         )
 
+    def test_right_long_press_stats_feature_is_removed(self):
+        self.assertFalse(hasattr(pet.PetWindow, "open_stats"))
+        self.assertFalse(hasattr(pet.TrayApp, "_on_right_long"))
+
     def test_more_replaces_primary_canvas(self):
         fake_pet = SimpleNamespace(_bubble_menu=None)
         fake_menu = SimpleNamespace(pet=fake_pet, _close=Mock())
