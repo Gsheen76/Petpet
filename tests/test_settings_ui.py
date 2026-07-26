@@ -36,6 +36,12 @@ class SettingsWindowTests(unittest.TestCase):
 
     def test_uses_size_dropdown_and_switches(self):
         self.assertEqual(self.window.windowTitle(), "温馨设置")
+        self.assertGreaterEqual(
+            self.window.width(), pet.SettingsWindow.COMPACT_MIN_WIDTH
+        )
+        self.assertGreaterEqual(
+            self.window.height(), pet.SettingsWindow.COMPACT_MIN_HEIGHT
+        )
         self.assertEqual(self.window.chat_size_combo.currentData(), (640, 820))
         self.assertNotIn("chat_bubble_max", self.window.inputs)
         self.assertNotIn("decay_hunger", self.window.inputs)

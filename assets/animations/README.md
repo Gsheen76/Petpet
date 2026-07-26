@@ -70,4 +70,7 @@ python tools\slice_sprite_sheet.py 你的精灵表.png walk --columns 4 --rows 2
 
 输出会自动写入 `assets/animations/walk/`。重新启动 Petpet 即可看到动画。
 
-播放速度、是否循环和静态回退姿势可以在 `manifest.json` 中调整。
+播放速度、是否循环、静态回退姿势和颜色可以在 `manifest.json` 中调整。
+`saturation` 与 `brightness` 的范围为 `0.0～1.0`；例如吃东西动画使用
+`"saturation": 0.9`、`"brightness": 0.97`，只在加载时轻微降低鲜艳度和
+亮度，不会改写原始 PNG。

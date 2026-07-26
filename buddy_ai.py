@@ -20,6 +20,17 @@ MEMORY_PATH = os.path.join(DATA_DIR, "memory.json")
 
 API_URL = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
 MODEL = "glm-4-flash"
+DEFAULT_PET_NAME = "Sheen"
+
+
+def normalize_pet_name(value):
+    """Return a safe display/persona name, falling back to Sheen."""
+    text = " ".join(str(value or "").split())
+    allowed = "".join(
+        char for char in text
+        if char.isalnum() or char in (" ", "-", "_", "·")
+    )
+    return allowed[:12].strip() or DEFAULT_PET_NAME
 
 
 def _b64url(data: bytes) -> str:
@@ -80,6 +91,7 @@ def _default_memory():
         "user_profile": "主人叫什么我还不知道，慢慢聊就知道了。",
         "history": [],   # list of {role, content, t}
         "born": time.time(),
+        "pet_name": DEFAULT_PET_NAME,
     }
 
 def load_memory():
@@ -120,13 +132,16 @@ def _time_desc():
     return "深夜"
 
 
-def _history_text(mem, n=8):
+def _history_text(mem, n=8, pet_name=None):
     hs = mem["history"][-n*2:]
     if not hs:
         return "（还没有聊过天）"
+    pet_name = normalize_pet_name(
+        pet_name or mem.get("pet_name", DEFAULT_PET_NAME)
+    )
     out = []
     for h in hs:
-        who = "主人" if h["role"] == "user" else "Sheen"
+        who = "主人" if h["role"] == "user" else pet_name
         out.append(f"{who}：{h['content']}")
     return "\n".join(out)
 
@@ -143,7 +158,10 @@ def _detect_mood(text):
     return None
 
 
-def _build_messages(user_text, mem):
+def _build_messages(user_text, mem, pet_name=None):
+    pet_name = normalize_pet_name(
+        pet_name or mem.get("pet_name", DEFAULT_PET_NAME)
+    )
     mood = _detect_mood(user_text)
     mood_hint = ""
     if mood == "sad":
@@ -153,10 +171,10 @@ def _build_messages(user_text, mem):
     elif mood == "angry":
         mood_hint = "\n\n# 主人现在的情绪\n主人在生气/烦躁，先认可ta的情绪，不要急着讲道理或让ta冷静。"
 
-    sys_prompt = PERSONA.format(
+    sys_prompt = PERSONA.replace("Sheen", pet_name).format(
         user_profile=mem.get("user_profile", "（还没了解主人）"),
         now=_time_desc(),
-        history=_history_text(mem),
+        history=_history_text(mem, pet_name=pet_name),
     ) + mood_hint
     # GLM accepts system + user turns
     msgs = [{"role": "system", "content": sys_prompt}]
@@ -168,7 +186,8 @@ def _build_messages(user_text, mem):
 
 
 # ---------------- streaming call ----------------
-def chat_stream(user_text, mem=None, on_token=None, timeout=45):
+def chat_stream(user_text, mem=None, on_token=None, timeout=45,
+                pet_name=None):
     """Stream tokens from GLM. Yields (kind, payload) events:
        ('token', str)         -> a piece of reply text
        ('done',  full_text)   -> finished
@@ -184,7 +203,8 @@ def chat_stream(user_text, mem=None, on_token=None, timeout=45):
         return
 
     for attempt in range(3):
-        for ev in _stream_once(user_text, mem, key, on_token, timeout):
+        for ev in _stream_once(
+                user_text, mem, key, on_token, timeout, pet_name=pet_name):
             kind, payload = ev
             if kind == "error" and payload == "rate_limit" and attempt < 2:
                 # backoff: wait 8s then 15s
@@ -196,10 +216,10 @@ def chat_stream(user_text, mem=None, on_token=None, timeout=45):
                 return
 
 
-def _stream_once(user_text, mem, key, on_token, timeout):
+def _stream_once(user_text, mem, key, on_token, timeout, pet_name=None):
     body = json.dumps({
         "model": MODEL,
-        "messages": _build_messages(user_text, mem),
+        "messages": _build_messages(user_text, mem, pet_name=pet_name),
         "stream": True,
         "temperature": 0.85,
         "max_tokens": 200,
@@ -269,16 +289,18 @@ def _stream_once(user_text, mem, key, on_token, timeout):
 
 
 # ---------------- one-shot helper ----------------
-def chat(user_text, mem=None, timeout=30):
+def chat(user_text, mem=None, timeout=30, pet_name=None):
     """Blocking call, returns full reply string. Falls back to rules on error."""
     full = []
     last_err = None
-    for kind, payload in chat_stream(user_text, mem=mem, on_token=full.append, timeout=timeout):
+    for kind, payload in chat_stream(
+            user_text, mem=mem, on_token=full.append, timeout=timeout,
+            pet_name=pet_name):
         if kind == "done":
             return payload
         if kind == "error":
             last_err = payload
-    return fallback_reply(user_text, last_err)
+    return fallback_reply(user_text, last_err, pet_name=pet_name)
 
 
 # ---------------- fallback (no AI) ----------------
@@ -291,17 +313,29 @@ _FALLBACK = {
     "睡": ["晚安呀，Sheen 守着你睡💤", "好好睡，明天见~"],
 }
 
-def fallback_reply(user_text, err=None):
+def fallback_reply(user_text, err=None, pet_name=None):
     """Cheap rule-based reply when AI is unavailable."""
+    pet_name = normalize_pet_name(pet_name)
     t = (user_text or "").lower()
     for key, replies in _FALLBACK.items():
         if key in t:
-            return random.choice(replies) if "random" in globals() else replies[0]
+            reply = random.choice(replies) if "random" in globals() else replies[0]
+            return reply.replace("Sheen", pet_name)
     if err == "no_api_key":
-        return "汪…（Sheen 现在连不上大脑，设置一下 ZHIPU_API_KEY 就能聊天啦）"
+        return (
+            f"汪…（{pet_name} 现在连不上大脑，"
+            "设置一下 ZHIPU_API_KEY 就能聊天啦）"
+        )
     if err:
-        return f"汪…（Sheen 走神了：{err[:30]}）"
+        return f"汪…（{pet_name} 走神了：{err[:30]}）"
     return "汪？"
+
+
+def set_pet_name(pet_name):
+    """Persist the current pet name alongside chat memory."""
+    mem = load_memory()
+    mem["pet_name"] = normalize_pet_name(pet_name)
+    save_memory(mem)
 
 
 # ---------------- memory update (lightweight) ----------------
@@ -327,8 +361,11 @@ def _refresh_user_profile(mem):
     if not key:
         return
     recent = mem["history"][-12:]
-    convo = "\n".join(f"{'主人' if h['role']=='user' else 'Sheen'}：{h['content']}"
-                      for h in recent)
+    pet_name = normalize_pet_name(mem.get("pet_name", DEFAULT_PET_NAME))
+    convo = "\n".join(
+        f"{'主人' if h['role']=='user' else pet_name}：{h['content']}"
+        for h in recent
+    )
     prompt = (
         "根据下面的对话，用一句话总结主人的关键信息（名字、身份、近期大事、情绪状态、喜恶），"
         "不要编造，没提到的就不写。只输出总结，不要其它内容。\n\n"
@@ -359,7 +396,8 @@ def _refresh_user_profile(mem):
 
 
 # ---------------- proactive nudge ----------------
-def maybe_nudge(mem, idle_seconds, pet_state=None, idle_min=1800, gap_min=10800):
+def maybe_nudge(mem, idle_seconds, pet_state=None, idle_min=1800,
+                gap_min=10800, pet_name=None):
     """Return a proactive message if appropriate, else None.
     Called periodically by the host app. idle_seconds = seconds since last user msg.
     pet_state optional: {'hunger':n,'mood':n,'energy':n,'sleeping':bool}
@@ -393,21 +431,25 @@ def maybe_nudge(mem, idle_seconds, pet_state=None, idle_min=1800, gap_min=10800)
     else:
         opts = ["还没睡呀…Sheen 陪着你。", "夜深了，注意休息哦。"]
 
-    msg = opts[int(time.time()) % len(opts)]
+    pet_name = normalize_pet_name(
+        pet_name or mem.get("pet_name", DEFAULT_PET_NAME)
+    )
+    msg = opts[int(time.time()) % len(opts)].replace("Sheen", pet_name)
     mem["last_nudge_t"] = time.time()
     save_memory(mem)
     return msg
 
 
-def time_greeting():
-    """A proactive opener Sheen might say on app launch."""
+def time_greeting(pet_name=None):
+    """A proactive opener the pet might say on app launch."""
+    pet_name = normalize_pet_name(pet_name)
     h = time.localtime().tm_hour
     if 5 <= h < 9:   return "早呀主人！新的一天开始啦，汪~"
     if 9 <= h < 12:  return "上午好~今天忙不忙呀？"
     if 12 <= h < 14: return "中午啦，吃饭了没？别饿着~"
     if 14 <= h < 18: return "下午好~要不要歇会儿聊聊天？"
     if 18 <= h < 22: return "晚上好，今天过得怎么样？"
-    return "这么晚了还没睡呀…Sheen 陪着你。"
+    return f"这么晚了还没睡呀…{pet_name} 陪着你。"
 
 
 if __name__ == "__main__":

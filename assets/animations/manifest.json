@@ -14,7 +14,9 @@
     "loop": true,
     "fallback": "eat",
     "scale": 1.2,
-    "anchor_bottom": true
+    "anchor_bottom": true,
+    "saturation": 0.9,
+    "brightness": 0.97
   },
   "play":  {"folder": "play",  "fps": 10, "loop": false, "fallback": "happy"},
   "happy": {"folder": "happy", "fps": 8,  "loop": true,  "fallback": "happy"},

@@ -32,9 +32,10 @@ from updater import (
 )
 
 # ---------- version & update ----------
-VERSION = "1.2.0"
+VERSION = "1.2.1"
 IS_WINDOWS = sys.platform.startswith("win")
 IS_MACOS = sys.platform == "darwin"
+IS_FROZEN = bool(getattr(sys, "frozen", False))
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, QTextEdit, QMenu, QAction,
     QSystemTrayIcon, QVBoxLayout, QHBoxLayout, QPushButton, QFrame,
@@ -77,7 +78,8 @@ DEFAULT_ANIMATIONS = {
     "walk":  {"fps": 6,  "loop": True,  "fallback": "idle",
               "scale": 1.56, "anchor_bottom": True},
     "eat":   {"fps": 4,  "loop": True,  "fallback": "eat",
-              "scale": 1.2, "anchor_bottom": True},
+              "scale": 1.2, "anchor_bottom": True,
+              "saturation": 0.9, "brightness": 0.97},
     "play":  {"fps": 10, "loop": False, "fallback": "happy"},
     "happy": {"fps": 8,  "loop": True,  "fallback": "happy"},
     "sleep": {"fps": 4,  "loop": True,  "fallback": "sleep"},
@@ -86,6 +88,60 @@ DEFAULT_ANIMATIONS = {
     "sit":   {"fps": 6,  "loop": True,  "fallback": "idle"},
     "ask":   {"fps": 8,  "loop": False, "fallback": "idle"},
 }
+
+
+def adjust_animation_colors(pixmap, saturation=1.0, brightness=1.0):
+    """Apply a fast, alpha-safe color correction to an animation frame.
+
+    ``saturation`` and ``brightness`` are intentionally limited to 0..1.
+    Animation source PNGs stay untouched, so corrections remain reversible
+    and can be tuned independently for every action in the manifest.
+    """
+    try:
+        saturation = max(0.0, min(1.0, float(saturation)))
+        brightness = max(0.0, min(1.0, float(brightness)))
+    except (TypeError, ValueError):
+        return pixmap
+    if pixmap.isNull() or (
+            abs(saturation - 1.0) < 0.001
+            and abs(brightness - 1.0) < 0.001):
+        return pixmap
+
+    image = pixmap.toImage().convertToFormat(
+        QImage.Format_ARGB32_Premultiplied
+    )
+    result = QImage(image)
+
+    if saturation < 0.999:
+        grayscale = image.convertToFormat(QImage.Format_Grayscale8)
+        grayscale = grayscale.convertToFormat(
+            QImage.Format_ARGB32_Premultiplied
+        )
+        # Copy the source transparency without relying on alphaChannel(),
+        # which is unavailable in some PyQt5 builds.
+        mask_painter = QPainter(grayscale)
+        mask_painter.setCompositionMode(
+            QPainter.CompositionMode_DestinationIn
+        )
+        mask_painter.drawImage(0, 0, image)
+        mask_painter.end()
+        painter = QPainter(result)
+        painter.setOpacity(1.0 - saturation)
+        painter.setCompositionMode(QPainter.CompositionMode_SourceAtop)
+        painter.drawImage(0, 0, grayscale)
+        painter.end()
+
+    if brightness < 0.999:
+        painter = QPainter(result)
+        painter.setCompositionMode(QPainter.CompositionMode_SourceAtop)
+        painter.fillRect(
+            result.rect(),
+            QColor(0, 0, 0, int(round((1.0 - brightness) * 255))),
+        )
+        painter.end()
+
+    return QPixmap.fromImage(result)
+
 
 # ---------- settings (user-tunable) ----------
 DEFAULT_SETTINGS = {
@@ -124,15 +180,16 @@ WARM_MENU_STYLE = """
         background:#fffaf0;
         color:#65483b;
         border:1px solid #edc9ad;
-        border-radius:12px;
-        padding:8px;
+        border-radius:15px;
+        padding:12px;
+        min-width:310px;
         font-family:'Microsoft YaHei';
-        font-size:14px;
+        font-size:17px;
     }
     QMenu::item {
-        padding:8px 28px 8px 12px;
-        border-radius:8px;
-        margin:1px 2px;
+        padding:12px 40px 12px 18px;
+        border-radius:10px;
+        margin:2px 4px;
     }
     QMenu::item:selected {
         background:#ffe2d8;
@@ -143,9 +200,9 @@ WARM_MENU_STYLE = """
         background:#fff3e4;
     }
     QMenu::separator {
-        height:1px;
+        height:2px;
         background:#efd8c4;
-        margin:6px 8px;
+        margin:8px 12px;
     }
     QMenu::indicator:checked {
         background:#f28f76;
@@ -183,6 +240,8 @@ DEFAULT_STATE = {
     "x": None, "y": None, "sleeping": False, "born": time.time(),
     "autostart": False,
     "level": 1, "xp": 0,
+    "pet_name": ai.DEFAULT_PET_NAME,
+    "tutorial_completed": False,
 }
 
 # XP needed to go from level L to L+1: 100 * L^1.5 (slowing curve)
@@ -199,7 +258,14 @@ def load_state():
     try:
         with open(SAVE_PATH, "r", encoding="utf-8") as f:
             s = json.load(f)
-            return {**DEFAULT_STATE, **s}
+            state = {**DEFAULT_STATE, **s}
+            state["pet_name"] = ai.normalize_pet_name(
+                state.get("pet_name")
+            )
+            state["tutorial_completed"] = bool(
+                state.get("tutorial_completed", False)
+            )
+            return state
     except Exception:
         return dict(DEFAULT_STATE)
 
@@ -243,6 +309,9 @@ class ChatWindow(QWidget):
         self.setObjectName("chat")
         self.setFixedSize(self.s["chat_width"], self.s["chat_height"])
         self._apply_style()
+
+    def _pet_name(self):
+        return self.pet.pet_name
 
     def _apply_style(self):
         fs = self.s["chat_font_size"]
@@ -292,7 +361,7 @@ class ChatWindow(QWidget):
         """)
 
         # title bar (draggable) — title label on the left, close button on the right
-        self.title = QLabel("  🐶 Sheen")
+        self.title = QLabel(f"  🐶 {self._pet_name()}")
         self.title.setObjectName("title")
         self.title.setFixedHeight(38)
         self.title.setStyleSheet(
@@ -331,7 +400,9 @@ class ChatWindow(QWidget):
 
         # input row
         self.input = QLineEdit()
-        self.input.setPlaceholderText("跟 Sheen 说点什么…")
+        self.input.setPlaceholderText(
+            f"跟 {self._pet_name()} 说点什么…"
+        )
         self.input.returnPressed.connect(self.send)
         self.send_btn = QPushButton("发送")
         self.send_btn.setObjectName("send")
@@ -340,7 +411,9 @@ class ChatWindow(QWidget):
 
         self.clear_btn = QPushButton("清除记忆")
         self.clear_btn.setObjectName("clear")
-        self.clear_btn.setToolTip("让 Sheen 忘记所有对话")
+        self.clear_btn.setToolTip(
+            f"让 {self._pet_name()} 忘记所有对话"
+        )
         self.clear_btn.setCursor(Qt.PointingHandCursor)
         self.clear_btn.clicked.connect(self.confirm_clear_memory)
 
@@ -361,6 +434,15 @@ class ChatWindow(QWidget):
         layout.addWidget(self.log, 1)
         layout.addLayout(row)
         layout.addLayout(bottom_row)
+
+    def refresh_pet_name(self):
+        """Refresh every visible name after onboarding or renaming."""
+        name = self._pet_name()
+        self.mem["pet_name"] = name
+        self.title.setText(f"  🐶 {name}")
+        self.clear_btn.setToolTip(f"让 {name} 忘记所有对话")
+        if not self.busy:
+            self.input.setPlaceholderText(f"跟 {name} 说点什么…")
 
     def _render_history(self, exclude_last_assistant=False):
         """Render last N turns as HTML chat bubbles.
@@ -442,7 +524,7 @@ class ChatWindow(QWidget):
                            + self._bubble_html("assistant", "🐶 …"))
         self.busy = True
         self.send_btn.setEnabled(False)
-        self.input.setPlaceholderText("Sheen 正在思考…")
+        self.input.setPlaceholderText(f"{self._pet_name()} 正在思考…")
         # run AI in background thread so GUI doesn't freeze
         t = threading.Thread(target=self._ai_thread, args=(text,), daemon=True)
         t.start()
@@ -450,8 +532,10 @@ class ChatWindow(QWidget):
     def _ai_thread(self, user_text):
         full = []
         err = None
-        for kind, payload in ai.chat_stream(user_text, mem=self.mem,
-                                            on_token=lambda chunk: bridge.token.emit(chunk)):
+        for kind, payload in ai.chat_stream(
+                user_text, mem=self.mem,
+                on_token=lambda chunk: bridge.token.emit(chunk),
+                pet_name=self._pet_name()):
             if kind == "token":
                 full.append(payload)
             elif kind == "done":
@@ -461,7 +545,9 @@ class ChatWindow(QWidget):
                 err = payload
                 break
         if err:
-            reply = ai.fallback_reply(user_text, err)
+            reply = ai.fallback_reply(
+                user_text, err, pet_name=self._pet_name()
+            )
             bridge.error.emit(reply)
         else:
             bridge.done.emit("".join(full))
@@ -485,7 +571,9 @@ class ChatWindow(QWidget):
         self._streaming = ""
         self.busy = False
         self.send_btn.setEnabled(True)
-        self.input.setPlaceholderText("跟 Sheen 说点什么…")
+        self.input.setPlaceholderText(
+            f"跟 {self._pet_name()} 说点什么…"
+        )
         self.input.setFocus()
         self._set_log_html(self._render_history())
         # also show a speech bubble on the pet
@@ -501,16 +589,18 @@ class ChatWindow(QWidget):
         self._streaming = ""
         self.busy = False
         self.send_btn.setEnabled(True)
-        self.input.setPlaceholderText("跟 Sheen 说点什么…")
+        self.input.setPlaceholderText(
+            f"跟 {self._pet_name()} 说点什么…"
+        )
         self._set_log_html(self._render_history())
         self.pet.say(reply[:30], 2000)
 
     def confirm_clear_memory(self):
-        """Ask for confirmation with Sheen's voice; on yes, wipe memory."""
+        """Ask for confirmation in the pet's voice; on yes, wipe memory."""
         if self.busy:
             return
         msg = QMessageBox(self)
-        msg.setWindowTitle("Sheen · 清除记忆")
+        msg.setWindowTitle(f"{self._pet_name()} · 清除记忆")
         msg.setIcon(QMessageBox.Question)
         msg.setText("主人，我会忘记你的，还是想要和我重新相识一次？")
         msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
@@ -539,7 +629,9 @@ class StatsWindow(QWidget):
         self.s = pet_window.settings
 
         self.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.Tool)
-        self.setWindowTitle("Sheen · 温暖成长档案")
+        self.setWindowTitle(
+            f"{self.pet.pet_name} · 温暖档案"
+        )
         self.setFixedSize(460, 580)
 
         # stats panel uses its own larger font scale (not ui_font_size)
@@ -639,11 +731,13 @@ class StatsWindow(QWidget):
 
     def refresh(self):
         st = self.pet.state
+        name = self.pet.pet_name
+        self.setWindowTitle(f"{name} · 温暖档案")
         lvl = st.get("level", 1)
         xp = st.get("xp", 0)
         need = xp_to_next(lvl)
         self.lvl_label.setText(f"Lv.{lvl}")
-        self.title_label.setText("Sheen 的成长小屋")
+        self.title_label.setText(f"{name} 的小屋")
         self.subtitle_label.setText(f"距离下一级：{max(0, need-xp)} EXP")
         self.subtitle_label.setObjectName("gold")
         self.subtitle_label.setStyleSheet(
@@ -677,12 +771,12 @@ class ToggleSwitch(QAbstractButton):
         super().__init__(parent)
         self.setCheckable(True)
         self.setCursor(Qt.PointingHandCursor)
-        self.setFixedSize(56, 30)
+        self.setFixedSize(60, 32)
         self.setFocusPolicy(Qt.StrongFocus)
         self.toggled.connect(lambda _checked: self.update())
 
     def sizeHint(self):
-        return QSize(56, 30)
+        return QSize(60, 32)
 
     def paintEvent(self, _event):
         painter = QPainter(self)
@@ -693,8 +787,8 @@ class ToggleSwitch(QAbstractButton):
             track_color.setAlpha(120)
         painter.setPen(Qt.NoPen)
         painter.setBrush(track_color)
-        painter.drawRoundedRect(track, 13, 13)
-        knob_size = 22
+        painter.drawRoundedRect(track, 14, 14)
+        knob_size = 24
         knob_x = self.width() - knob_size - 4 if self.isChecked() else 4
         painter.setBrush(QColor("#fffdf9"))
         painter.drawEllipse(QRectF(knob_x, 4, knob_size, knob_size))
@@ -713,7 +807,7 @@ class StepperControl(QWidget):
         self.plus = QPushButton("+")
         for button in (self.minus, self.plus):
             button.setObjectName("stepButton")
-            button.setFixedSize(34, 34)
+            button.setFixedSize(38, 38)
             button.setAutoRepeat(True)
             button.setAutoRepeatDelay(350)
             button.setAutoRepeatInterval(90)
@@ -728,7 +822,7 @@ class StepperControl(QWidget):
         self.spin.setRange(minimum, maximum)
         self.spin.setSingleStep(step)
         self.spin.setValue(value)
-        self.spin.setFixedSize(92, 34)
+        self.spin.setFixedSize(104, 38)
         self.minus.clicked.connect(self.spin.stepDown)
         self.plus.clicked.connect(self.spin.stepUp)
         layout.addWidget(self.minus)
@@ -751,6 +845,10 @@ class StepperControl(QWidget):
 class SettingsWindow(QWidget):
     """Tunable settings panel — chat window size, decay rates, chatter frequency, etc."""
     CHANGED = pyqtSignal()
+    PREFERRED_WIDTH = 700
+    PREFERRED_HEIGHT = 800
+    COMPACT_MIN_WIDTH = 540
+    COMPACT_MIN_HEIGHT = 590
 
     FIELDS = [
         # (key, label, min, max, step, hint)
@@ -800,8 +898,14 @@ class SettingsWindow(QWidget):
         self._build_ui()
         screen = QApplication.primaryScreen().availableGeometry()
         self.setFixedSize(
-            max(480, min(640, screen.width() - 40)),
-            max(560, min(720, screen.height() - 100)),
+            max(
+                self.COMPACT_MIN_WIDTH,
+                min(self.PREFERRED_WIDTH, screen.width() - 60),
+            ),
+            max(
+                self.COMPACT_MIN_HEIGHT,
+                min(self.PREFERRED_HEIGHT, screen.height() - 80),
+            ),
         )
 
     def _apply_font(self):
@@ -827,7 +931,7 @@ class SettingsWindow(QWidget):
                 background:#fffdf9;
                 border:1px solid #e7c6ad;
                 border-radius:10px;
-                padding:5px 10px;
+                padding:7px 12px;
                 color:#65483b;
                 selection-background-color:#ffc9b8;
             }}
@@ -849,8 +953,8 @@ class SettingsWindow(QWidget):
                 background:#f28f76;
                 color:#fff;
                 border:0;
-                border-radius:11px;
-                padding:9px 18px;
+                border-radius:12px;
+                padding:11px 21px;
                 font-weight:700;
             }}
             QPushButton:hover {{ background:#f5a08a; }}
@@ -894,8 +998,8 @@ class SettingsWindow(QWidget):
                 background:#fffdf8;
                 border:1px solid #edcfb5;
                 border-radius:17px;
-                margin-top:15px;
-                padding:18px 15px 12px 15px;
+                margin-top:17px;
+                padding:21px 18px 15px 18px;
             }}
             QGroupBox::title {{
                 color:#925d49;
@@ -922,22 +1026,22 @@ class SettingsWindow(QWidget):
 
     def _build_ui(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(22, 14, 22, 14)
-        root.setSpacing(6)
+        root.setContentsMargins(26, 18, 26, 18)
+        root.setSpacing(8)
 
         title_bar = QFrame()
         title_bar.setCursor(Qt.SizeAllCursor)
         title_row = QHBoxLayout(title_bar)
         title_row.setContentsMargins(0, 0, 0, 0)
-        title_row.setSpacing(8)
+        title_row.setSpacing(10)
         title = QLabel("🌼 温馨设置")
         title.setStyleSheet(
-            "font-size:22px; font-weight:900; color:#754b3a;")
+            "font-size:24px; font-weight:900; color:#754b3a;")
         title.setAttribute(Qt.WA_TransparentForMouseEvents, True)
         close_button = QPushButton("×")
         close_button.setObjectName("closeButton")
         close_button.setToolTip("关闭温馨设置")
-        close_button.setFixedSize(32, 32)
+        close_button.setFixedSize(36, 36)
         close_button.clicked.connect(self.close)
         title_row.addWidget(title)
         title_row.addStretch(1)
@@ -948,7 +1052,7 @@ class SettingsWindow(QWidget):
         root.addWidget(title_bar)
 
         subtitle = QLabel("每一项都会保存并立即应用，按需要慢慢调就好。")
-        subtitle.setStyleSheet("color:#a27a68; font-size:13px;")
+        subtitle.setStyleSheet("color:#a27a68; font-size:14px;")
         root.addWidget(subtitle)
 
         scroll = QScrollArea()
@@ -957,8 +1061,8 @@ class SettingsWindow(QWidget):
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         content = QWidget()
         content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(0, 2, 8, 2)
-        content_layout.setSpacing(8)
+        content_layout.setContentsMargins(0, 4, 10, 4)
+        content_layout.setSpacing(10)
         content_layout.setAlignment(Qt.AlignTop)
 
         content_layout.addWidget(self._interface_group())
@@ -981,11 +1085,13 @@ class SettingsWindow(QWidget):
         root.addWidget(self.status_label)
 
         btn_row = QHBoxLayout()
-        btn_row.setSpacing(10)
+        btn_row.setSpacing(14)
         reset_btn = QPushButton("恢复全部默认值")
         reset_btn.setObjectName("reset")
+        reset_btn.setMinimumHeight(44)
         reset_btn.clicked.connect(self.reset_defaults)
         ok_btn = QPushButton("保存并立即应用")
+        ok_btn.setMinimumHeight(44)
         ok_btn.clicked.connect(self.apply)
         btn_row.addWidget(reset_btn)
         btn_row.addStretch(1)
@@ -1011,7 +1117,7 @@ class SettingsWindow(QWidget):
     def _interface_group(self):
         group = QGroupBox("🍑 界面、声音与更新")
         layout = QVBoxLayout(group)
-        layout.setSpacing(7)
+        layout.setSpacing(9)
 
         combo = QComboBox()
         combo.setMinimumWidth(220)
@@ -1056,7 +1162,7 @@ class SettingsWindow(QWidget):
     def _group(self, title, keys):
         group = QGroupBox(title)
         layout = QVBoxLayout(group)
-        layout.setSpacing(7)
+        layout.setSpacing(9)
         for key in keys:
             self._add_numeric_row(layout, key)
         return group
@@ -1073,8 +1179,8 @@ class SettingsWindow(QWidget):
     def _add_row(self, layout, label, hint, control):
         row_widget = QWidget()
         row = QHBoxLayout(row_widget)
-        row.setContentsMargins(3, 3, 3, 3)
-        row.setSpacing(12)
+        row.setContentsMargins(4, 5, 4, 5)
+        row.setSpacing(16)
         text_layout = QVBoxLayout()
         text_layout.setContentsMargins(0, 0, 0, 0)
         text_layout.setSpacing(1)
@@ -1162,6 +1268,264 @@ class SettingsWindow(QWidget):
         self.CHANGED.emit()
 
 
+class TutorialWindow(QWidget):
+    """Warm first-run guide whose final step names the pet."""
+
+    PAGES = [
+        (
+            "🐶",
+            "欢迎认识你的桌面伙伴",
+            "从今天开始，这只小狗会住在你的桌面上。\n"
+            "它会散步、撒娇、陪你聊天，也会记住你们一起度过的时间。",
+        ),
+        (
+            "🖱️",
+            "摸摸它，也可以带它走",
+            "单击小狗可以抚摸它，双击会打开聊天窗口。\n"
+            "按住左键拖动可以移动小狗，快速甩出去时它还会弹跳。",
+        ),
+        (
+            "🌷",
+            "右键打开治愈互动",
+            "短按右键会显示状态卡和互动气泡，可以聊天、喂食、玩耍或睡觉。\n"
+            "点击“更多”可以进入设置、隐藏、教程等功能；长按右键会打开完整状态档案。",
+        ),
+        (
+            "💬",
+            "聊天、设置与托盘",
+            "配置智谱 API Key 后，小狗就能在线陪你聊天；没有 Key 时也会使用本地话术。\n"
+            "托盘图标可以显示或隐藏小狗、检查更新、设置开机自启和退出。",
+        ),
+        (
+            "🏷️",
+            "最后，给小狗取个名字吧",
+            "这是它以后陪伴你时使用的名字，也会显示在聊天、状态档案和托盘中。\n"
+            "名字可以使用中文、英文、数字、空格、“-”、“_”或“·”，最多 12 个字符。",
+        ),
+    ]
+
+    def __init__(self, pet_window, on_complete):
+        super().__init__()
+        self.pet = pet_window
+        self.on_complete = on_complete
+        self.page_index = 0
+        self.setWindowFlags(
+            Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
+        )
+        self.setAttribute(Qt.WA_DeleteOnClose, False)
+        self.setObjectName("tutorialWindow")
+        self.setWindowTitle("初次见面 · 新手教程")
+        self.setFixedSize(800, 680)
+        self.setStyleSheet("""
+            QWidget#tutorialWindow {
+                background:#fff8ec;
+                border:1px solid #e7c4ad;
+                border-radius:24px;
+                color:#65483b;
+                font-family:'Microsoft YaHei',sans-serif;
+            }
+            QLabel { background:transparent; }
+            QLabel#tutorialIcon { font-size:88px; }
+            QLabel#tutorialTitle {
+                color:#754b3a;
+                font-size:38px;
+                font-weight:900;
+            }
+            QLabel#tutorialBody {
+                color:#8e6959;
+                font-size:30px;
+                line-height:1.6;
+            }
+            QLabel#tutorialProgress {
+                color:#e18d76;
+                font-size:23px;
+                letter-spacing:5px;
+            }
+            QLabel#nameHint {
+                color:#b36f5b;
+                font-size:20px;
+                font-weight:700;
+            }
+            QFrame#nameCard {
+                background:#fffdf8;
+                border:1px solid #edcfb5;
+                border-radius:17px;
+            }
+            QLineEdit {
+                background:#ffffff;
+                border:2px solid #edcdb3;
+                border-radius:14px;
+                padding:12px 16px;
+                color:#65483b;
+                font-size:28px;
+                selection-background-color:#ffc9b8;
+            }
+            QLineEdit:focus { border-color:#f19a7f; }
+            QPushButton {
+                min-height:52px;
+                padding:7px 25px;
+                border:0;
+                border-radius:17px;
+                background:#f28f76;
+                color:#ffffff;
+                font-size:22px;
+                font-weight:800;
+            }
+            QPushButton:hover { background:#f5a08a; }
+            QPushButton:pressed { background:#df7d67; }
+            QPushButton#secondary {
+                background:#f1dfd2;
+                color:#7e5b4c;
+            }
+            QPushButton#secondary:hover { background:#ead1c1; }
+            QPushButton#later {
+                background:transparent;
+                color:#ad8170;
+                padding:4px 12px;
+                min-height:38px;
+            }
+            QPushButton#later:hover {
+                background:#ffebe3;
+                color:#a45d4e;
+            }
+        """)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(38, 28, 38, 30)
+        root.setSpacing(14)
+
+        top = QHBoxLayout()
+        brand = QLabel("🌼 Pet陪它 · 新手教程")
+        brand.setStyleSheet(
+            "font-size:23px; font-weight:900; color:#93624f;"
+        )
+        self.later_button = QPushButton("稍后再说")
+        self.later_button.setObjectName("later")
+        self.later_button.clicked.connect(self.close)
+        top.addWidget(brand)
+        top.addStretch(1)
+        top.addWidget(self.later_button)
+        root.addLayout(top)
+
+        self.icon_label = QLabel()
+        self.icon_label.setObjectName("tutorialIcon")
+        self.icon_label.setAlignment(Qt.AlignCenter)
+        root.addWidget(self.icon_label)
+
+        self.title_label = QLabel()
+        self.title_label.setObjectName("tutorialTitle")
+        self.title_label.setAlignment(Qt.AlignCenter)
+        root.addWidget(self.title_label)
+
+        self.body_label = QLabel()
+        self.body_label.setObjectName("tutorialBody")
+        self.body_label.setAlignment(Qt.AlignCenter)
+        self.body_label.setWordWrap(True)
+        self.body_label.setMinimumHeight(132)
+        root.addWidget(self.body_label)
+
+        self.name_card = QFrame()
+        self.name_card.setObjectName("nameCard")
+        name_layout = QVBoxLayout(self.name_card)
+        name_layout.setContentsMargins(20, 15, 20, 15)
+        name_layout.setSpacing(7)
+        self.name_input = QLineEdit()
+        self.name_input.setObjectName("petNameInput")
+        self.name_input.setMaxLength(12)
+        self.name_input.setPlaceholderText("例如：团子、旺财、Sheen")
+        self.name_input.returnPressed.connect(self._next)
+        self.name_hint = QLabel("")
+        self.name_hint.setObjectName("nameHint")
+        self.name_hint.setAlignment(Qt.AlignCenter)
+        name_layout.addWidget(self.name_input)
+        name_layout.addWidget(self.name_hint)
+        root.addWidget(self.name_card)
+
+        root.addStretch(1)
+        self.progress_label = QLabel()
+        self.progress_label.setObjectName("tutorialProgress")
+        self.progress_label.setAlignment(Qt.AlignCenter)
+        root.addWidget(self.progress_label)
+
+        controls = QHBoxLayout()
+        controls.setSpacing(12)
+        self.back_button = QPushButton("上一步")
+        self.back_button.setObjectName("secondary")
+        self.back_button.clicked.connect(self._back)
+        self.next_button = QPushButton("下一步")
+        self.next_button.clicked.connect(self._next)
+        controls.addWidget(self.back_button)
+        controls.addStretch(1)
+        controls.addWidget(self.next_button)
+        root.addLayout(controls)
+
+        self._refresh_page()
+
+    def start(self):
+        """Restart the guide from page one and place it near the pet."""
+        self.page_index = 0
+        current_name = self.pet.pet_name
+        if (not self.pet.state.get("tutorial_completed", False)
+                and current_name == ai.DEFAULT_PET_NAME):
+            self.name_input.clear()
+        else:
+            self.name_input.setText(current_name)
+        self.name_hint.clear()
+        self._refresh_page()
+        screen = self.pet.current_screen_rect()
+        x = screen.center().x() - self.width() // 2
+        y = screen.center().y() - self.height() // 2
+        self.move(int(x), int(y))
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
+    def _refresh_page(self):
+        emoji, title, body = self.PAGES[self.page_index]
+        is_last = self.page_index == len(self.PAGES) - 1
+        self.icon_label.setText(emoji)
+        self.title_label.setText(title)
+        self.body_label.setText(body)
+        self.name_card.setVisible(is_last)
+        self.back_button.setVisible(self.page_index > 0)
+        self.next_button.setText(
+            "完成相遇" if is_last else "下一步"
+        )
+        self.progress_label.setText(
+            " ".join(
+                "●" if index == self.page_index else "○"
+                for index in range(len(self.PAGES))
+            )
+        )
+        self.later_button.setText(
+            "关闭" if self.pet.state.get("tutorial_completed") else "稍后再说"
+        )
+        if is_last:
+            QTimer.singleShot(0, self.name_input.setFocus)
+
+    def _back(self):
+        if self.page_index > 0:
+            self.page_index -= 1
+            self.name_hint.clear()
+            self._refresh_page()
+
+    def _next(self):
+        if self.page_index < len(self.PAGES) - 1:
+            self.page_index += 1
+            self._refresh_page()
+            return
+        raw_name = " ".join(self.name_input.text().split())
+        if not any(char.isalnum() for char in raw_name):
+            self.name_hint.setText("请先给小狗取一个名字，再开始陪伴吧～")
+            self.name_input.setFocus()
+            return
+        name = ai.normalize_pet_name(raw_name)
+        self.name_input.setText(name)
+        self.name_hint.clear()
+        self.on_complete(name)
+        self.close()
+
+
 class StatBubble(QWidget):
     """A warm, readable growth card shown above the right-click actions."""
     def __init__(self, pet):
@@ -1237,7 +1601,7 @@ class StatBubble(QWidget):
         p.setPen(QColor("#7b4d3a"))
         p.setFont(QFont("Microsoft YaHei", 16, QFont.Bold))
         p.drawText(title_rect, Qt.AlignLeft | Qt.AlignVCenter,
-                   "🐾 Sheen 的成长小屋")
+                   f"🐾 {self.pet.pet_name} 的小屋")
 
         days_text = f"♡ 陪伴第 {days} 天"
         days_rect = QRectF(W - 179, 18, 153, 33)
@@ -1275,7 +1639,7 @@ class StatBubble(QWidget):
         p.setPen(QColor("#8a6654"))
         p.setFont(QFont("Microsoft YaHei", 10, QFont.Bold))
         p.drawText(QRectF(xp_area_x, 76, 104, 23),
-                   Qt.AlignLeft | Qt.AlignVCenter, "成长经验")
+                   Qt.AlignLeft | Qt.AlignVCenter, "经验")
         xp_text = f"{xp} / {need} EXP"
         xp_value_rect = QRectF(xp_area_x + 108, 76, xp_area_w - 108, 23)
         p.setFont(self._fit_font(xp_text, 10, xp_value_rect.width(),
@@ -1359,16 +1723,30 @@ class StatBubble(QWidget):
 
 class BubbleMenu(QWidget):
     """Five soft candy-style action buttons with a warm growth card."""
-    def __init__(self, pet):
+    PRIMARY_ACTIONS = [
+        ("💬", "聊天", "chat", "#ef8fa2"),
+        ("🍖", "喂食", "feed", "#f49a62"),
+        ("🎾", "玩耍", "play", "#72bf9b"),
+        ("💤", "睡觉", "sleep", "#9b8ade"),
+        ("⋯", "更多", "more", "#e7ae64"),
+    ]
+    MORE_ACTIONS = [
+        ("⚙️", "设置", "settings", "#e7ae64"),
+        ("👁", "隐藏", "hide", "#79a9d8"),
+        ("📖", "教程", "tutorial", "#d392bd"),
+        ("↩", "返回", "back", "#79bd9a"),
+        ("✕", "退出", "quit", "#df8f91"),
+    ]
+
+    def __init__(self, pet, page="primary"):
         super().__init__()
         self.pet = pet
-        self.actions = [
-            ("💬", "聊天", "chat", "#ef8fa2"),
-            ("🍖", "喂食", "feed", "#f49a62"),
-            ("🎾", "玩耍", "play", "#72bf9b"),
-            ("💤", "睡觉", "sleep", "#9b8ade"),
-            ("⚙️", "设置", "settings", "#e7ae64"),
-        ]
+        self.page = page if page in ("primary", "more") else "primary"
+        self.actions = list(
+            self.PRIMARY_ACTIONS
+            if self.page == "primary"
+            else self.MORE_ACTIONS
+        )
         self.setWindowFlags(
             Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint |
             Qt.Tool | Qt.WindowDoesNotAcceptFocus
@@ -1378,7 +1756,9 @@ class BubbleMenu(QWidget):
         self.setAttribute(Qt.WA_DeleteOnClose, True)
 
         # Larger hit targets with room for both icon and label.
-        self.W = 590
+        self.W = 590 if self.page == "primary" else max(
+            480, len(self.actions) * 102 + (len(self.actions) - 1) * 10 + 40
+        )
         self.H = 112
         self.resize(self.W, self.H)
         self._bubble_rects = []
@@ -1389,8 +1769,11 @@ class BubbleMenu(QWidget):
         self._anim.timeout.connect(self._tick)
         self._anim.start(16)
 
-        # stat bubble (follows pet too)
-        self.stat_bubble = StatBubble(pet)
+        # The growth card belongs only to the primary interaction canvas.
+        # Opening "更多" replaces the whole first canvas.
+        self.stat_bubble = (
+            StatBubble(pet) if self.page == "primary" else None
+        )
 
         self._place()
         self.show()
@@ -1413,10 +1796,11 @@ class BubbleMenu(QWidget):
     def follow_pet(self):
         """Reposition both the bubble menu and stat bubble to follow the pet."""
         self._place()
-        try:
-            self.stat_bubble._place()
-        except Exception:
-            pass
+        if self.stat_bubble is not None:
+            try:
+                self.stat_bubble._place()
+            except Exception:
+                pass
 
     def _place(self):
         """Position the row of bubbles just above the pet's head."""
@@ -1519,6 +1903,14 @@ class BubbleMenu(QWidget):
 
     def _run_action(self, action):
         pet = self.pet
+        if action in ("more", "back"):
+            # Switching pages always replaces the complete current canvas.
+            # Returning rebuilds the primary growth card and five bubbles.
+            target_page = "more" if action == "more" else "primary"
+            self._close()
+            pet._bubble_menu = BubbleMenu(pet, page=target_page)
+            return
+
         if action == "chat":
             pet.chat()
         elif action == "feed":
@@ -1529,18 +1921,27 @@ class BubbleMenu(QWidget):
             pet.toggle_sleep()
         elif action == "settings":
             pet.open_settings()
+        elif action in ("hide", "tutorial", "quit"):
+            self._close()
+            callback = getattr(pet, "_app_action_cb", None)
+            if callable(callback):
+                callback(action)
+            return
         self._close()
 
     def _close(self):
-        try:
-            self.stat_bubble.close()
-        except Exception:
-            pass
+        if self.stat_bubble is not None:
+            try:
+                self.stat_bubble.close()
+            except Exception:
+                pass
         try:
             self.releaseMouse()
         except Exception:
             pass
         self.close()
+        if getattr(self.pet, "_bubble_menu", None) is self:
+            self.pet._bubble_menu = None
 
     def keyPressEvent(self, e):
         if e.key() == Qt.Key_Escape:
@@ -1828,6 +2229,9 @@ class SpeechBubble(QWidget):
 
     def show_text(self, text, ms):
         # Flatten all input so the bubble can never wrap onto a second line.
+        # Stop the previous countdown first.  Rapid clicks can otherwise leave
+        # an old timeout queued while the same translucent window is resized.
+        self._hide_timer.stop()
         text = " ".join(str(text).replace("\r", "\n").splitlines()).strip()
         screen = self.pet.current_screen_rect()
         fm = self.fontMetrics()
@@ -1835,29 +2239,44 @@ class SpeechBubble(QWidget):
         max_text_width = max(80, screen.width() - padding_x * 2 - 24)
         self.text = fm.elidedText(text, Qt.ElideRight, max_text_width)
         text_width = fm.horizontalAdvance(self.text)
-        self.resize(text_width + padding_x * 2 + 10, fm.height() + 28)
-        self.follow_pet()
-        self.show()
+        width = text_width + padding_x * 2 + 10
+        height = fm.height() + 28
+        self.setGeometry(self._bubble_geometry(width, height))
+        if not self.isVisible():
+            self.show()
         self.raise_()
+        # A synchronous full repaint prevents Windows' translucent backing
+        # surface from briefly retaining the old width after rapid updates.
+        self.repaint()
         self._hide_timer.start(max(1, int(ms)))
-        self.update()
 
     def follow_pet(self):
         if not self.pet.isVisible():
             self.hide()
             return
+        rect = self._bubble_geometry(self.width(), self.height())
+        self.move(rect.topLeft())
+
+    def _bubble_geometry(self, width, height):
+        """Return one complete on-screen geometry for an atomic update."""
         g = self.pet.geometry()
         screen = self.pet.current_screen_rect()
-        x = g.center().x() - self.width() // 2
+        x = g.center().x() - width // 2
         # Keep the one-line bubble inside the pet window's reserved head space.
         y = g.top() + 3
-        x = max(screen.left() + 4, min(x, screen.right() - self.width() - 4))
-        y = max(screen.top() + 4, min(y, screen.bottom() - self.height() - 4))
-        self.move(int(x), int(y))
+        x = max(screen.left() + 4, min(x, screen.right() - width - 4))
+        y = max(screen.top() + 4, min(y, screen.bottom() - height - 4))
+        return QRect(int(x), int(y), int(width), int(height))
 
     def paintEvent(self, event):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
+        # Explicitly clear the complete translucent surface.  This matters
+        # when a visible bubble changes from short to long several times in
+        # quick succession on Windows.
+        p.setCompositionMode(QPainter.CompositionMode_Source)
+        p.fillRect(self.rect(), Qt.transparent)
+        p.setCompositionMode(QPainter.CompositionMode_SourceOver)
         body = QRectF(4, 3, self.width() - 8, self.height() - 12)
 
         p.setPen(Qt.NoPen)
@@ -1983,6 +2402,7 @@ class PetWindow(QWidget):
         self._last_interactive_t = 0.0   # throttle: don't spam
         self._ctx_menu_cb = None  # set by TrayApp to provide a right-click menu
         self._settings_applied_cb = None
+        self._app_action_cb = None
 
         # Single-line speech bubble is a separate window so it can grow wider
         # than the pet widget without clipping or wrapping.
@@ -2023,6 +2443,23 @@ class PetWindow(QWidget):
 
         # multi-sample drag velocity: track mouse move events
         # (handled in mouseMoveEvent)
+
+    @property
+    def pet_name(self):
+        return ai.normalize_pet_name(self.state.get("pet_name"))
+
+    def set_pet_name(self, value):
+        """Persist a new name and refresh already-open pet windows."""
+        name = ai.normalize_pet_name(value)
+        self.state["pet_name"] = name
+        save_state(self.state)
+        ai.set_pet_name(name)
+        if self.chat_win is not None:
+            self.chat_win.refresh_pet_name()
+        if self.stats_win is not None:
+            self.stats_win.refresh()
+        self.update()
+        return name
 
     def on_health_check(self):
         """Check if it's time to remind the user to drink/rest/stand."""
@@ -2251,6 +2688,11 @@ class PetWindow(QWidget):
                     pixmap = pixmap.scaled(
                         512, 512, Qt.KeepAspectRatio,
                         Qt.SmoothTransformation)
+                pixmap = adjust_animation_colors(
+                    pixmap,
+                    saturation=spec.get("saturation", 1.0),
+                    brightness=spec.get("brightness", 1.0),
+                )
                 frames.append(pixmap)
             if frames:
                 self.animation_frames[name] = frames
@@ -2989,8 +3431,14 @@ class PetWindow(QWidget):
         self.last_nudge_check = time.time()
         mem = ai.load_memory()
         # pass settings to maybe_nudge so it respects nudge_gap_min
-        msg = ai.maybe_nudge(mem, idle, pet_state=self.state,
-                             idle_min=s["nudge_idle_min"], gap_min=s["nudge_gap_min"])
+        msg = ai.maybe_nudge(
+            mem,
+            idle,
+            pet_state=self.state,
+            idle_min=s["nudge_idle_min"],
+            gap_min=s["nudge_gap_min"],
+            pet_name=self.pet_name,
+        )
         if msg:
             # show as a longer speech bubble; do not call AI to save quota
             self.say(msg, 4500)
@@ -3006,14 +3454,15 @@ class TrayApp:
         bridge = _Bridge()
         self.state = load_state()
         self.pet = PetWindow(self.state)
-        # initial greeting from Sheen (only if has API key)
-        if ai.get_api_key():
-            QTimer.singleShot(1500, lambda: self.pet.say(ai.time_greeting(), 3000))
+        self.pet._app_action_cb = self._handle_bubble_action
+        ai.set_pet_name(self.pet.pet_name)
         self.pet.show()
 
         # tray
         self.tray = QSystemTrayIcon(QIcon(ICON_PATH), self.app)
-        self.tray.setToolTip("我的小狗 Sheen — 双击显示/隐藏")
+        self.tray.setToolTip(
+            f"我的小狗 {self.pet.pet_name} — 双击显示/隐藏"
+        )
         self.tray.activated.connect(self.on_tray_activated)
         self.menu = QMenu()
         self.menu.setStyleSheet(WARM_MENU_STYLE)
@@ -3028,6 +3477,7 @@ class TrayApp:
         self._manual_update_check = False
         self._update_progress_dialog = None
         self._update_cancel_event = None
+        self.tutorial_win = None
         self.pet._settings_applied_cb = self._on_settings_applied
         bridge.update_checked.connect(self._on_update_result)
         bridge.update_progress.connect(self._on_update_progress)
@@ -3038,6 +3488,16 @@ class TrayApp:
             QTimer.singleShot(
                 5000, lambda: self._check_update(manual=False)
             )
+        if self.state.get("tutorial_completed", False):
+            if ai.get_api_key():
+                QTimer.singleShot(
+                    1500,
+                    lambda: self.pet.say(
+                        ai.time_greeting(self.pet.pet_name), 3000
+                    ),
+                )
+        else:
+            QTimer.singleShot(700, self.open_tutorial)
 
     def _on_settings_applied(self, previous, current):
         """Handle app-level settings that PetWindow cannot apply itself."""
@@ -3045,6 +3505,34 @@ class TrayApp:
                 bool(current.get("auto_check_updates", True))):
             self._check_update(manual=False)
         self.refresh_menu()
+
+    def _handle_bubble_action(self, action):
+        """Handle app-level actions from the secondary bubble canvas."""
+        if action == "hide":
+            self.toggle_visible()
+        elif action == "tutorial":
+            self.open_tutorial()
+        elif action == "quit":
+            self.quit()
+
+    def open_tutorial(self):
+        """Open or restart the first-run guide."""
+        if self.tutorial_win is None:
+            self.tutorial_win = TutorialWindow(
+                self.pet, self._complete_tutorial
+            )
+        self.tutorial_win.start()
+
+    def _complete_tutorial(self, pet_name):
+        """Persist onboarding completion and apply the chosen name."""
+        name = self.pet.set_pet_name(pet_name)
+        self.state["tutorial_completed"] = True
+        save_state(self.state)
+        self.tray.setToolTip(
+            f"我的小狗 {name} — 双击显示/隐藏"
+        )
+        self.refresh_menu()
+        self.pet.say(f"以后我就叫 {name} 啦！请多多关照～", 3600)
 
     def _install_interaction_handlers(self):
         """Install click, double-click, drag, and right-long-press handling."""
@@ -3098,7 +3586,7 @@ class TrayApp:
             return
 
         msg = QMessageBox(self.pet)
-        msg.setWindowTitle("Sheen 有新版本")
+        msg.setWindowTitle(f"{self.pet.pet_name} 有新版本")
         msg.setIcon(QMessageBox.Information)
         v = info["version"]
         notes = info.get("notes", "").strip() or "（暂无更新说明）"
@@ -3305,11 +3793,9 @@ class TrayApp:
         m.addSeparator()
 
         # ---- 管理 ----
-        a_stats = QAction("📊 状态页", m); a_stats.triggered.connect(self.pet.open_stats); m.addAction(a_stats)
         a_recall = QAction("🎯 回到屏幕中央", m); a_recall.triggered.connect(self.pet.recall); m.addAction(a_recall)
         a_hide = QAction("👁 显示/隐藏", m); a_hide.triggered.connect(self.toggle_visible); m.addAction(a_hide)
         a_settings = QAction("⚙️ 设置", m); a_settings.triggered.connect(self.pet.open_settings); m.addAction(a_settings)
-        a_data = QAction("📁 打开数据文件夹", m); a_data.triggered.connect(self.open_data_folder); m.addAction(a_data)
         m.addSeparator()
 
         # ---- 系统 ----
@@ -3323,7 +3809,10 @@ class TrayApp:
         a_autostart.setChecked(self.state.get("autostart", False))
         a_autostart.triggered.connect(lambda: self.toggle_autostart(a_autostart))
         m.addAction(a_autostart)
-        self._add_debug_menu(m)
+        # Debug shortcuts are for local source development only. PyInstaller
+        # sets sys.frozen in release builds, so users never see this menu.
+        if not IS_FROZEN:
+            self._add_debug_menu(m)
         m.addSeparator()
         a_quit = QAction("✕ 退出", m); a_quit.triggered.connect(self.quit); m.addAction(a_quit)
 
