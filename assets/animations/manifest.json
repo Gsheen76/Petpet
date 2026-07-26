@@ -20,7 +20,14 @@
   },
   "play":  {"folder": "play",  "fps": 10, "loop": false, "fallback": "happy"},
   "happy": {"folder": "happy", "fps": 8,  "loop": true,  "fallback": "happy"},
-  "sleep": {"folder": "sleep", "fps": 4,  "loop": true,  "fallback": "sleep"},
+  "sleep": {
+    "folder": "sleep",
+    "fps": 2.4,
+    "loop": true,
+    "fallback": "sleep",
+    "scale": 0.8,
+    "anchor_bottom": true
+  },
   "drag":  {"folder": "drag",  "fps": 6,  "loop": true,  "fallback": "drag"},
   "sad":   {"folder": "sad",   "fps": 5,  "loop": true,  "fallback": "sad"},
   "sit":   {"folder": "sit",   "fps": 6,  "loop": true,  "fallback": "idle"},

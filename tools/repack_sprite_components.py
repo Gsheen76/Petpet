@@ -7,6 +7,7 @@ slightly crosses a theoretical cell boundary.
 from __future__ import annotations
 
 import argparse
+import math
 from pathlib import Path
 
 import numpy as np
@@ -80,8 +81,6 @@ def paste_anchored(canvas, sprite, center_x, bottom):
 def main():
     args = parse_args()
     source = Image.open(args.image).convert("RGBA")
-    if source.width % args.columns or source.height % args.rows:
-        raise SystemExit("image dimensions must divide evenly by the grid")
     if args.frames != args.columns * args.rows:
         raise SystemExit("this tool currently expects one frame per grid cell")
 
@@ -99,8 +98,12 @@ def main():
     if use_props and len(props) != args.frames:
         raise SystemExit("expected one separate prop component per frame")
 
-    cell_size = (source.width // args.columns,
-                 source.height // args.rows)
+    # Image generators do not always return dimensions that divide perfectly
+    # by the requested grid (for example, an odd-height 4x2 sheet).  Components
+    # are detected across the whole image, so round the output canvas up instead
+    # of rejecting an otherwise usable sheet or cutting a row of pixels off.
+    cell_size = (math.ceil(source.width / args.columns),
+                 math.ceil(source.height / args.rows))
     output_dir = ANIMATIONS_DIR / args.action
     output_dir.mkdir(parents=True, exist_ok=True)
 

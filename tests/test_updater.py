@@ -7,10 +7,12 @@ from unittest.mock import patch
 
 from updater import (
     _extract_windows_executable,
+    _windows_replacement_target,
     download_release,
     is_newer_version,
     launch_windows_replacement,
     select_release_asset,
+    update_cache_dir,
     version_tuple,
 )
 
@@ -92,6 +94,27 @@ class UpdaterTests(unittest.TestCase):
             script = helper.read_text(encoding="utf-8-sig")
             self.assertIn("Wait-Process -Id $petProcessId", script)
             self.assertIn("Copy-Item -LiteralPath", script)
+
+    def test_update_cache_is_in_temp_root_not_install_or_data_dir(self):
+        with tempfile.TemporaryDirectory() as folder:
+            cache = update_cache_dir("1.2.2 beta", temp_root=folder)
+            self.assertEqual(
+                cache,
+                Path(folder) / "Petpet" / "updates" / "v1.2.2-beta",
+            )
+
+    def test_replacement_recovers_original_exe_from_legacy_update_cache(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            original = root / "Petpet.exe"
+            original.write_bytes(b"old executable")
+            cached = root / "updates" / "v1.2.1" / "Petpet.exe"
+            cached.parent.mkdir(parents=True)
+            cached.write_bytes(b"downloaded executable")
+
+            self.assertEqual(
+                _windows_replacement_target(cached), original.resolve()
+            )
 
 
 if __name__ == "__main__":

@@ -29,10 +29,11 @@ from updater import (
     download_release,
     launch_windows_replacement,
     open_macos_update,
+    update_cache_dir,
 )
 
 # ---------- version & update ----------
-VERSION = "1.2.1"
+VERSION = "1.2.2"
 IS_WINDOWS = sys.platform.startswith("win")
 IS_MACOS = sys.platform == "darwin"
 IS_FROZEN = bool(getattr(sys, "frozen", False))
@@ -44,12 +45,15 @@ from PyQt5.QtWidgets import (
     QAbstractButton
 )
 from PyQt5.QtSvg import QSvgRenderer
+from PyQt5.QtNetwork import QLocalServer, QLocalSocket
 from PyQt5.QtGui import (
     QPainter, QPixmap, QImage, QCursor, QIcon, QColor, QFont, QFontMetrics, QPen,
-    QLinearGradient, QRadialGradient, QTextDocument, QDesktopServices, QRegion
+    QLinearGradient, QRadialGradient, QTextDocument, QDesktopServices, QRegion,
+    QPainterPath, QPolygonF
 )
 from PyQt5.QtCore import (
-    Qt, QTimer, QPoint, QPointF, QRect, QRectF, QByteArray, QSize, pyqtSignal, QObject, QUrl
+    Qt, QEvent, QTimer, QPoint, QPointF, QRect, QRectF, QByteArray, QSize,
+    pyqtSignal, QObject, QUrl
 )
 
 # AI engine (same folder)
@@ -82,12 +86,117 @@ DEFAULT_ANIMATIONS = {
               "saturation": 0.9, "brightness": 0.97},
     "play":  {"fps": 10, "loop": False, "fallback": "happy"},
     "happy": {"fps": 8,  "loop": True,  "fallback": "happy"},
-    "sleep": {"fps": 4,  "loop": True,  "fallback": "sleep"},
+    "sleep": {"fps": 2.4, "loop": True,  "fallback": "sleep",
+              "scale": 0.8, "anchor_bottom": True},
     "drag":  {"fps": 6,  "loop": True,  "fallback": "drag"},
     "sad":   {"fps": 5,  "loop": True,  "fallback": "sad"},
     "sit":   {"fps": 6,  "loop": True,  "fallback": "idle"},
     "ask":   {"fps": 8,  "loop": False, "fallback": "idle"},
 }
+
+INSTANCE_SERVER_NAME = "com.gsheen.petpet.single-instance"
+
+
+class SingleInstanceServer(QObject):
+    """Allow one Petpet process and wake it when another copy is launched."""
+
+    activation_requested = pyqtSignal()
+
+    def __init__(self, server_name=INSTANCE_SERVER_NAME):
+        super().__init__()
+        self.server_name = server_name
+        self.server = QLocalServer(self)
+        self.server.newConnection.connect(self._on_new_connection)
+        self.is_primary = False
+
+    def start(self):
+        """Return True for the primary process; notify it otherwise."""
+        if self._notify_existing():
+            return False
+
+        # A crashed process can leave a stale Unix socket file.  On Windows
+        # this is harmless, while on macOS removeServer clears that stale path.
+        QLocalServer.removeServer(self.server_name)
+        if self.server.listen(self.server_name):
+            self.is_primary = True
+            return True
+
+        # Resolve the narrow race where two processes start together.
+        return False if self._notify_existing() else False
+
+    def _notify_existing(self):
+        socket = QLocalSocket()
+        socket.connectToServer(self.server_name)
+        if not socket.waitForConnected(450):
+            return False
+        socket.write(b"activate")
+        socket.flush()
+        socket.waitForBytesWritten(450)
+        socket.disconnectFromServer()
+        return True
+
+    def _on_new_connection(self):
+        received = False
+        while self.server.hasPendingConnections():
+            socket = self.server.nextPendingConnection()
+            socket.readAll()
+            socket.disconnectFromServer()
+            socket.deleteLater()
+            received = True
+        if received:
+            self.activation_requested.emit()
+
+    def close(self):
+        if not self.is_primary:
+            return
+        self.server.close()
+        QLocalServer.removeServer(self.server_name)
+        self.is_primary = False
+
+
+class WakeShakeDetector:
+    """Recognize a deliberate long-press, left-right shake gesture."""
+
+    def __init__(self, hold_seconds=0.45, min_step=6,
+                 required_reversals=3, min_distance=90):
+        self.hold_seconds = float(hold_seconds)
+        self.min_step = int(min_step)
+        self.required_reversals = int(required_reversals)
+        self.min_distance = float(min_distance)
+        self.reset()
+
+    def reset(self):
+        self.started_at = None
+        self.last_x = None
+        self.direction = 0
+        self.reversals = 0
+        self.distance = 0.0
+
+    def start(self, x, now=None):
+        self.reset()
+        self.started_at = time.monotonic() if now is None else float(now)
+        self.last_x = float(x)
+
+    def move(self, x, now=None):
+        if self.started_at is None or self.last_x is None:
+            return False
+        now = time.monotonic() if now is None else float(now)
+        x = float(x)
+        delta = x - self.last_x
+        if abs(delta) < self.min_step:
+            return False
+
+        new_direction = 1 if delta > 0 else -1
+        self.distance += abs(delta)
+        self.last_x = x
+        if self.direction and new_direction != self.direction:
+            self.reversals += 1
+        self.direction = new_direction
+        return (
+            now - self.started_at >= self.hold_seconds
+            and self.reversals >= self.required_reversals
+            and self.distance >= self.min_distance
+        )
 
 
 def adjust_animation_colors(pixmap, saturation=1.0, brightness=1.0):
@@ -1282,7 +1391,8 @@ class TutorialWindow(QWidget):
             "🖱️",
             "摸摸它，也可以带它走",
             "单击小狗可以抚摸它，双击会打开聊天窗口。\n"
-            "按住左键拖动可以移动小狗，快速甩出去时它还会弹跳。",
+            "按住左键拖动可以移动小狗，快速甩出去时它还会弹跳。\n"
+            "睡着后，按住左键左右晃几下，就能温柔地把它摇醒。",
         ),
         (
             "🌷",
@@ -1538,7 +1648,7 @@ class StatBubble(QWidget):
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WA_ShowWithoutActivating, True)
         self.setAttribute(Qt.WA_DeleteOnClose, True)
-        self.setFixedSize(580, 310)
+        self.setFixedSize(620, 330)
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
         self._timer.start(500)  # refresh stats 2x/sec
@@ -1571,6 +1681,47 @@ class StatBubble(QWidget):
                 return font
             size -= 1
         return QFont("Microsoft YaHei", minimum_size, weight)
+
+    @staticmethod
+    def _draw_stat_icon(painter, rect, kind, color):
+        """Draw font-independent hunger, mood, and energy pictograms."""
+        painter.save()
+        c = QColor(color)
+        cx, cy = rect.center().x(), rect.center().y()
+        if kind == "hunger":
+            painter.setPen(QPen(c, 5, Qt.SolidLine, Qt.RoundCap))
+            painter.drawLine(QPointF(rect.left() + 10, cy),
+                             QPointF(rect.right() - 10, cy))
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(c)
+            for x in (rect.left() + 9, rect.right() - 9):
+                painter.drawEllipse(QPointF(x, cy - 4), 3.5, 3.5)
+                painter.drawEllipse(QPointF(x, cy + 4), 3.5, 3.5)
+        elif kind == "mood":
+            path = QPainterPath()
+            path.moveTo(cx, rect.bottom() - 7)
+            path.cubicTo(rect.left() + 5, cy + 2,
+                         rect.left() + 5, rect.top() + 8,
+                         cx, rect.top() + 12)
+            path.cubicTo(rect.right() - 5, rect.top() + 8,
+                         rect.right() - 5, cy + 2,
+                         cx, rect.bottom() - 7)
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(c)
+            painter.drawPath(path)
+        else:
+            points = QPolygonF([
+                QPointF(cx + 2, rect.top() + 5),
+                QPointF(cx - 8, cy + 2),
+                QPointF(cx - 1, cy + 2),
+                QPointF(cx - 5, rect.bottom() - 5),
+                QPointF(cx + 10, cy - 4),
+                QPointF(cx + 3, cy - 4),
+            ])
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(c)
+            painter.drawPolygon(points)
+        painter.restore()
 
     def paintEvent(self, e):
         p = QPainter(self)
@@ -1663,19 +1814,19 @@ class StatBubble(QWidget):
 
         # ---- Three stat cards with dedicated name/value/status regions. ----
         stats = [
-            ("🍗", "饱腹", st.get("hunger", 0), "#f49a62",
+            ("hunger", "饱腹", st.get("hunger", 0), "#f49a62",
              ("肚肚空空", "刚刚好", "肚肚饱饱")),
-            ("🌷", "心情", st.get("mood", 0), "#ef8fa2",
+            ("mood", "心情", st.get("mood", 0), "#ef8fa2",
              ("想要抱抱", "心情不错", "开心摇尾巴")),
-            ("⚡", "精力", st.get("energy", 0), "#9b8ade",
+            ("energy", "精力", st.get("energy", 0), "#9b8ade",
              ("需要充电", "精神还好", "元气满满")),
         ]
         pad = 20
         gap = 12
         card_w = (W - pad * 2 - gap * 2) / 3
         card_y = 157
-        card_h = 125
-        for i, (emoji, name, val, color, moods) in enumerate(stats):
+        card_h = 145
+        for i, (icon_kind, name, val, color, moods) in enumerate(stats):
             val = max(0.0, min(100.0, float(val)))
             cx = pad + i * (card_w + gap)
             card = QRectF(cx, card_y, card_w, card_h)
@@ -1685,27 +1836,29 @@ class StatBubble(QWidget):
             p.setPen(QPen(QColor(color).lighter(125), 1))
             p.drawRoundedRect(card, 16, 16)
 
-            icon_rect = QRectF(cx + 13, card_y + 12, 38, 38)
+            icon_rect = QRectF(cx + 13, card_y + 13, 42, 42)
             p.setBrush(QColor(255, 255, 255, 190))
             p.setPen(Qt.NoPen)
             p.drawEllipse(icon_rect)
-            p.setFont(QFont("Microsoft YaHei", 15))
-            p.drawText(icon_rect, Qt.AlignCenter, emoji)
+            self._draw_stat_icon(
+                p, icon_rect.adjusted(5, 5, -5, -5), icon_kind, color)
 
-            name_rect = QRectF(cx + 59, card_y + 12, 42, 26)
+            name_rect = QRectF(cx + 64, card_y + 12, 52, 34)
             p.setPen(QColor("#76584b"))
-            p.setFont(QFont("Microsoft YaHei", 11, QFont.Bold))
-            p.drawText(name_rect, Qt.AlignLeft | Qt.AlignVCenter, name)
+            p.setFont(self._fit_font(
+                name, 12, name_rect.width(), QFont.Bold, 10))
+            p.drawText(name_rect, Qt.AlignLeft | Qt.AlignVCenter |
+                       Qt.TextSingleLine, name)
 
             value_text = f"{int(round(val))}%"
-            value_rect = QRectF(cx + 104, card_y + 11, card_w - 117, 28)
+            value_rect = QRectF(cx + 118, card_y + 11, card_w - 130, 35)
             p.setPen(QColor(color))
             p.setFont(self._fit_font(value_text, 14, value_rect.width(),
                                      QFont.Bold, 8))
             p.drawText(value_rect, Qt.AlignRight | Qt.AlignVCenter |
                        Qt.TextSingleLine, value_text)
 
-            br = QRectF(cx + 15, card_y + 65, card_w - 30, 11)
+            br = QRectF(cx + 15, card_y + 75, card_w - 30, 11)
             p.setBrush(QColor(255, 255, 255, 190))
             p.setPen(Qt.NoPen)
             p.drawRoundedRect(br, 5, 5)
@@ -1714,7 +1867,7 @@ class StatBubble(QWidget):
             p.drawRoundedRect(fill, 5, 5)
 
             mood_text = moods[0] if val < 35 else (moods[1] if val < 70 else moods[2])
-            mood_rect = QRectF(cx + 12, card_y + 88, card_w - 24, 25)
+            mood_rect = QRectF(cx + 12, card_y + 105, card_w - 24, 27)
             p.setPen(QColor("#8a6f62"))
             p.setFont(self._fit_font(mood_text, 9, mood_rect.width(),
                                      QFont.Normal, 8))
@@ -1749,10 +1902,9 @@ class BubbleMenu(QWidget):
         )
         self.setWindowFlags(
             Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint |
-            Qt.Tool | Qt.WindowDoesNotAcceptFocus
+            Qt.Popup
         )
         self.setAttribute(Qt.WA_TranslucentBackground, True)
-        self.setAttribute(Qt.WA_ShowWithoutActivating, True)
         self.setAttribute(Qt.WA_DeleteOnClose, True)
 
         # Larger hit targets with room for both icon and label.
@@ -1764,10 +1916,17 @@ class BubbleMenu(QWidget):
         self._bubble_rects = []
         self._hover = -1
         self._press = -1
+        self._closing = False
         self._hover_scales = [0.0] * len(self.actions)
         self._anim = QTimer(self)
         self._anim.timeout.connect(self._tick)
         self._anim.start(16)
+        self._app = QApplication.instance()
+        if self._app is not None:
+            self._app.applicationStateChanged.connect(
+                self._on_application_state_changed
+            )
+            self._app.installEventFilter(self)
 
         # The growth card belongs only to the primary interaction canvas.
         # Opening "更多" replaces the whole first canvas.
@@ -1778,8 +1937,8 @@ class BubbleMenu(QWidget):
         self._place()
         self.show()
         self.raise_()
+        self.activateWindow()
         self.setMouseTracking(True)
-        self.grabMouse()
 
     def _tick(self):
         # ease hover scales
@@ -1880,14 +2039,16 @@ class BubbleMenu(QWidget):
             self._hover = new_hover
 
     def mousePressEvent(self, e):
-        if e.button() == Qt.LeftButton:
-            pos = e.pos()
-            for i, rect, action, _, _ in self._bubble_rects:
-                if rect.contains(QPointF(pos)):
-                    self._press = i
-                    self.update()
-                    return
+        if e.button() != Qt.LeftButton:
             self._close()
+            return
+        pos = e.pos()
+        for i, rect, action, _, _ in self._bubble_rects:
+            if rect.contains(QPointF(pos)):
+                self._press = i
+                self.update()
+                return
+        self._close()
 
     def mouseReleaseEvent(self, e):
         if e.button() == Qt.LeftButton:
@@ -1930,6 +2091,20 @@ class BubbleMenu(QWidget):
         self._close()
 
     def _close(self):
+        if self._closing:
+            return
+        self._closing = True
+        if self._app is not None:
+            try:
+                self._app.applicationStateChanged.disconnect(
+                    self._on_application_state_changed
+                )
+            except (TypeError, RuntimeError):
+                pass
+            try:
+                self._app.removeEventFilter(self)
+            except (TypeError, RuntimeError):
+                pass
         if self.stat_bubble is not None:
             try:
                 self.stat_bubble.close()
@@ -1942,6 +2117,42 @@ class BubbleMenu(QWidget):
         self.close()
         if getattr(self.pet, "_bubble_menu", None) is self:
             self.pet._bubble_menu = None
+
+    def _on_application_state_changed(self, state):
+        if state == Qt.ApplicationInactive and self.isVisible():
+            self._close()
+
+    def eventFilter(self, watched, event):
+        if (not self._closing and self.isVisible()
+                and event.type() == QEvent.MouseButtonPress
+                and hasattr(event, "globalPos")):
+            point = event.globalPos()
+            inside = self.frameGeometry().contains(point)
+            if self.stat_bubble is not None:
+                try:
+                    inside = inside or (
+                        self.stat_bubble.isVisible()
+                        and self.stat_bubble.frameGeometry().contains(point)
+                    )
+                except RuntimeError:
+                    pass
+            if not inside:
+                QTimer.singleShot(0, self._close)
+        return False
+
+    def event(self, event):
+        if (
+            event.type() == QEvent.UngrabMouse
+            and self.isVisible()
+            and not self._closing
+        ):
+            QTimer.singleShot(0, self._close)
+        return super().event(event)
+
+    def hideEvent(self, event):
+        if not self._closing:
+            QTimer.singleShot(0, self._close)
+        super().hideEvent(event)
 
     def keyPressEvent(self, e):
         if e.key() == Qt.Key_Escape:
@@ -2385,6 +2596,8 @@ class PetWindow(QWidget):
         self.last_drag_pos = QPoint(0, 0)
         self.last_drag_t = 0.0
         self.drag_samples = []  # for velocity calc
+        self._wake_shake = WakeShakeDetector()
+        self._woke_from_shake = False
 
         # walk timer / autonomous behavior
         self.behavior = "idle"  # idle / walk / sit / nap / ask
@@ -2903,13 +3116,59 @@ class PetWindow(QWidget):
 
 
     def say(self, text, ms=2200):
+        if not self.isVisible():
+            return
         if self._speech_bubble is None:
             self._speech_bubble = SpeechBubble(self)
         self._speech_bubble.show_text(text, ms)
 
+    def hide_overlays(self):
+        """Close every detached bubble that visually belongs to the pet."""
+        speech = self._speech_bubble
+        if speech is not None:
+            try:
+                speech._hide_timer.stop()
+                speech.hide()
+            except RuntimeError:
+                self._speech_bubble = None
+
+        interactive = self._interactive_bubble
+        self._interactive_bubble = None
+        if interactive is not None:
+            try:
+                interactive.close()
+            except RuntimeError:
+                pass
+
+        menu = self._bubble_menu
+        self._bubble_menu = None
+        if menu is not None:
+            try:
+                menu._close()
+            except RuntimeError:
+                pass
+
+        bonus = getattr(self, "_last_bonus", None)
+        self._last_bonus = None
+        if bonus is not None:
+            try:
+                bonus.close()
+            except RuntimeError:
+                pass
+
+    def hideEvent(self, event):
+        self.hide_overlays()
+        super().hideEvent(event)
+
     # ---------- mouse ----------
     def mousePressEvent(self, e):
         if e.button() == Qt.LeftButton:
+            self._woke_from_shake = False
+            if self.state.get("sleeping"):
+                self._wake_shake.start(
+                    e.globalPos().x(), time.monotonic())
+            else:
+                self._wake_shake.reset()
             self.dragging = True
             self.drag_offset = e.globalPos() - self.frameGeometry().topLeft()
             self.last_drag_pos = e.globalPos()
@@ -2926,6 +3185,10 @@ class PetWindow(QWidget):
     def mouseMoveEvent(self, e):
         if self.dragging:
             now = time.time()
+            if (self.state.get("sleeping")
+                    and self._wake_shake.move(
+                        e.globalPos().x(), time.monotonic())):
+                self.wake_from_shake()
             new_pos = e.globalPos() - self.drag_offset
             # clamp so the pet stays at least partially visible on screen
             screen = self.screen_rect()
@@ -2952,7 +3215,7 @@ class PetWindow(QWidget):
             # already stopped, it just drops.
             now = time.time()
             window = [s for s in self.drag_samples if now - s[1] < 0.10]
-            if len(window) >= 2:
+            if not self._woke_from_shake and len(window) >= 2:
                 (p0, t0), (p1, t1) = window[0], window[-1]
                 dt = t1 - t0
                 if dt > 0.005:
@@ -2965,6 +3228,10 @@ class PetWindow(QWidget):
                     # so it sails instead of instantly dropping
                     if abs(self.vy) < 80 and abs(self.vx) > 300:
                         self.vy = -120  # slight upward bias -> arc trajectory
+            if self._woke_from_shake:
+                # A wake-up shake is affectionate interaction, not a throw.
+                self.vx = 0
+                self.vy = 0
             # mark airborne so gravity + bounce physics take over
             self.on_ground = False
             self.pose = POSE["idle"]
@@ -2975,6 +3242,8 @@ class PetWindow(QWidget):
             if speed > 120:
                 self.say(random.choice(["汪！Whee~","嗖——","飞起来啦！","汪汪！"]), 1200)
             self.drag_samples = []
+            self._wake_shake.reset()
+            self._woke_from_shake = False
 
     # single click (press & release without much move) = pet
     def mouseReleaseEvent_pet(self):
@@ -3169,6 +3438,8 @@ class PetWindow(QWidget):
         """When hunger/mood/energy is low, sometimes pop a clickable action
         bubble above the pet. Clicking it performs the action and shows a
         floating '+N stat' bonus bubble."""
+        if not self.isVisible():
+            return
         # already showing one? skip
         if self._interactive_bubble is not None:
             try:
@@ -3350,6 +3621,29 @@ class PetWindow(QWidget):
         save_state(self.state)
         self.refresh_pose_from_state()
 
+    def wake_from_shake(self):
+        """Wake the sleeping pet after a deliberate left-right shake."""
+        if not self.state.get("sleeping"):
+            return False
+        self.state["sleeping"] = False
+        self._woke_from_shake = True
+        self._wake_shake.reset()
+        self._animation_override_token += 1
+        self._animation_override = None
+        self._active_animation = None
+        self._animation_started_at = time.monotonic()
+        self.behavior = "drag" if self.dragging else "idle"
+        self.say(random.choice([
+            "唔……被你摇醒啦！☀️",
+            "汪呜？天亮了吗～",
+            "醒啦醒啦，抱稳我呀～",
+        ]), 2200)
+        self.play_sound("bark")
+        save_state(self.state)
+        self.refresh_pose_from_state()
+        self.update()
+        return True
+
     def pet_click(self):
         """Called when user clicks (not drags) on the dog."""
         if self.state["sleeping"]:
@@ -3446,8 +3740,8 @@ class PetWindow(QWidget):
 
 
 class TrayApp:
-    def __init__(self):
-        self.app = QApplication(sys.argv)
+    def __init__(self, app=None):
+        self.app = app or QApplication.instance() or QApplication(sys.argv)
         self.app.setQuitOnLastWindowClosed(False)
         # AI bridge (must be created before PetWindow uses it)
         global bridge
@@ -3514,6 +3808,13 @@ class TrayApp:
             self.open_tutorial()
         elif action == "quit":
             self.quit()
+
+    def activate_existing_instance(self):
+        """Bring the existing pet back when Petpet is launched again."""
+        if not self.pet.isVisible():
+            self.pet.show()
+        self.pet.raise_()
+        self.pet.say("我已经在这里啦～", 1800)
 
     def open_tutorial(self):
         """Open or restart the first-run guide."""
@@ -3631,9 +3932,10 @@ class TrayApp:
         dialog.show()
 
         def worker():
-            update_dir = os.path.join(
-                DATA_DIR, "updates", f"v{info['version']}"
-            )
+            # Updates are disposable program files, never user data.  Keeping
+            # them in the OS temp area prevents a downloaded EXE from treating
+            # its cache directory as a fresh pet profile.
+            update_dir = str(update_cache_dir(info["version"]))
 
             def progress(done, total):
                 if total:
@@ -3889,6 +4191,7 @@ class TrayApp:
 
     def toggle_visible(self):
         if self.pet.isVisible():
+            self.pet.hide_overlays()
             self.pet.hide()
         else:
             self.pet.show()
@@ -3966,11 +4269,28 @@ class TrayApp:
         self.state["y"] = self.pet.y()
         save_state(self.state)
         self.tray.hide()
+        instance_server = getattr(self, "_instance_server", None)
+        if instance_server is not None:
+            instance_server.close()
         self.app.quit()
 
     def run(self):
-        sys.exit(self.app.exec_())
+        return self.app.exec_()
+
+
+def main():
+    app = QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(False)
+    instance_server = SingleInstanceServer()
+    if not instance_server.start():
+        return 0
+    tray_app = TrayApp(app)
+    tray_app._instance_server = instance_server
+    instance_server.activation_requested.connect(
+        tray_app.activate_existing_instance
+    )
+    return tray_app.run()
 
 
 if __name__ == "__main__":
-    TrayApp().run()
+    sys.exit(main())

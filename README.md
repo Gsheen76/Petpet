@@ -6,7 +6,7 @@
   <img src="assets/poses/idle.png" width="280" alt="Pet陪它桌面小狗">
 </p>
 
-当前版本：`v1.2.1`
+当前版本：`v1.2.2`
 
 支持平台：Windows 10/11、macOS Intel、macOS Apple 芯片
 
@@ -25,15 +25,15 @@
 - 本地保存配置、记忆和养成状态
 - 启动自动检查更新，也可从右键菜单或托盘主动检查并安装新版
 
-## v1.2.1 更新亮点
+## v1.2.2 更新亮点
 
-- 新增五步治愈系新手教程，最后一步可以为小狗命名
-- 名字会同步应用到聊天窗口、AI 人设、状态卡和托盘提示
-- “更多”改为独立功能画布，加入设置、隐藏、教程、返回和退出
-- 放大并优化教程、设置页、托盘菜单和右键状态卡的文字与布局
-- 优化进食动画色彩，让它更接近日常状态
-- 修复连续快速互动时说话框右侧偶尔绘制不完整的问题
-- 正式打包版隐藏仅供本地开发使用的调试功能
+- 新增 12 帧慢速睡眠呼吸动画，睡着后可以按住左键左右晃动将小狗摇醒
+- 限制同一时间只运行一只小狗，再次启动会唤回已经运行的实例
+- Windows 更新改为原位置替换程序，并将名字、等级、记忆和设置稳定保存在用户数据目录
+- 隐藏小狗时同步关闭说话、互动、奖励和右键气泡，隐藏期间不再弹出新气泡
+- 点击屏幕其他位置即可收起右键互动画布
+- 扩大右键状态卡并重新绘制饱腹、心情和精力图标，避免字体缺失和文字裁切
+- 改进 AI 动画精灵表的拆分与基线对齐，减少串帧、裁切和上下跳动
 
 ## 下载和运行
 
@@ -78,6 +78,7 @@ macOS 包由 [GitHub Actions](https://github.com/Gsheen76/Petpet/actions/workflo
 | 左键单击 | 抚摸小狗，提升心情 |
 | 左键双击 | 打开 AI 聊天 |
 | 左键拖动 | 移动或甩飞小狗 |
+| 睡觉时按住左键左右晃动 | 温柔地摇醒小狗 |
 | 右键短按 | 打开成长卡与聊天、喂食、玩耍、睡觉、更多五个快捷气泡 |
 | 右键长按 | 打开完整状态页 |
 | 托盘或菜单栏双击 | 显示或隐藏小狗 |
@@ -103,7 +104,7 @@ macOS 包由 [GitHub Actions](https://github.com/Gsheen76/Petpet/actions/workflo
 
 | 运行方式 | 数据目录 |
 |---|---|
-| Windows 打包版 | `Petpet.exe` 所在目录 |
+| Windows 打包版 | `%LOCALAPPDATA%\Petpet` |
 | macOS 打包版 | `~/Library/Application Support/Petpet` |
 | 从源码运行 | 项目中的 `data/` |
 
@@ -199,7 +200,8 @@ Petpet/
 ├── docs/
 │   ├── TODO.md                  路线图和待办事项
 │   ├── RELEASE_NOTES_v1.2.0.md  v1.2.0 发布说明
-│   └── RELEASE_NOTES_v1.2.1.md  v1.2.1 发布说明
+│   ├── RELEASE_NOTES_v1.2.1.md  v1.2.1 发布说明
+│   └── RELEASE_NOTES_v1.2.2.md  v1.2.2 发布说明
 ├── packaging/
 │   ├── Petpet-windows.spec      Windows PyInstaller 配置
 │   └── Petpet-mac.spec          macOS PyInstaller 配置
@@ -246,6 +248,7 @@ Petpet/
 - 默认在启动 5 秒后检查 GitHub Releases；可在“设置 → 启动时自动检查更新”中关闭。
 - 也可以从托盘或右键菜单主动选择“检查更新”，程序会明确提示最新版、网络错误或可用更新。
 - Windows 打包版会自动选择 `.exe` 或 Windows ZIP，下载并校验完成后隐藏替换旧程序、自动重启。
+- Windows 首次使用新版数据目录时，会自动复制原 `Petpet.exe` 旁的名字、等级、记忆和设置；后续更新只替换程序，不会更换用户数据。
 - macOS 版会根据 Apple 芯片或 Intel 芯片选择对应的 `.dmg`/ZIP，下载后打开更新包；根据系统提示将 Petpet 拖入“应用程序”并替换旧版本。
 - 源码运行模式不会覆盖项目文件，检测到新版时会打开 GitHub Release 页面。
 - GitHub API 被限流时会自动改用公开 Release 页面，不需要登录 GitHub。

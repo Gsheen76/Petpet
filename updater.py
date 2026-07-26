@@ -11,6 +11,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import urllib.error
 import urllib.parse
@@ -22,6 +23,7 @@ from pathlib import Path
 RELEASES_URL = "https://api.github.com/repos/Gsheen76/Petpet/releases/latest"
 RELEASE_PAGE_URL = "https://github.com/Gsheen76/Petpet/releases/latest"
 USER_AGENT = "Petpet-Updater"
+LEGACY_UPDATE_DIR_NAMES = {"update", "updates", "updata"}
 
 
 def version_tuple(value):
@@ -319,6 +321,29 @@ def _extract_windows_executable(download_path, staging_dir):
         return output_path
 
 
+def update_cache_dir(version, temp_root=None):
+    """Return an ephemeral update cache that cannot become user data."""
+    safe_version = re.sub(r"[^0-9A-Za-z._-]+", "-", str(version)).strip("-")
+    safe_version = safe_version or "latest"
+    root = Path(temp_root or tempfile.gettempdir())
+    return root / "Petpet" / "updates" / f"v{safe_version}"
+
+
+def _windows_replacement_target(current_executable):
+    """Recover the real install EXE if an old cached update was launched."""
+    current = Path(current_executable).resolve()
+    executable_dir = current.parent
+    if executable_dir.parent.name.lower() in LEGACY_UPDATE_DIR_NAMES:
+        original = executable_dir.parent.parent / current.name
+        if original.is_file():
+            return original.resolve()
+    elif executable_dir.name.lower() in LEGACY_UPDATE_DIR_NAMES:
+        original = executable_dir.parent / current.name
+        if original.is_file():
+            return original.resolve()
+    return current
+
+
 def launch_windows_replacement(download_path, current_executable, work_dir,
                                process_id=None):
     """Launch a hidden helper that replaces the frozen executable after exit."""
@@ -327,7 +352,9 @@ def launch_windows_replacement(download_path, current_executable, work_dir,
     work_path.mkdir(parents=True, exist_ok=True)
     staged_executable = _extract_windows_executable(download_path, work_path)
     helper_path = work_path / "apply-update.ps1"
-    current_executable = str(Path(current_executable).resolve())
+    current_executable = str(
+        _windows_replacement_target(current_executable)
+    )
     staged_executable = str(staged_executable.resolve())
     executable_dir = str(Path(current_executable).parent)
     ps_quote = lambda value: str(value).replace("'", "''")

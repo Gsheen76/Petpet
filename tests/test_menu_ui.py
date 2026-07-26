@@ -5,6 +5,8 @@ from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PyQt5.QtCore import QEvent, QPoint, QRect, QRectF, Qt, QTimer
+from PyQt5.QtGui import QColor, QImage, QPainter
 from PyQt5.QtWidgets import QApplication, QMenu
 
 import pet
@@ -82,6 +84,89 @@ class MenuUiTests(unittest.TestCase):
         pet.BubbleMenu._run_action(fake_menu, "hide")
         fake_menu._close.assert_called_once_with()
         callback.assert_called_once_with("hide")
+
+    def test_any_non_left_click_closes_bubble_canvas(self):
+        fake_menu = SimpleNamespace(_close=Mock())
+        event = SimpleNamespace(button=lambda: Qt.RightButton)
+
+        pet.BubbleMenu.mousePressEvent(fake_menu, event)
+
+        fake_menu._close.assert_called_once_with()
+
+    def test_losing_application_focus_closes_bubble_canvas(self):
+        fake_menu = SimpleNamespace(
+            isVisible=Mock(return_value=True),
+            _close=Mock(),
+        )
+
+        pet.BubbleMenu._on_application_state_changed(
+            fake_menu, Qt.ApplicationInactive
+        )
+
+        fake_menu._close.assert_called_once_with()
+
+    def test_click_outside_closes_bubble_canvas(self):
+        fake_menu = SimpleNamespace(
+            _closing=False,
+            isVisible=Mock(return_value=True),
+            frameGeometry=Mock(return_value=QRect(20, 20, 100, 80)),
+            stat_bubble=None,
+            _close=Mock(),
+        )
+        event = SimpleNamespace(
+            type=lambda: QEvent.MouseButtonPress,
+            globalPos=lambda: QPoint(300, 300),
+        )
+        with patch.object(QTimer, "singleShot",
+                          side_effect=lambda _delay, callback: callback()):
+            pet.BubbleMenu.eventFilter(fake_menu, None, event)
+
+        fake_menu._close.assert_called_once_with()
+
+    def test_stat_icons_are_drawn_without_emoji_fonts(self):
+        image = QImage(132, 44, QImage.Format_ARGB32)
+        image.fill(Qt.transparent)
+        painter = QPainter(image)
+        for index, kind in enumerate(("hunger", "mood", "energy")):
+            pet.StatBubble._draw_stat_icon(
+                painter, QRectF(index * 44 + 6, 6, 32, 32),
+                kind, "#ef8fa2",
+            )
+        painter.end()
+
+        colored = sum(
+            1
+            for y in range(image.height())
+            for x in range(image.width())
+            if QColor.fromRgba(image.pixel(x, y)).alpha() > 0
+        )
+        self.assertGreater(colored, 180)
+
+    def test_hiding_pet_closes_all_detached_bubbles(self):
+        speech = SimpleNamespace(
+            _hide_timer=SimpleNamespace(stop=Mock()),
+            hide=Mock(),
+        )
+        interactive = SimpleNamespace(close=Mock())
+        menu = SimpleNamespace(_close=Mock())
+        bonus = SimpleNamespace(close=Mock())
+        fake_pet = SimpleNamespace(
+            _speech_bubble=speech,
+            _interactive_bubble=interactive,
+            _bubble_menu=menu,
+            _last_bonus=bonus,
+        )
+
+        pet.PetWindow.hide_overlays(fake_pet)
+
+        speech._hide_timer.stop.assert_called_once_with()
+        speech.hide.assert_called_once_with()
+        interactive.close.assert_called_once_with()
+        menu._close.assert_called_once_with()
+        bonus.close.assert_called_once_with()
+        self.assertIsNone(fake_pet._interactive_bubble)
+        self.assertIsNone(fake_pet._bubble_menu)
+        self.assertIsNone(fake_pet._last_bonus)
 
     def test_tray_omits_status_and_data_folder(self):
         tray = self._tray_harness()
