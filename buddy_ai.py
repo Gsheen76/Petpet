@@ -8,8 +8,8 @@ Features:
   - Rule-based fallback when API fails / no key / offline
   - Zero third-party deps: uses only urllib + json from stdlib
 
-Config: set env ZHIPU_API_KEY, or create config.json in Petpet's data folder:
-        {"api_key": "your.key.here"}
+Config: set env ZHIPU_API_KEY, or configure the API key and model in Petpet:
+        {"api_key": "your.key.here", "model": "glm-4-flash"}
 """
 import os, json, time, urllib.request, urllib.error
 import hmac, hashlib, base64
@@ -19,7 +19,12 @@ CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
 MEMORY_PATH = os.path.join(DATA_DIR, "memory.json")
 
 API_URL = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
-MODEL = "glm-4-flash"
+DEFAULT_MODEL = "glm-4-flash"
+SUPPORTED_MODELS = {
+    "glm-4-flash": "GLM-4-Flash",
+}
+# Kept for compatibility with older imports. Requests use get_model().
+MODEL = DEFAULT_MODEL
 DEFAULT_PET_NAME = "Sheen"
 
 
@@ -110,17 +115,88 @@ def save_memory(m):
         pass
 
 
-def get_api_key():
-    key = os.environ.get("ZHIPU_API_KEY")
-    if key:
-        return key.strip()
+def load_config():
+    """Load the local AI configuration with safe, validated defaults."""
     try:
         # utf-8-sig accepts both regular UTF-8 and files saved with a BOM
         # (common when config.json is created by Windows editors/PowerShell).
         with open(CONFIG_PATH, "r", encoding="utf-8-sig") as f:
-            return json.load(f).get("api_key", "").strip()
+            raw = json.load(f)
+        if not isinstance(raw, dict):
+            raw = {}
     except Exception:
-        return ""
+        raw = {}
+    api_key = raw.get("api_key", "")
+    model = raw.get("model", DEFAULT_MODEL)
+    return {
+        **raw,
+        "api_key": api_key.strip() if isinstance(api_key, str) else "",
+        "model": model if model in SUPPORTED_MODELS else DEFAULT_MODEL,
+    }
+
+
+def save_config(config):
+    """Persist local AI settings atomically so a crash cannot truncate them."""
+    os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
+    clean = dict(config) if isinstance(config, dict) else {}
+    api_key = clean.get("api_key", "")
+    model = clean.get("model", DEFAULT_MODEL)
+    clean["api_key"] = api_key.strip() if isinstance(api_key, str) else ""
+    clean["model"] = model if model in SUPPORTED_MODELS else DEFAULT_MODEL
+    temp_path = CONFIG_PATH + ".tmp"
+    try:
+        with open(temp_path, "w", encoding="utf-8") as f:
+            json.dump(clean, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temp_path, CONFIG_PATH)
+    except Exception:
+        try:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+        except Exception:
+            pass
+        raise
+
+
+def get_api_key_source():
+    """Return the active key source without exposing the key itself."""
+    if os.environ.get("ZHIPU_API_KEY", "").strip():
+        return "environment"
+    if load_config().get("api_key"):
+        return "config"
+    return "none"
+
+
+def get_api_key():
+    key = os.environ.get("ZHIPU_API_KEY")
+    if key:
+        return key.strip()
+    return load_config()["api_key"]
+
+
+def set_api_key(api_key):
+    config = load_config()
+    config["api_key"] = str(api_key or "").strip()
+    save_config(config)
+
+
+def get_model():
+    return load_config()["model"]
+
+
+def set_model(model):
+    if model not in SUPPORTED_MODELS:
+        raise ValueError(f"Unsupported model: {model}")
+    config = load_config()
+    config["model"] = model
+    save_config(config)
+
+
+def get_model_name(model=None):
+    return SUPPORTED_MODELS.get(
+        model or get_model(), SUPPORTED_MODELS[DEFAULT_MODEL]
+    )
 
 
 def _time_desc():
@@ -201,10 +277,12 @@ def chat_stream(user_text, mem=None, on_token=None, timeout=45,
     if not key:
         yield ("error", "no_api_key")
         return
+    model = get_model()
 
     for attempt in range(3):
         for ev in _stream_once(
-                user_text, mem, key, on_token, timeout, pet_name=pet_name):
+                user_text, mem, key, on_token, timeout, pet_name=pet_name,
+                model=model):
             kind, payload = ev
             if kind == "error" and payload == "rate_limit" and attempt < 2:
                 # backoff: wait 8s then 15s
@@ -216,9 +294,10 @@ def chat_stream(user_text, mem=None, on_token=None, timeout=45,
                 return
 
 
-def _stream_once(user_text, mem, key, on_token, timeout, pet_name=None):
+def _stream_once(user_text, mem, key, on_token, timeout, pet_name=None,
+                 model=None):
     body = json.dumps({
-        "model": MODEL,
+        "model": model or get_model(),
         "messages": _build_messages(user_text, mem, pet_name=pet_name),
         "stream": True,
         "temperature": 0.85,

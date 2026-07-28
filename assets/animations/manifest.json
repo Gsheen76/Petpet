@@ -18,8 +18,25 @@
     "saturation": 0.9,
     "brightness": 0.97
   },
-  "play":  {"folder": "play",  "fps": 10, "loop": false, "fallback": "happy"},
+  "play": {
+    "folder": "play",
+    "fps": 14,
+    "loop": false,
+    "fallback": "happy",
+    "scale": 1.3,
+    "anchor_bottom": true
+  },
   "happy": {"folder": "happy", "fps": 8,  "loop": true,  "fallback": "happy"},
+  "pet": {
+    "folder": "pet",
+    "fps": 8,
+    "loop": false,
+    "fallback": "happy",
+    "scale": 1.2,
+    "anchor_bottom": true,
+    "saturation": 0.9,
+    "brightness": 0.97
+  },
   "sleep": {
     "folder": "sleep",
     "fps": 2.4,

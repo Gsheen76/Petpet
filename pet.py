@@ -35,7 +35,7 @@ from updater import (
 )
 
 # ---------- version & update ----------
-VERSION = "1.2.3"
+VERSION = "1.2.4"
 IS_WINDOWS = sys.platform.startswith("win")
 IS_MACOS = sys.platform == "darwin"
 IS_FROZEN = bool(getattr(sys, "frozen", False))
@@ -44,7 +44,7 @@ from PyQt5.QtWidgets import (
     QSystemTrayIcon, QVBoxLayout, QHBoxLayout, QPushButton, QFrame,
     QGroupBox, QSpinBox, QDoubleSpinBox, QMessageBox, QProgressBar,
     QProgressDialog, QComboBox, QScrollArea, QAbstractSpinBox,
-    QAbstractButton
+    QAbstractButton, QDialog
 )
 from PyQt5.QtSvg import QSvgRenderer
 from PyQt5.QtNetwork import QLocalServer, QLocalSocket
@@ -148,8 +148,12 @@ DEFAULT_ANIMATIONS = {
     "eat":   {"fps": 4,  "loop": True,  "fallback": "eat",
               "scale": 1.2, "anchor_bottom": True,
               "saturation": 0.9, "brightness": 0.97},
-    "play":  {"fps": 10, "loop": False, "fallback": "happy"},
+    "play":  {"fps": 14, "loop": False, "fallback": "happy",
+              "scale": 1.3, "anchor_bottom": True},
     "happy": {"fps": 8,  "loop": True,  "fallback": "happy"},
+    "pet":   {"fps": 8,  "loop": False, "fallback": "happy",
+              "scale": 1.2, "anchor_bottom": True,
+              "saturation": 0.9, "brightness": 0.97},
     "sleep": {"fps": 2.4, "loop": True,  "fallback": "sleep",
               "scale": 0.8, "anchor_bottom": True},
     "drag":  {"fps": 6,  "loop": True,  "fallback": "drag"},
@@ -410,7 +414,8 @@ def save_settings(s):
 # ---------- state ----------
 DEFAULT_STATE = {
     "hunger": 80, "mood": 70, "energy": 90,
-    "x": None, "y": None, "sleeping": False, "born": time.time(),
+    "x": None, "y": None, "sleeping": False, "sleep_mode": None,
+    "born": time.time(),
     "autostart": False,
     "level": 1, "xp": 0,
     "pet_name": ai.DEFAULT_PET_NAME,
@@ -438,6 +443,12 @@ def load_state():
             state["tutorial_completed"] = bool(
                 state.get("tutorial_completed", False)
             )
+            if state.get("sleeping"):
+                if state.get("sleep_mode") not in ("manual", "auto"):
+                    # Sleeping saves from older versions are user-controlled.
+                    state["sleep_mode"] = "manual"
+            else:
+                state["sleep_mode"] = None
             return state
     except Exception:
         return dict(DEFAULT_STATE)
@@ -524,11 +535,29 @@ class ChatWindow(QWidget):
             QPushButton#send:hover {{ background:#f59f88; }}
             QPushButton#send:disabled {{ background:#d9c6bb; }}
             QPushButton#send:pressed {{ background:#df7d67; }}
-            QPushButton#clear {{
-                background:transparent; color:#b58b79; border:0;
-                padding:5px 9px; font-size:{max(fs-3,10)}px;
+            QFrame#chatTools {{
+                background:#fff1e5;
+                border:1px solid #efd3bc;
+                border-radius:14px;
             }}
-            QPushButton#clear:hover {{ color:#d96868; background:#ffebe5; border-radius:10px; }}
+            QPushButton#chatTool, QPushButton#clearTool {{
+                background:#fffaf5; color:#8a6251;
+                border:1px solid #e9c8ae; border-radius:10px;
+                padding:7px 11px;
+                font-size:{max(fs-5,12)}px; font-weight:700;
+            }}
+            QPushButton#chatTool:hover {{
+                background:#ffe5d8; color:#a65e4e; border-color:#efaa8f;
+            }}
+            QPushButton#chatTool:pressed {{
+                background:#ffd5c5;
+            }}
+            QPushButton#clearTool {{
+                color:#ae706b; background:#fff7f3; border-color:#edcdc5;
+            }}
+            QPushButton#clearTool:hover {{
+                color:#cf5f5f; background:#ffe5e1; border-color:#efa9a2;
+            }}
             QLabel#title {{
                 font-size:{fs+2}px; font-weight:700; color:#7a4d3b;
                 padding:6px 12px;
@@ -584,23 +613,40 @@ class ChatWindow(QWidget):
         self.send_btn.setCursor(Qt.PointingHandCursor)
         self.send_btn.clicked.connect(self.send)
 
-        self.clear_btn = QPushButton("清除记忆")
-        self.clear_btn.setObjectName("clear")
+        self.api_key_btn = QPushButton()
+        self.api_key_btn.setObjectName("chatTool")
+        self.api_key_btn.setCursor(Qt.PointingHandCursor)
+        self.api_key_btn.clicked.connect(self.configure_api_key)
+
+        self.model_btn = QPushButton()
+        self.model_btn.setObjectName("chatTool")
+        self.model_btn.setCursor(Qt.PointingHandCursor)
+        self.model_btn.setToolTip("选择聊天使用的 AI 模型")
+        self.model_btn.clicked.connect(self.show_model_menu)
+
+        self.clear_btn = QPushButton("🧹 清除记忆")
+        self.clear_btn.setObjectName("clearTool")
         self.clear_btn.setToolTip(
             f"让 {self._pet_name()} 忘记所有对话"
         )
         self.clear_btn.setCursor(Qt.PointingHandCursor)
         self.clear_btn.clicked.connect(self.confirm_clear_memory)
+        self._refresh_ai_tool_buttons()
 
         row = QHBoxLayout()
         row.setSpacing(8)
         row.addWidget(self.input, 1)
         row.addWidget(self.send_btn)
 
-        bottom_row = QHBoxLayout()
-        bottom_row.setContentsMargins(0, 0, 4, 0)
-        bottom_row.addStretch(1)
-        bottom_row.addWidget(self.clear_btn)
+        self.tools_frame = QFrame()
+        self.tools_frame.setObjectName("chatTools")
+        tools_row = QHBoxLayout(self.tools_frame)
+        tools_row.setContentsMargins(7, 5, 7, 5)
+        tools_row.setSpacing(7)
+        tools_row.addWidget(self.api_key_btn)
+        tools_row.addWidget(self.model_btn)
+        tools_row.addStretch(1)
+        tools_row.addWidget(self.clear_btn)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(14, 12, 14, 14)
@@ -608,7 +654,7 @@ class ChatWindow(QWidget):
         layout.addLayout(title_row)
         layout.addWidget(self.log, 1)
         layout.addLayout(row)
-        layout.addLayout(bottom_row)
+        layout.addWidget(self.tools_frame)
 
     def refresh_pet_name(self):
         """Refresh every visible name after onboarding or renaming."""
@@ -618,6 +664,233 @@ class ChatWindow(QWidget):
         self.clear_btn.setToolTip(f"让 {name} 忘记所有对话")
         if not self.busy:
             self.input.setPlaceholderText(f"跟 {name} 说点什么…")
+
+    def _refresh_ai_tool_buttons(self):
+        source = ai.get_api_key_source()
+        if source == "environment":
+            self.api_key_btn.setText("🔑 API Key：环境变量")
+            self.api_key_btn.setToolTip(
+                "当前优先使用系统环境变量 ZHIPU_API_KEY；"
+                "仍可在这里保存本机备用 Key"
+            )
+        elif source == "config":
+            self.api_key_btn.setText("🔑 API Key：已配置")
+            self.api_key_btn.setToolTip("修改或移除本机保存的 API Key")
+        else:
+            self.api_key_btn.setText("🔑 添加 API Key")
+            self.api_key_btn.setToolTip("添加智谱 API Key，开启 AI 聊天")
+        self.model_btn.setText(f"🤖 {ai.get_model_name()} ▾")
+
+    def configure_api_key(self):
+        """Open a password-form editor without ever displaying the saved key."""
+        dialog = QDialog(self)
+        dialog.setObjectName("apiKeyDialog")
+        dialog.setWindowTitle("配置 API Key")
+        dialog.setModal(True)
+        dialog.setFixedWidth(500)
+        dialog.setStyleSheet("""
+            QDialog#apiKeyDialog {
+                background:#fff8ec;
+                color:#65483b;
+                font-family:'Microsoft YaHei',sans-serif;
+                font-size:16px;
+            }
+            QLabel { color:#76584b; }
+            QLabel#keyHint {
+                color:#aa8170;
+                font-size:13px;
+            }
+            QLineEdit {
+                background:#fffdf8;
+                border:1px solid #e9c8ae;
+                border-radius:12px;
+                padding:10px 12px;
+                font-size:16px;
+            }
+            QLineEdit:focus { border:2px solid #f19a7e; }
+            QPushButton {
+                background:#fff4e9;
+                color:#8a6251;
+                border:1px solid #e9c8ae;
+                border-radius:10px;
+                padding:8px 15px;
+                font-weight:700;
+            }
+            QPushButton:hover { background:#ffe4d7; }
+            QPushButton#saveKey {
+                color:white;
+                background:#f28f76;
+                border-color:#f28f76;
+            }
+            QPushButton#saveKey:hover { background:#e98169; }
+            QPushButton#removeKey { color:#c56868; }
+        """)
+
+        title = QLabel("🔑 让小狗连接 AI")
+        title.setStyleSheet(
+            "font-size:20px;font-weight:800;color:#7a4d3b;"
+        )
+        source = ai.get_api_key_source()
+        if source == "environment":
+            status_text = (
+                "已检测到系统环境变量，它会优先于这里保存的 Key。"
+            )
+        elif source == "config":
+            status_text = "本机已经保存了 API Key，输入新 Key 即可替换。"
+        else:
+            status_text = "输入你的智谱 API Key，保存后下一次聊天立即生效。"
+        status = QLabel(status_text)
+        status.setWordWrap(True)
+
+        key_edit = QLineEdit()
+        key_edit.setEchoMode(QLineEdit.Password)
+        key_edit.setPlaceholderText("请输入新的 API Key")
+        key_edit.setClearButtonEnabled(True)
+
+        privacy = QLabel(
+            "Key 只保存在当前电脑的用户数据目录中，界面不会回显完整内容。"
+        )
+        privacy.setObjectName("keyHint")
+        privacy.setWordWrap(True)
+
+        show_btn = QPushButton("按住显示")
+        show_btn.setCursor(Qt.PointingHandCursor)
+        show_btn.pressed.connect(
+            lambda: key_edit.setEchoMode(QLineEdit.Normal)
+        )
+        show_btn.released.connect(
+            lambda: key_edit.setEchoMode(QLineEdit.Password)
+        )
+
+        cancel_btn = QPushButton("取消")
+        cancel_btn.setCursor(Qt.PointingHandCursor)
+        cancel_btn.clicked.connect(dialog.reject)
+        save_btn = QPushButton("保存")
+        save_btn.setObjectName("saveKey")
+        save_btn.setCursor(Qt.PointingHandCursor)
+
+        def accept_key():
+            if key_edit.text().strip():
+                dialog.accept()
+                return
+            status.setText("请先输入 API Key，再点击保存。")
+            status.setStyleSheet("color:#cf5f5f;font-weight:700;")
+            key_edit.setFocus()
+
+        save_btn.clicked.connect(accept_key)
+        key_edit.returnPressed.connect(accept_key)
+        remove_btn = QPushButton("移除本机 Key")
+        remove_btn.setObjectName("removeKey")
+        remove_btn.setCursor(Qt.PointingHandCursor)
+        remove_btn.setVisible(ai.load_config().get("api_key", "") != "")
+        remove_btn.clicked.connect(lambda: dialog.done(2))
+
+        key_row = QHBoxLayout()
+        key_row.setSpacing(8)
+        key_row.addWidget(key_edit, 1)
+        key_row.addWidget(show_btn)
+
+        button_row = QHBoxLayout()
+        button_row.setSpacing(8)
+        button_row.addWidget(remove_btn)
+        button_row.addStretch(1)
+        button_row.addWidget(cancel_btn)
+        button_row.addWidget(save_btn)
+
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(22, 20, 22, 20)
+        layout.setSpacing(12)
+        layout.addWidget(title)
+        layout.addWidget(status)
+        layout.addLayout(key_row)
+        layout.addWidget(privacy)
+        layout.addLayout(button_row)
+        key_edit.setFocus()
+
+        result = dialog.exec_()
+        if result == QDialog.Accepted:
+            new_key = key_edit.text().strip()
+            if not new_key:
+                QMessageBox.warning(
+                    self, "API Key 未保存", "请输入 API Key 后再保存。"
+                )
+                return
+            try:
+                ai.set_api_key(new_key)
+            except Exception as exc:
+                QMessageBox.warning(
+                    self, "保存失败",
+                    f"无法保存 API Key：{exc}"
+                )
+                return
+            self._refresh_ai_tool_buttons()
+            note = "API Key 已保存，下一次聊天会立即使用。"
+            if ai.get_api_key_source() == "environment":
+                note = (
+                    "本机备用 Key 已保存；当前仍优先使用系统环境变量。"
+                )
+            QMessageBox.information(self, "保存成功", note)
+        elif result == 2:
+            choice = QMessageBox.question(
+                self, "移除 API Key",
+                "确定移除保存在这台电脑上的 API Key 吗？",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if choice == QMessageBox.Yes:
+                try:
+                    ai.set_api_key("")
+                except Exception as exc:
+                    QMessageBox.warning(
+                        self, "移除失败",
+                        f"无法移除 API Key：{exc}"
+                    )
+                    return
+                self._refresh_ai_tool_buttons()
+
+    def show_model_menu(self):
+        menu = QMenu(self)
+        menu.setStyleSheet("""
+            QMenu {
+                background:#fffaf3;
+                color:#76584b;
+                border:1px solid #e9c8ae;
+                border-radius:10px;
+                padding:6px;
+                font-size:15px;
+            }
+            QMenu::item {
+                border-radius:7px;
+                padding:8px 24px 8px 12px;
+            }
+            QMenu::item:selected { background:#ffe2d4; }
+            QMenu::indicator { width:14px; height:14px; }
+        """)
+        current = ai.get_model()
+        for model_id, display_name in ai.SUPPORTED_MODELS.items():
+            action = QAction(display_name, menu)
+            action.setCheckable(True)
+            action.setChecked(model_id == current)
+            action.triggered.connect(
+                lambda checked=False, selected=model_id:
+                self.select_model(selected)
+            )
+            menu.addAction(action)
+        menu.exec_(
+            self.model_btn.mapToGlobal(
+                QPoint(0, self.model_btn.height() + 4)
+            )
+        )
+
+    def select_model(self, model_id):
+        try:
+            ai.set_model(model_id)
+        except (OSError, ValueError) as exc:
+            QMessageBox.warning(
+                self, "模型切换失败", f"无法保存模型设置：{exc}"
+            )
+            return
+        self._refresh_ai_tool_buttons()
 
     def _render_history(self, exclude_last_assistant=False):
         """Render last N turns as HTML chat bubbles.
@@ -2356,11 +2629,12 @@ class InteractiveBubble(QWidget):
         self.setCursor(Qt.PointingHandCursor)
         self.setFont(pixel_font(12, QFont.Bold))
         fm = self.fontMetrics()
-        w = fm.horizontalAdvance(label) + 52
-        h = fm.height() + 30
-        self.resize(w + 10, h + 10)  # extra room for shadow + pulse
+        w = max(148, fm.horizontalAdvance(label) + 64)
+        self.resize(w + 16, 64)
         self.label = label
         self._pulse = 0.0
+        self._hovered = False
+        self._tail_on_left = True
         self._anim = QTimer(self)
         self._anim.timeout.connect(self._tick)
         self._anim.start(40)
@@ -2382,9 +2656,11 @@ class InteractiveBubble(QWidget):
         if pet_cx < screen_cx:
             # Bubble is on the right, so shift it left toward the pet.
             x = g.right() + 8 - toward_pet
+            self._tail_on_left = True
         else:
             # Bubble is on the left, so shift it right toward the pet.
             x = g.left() - self.width() - 8 + toward_pet
+            self._tail_on_left = False
         y = g.center().y() - self.height() // 2 + 15
         # clamp to screen
         x = max(scr.left(), min(x, scr.right() - self.width()))
@@ -2397,11 +2673,10 @@ class InteractiveBubble(QWidget):
             self._trigger()
 
     def _ellipse_rect(self):
-        margin = 5
         return QRectF(
-            margin, margin,
-            self.width() - margin * 2,
-            self.height() - margin * 2 - 4,
+            8, 6,
+            self.width() - 16,
+            self.height() - 12,
         )
 
     def _trigger(self):
@@ -2414,6 +2689,10 @@ class InteractiveBubble(QWidget):
         # wake the pet if sleeping, so feed/play actually take effect
         if pet.state.get("sleeping") and self.action_name in ("feed", "play"):
             pet.state["sleeping"] = False
+            pet.state["sleep_mode"] = None
+            pet._auto_sleep_phase = None
+            pet._auto_sleep_target_x = None
+            pet._auto_sleep_snooze_until = time.time() + 60.0
             pet.refresh_pose_from_state()
         if self.action_name == "feed":
             pet.feed()
@@ -2475,51 +2754,136 @@ class InteractiveBubble(QWidget):
     def paintEvent(self, e):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
-        # pulse scale: gentle breathing 1.0 -> 1.05
-        scale = 1.0 + math.sin(self._pulse) * 0.03
+        scale = (
+            1.0
+            + math.sin(self._pulse) * 0.008
+            + (0.022 if self._hovered else 0.0)
+        )
         cx, cy = self.width() / 2, self.height() / 2
         p.translate(cx, cy)
         p.scale(scale, scale)
         p.translate(-cx, -cy)
-        # main oval
+
         r = self._ellipse_rect()
-        # soft outer glow (pulse-driven)
-        glow_alpha = int(60 + math.sin(self._pulse) * 20)
         c = QColor(self.color)
-        glow = QColor(c); glow.setAlpha(glow_alpha)
+
+        glow = QColor(c)
+        glow.setAlpha(int(28 + math.sin(self._pulse) * 8))
         p.setBrush(glow)
         p.setPen(Qt.NoPen)
-        p.drawEllipse(r.adjusted(-2, -2, 2, 2))
-        # shadow
-        shadow = QRectF(r.x()+2, r.y()+3, r.width(), r.height())
-        p.setBrush(QColor(0, 0, 0, 50))
+        p.drawRoundedRect(r.adjusted(-2, -2, 2, 2), 25, 25)
+
+        shadow = r.translated(2, 3)
+        p.setBrush(QColor(91, 59, 44, 42))
         p.setPen(Qt.NoPen)
-        p.drawEllipse(shadow)
-        # gradient oval
+        p.drawRoundedRect(shadow, 24, 24)
+
+        tail_y = r.center().y()
+        if self._tail_on_left:
+            tail = QPolygonF([
+                QPointF(r.left() + 2, tail_y - 7),
+                QPointF(2, tail_y),
+                QPointF(r.left() + 2, tail_y + 7),
+            ])
+        else:
+            tail = QPolygonF([
+                QPointF(r.right() - 2, tail_y - 7),
+                QPointF(self.width() - 2, tail_y),
+                QPointF(r.right() - 2, tail_y + 7),
+            ])
+        p.setBrush(c.lighter(150))
+        p.drawPolygon(tail)
+
         grad = QLinearGradient(r.topLeft(), r.bottomRight())
-        grad.setColorAt(0.0, c.lighter(135))
-        grad.setColorAt(1.0, c)
+        grad.setColorAt(0.0, c.lighter(190))
+        grad.setColorAt(0.48, c.lighter(165))
+        grad.setColorAt(1.0, c.lighter(130))
         p.setBrush(grad)
-        p.setPen(QPen(c.darker(150), 1.0))
-        p.drawEllipse(r)
-        # inner highlight (top gloss)
-        gloss = QRectF(r.x()+10, r.y()+3, r.width()-20, r.height()/2.2)
+        p.setPen(QPen(c.darker(112), 1.25))
+        p.drawRoundedRect(r, 24, 24)
+
+        gloss = QRectF(
+            r.x() + 12, r.y() + 4,
+            r.width() - 24, r.height() * 0.38,
+        )
         gloss_grad = QLinearGradient(gloss.topLeft(), gloss.bottomLeft())
-        gloss_grad.setColorAt(0.0, QColor(255, 255, 255, 90))
+        gloss_grad.setColorAt(0.0, QColor(255, 255, 255, 125))
         gloss_grad.setColorAt(1.0, QColor(255, 255, 255, 0))
         p.setBrush(gloss_grad)
         p.setPen(Qt.NoPen)
-        p.drawEllipse(gloss)
-        # white text with subtle shadow
-        p.setPen(QColor(0, 0, 0, 80))
+        p.drawRoundedRect(gloss, 16, 16)
+
+        icon_center = QPointF(r.left() + 27, r.center().y())
+        p.setBrush(QColor(255, 252, 246, 230))
+        p.setPen(QPen(QColor(255, 255, 255, 190), 1))
+        p.drawEllipse(icon_center, 17, 17)
+        self._draw_action_icon(p, icon_center, c.darker(105))
+
+        text_rect = QRectF(
+            r.left() + 49, r.top(),
+            r.width() - 57, r.height(),
+        )
         p.setFont(self.font())
-        text_rect = QRectF(r.x(), r.y()+1, r.width(), r.height())
-        p.drawText(text_rect, Qt.AlignCenter, self.label)
-        p.setPen(QColor(255, 255, 255))
-        p.drawText(r, Qt.AlignCenter, self.label)
+        p.setPen(QColor(92, 63, 52, 220))
+        p.drawText(
+            text_rect.translated(0, 1),
+            Qt.AlignCenter | Qt.TextSingleLine,
+            self.label,
+        )
+        p.setPen(QColor("#70483d"))
+        p.drawText(
+            text_rect,
+            Qt.AlignCenter | Qt.TextSingleLine,
+            self.label,
+        )
+
+    def _draw_action_icon(self, painter, center, color):
+        painter.setPen(QPen(color, 2.2, Qt.SolidLine, Qt.RoundCap))
+        painter.setBrush(Qt.NoBrush)
+        if self.action_name == "feed":
+            bone = QRectF(
+                center.x() - 7, center.y() - 3,
+                14, 6,
+            )
+            painter.setBrush(color)
+            painter.setPen(Qt.NoPen)
+            painter.drawRoundedRect(bone, 3, 3)
+            for dx in (-7, 7):
+                painter.drawEllipse(
+                    QPointF(center.x() + dx, center.y() - 4), 3.5, 3.5
+                )
+                painter.drawEllipse(
+                    QPointF(center.x() + dx, center.y() + 4), 3.5, 3.5
+                )
+        elif self.action_name == "play":
+            ball = QRectF(
+                center.x() - 9, center.y() - 9,
+                18, 18,
+            )
+            painter.drawEllipse(ball)
+            painter.drawArc(ball.adjusted(4, -1, 4, 1), 80 * 16, 95 * 16)
+            painter.drawArc(ball.adjusted(-4, -1, -4, 1), 260 * 16, 95 * 16)
+        else:
+            painter.setFont(pixel_font(14, QFont.Bold))
+            painter.drawText(
+                QRectF(
+                    center.x() - 14, center.y() - 14,
+                    28, 28,
+                ),
+                Qt.AlignCenter,
+                "Z",
+            )
 
     def enterEvent(self, e):
+        self._hovered = True
         self.setCursor(Qt.PointingHandCursor)
+        self.update()
+        super().enterEvent(e)
+
+    def leaveEvent(self, e):
+        self._hovered = False
+        self.update()
+        super().leaveEvent(e)
 
 
 def _esc(text):
@@ -2624,8 +2988,532 @@ class SpeechBubble(QWidget):
                    self.text)
 
 
+class FetchPlayScene(QWidget):
+    """Interactive zoomed-out fetch scene with a clickable throw zone."""
+
+    ZOOM_SECONDS = 0.42
+    COUNTDOWN_SECONDS = 3.0
+    CELEBRATION_SECONDS = 1.0
+    FRAME_BASELINE_RATIO = 440.0 / 512.0
+    CATCH_BASELINE_RATIO = 0.37
+
+    def __init__(self, pet_window, on_finished):
+        super().__init__(None)
+        self.pet = pet_window
+        self._on_finished = on_finished
+        self._finishing = False
+        self._phase = "zoom"
+        self._phase_started_at = time.monotonic()
+        self._countdown_deadline = None
+        self._target = None
+        self._frame_index = 0
+        self._hovering_target = False
+        self.last_throw_was_automatic = False
+
+        flags = Qt.FramelessWindowHint | Qt.Tool
+        if self.pet.settings.get("always_on_top", True):
+            flags |= Qt.WindowStaysOnTopHint
+        self.setWindowFlags(flags)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setAttribute(Qt.WA_NoSystemBackground, True)
+        self.setAttribute(Qt.WA_ShowWithoutActivating, True)
+        self.setMouseTracking(True)
+
+        screen = self.pet.current_screen_rect()
+        width = max(360, min(760, screen.width() - 40))
+        height = max(280, min(460, screen.height() - 80))
+        pet_geometry = self.pet.geometry()
+        x = pet_geometry.center().x() - width // 2
+        y = pet_geometry.center().y() - height // 2
+        x = max(screen.left(), min(x, screen.right() - width + 1))
+        y = max(screen.top(), min(y, screen.bottom() - height + 1))
+        self.setGeometry(int(x), int(y), int(width), int(height))
+
+        self._zoom_origin = QPointF(
+            pet_geometry.center().x() - x,
+            pet_geometry.bottom() - y - 8,
+        )
+        target_x = width * 0.14
+        target_y = 72.0
+        target_width = max(190.0, width * 0.72)
+        target_height = max(130.0, height - 158.0)
+        self.target_rect = QRectF(
+            target_x, target_y, target_width, target_height
+        )
+        # The puppy waits inside the far end of the play field and faces the
+        # player.  The ball starts close to the player at the bottom centre,
+        # creating a straight-ahead throw instead of a sideways chase.
+        self._dog_start = QPointF(
+            self.target_rect.center().x(),
+            self.target_rect.top() + self.target_rect.height() * 0.62,
+        )
+        self._throw_origin = QPointF(width * 0.5, height - 34)
+        self._default_target = QPointF(
+            self._dog_start.x(),
+            self._dog_start.y() - 122.0 * self.CATCH_BASELINE_RATIO,
+        )
+
+        self.frames = list(self.pet.animation_frames.get("play", ()))
+        if not self.frames:
+            fallback = (
+                self.pet.pose_pixmaps.get(POSE["happy"])
+                or self.pet.pose_pixmaps.get(POSE["idle"])
+            )
+            if fallback is not None:
+                self.frames = [fallback]
+        try:
+            self.fps = max(
+                1.0,
+                float(self.pet.animation_specs.get("play", {}).get("fps", 14)),
+            )
+        except (TypeError, ValueError):
+            self.fps = 14.0
+
+        ball_path = os.path.join(
+            ANIMATIONS_DIR, "sources", "fetch_ball.png"
+        )
+        self.ball_pixmap = QPixmap(ball_path)
+        if not self.ball_pixmap.isNull():
+            visible = QRegion(self.ball_pixmap.mask()).boundingRect()
+            if visible.isValid() and not visible.isEmpty():
+                self.ball_pixmap = self.ball_pixmap.copy(visible)
+
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self._tick)
+        self.timer.setInterval(16)
+
+    @staticmethod
+    def _ease_out_cubic(value):
+        value = max(0.0, min(1.0, float(value)))
+        return 1.0 - (1.0 - value) ** 3
+
+    @staticmethod
+    def _lerp_point(start, end, progress):
+        return QPointF(
+            start.x() + (end.x() - start.x()) * progress,
+            start.y() + (end.y() - start.y()) * progress,
+        )
+
+    def _font(self, size, weight=QFont.Normal):
+        font = QFont("Microsoft YaHei")
+        font.setPixelSize(max(1, int(size)))
+        font.setWeight(weight)
+        return font
+
+    def start(self):
+        self._phase = "zoom"
+        self._phase_started_at = time.monotonic()
+        self.show()
+        self.raise_()
+        self.timer.start()
+        self.update()
+
+    def countdown_value(self, now=None):
+        if self._phase != "aim" or self._countdown_deadline is None:
+            return 0
+        now = time.monotonic() if now is None else float(now)
+        return max(1, int(math.ceil(self._countdown_deadline - now)))
+
+    def _clamp_target(self, point):
+        inset = self.target_rect.adjusted(14, 14, -14, -14)
+        return QPointF(
+            max(inset.left(), min(float(point.x()), inset.right())),
+            max(inset.top(), min(float(point.y()), inset.bottom())),
+        )
+
+    def start_throw(self, target, automatic=False, now=None):
+        if self._phase in ("fetch", "celebrate"):
+            return
+        self._target = self._clamp_target(target)
+        self.last_throw_was_automatic = bool(automatic)
+        self._phase = "fetch"
+        self._phase_started_at = (
+            time.monotonic() if now is None else float(now)
+        )
+        self._frame_index = 0
+        self.setCursor(Qt.ArrowCursor)
+        self.update()
+
+    def _advance(self, now):
+        if self._finishing:
+            return
+        if self._phase == "zoom":
+            if now - self._phase_started_at >= self.ZOOM_SECONDS:
+                self._phase = "aim"
+                self._phase_started_at = now
+                self._countdown_deadline = now + self.COUNTDOWN_SECONDS
+        elif self._phase == "aim":
+            if (self._countdown_deadline is not None
+                    and now >= self._countdown_deadline):
+                self.start_throw(
+                    self._default_target,
+                    automatic=True,
+                    now=now,
+                )
+        elif self._phase == "fetch":
+            frame_count = max(1, len(self.frames))
+            elapsed = max(0.0, now - self._phase_started_at)
+            frame_index = int(elapsed * self.fps)
+            if frame_index >= frame_count:
+                self._phase = "celebrate"
+                self._phase_started_at = now
+                self._frame_index = frame_count - 1
+            else:
+                self._frame_index = frame_index
+        elif self._phase == "celebrate":
+            if now - self._phase_started_at >= self.CELEBRATION_SECONDS:
+                self._finish(completed=True)
+                return
+        self.update()
+
+    def _tick(self):
+        self._advance(time.monotonic())
+
+    def _finish(self, completed):
+        if self._finishing:
+            return
+        self._finishing = True
+        self.timer.stop()
+        self.hide()
+        callback = self._on_finished
+        self._on_finished = None
+        if callable(callback):
+            callback(self, bool(completed))
+        self.close()
+        self.deleteLater()
+
+    def cancel(self, notify=True):
+        if notify:
+            self._finish(completed=False)
+            return
+        self._finishing = True
+        self.timer.stop()
+        self._on_finished = None
+        self.hide()
+        self.close()
+        self.deleteLater()
+
+    def closeEvent(self, event):
+        self.timer.stop()
+        super().closeEvent(event)
+
+    def mouseMoveEvent(self, event):
+        hovering = (
+            self._phase == "aim"
+            and self.target_rect.contains(QPointF(event.pos()))
+        )
+        if hovering != self._hovering_target:
+            self._hovering_target = hovering
+            self.setCursor(
+                Qt.CrossCursor if hovering else Qt.ArrowCursor
+            )
+            self.update()
+
+    def leaveEvent(self, event):
+        self._hovering_target = False
+        self.setCursor(Qt.ArrowCursor)
+        self.update()
+        super().leaveEvent(event)
+
+    def mousePressEvent(self, event):
+        if (event.button() == Qt.LeftButton
+                and self._phase == "aim"
+                and self.target_rect.contains(QPointF(event.pos()))):
+            self.start_throw(QPointF(event.pos()), automatic=False)
+            return
+        super().mousePressEvent(event)
+
+    def _fetch_dog_baseline(self, frame_index, dog_size):
+        progress = self._fetch_progress(frame_index)
+        end = QPointF(
+            self._target.x(),
+            self._target.y() + dog_size * self.CATCH_BASELINE_RATIO,
+        )
+        end.setY(min(self.height() - 34.0, end.y()))
+        eased = progress * progress * (3.0 - 2.0 * progress)
+        point = self._lerp_point(self._dog_start, end, eased)
+        point.setY(point.y() - 58.0 * math.sin(math.pi * progress))
+        return point
+
+    def _fetch_progress(self, frame_index):
+        last_frame = max(1, len(self.frames) - 1)
+        return max(0.0, min(1.0, float(frame_index) / last_frame))
+
+    def _ball_position(self, frame_index):
+        progress = self._fetch_progress(frame_index)
+        point = self._lerp_point(
+            self._throw_origin, self._target, progress
+        )
+        point.setY(point.y() - 92.0 * math.sin(math.pi * progress))
+        return point
+
+    def _draw_ball(self, painter, center, size, rotation=0.0):
+        if self.ball_pixmap.isNull():
+            painter.setPen(QPen(QColor("#d95d52"), 2))
+            painter.setBrush(QColor("#f27262"))
+            painter.drawEllipse(
+                QRectF(
+                    center.x() - size / 2,
+                    center.y() - size / 2,
+                    size, size,
+                )
+            )
+            return
+        painter.save()
+        painter.translate(center)
+        painter.rotate(rotation)
+        painter.drawPixmap(
+            QRectF(-size / 2, -size / 2, size, size),
+            self.ball_pixmap,
+            QRectF(
+                0, 0,
+                self.ball_pixmap.width(),
+                self.ball_pixmap.height(),
+            ),
+        )
+        painter.restore()
+
+    def _draw_dog(self, painter, frame_index, baseline, size):
+        if not self.frames:
+            return
+        pixmap = self.frames[
+            max(0, min(int(frame_index), len(self.frames) - 1))
+        ]
+        shadow_width = size * 0.54
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(92, 61, 42, 42))
+        painter.drawEllipse(QRectF(
+            baseline.x() - shadow_width / 2,
+            baseline.y() - 8,
+            shadow_width, 14,
+        ))
+        target = QRectF(
+            baseline.x() - size / 2,
+            baseline.y() - size * self.FRAME_BASELINE_RATIO,
+            size, size,
+        )
+        painter.drawPixmap(
+            target, pixmap,
+            QRectF(0, 0, pixmap.width(), pixmap.height()),
+        )
+
+    def _draw_celebration(self, painter, now):
+        elapsed = max(0.0, now - self._phase_started_at)
+        progress = min(1.0, elapsed / self.CELEBRATION_SECONDS)
+        eased = self._ease_out_cubic(progress)
+        center = QPointF(self._target)
+
+        ring_radius = 19.0 + 31.0 * eased
+        painter.setBrush(Qt.NoBrush)
+        painter.setPen(QPen(
+            QColor(255, 181, 79, int(190 * (1.0 - progress))),
+            2.5,
+        ))
+        painter.drawEllipse(center, ring_radius, ring_radius)
+
+        colors = (
+            QColor("#ff8f7c"),
+            QColor("#ffc45d"),
+            QColor("#f487ab"),
+            QColor("#9d8bea"),
+        )
+        for index in range(10):
+            angle = -math.pi + index * math.pi * 2.0 / 10.0
+            radius = 31.0 + eased * (25.0 + (index % 3) * 5.0)
+            particle_center = QPointF(
+                center.x() + math.cos(angle) * radius,
+                center.y() + math.sin(angle) * radius
+                - 7.0 * math.sin(progress * math.pi),
+            )
+            size = 4.5 + (index % 2) * 1.5
+            color = QColor(colors[index % len(colors)])
+            color.setAlpha(int(245 * (1.0 - 0.28 * progress)))
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(color)
+            if index % 2:
+                heart = QPainterPath()
+                heart.moveTo(
+                    particle_center.x(),
+                    particle_center.y() + size * 0.75,
+                )
+                heart.cubicTo(
+                    particle_center.x() - size * 1.35,
+                    particle_center.y() - size * 0.1,
+                    particle_center.x() - size * 0.65,
+                    particle_center.y() - size,
+                    particle_center.x(),
+                    particle_center.y() - size * 0.35,
+                )
+                heart.cubicTo(
+                    particle_center.x() + size * 0.65,
+                    particle_center.y() - size,
+                    particle_center.x() + size * 1.35,
+                    particle_center.y() - size * 0.1,
+                    particle_center.x(),
+                    particle_center.y() + size * 0.75,
+                )
+                painter.drawPath(heart)
+            else:
+                points = []
+                for point_index in range(10):
+                    point_angle = (
+                        -math.pi / 2.0 + point_index * math.pi / 5.0
+                    )
+                    point_radius = (
+                        size if point_index % 2 == 0 else size * 0.42
+                    )
+                    points.append(QPointF(
+                        particle_center.x()
+                        + math.cos(point_angle) * point_radius,
+                        particle_center.y()
+                        + math.sin(point_angle) * point_radius,
+                    ))
+                painter.drawPolygon(QPolygonF(points))
+
+        badge_width = 116.0
+        badge_height = 34.0
+        badge_x = max(
+            self.target_rect.left() + 8.0,
+            min(
+                center.x() - badge_width / 2.0,
+                self.target_rect.right() - badge_width - 8.0,
+            ),
+        )
+        badge_y = max(
+            self.target_rect.top() + 9.0,
+            center.y() - 68.0 - 4.0 * math.sin(progress * math.pi),
+        )
+        badge = QRectF(
+            badge_x, badge_y, badge_width, badge_height
+        )
+        painter.setPen(QPen(QColor("#ef9f67"), 1.5))
+        painter.setBrush(QColor(255, 249, 220, 245))
+        painter.drawRoundedRect(badge, 15, 15)
+        painter.setPen(QColor("#b05f45"))
+        painter.setFont(self._font(16, QFont.Bold))
+        painter.drawText(
+            badge, Qt.AlignCenter | Qt.TextSingleLine, "接住啦！"
+        )
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+
+        now = time.monotonic()
+        if self._phase == "zoom":
+            zoom_progress = self._ease_out_cubic(
+                (now - self._phase_started_at) / self.ZOOM_SECONDS
+            )
+        else:
+            zoom_progress = 1.0
+
+        # A warm translucent play field that still leaves the desktop visible.
+        field_alpha = int(zoom_progress * 190)
+        field = self.target_rect
+        painter.setPen(QPen(
+            QColor(235, 146, 112, int(zoom_progress * 230)),
+            2.2,
+            Qt.DashLine,
+        ))
+        field_color = QColor(255, 244, 229, field_alpha)
+        if self._hovering_target:
+            field_color = QColor(255, 225, 210, 218)
+        painter.setBrush(field_color)
+        painter.drawRoundedRect(field, 24, 24)
+
+        if self._phase == "aim":
+            painter.setFont(self._font(16, QFont.Bold))
+            painter.setPen(QColor("#a36b58"))
+            painter.drawText(
+                field.adjusted(14, 14, -14, -14),
+                Qt.AlignTop | Qt.AlignHCenter,
+                "点击这里，决定小球的落点",
+            )
+            pulse = 1.0 + 0.12 * math.sin(now * 6.0)
+            painter.setPen(QPen(QColor(235, 146, 112, 155), 2))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawEllipse(
+                self._default_target,
+                17 * pulse,
+                17 * pulse,
+            )
+
+        header = QRectF(
+            self.width() / 2 - 176,
+            16, 352, 46,
+        )
+        painter.setPen(QPen(QColor(239, 193, 163, 230), 1.2))
+        painter.setBrush(QColor(255, 248, 238, 240))
+        painter.drawRoundedRect(header, 18, 18)
+        painter.setPen(QColor("#805748"))
+        painter.setFont(self._font(18, QFont.Bold))
+        if self._phase == "zoom":
+            header_text = "视角拉远中…准备玩球！"
+        elif self._phase == "aim":
+            header_text = (
+                f"点击区域扔球  ·  {self.countdown_value(now)}"
+            )
+        else:
+            header_text = "快去接住它！"
+        painter.drawText(
+            header, Qt.AlignCenter | Qt.TextSingleLine, header_text
+        )
+        if self._phase == "celebrate":
+            painter.setPen(QPen(QColor(239, 193, 163, 230), 1.2))
+            painter.setBrush(QColor(255, 248, 224, 245))
+            painter.drawRoundedRect(header, 18, 18)
+            painter.setPen(QColor("#a85f45"))
+            painter.setFont(self._font(18, QFont.Bold))
+            painter.drawText(
+                header,
+                Qt.AlignCenter | Qt.TextSingleLine,
+                "接球成功 · 太棒啦！",
+            )
+
+        if self._phase == "zoom":
+            dog_baseline = self._lerp_point(
+                self._zoom_origin, self._dog_start, zoom_progress
+            )
+            dog_size = 168.0 - 46.0 * zoom_progress
+            self._draw_dog(painter, 0, dog_baseline, dog_size)
+        elif self._phase == "aim":
+            self._draw_dog(painter, 0, self._dog_start, 122.0)
+            self._draw_ball(
+                painter, self._throw_origin, 28.0,
+                rotation=now * 70.0 % 360.0,
+            )
+        else:
+            frame_index = self._frame_index
+            flight_progress = self._fetch_progress(frame_index)
+            dog_size = 122.0 + 14.0 * math.sin(
+                math.pi * flight_progress
+            )
+            baseline = self._fetch_dog_baseline(
+                frame_index, dog_size
+            )
+            self._draw_dog(
+                painter, frame_index, baseline, dog_size
+            )
+            ball_size = 32.0 - 20.0 * flight_progress
+            self._draw_ball(
+                painter,
+                self._ball_position(frame_index),
+                ball_size,
+                rotation=frame_index * 32.0,
+            )
+            if self._phase == "celebrate":
+                self._draw_celebration(painter, now)
+
+        painter.end()
+
+
 class PetWindow(QWidget):
     flung = pyqtSignal()
+    AUTO_SLEEP_ENERGY_THRESHOLD = 30.0
+    AUTO_WAKE_ENERGY_THRESHOLD = 80.0
+    AUTO_SLEEP_WALK_SPEED = 118.0
+    AUTO_SLEEP_CORNER_MARGIN = 18
 
     def __init__(self, state):
         super().__init__()
@@ -2711,12 +3599,22 @@ class PetWindow(QWidget):
         self.behavior = "idle"  # idle / walk / sit / nap / ask
         self.behavior_until = 0.0
         self.next_behavior_at = time.time() + random.uniform(3, 7)
+        self._auto_sleep_phase = (
+            "sleeping"
+            if self.state.get("sleeping")
+            and self.state.get("sleep_mode") == "auto"
+            else None
+        )
+        self._auto_sleep_target_x = None
+        self._auto_sleep_snooze_until = 0.0
 
         # AI: track idle time for proactive nudges
         self.last_user_t = time.time()
         self.last_nudge_check = time.time()
         self.chat_win = None  # lazy-created on first chat
         self.settings_win = None  # lazy-created on first settings open
+        self.play_scene = None  # zoomed-out interactive fetch scene
+        self._play_return_pos = None
         self._interactive_bubble = None  # current floating action bubble
         self._bubble_menu = None         # radial bubble menu (right-click)
         self._last_interactive_t = 0.0   # throttle: don't spam
@@ -3015,8 +3913,22 @@ class PetWindow(QWidget):
             if frames:
                 self.animation_frames[name] = frames
 
-    def trigger_animation(self, name, duration_ms):
-        """Temporarily override state-driven animation for an interaction."""
+    def _animation_duration_ms(self, name):
+        """Return the exact time needed to show every frame once."""
+        frames = self.animation_frames.get(name, ())
+        spec = self.animation_specs.get(name, {})
+        try:
+            fps = max(1.0, float(spec.get("fps", 8)))
+        except (TypeError, ValueError):
+            fps = 8.0
+        if not frames:
+            return 1
+        return max(1, int(math.ceil(len(frames) * 1000.0 / fps)))
+
+    def trigger_animation(self, name, duration_ms=None):
+        """Temporarily override state animation, optionally for one full run."""
+        if duration_ms is None:
+            duration_ms = self._animation_duration_ms(name)
         self._animation_override_token += 1
         token = self._animation_override_token
         self._animation_override = name
@@ -3042,7 +3954,7 @@ class PetWindow(QWidget):
             return "drag"
         if self.behavior == "eat":
             return "eat"
-        if self.behavior == "walk":
+        if self.behavior in ("walk", "auto_sleep_walk"):
             return "walk"
         if self.behavior in ("sit", "ask"):
             return self.behavior
@@ -3371,10 +4283,27 @@ class PetWindow(QWidget):
         BOUNCE_FLOOR = 0.45  # energy retained on floor bounce
         FRICTION = 0.88      # per-tick ground friction
         STOP_V = 2.0         # below this, snap to 0
+        auto_sleep_arrived = False
+
+        if self._auto_sleep_phase == "walking" and not self.dragging:
+            if self._auto_sleep_target_x is None:
+                self._auto_sleep_target_x = self._auto_sleep_corner_x()
+            delta_x = self._auto_sleep_target_x - x
+            self.behavior = "auto_sleep_walk"
+            if abs(delta_x) <= self.AUTO_SLEEP_WALK_SPEED * dt:
+                self.target_vx = 0
+                self.vx = 0
+                auto_sleep_arrived = self.on_ground
+            else:
+                direction = 1.0 if delta_x > 0 else -1.0
+                self.target_vx = direction * self.AUTO_SLEEP_WALK_SPEED
+                self.vx = self.target_vx
+
+        is_walking = self.behavior in ("walk", "auto_sleep_walk")
 
         if not self.dragging:
             # walking overrides gravity (stay glued to ground while walking)
-            if self.behavior == "walk" and self.on_ground:
+            if is_walking and self.on_ground:
                 self.vx = self.target_vx
                 self.vy = 0
             else:
@@ -3384,13 +4313,15 @@ class PetWindow(QWidget):
             # integrate position
             new_x = x + self.vx * dt
             new_y = y + self.vy * dt
+            if auto_sleep_arrived:
+                new_x = self._auto_sleep_target_x
 
             # ---- floor collision ----
             if new_y >= ground_y:
                 if self.on_ground:
                     # already on ground; just clamp
                     new_y = ground_y
-                    if self.behavior != "walk":
+                    if not is_walking:
                         self.vy = 0
                 else:
                     # landing from a fall/fling -> bounce
@@ -3438,7 +4369,7 @@ class PetWindow(QWidget):
                     self.vy = -self.vy * BOUNCE
 
             # ---- ground friction ----
-            if self.on_ground and self.behavior != "walk":
+            if self.on_ground and not is_walking:
                 self.vx *= FRICTION
                 if abs(self.vx) < STOP_V:
                     self.vx = 0
@@ -3446,16 +4377,18 @@ class PetWindow(QWidget):
             # ---- facing follows horizontal velocity ----
             if abs(self.vx) > 5:
                 self.facing = 1 if self.vx > 0 else -1
-            elif self.behavior == "walk":
+            elif is_walking:
                 self.facing = 1 if self.target_vx > 0 else -1
 
             # Preserve the legacy bob only while no real walk frames exist.
             if (self.on_ground and abs(self.vx) > 20 and
-                    not (self.behavior == "walk" and
+                    not (is_walking and
                          self.animation_frames.get("walk"))):
                 new_y -= abs(math.sin(time.time() * 6)) * 4
 
             self.move(int(new_x), int(new_y))
+            if auto_sleep_arrived:
+                self._enter_auto_sleep()
 
         # keep interactive bubble glued to the pet
         if self._interactive_bubble is not None:
@@ -3501,6 +4434,155 @@ class PetWindow(QWidget):
 
         self.update()
 
+    def _auto_sleep_corner_x(self):
+        screen = self.current_screen_rect()
+        left_x = screen.left() + self.AUTO_SLEEP_CORNER_MARGIN
+        right_x = (
+            screen.right() - self.width()
+            - self.AUTO_SLEEP_CORNER_MARGIN + 1
+        )
+        if abs(self.x() - left_x) <= abs(self.x() - right_x):
+            return float(left_x)
+        return float(right_x)
+
+    def _begin_auto_sleep(self, now=None):
+        now = time.time() if now is None else float(now)
+        if (
+            self.state.get("sleeping")
+            or self._auto_sleep_phase == "walking"
+            or self.dragging
+            or self.play_scene is not None
+            or not self.isVisible()
+            or now < self._auto_sleep_snooze_until
+        ):
+            return False
+        self._auto_sleep_phase = "walking"
+        self._auto_sleep_target_x = self._auto_sleep_corner_x()
+        self.behavior = "auto_sleep_walk"
+        direction = 1.0 if self._auto_sleep_target_x > self.x() else -1.0
+        self.target_vx = direction * self.AUTO_SLEEP_WALK_SPEED
+        self.vx = self.target_vx
+        self.vy = 0
+        self.behavior_until = float("inf")
+        self.next_behavior_at = float("inf")
+        self.state["sleep_mode"] = None
+
+        interactive = self._interactive_bubble
+        self._interactive_bubble = None
+        if interactive is not None:
+            try:
+                interactive.close()
+            except RuntimeError:
+                pass
+
+        lines = [
+            "我困了，要去角落睡一会儿～",
+            "眼皮好重呀，我先去睡觉啦。",
+            "精力快见底啦，我去找个舒服的地方休息。",
+        ]
+        hour = time.localtime().tm_hour
+        if 11 <= hour < 18:
+            lines.append("有点困啦，午安主人，我去睡一会儿～")
+        elif hour >= 21 or hour < 6:
+            lines.append("好困呀，晚安主人，我去睡觉啦～")
+        self.say(random.choice(lines), 3200)
+        self.refresh_pose_from_state()
+        self.update()
+        return True
+
+    def _enter_auto_sleep(self):
+        if self._auto_sleep_phase != "walking":
+            return False
+        if self._auto_sleep_target_x is not None:
+            self.move(int(round(self._auto_sleep_target_x)), self.y())
+        self._auto_sleep_phase = "sleeping"
+        self._auto_sleep_target_x = None
+        self.state["sleeping"] = True
+        self.state["sleep_mode"] = "auto"
+        self.state["x"] = self.x()
+        self.state["y"] = self.y()
+        self.behavior = "idle"
+        self.target_vx = 0
+        self.vx = 0
+        self.vy = 0
+        self.on_ground = True
+
+        hour = time.localtime().tm_hour
+        if 11 <= hour < 18:
+            line = random.choice([
+                "午安主人，我在这里睡一会儿～",
+                "主人午安，醒来再陪你玩。",
+            ])
+        elif hour >= 21 or hour < 6:
+            line = random.choice([
+                "晚安主人，做个好梦～",
+                "主人晚安，我要进入香香的梦乡啦。",
+            ])
+        else:
+            line = random.choice([
+                "我先睡一会儿，醒了再回来陪你～",
+                "这里很舒服，我要开始充电啦。",
+            ])
+        self.say(line, 3000)
+        self.play_sound("sleep")
+        save_state(self.state)
+        self.refresh_pose_from_state()
+        self.update()
+        return True
+
+    def _wake_from_auto_sleep(self):
+        if (
+            not self.state.get("sleeping")
+            or self.state.get("sleep_mode") != "auto"
+        ):
+            return False
+        self.state["sleeping"] = False
+        self.state["sleep_mode"] = None
+        self._auto_sleep_phase = None
+        self._auto_sleep_target_x = None
+        self.behavior = "idle"
+        self.behavior_until = time.time() + 1.2
+        self.next_behavior_at = self.behavior_until + random.uniform(2, 5)
+        self.target_vx = 0
+        self.vx = 0
+        self.vy = 0
+        self.say(random.choice([
+            "睡醒啦，我又回来啦！",
+            "充满电啦！主人，我醒啦～",
+            "这一觉好舒服，我们继续玩吧！",
+            "早呀主人，我现在精神满满！",
+        ]), 2600)
+        self.play_sound("bark")
+        save_state(self.state)
+        self.refresh_pose_from_state()
+        self.update()
+        return True
+
+    def _update_auto_sleep_state(self, now=None):
+        now = time.time() if now is None else float(now)
+        if self.state.get("sleeping"):
+            if self.state.get("sleep_mode") == "auto":
+                self._auto_sleep_phase = "sleeping"
+                if self.state.get("energy", 0) > self.AUTO_WAKE_ENERGY_THRESHOLD:
+                    self._wake_from_auto_sleep()
+                    return "woke"
+            else:
+                self._auto_sleep_phase = None
+            return "sleeping"
+
+        self.state["sleep_mode"] = None
+        if self._auto_sleep_phase == "sleeping":
+            self._auto_sleep_phase = None
+        if self._auto_sleep_phase == "walking":
+            return "walking"
+        if (
+            self.state.get("energy", 0) < self.AUTO_SLEEP_ENERGY_THRESHOLD
+            and now >= self._auto_sleep_snooze_until
+            and self._begin_auto_sleep(now)
+        ):
+            return "walking"
+        return None
+
     # ---------- decay ----------
     def on_decay(self):
         s = self.settings
@@ -3511,8 +4593,11 @@ class PetWindow(QWidget):
             self.state["hunger"] = max(0, self.state["hunger"] - s["decay_hunger"])
             self.state["energy"] = max(0, self.state["energy"] - s["decay_energy"])
             self.state["mood"] = max(0, self.state["mood"] - s["decay_mood"])
+        auto_sleep_event = self._update_auto_sleep_state()
         save_state(self.state)
         self.refresh_pose_from_state()
+        if auto_sleep_event in ("walking", "woke"):
+            return
         # occasional needy remarks (rate-controlled by settings)
         if not self.state["sleeping"]:
             boost = s.get("chatter_frequency_boost", 1.2)
@@ -3535,14 +4620,14 @@ class PetWindow(QWidget):
                     "我的小窝在叫我", "要变成一只瞌睡狗了", "打个哈欠先…哈呜",
                     "可以陪我眯一会儿吗", "电量快要见底啦",
                 ]))
-        # maybe show a clickable interactive bubble when a stat is low
-        if not self.state["sleeping"]:
+        # Hunger and mood may ask for help. Low energy is handled by the
+        # autonomous walk-to-corner sleep flow instead of a random bubble.
+        if (not self.state["sleeping"]
+                and self._auto_sleep_phase != "walking"):
             self.maybe_show_interactive_bubble()
 
     def maybe_show_interactive_bubble(self):
-        """When hunger/mood/energy is low, sometimes pop a clickable action
-        bubble above the pet. Clicking it performs the action and shows a
-        floating '+N stat' bonus bubble."""
+        """Occasionally offer a warm action bubble for hunger or low mood."""
         if not self.isVisible():
             return
         # already showing one? skip
@@ -3558,14 +4643,16 @@ class PetWindow(QWidget):
         # don't pop while dragging or sleeping or chat open
         if self.dragging or self.state.get("sleeping"):
             return
-        # decide which stat is most urgent and roll the dice
+        # Energy is deliberately absent: tiredness uses autonomous sleep.
         candidates = []
         if self.state["hunger"] < 40:
-            candidates.append(("feed",  "🦴 喂我",   "#ff8c42", "饱腹"))
+            candidates.append((
+                "feed", "肚子饿啦 · 喂喂我", "#f39a68", "饱腹"
+            ))
         if self.state["mood"] < 40:
-            candidates.append(("play",  "🎾 陪我玩", "#4aa8ff", "心情"))
-        if self.state["energy"] < 40:
-            candidates.append(("sleep", "💤 让我睡", "#9b6bff", "精力"))
+            candidates.append((
+                "play", "有点难过 · 陪我玩", "#75cda8", "心情"
+            ))
         if not candidates:
             return
         # ~25% chance per decay tick (every 2s) when a stat is low ->
@@ -3578,11 +4665,9 @@ class PetWindow(QWidget):
         self._last_interactive_t = time.time()
         # also show a tiny speech line to draw attention
         if action == "feed":
-            self.say("汪…好饿 🦴", 2500)
+            self.say("肚子咕咕叫啦，主人看看我～", 2500)
         elif action == "play":
-            self.say("想玩 🎾", 2500)
-        else:
-            self.say("困了… 💤", 2500)
+            self.say("心情有点低落，陪我玩一会儿嘛～", 2500)
 
     def refresh_pose_from_state(self):
         if self.state["sleeping"]:
@@ -3600,6 +4685,9 @@ class PetWindow(QWidget):
     # ---------- autonomous behavior ----------
     def on_autonomy(self):
         now = time.time()
+        auto_sleep_event = self._update_auto_sleep_state(now)
+        if auto_sleep_event in ("walking", "woke"):
+            return
         # AI proactive nudge check (runs even if sleeping? no—sleeping skip)
         if not self.state["sleeping"]:
             self.check_ai_nudge()
@@ -3698,30 +4786,85 @@ class PetWindow(QWidget):
             self.say("呼…睡着呢💤"); return
         if self.state["energy"] < 15:
             self.say("没力气了…"); return
+        if self.play_scene is not None:
+            try:
+                self.play_scene.raise_()
+            except RuntimeError:
+                self.play_scene = None
+            return
         self.state["mood"] = min(100, self.state["mood"] + 20)
         self.state["energy"] = max(0, self.state["energy"] - 12)
         self.state["hunger"] = max(0, self.state["hunger"] - 5)
-        # jump!
-        self.vy = -950
-        self.vx = random.choice([-1,1]) * 350
-        self.on_ground = False
-        self.trigger_animation("play", 1500)
-        self.say("汪汪！接球！🎾", 1500)
+        self.behavior = "idle"
+        self.target_vx = 0
+        self.vx = 0
+        self.vy = 0
+        self.on_ground = True
         self.play_sound("bark")
         self.add_xp(12)
         save_state(self.state)
-        # happy pose briefly, then back to idle
-        self.pose = POSE["happy"]
-        QTimer.singleShot(1500, self.refresh_pose_from_state)
+        self._play_return_pos = QPoint(self.pos())
+        scene = FetchPlayScene(self, self._on_play_scene_finished)
+        self.play_scene = scene
+        self.hide()
+        scene.start()
+
+    def _restore_after_play(self, show_pet):
+        if self._play_return_pos is not None:
+            self.move(QPoint(self._play_return_pos))
+        self._play_return_pos = None
+        self.behavior = "idle"
+        self.target_vx = 0
+        self.vx = 0
+        self.vy = 0
+        self.on_ground = True
+        self.pose = POSE["idle"]
+        self.next_behavior_at = time.time() + random.uniform(2, 5)
+        self.refresh_pose_from_state()
+        if show_pet:
+            self.show()
+            self.raise_()
+
+    def _on_play_scene_finished(self, scene, completed):
+        if scene is not self.play_scene:
+            return
+        self.play_scene = None
+        self._restore_after_play(show_pet=True)
+        if completed:
+            self.say(random.choice([
+                "接住啦！🎾",
+                "嘿！我扑到球啦～",
+                "汪汪，再来一次！",
+            ]), 1900)
+            self.play_sound("bark")
+
+    def cancel_play_scene(self, show_pet=True):
+        scene = self.play_scene
+        if scene is None:
+            return False
+        self.play_scene = None
+        try:
+            scene.cancel(notify=False)
+        except RuntimeError:
+            pass
+        self._restore_after_play(show_pet=show_pet)
+        return True
 
     def toggle_sleep(self):
-        self.state["sleeping"] = not self.state["sleeping"]
+        was_sleeping = bool(self.state.get("sleeping"))
+        self.state["sleeping"] = not was_sleeping
+        self._auto_sleep_phase = None
+        self._auto_sleep_target_x = None
         if self.state["sleeping"]:
+            # Manual sleep is intentionally excluded from automatic wake-up.
+            self.state["sleep_mode"] = "manual"
             self.behavior = "idle"; self.target_vx = 0; self.vx = 0
-            self.say("zzz…晚安💤", 2000)
+            self.say("晚安主人，我会乖乖睡到你叫醒我～", 2400)
             self.play_sound("sleep")
         else:
-            self.say("精神百倍！☀️", 1800)
+            self.state["sleep_mode"] = None
+            self._auto_sleep_snooze_until = time.time() + 45.0
+            self.say("醒来啦！又可以陪主人了～", 2000)
             self.play_sound("bark")
         save_state(self.state)
         self.refresh_pose_from_state()
@@ -3731,6 +4874,10 @@ class PetWindow(QWidget):
         if not self.state.get("sleeping"):
             return False
         self.state["sleeping"] = False
+        self.state["sleep_mode"] = None
+        self._auto_sleep_phase = None
+        self._auto_sleep_target_x = None
+        self._auto_sleep_snooze_until = time.time() + 60.0
         self._woke_from_shake = True
         self._wake_shake.reset()
         self._animation_override_token += 1
@@ -3758,10 +4905,9 @@ class PetWindow(QWidget):
         self.say(random.choice(["汪汪！","好舒服～","再摸摸！","嘿嘿","爱你哟","蹭蹭你"]),
                  random.randint(1000, 1800))
         self.play_sound("pet")
-        # happy pose briefly
+        # Play every petting frame once, then return to the current state.
         self.pose = POSE["happy"]
-        self.trigger_animation("happy", 1200)
-        QTimer.singleShot(1200, self.refresh_pose_from_state)
+        self.trigger_animation("pet")
         self.add_xp(3)
         save_state(self.state)
 
@@ -3893,6 +5039,14 @@ class TrayApp:
 
     def activate_existing_instance(self):
         """Bring the existing pet back when Petpet is launched again."""
+        scene = self.pet.play_scene
+        if scene is not None:
+            try:
+                if scene.isVisible():
+                    scene.raise_()
+                    return
+            except RuntimeError:
+                self.pet.play_scene = None
         if not self.pet.isVisible():
             self.pet.show()
         self.pet.raise_()
@@ -4225,12 +5379,17 @@ class TrayApp:
         # pick lowest stat
         s = self.pet.state
         candidates = []
-        if s["hunger"] < 100: candidates.append(("feed",  "🦴 喂我",   "#ff8c42"))
-        if s["mood"]   < 100: candidates.append(("play",  "🎾 陪我玩", "#4aa8ff"))
-        if s["energy"] < 100: candidates.append(("sleep", "💤 让我睡", "#9b6bff"))
+        if s["hunger"] < 100:
+            candidates.append((
+                "feed", "肚子饿啦 · 喂喂我", "#f39a68"
+            ))
+        if s["mood"] < 100:
+            candidates.append((
+                "play", "有点难过 · 陪我玩", "#75cda8"
+            ))
         if not candidates: return
         # choose the lowest
-        order = {"feed": s["hunger"], "play": s["mood"], "sleep": s["energy"]}
+        order = {"feed": s["hunger"], "play": s["mood"]}
         candidates.sort(key=lambda c: order[c[0]])
         action, label, color = candidates[0]
         if self.pet._interactive_bubble is not None:
@@ -4252,6 +5411,14 @@ class TrayApp:
             self.toggle_visible()
 
     def toggle_visible(self):
+        scene = self.pet.play_scene
+        if scene is not None:
+            try:
+                if scene.isVisible():
+                    self.pet.cancel_play_scene(show_pet=False)
+                    return
+            except RuntimeError:
+                self.pet.play_scene = None
         if self.pet.isVisible():
             self.pet.hide_overlays()
             self.pet.hide()
@@ -4325,6 +5492,7 @@ class TrayApp:
             plistlib.dump(payload, f)
 
     def quit(self):
+        self.pet.cancel_play_scene(show_pet=False)
         if self.pet.chat_win is not None:
             self.pet.chat_win.close()
         self.state["x"] = self.pet.x()

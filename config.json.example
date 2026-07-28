@@ -1,1 +1,4 @@
-﻿{"api_key": "在此填入你的智谱 API key"}
+{
+  "api_key": "在此填入你的智谱 API key",
+  "model": "glm-4-flash"
+}
