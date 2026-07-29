@@ -26,6 +26,10 @@ class WindowsPackagingTests(unittest.TestCase):
             '"Petpet-windows.manifest")',
             spec,
         )
+        self.assertIn(
+            '(str(assets_root / "props"), "assets/props")',
+            spec,
+        )
 
     def test_qt_windows_scaling_is_fixed_to_authored_pixels(self):
         source = (ROOT / "pet.py").read_text(encoding="utf-8")

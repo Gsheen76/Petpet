@@ -10,6 +10,7 @@ from PyQt5.QtGui import QColor, QImage, QPainter
 from PyQt5.QtWidgets import QApplication, QMenu
 
 import pet
+import progression
 
 
 class FakePet:
@@ -50,7 +51,10 @@ class MenuUiTests(unittest.TestCase):
         )
         self.assertEqual(
             [action for _, _, action, _ in pet.BubbleMenu.MORE_ACTIONS],
-            ["settings", "hide", "tutorial", "back", "quit"],
+            [
+                "records", "achievements", "shop", "settings",
+                "hide", "tutorial", "back", "quit",
+            ],
         )
         self.assertEqual(
             [action for _, _, action, _ in pet.BubbleMenu.MORE_ACTIONS][-2:],
@@ -145,6 +149,65 @@ class MenuUiTests(unittest.TestCase):
             if QColor.fromRgba(image.pixel(x, y)).alpha() > 0
         )
         self.assertGreater(colored, 180)
+
+    def test_equipped_collar_is_painted_from_pose_anchor(self):
+        state = progression.ensure_progression({})
+        progression.purchase_decoration(state, "red_collar")
+        progression.equip_decoration(state, "red_collar")
+        harness = SimpleNamespace(
+            state=state,
+            _resolve_neck_anchor=pet.PetWindow._resolve_neck_anchor,
+            _cubic_midpoint=pet.PetWindow._cubic_midpoint,
+        )
+        image = QImage(190, 220, QImage.Format_ARGB32)
+        image.fill(Qt.transparent)
+        painter = QPainter(image)
+
+        pet.PetWindow._draw_equipped_decoration_layer(
+            harness, painter, "idle", QRectF(0, 60, 190, 160),
+            "rear",
+        )
+        pet.PetWindow._draw_equipped_decoration_layer(
+            harness, painter, "idle", QRectF(0, 60, 190, 160),
+            "front",
+        )
+        painter.end()
+
+        colored = sum(
+            1
+            for y in range(image.height())
+            for x in range(image.width())
+            if QColor.fromRgba(image.pixel(x, y)).alpha() > 0
+        )
+        self.assertGreater(colored, 500)
+
+    def test_collar_hides_during_unreliable_complex_animation(self):
+        state = progression.ensure_progression({})
+        progression.purchase_decoration(state, "red_collar")
+        progression.equip_decoration(state, "red_collar")
+        harness = SimpleNamespace(
+            state=state,
+            _resolve_neck_anchor=pet.PetWindow._resolve_neck_anchor,
+            _cubic_midpoint=pet.PetWindow._cubic_midpoint,
+        )
+        image = QImage(190, 220, QImage.Format_ARGB32)
+        image.fill(Qt.transparent)
+        painter = QPainter(image)
+
+        for layer in ("rear", "front"):
+            pet.PetWindow._draw_equipped_decoration_layer(
+                harness, painter, "walk", QRectF(0, 60, 190, 160),
+                layer, 0,
+            )
+        painter.end()
+
+        colored = sum(
+            1
+            for y in range(image.height())
+            for x in range(image.width())
+            if QColor.fromRgba(image.pixel(x, y)).alpha() > 0
+        )
+        self.assertEqual(colored, 0)
 
     def test_hiding_pet_closes_all_detached_bubbles(self):
         speech = SimpleNamespace(

@@ -1,0 +1,3 @@
+"""Single source of truth for Petpet's public version."""
+
+VERSION = "1.3.0"

@@ -21,6 +21,7 @@ from app_paths import (
     ICONS_DIR,
     MAC_BUNDLE_ID,
     POSES_DIR,
+    PROPS_DIR,
     RESOURCE_DIR,
     SOUNDS_DIR,
 )
@@ -35,7 +36,8 @@ from updater import (
 )
 
 # ---------- version & update ----------
-VERSION = "1.2.4"
+from version import VERSION
+
 IS_WINDOWS = sys.platform.startswith("win")
 IS_MACOS = sys.platform == "darwin"
 IS_FROZEN = bool(getattr(sys, "frozen", False))
@@ -61,6 +63,8 @@ from PyQt5.QtCore import (
 # AI engine (same folder)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import buddy_ai as ai
+import progression
+from progression_ui import AchievementsWindow, RecordsWindow, ShopWindow
 
 # Sound (optional — QtMultimedia may not be installed)
 try:
@@ -418,6 +422,9 @@ DEFAULT_STATE = {
     "born": time.time(),
     "autostart": False,
     "level": 1, "xp": 0,
+    "affection_level": 1, "affection_points": 0,
+    "passive_xp_buffer": 0.0,
+    "pet_coins": 0,
     "pet_name": ai.DEFAULT_PET_NAME,
     "tutorial_completed": False,
 }
@@ -425,12 +432,6 @@ DEFAULT_STATE = {
 # XP needed to go from level L to L+1: 100 * L^1.5 (slowing curve)
 def xp_to_next(level):
     return int(100 * (level ** 1.5))
-
-# passive XP per tick based on average stat (0..100). Tick = 60s.
-# avg=100 -> +6 xp/min; avg=50 -> +1.5 xp/min; avg=0 -> +0
-def passive_xp(hunger, mood, energy):
-    avg = (hunger + mood + energy) / 3.0
-    return avg * 0.06
 
 def load_state():
     try:
@@ -449,9 +450,9 @@ def load_state():
                     state["sleep_mode"] = "manual"
             else:
                 state["sleep_mode"] = None
-            return state
+            return progression.ensure_progression(state)
     except Exception:
-        return dict(DEFAULT_STATE)
+        return progression.ensure_progression(dict(DEFAULT_STATE))
 
 def save_state(s):
     try:
@@ -963,6 +964,10 @@ class ChatWindow(QWidget):
         text = self.input.text().strip()
         if not text:
             return
+        # A real sent message counts as a chat interaction. Merely opening
+        # and closing the panel no longer grants affection.
+        progression.record_action(self.pet.state, "chats_opened")
+        save_state(self.pet.state)
         self.input.clear()
         # add user bubble immediately
         self._pending_user = text
@@ -2029,7 +2034,7 @@ class StatBubble(QWidget):
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WA_ShowWithoutActivating, True)
         self.setAttribute(Qt.WA_DeleteOnClose, True)
-        self.setFixedSize(620, 330)
+        self.setFixedSize(620, 416)
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
         self._timer.start(500)  # refresh stats 2x/sec
@@ -2129,11 +2134,29 @@ class StatBubble(QWidget):
         days = max(1, int((time.time() - st.get("born", time.time())) / 86400))
 
         # ---- Header: title and companionship badge never share a text rect. ----
-        title_rect = QRectF(27, 15, 330, 40)
+        title_text = f"🐾 {self.pet.pet_name} 的小屋"
+        title_rect = QRectF(27, 15, 300, 40)
         p.setPen(QColor("#7b4d3a"))
-        p.setFont(pixel_font(16, QFont.Bold))
+        p.setFont(self._fit_font(
+            title_text, 16, title_rect.width(), QFont.Bold, 7
+        ))
         p.drawText(title_rect, Qt.AlignLeft | Qt.AlignVCenter,
-                   f"🐾 {self.pet.pet_name} 的小屋")
+                   title_text)
+
+        coin_text = f"Pet币 {st.get('pet_coins', 0)}"
+        coin_rect = QRectF(W - 278, 18, 90, 33)
+        p.setBrush(QColor(255, 241, 198, 240))
+        p.setPen(QPen(QColor("#e8be68"), 1))
+        p.drawRoundedRect(coin_rect, 16, 16)
+        p.setPen(QColor("#a66a26"))
+        p.setFont(self._fit_font(
+            coin_text, 9, coin_rect.width() - 12, QFont.Bold, 6
+        ))
+        p.drawText(
+            coin_rect.adjusted(6, 0, -6, 0),
+            Qt.AlignCenter | Qt.TextSingleLine,
+            coin_text,
+        )
 
         days_text = f"♡ 陪伴第 {days} 天"
         days_rect = QRectF(W - 179, 18, 153, 33)
@@ -2168,12 +2191,21 @@ class StatBubble(QWidget):
 
         xp_area_x = 158
         xp_area_w = W - xp_area_x - 34
+        xp_rate = progression.passive_xp_per_minute(st)
+        rate_text = f"经验  +{xp_rate:.1f} EXP/min"
         p.setPen(QColor("#8a6654"))
-        p.setFont(pixel_font(10, QFont.Bold))
-        p.drawText(QRectF(xp_area_x, 76, 104, 23),
-                   Qt.AlignLeft | Qt.AlignVCenter, "经验")
+        p.setFont(self._fit_font(
+            rate_text, 10, 202, QFont.Bold, 7
+        ))
+        p.drawText(
+            QRectF(xp_area_x, 76, 202, 23),
+            Qt.AlignLeft | Qt.AlignVCenter | Qt.TextSingleLine,
+            rate_text,
+        )
         xp_text = f"{xp} / {need} EXP"
-        xp_value_rect = QRectF(xp_area_x + 108, 76, xp_area_w - 108, 23)
+        xp_value_rect = QRectF(
+            xp_area_x + 205, 76, xp_area_w - 205, 23
+        )
         p.setFont(self._fit_font(xp_text, 10, xp_value_rect.width(),
                                  QFont.Bold, 6))
         p.setPen(QColor("#b47b31"))
@@ -2193,6 +2225,71 @@ class StatBubble(QWidget):
         p.setBrush(xp_grad)
         p.drawRoundedRect(xp_fill, 7, 7)
 
+        # ---- Affection: its level alone controls passive EXP per second. ----
+        affection_level = int(st.get("affection_level", 1))
+        affection_points = int(st.get("affection_points", 0))
+        affection_need = progression.affection_to_next(affection_level)
+        affection_card = QRectF(22, 154, W - 44, 70)
+        affection_bg = QLinearGradient(
+            affection_card.topLeft(), affection_card.topRight()
+        )
+        affection_bg.setColorAt(0.0, QColor(255, 232, 229, 210))
+        affection_bg.setColorAt(1.0, QColor(255, 246, 225, 210))
+        p.setBrush(affection_bg)
+        p.setPen(QPen(QColor("#efb5a7"), 1))
+        p.drawRoundedRect(affection_card, 17, 17)
+
+        heart_rect = QRectF(35, 166, 45, 45)
+        p.setBrush(QColor(255, 255, 255, 210))
+        p.setPen(Qt.NoPen)
+        p.drawEllipse(heart_rect)
+        p.setPen(QColor("#ef877c"))
+        p.setFont(pixel_font(20, QFont.Bold))
+        p.drawText(heart_rect, Qt.AlignCenter, "♡")
+
+        affection_title = f"好感 Lv.{affection_level}"
+        p.setPen(QColor("#82584f"))
+        p.setFont(self._fit_font(
+            affection_title, 11, 122, QFont.Bold, 8
+        ))
+        p.drawText(
+            QRectF(91, 159, 122, 29),
+            Qt.AlignLeft | Qt.AlignVCenter | Qt.TextSingleLine,
+            affection_title,
+        )
+        affection_value = f"{affection_points} / {affection_need}"
+        p.setPen(QColor("#d37469"))
+        p.setFont(self._fit_font(
+            affection_value, 10, 94, QFont.Bold, 7
+        ))
+        p.drawText(
+            QRectF(210, 159, 94, 29),
+            Qt.AlignRight | Qt.AlignVCenter | Qt.TextSingleLine,
+            affection_value,
+        )
+
+        affection_bar = QRectF(91, 196, W - 126, 10)
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor(246, 220, 210))
+        p.drawRoundedRect(affection_bar, 5, 5)
+        affection_progress = max(
+            0.0,
+            min(1.0, affection_points / max(1, affection_need)),
+        )
+        affection_fill = QRectF(
+            affection_bar.left(),
+            affection_bar.top(),
+            affection_bar.width() * affection_progress,
+            affection_bar.height(),
+        )
+        affection_grad = QLinearGradient(
+            affection_bar.topLeft(), affection_bar.topRight()
+        )
+        affection_grad.setColorAt(0.0, QColor("#f18d88"))
+        affection_grad.setColorAt(1.0, QColor("#ffc28f"))
+        p.setBrush(affection_grad)
+        p.drawRoundedRect(affection_fill, 5, 5)
+
         # ---- Three stat cards with dedicated name/value/status regions. ----
         stats = [
             ("hunger", "饱腹", st.get("hunger", 0), "#f49a62",
@@ -2205,7 +2302,7 @@ class StatBubble(QWidget):
         pad = 20
         gap = 12
         card_w = (W - pad * 2 - gap * 2) / 3
-        card_y = 157
+        card_y = 238
         card_h = 145
         for i, (icon_kind, name, val, color, moods) in enumerate(stats):
             val = max(0.0, min(100.0, float(val)))
@@ -2256,7 +2353,7 @@ class StatBubble(QWidget):
 
 
 class BubbleMenu(QWidget):
-    """Five soft candy-style action buttons with a warm growth card."""
+    """Soft candy-style action buttons with a warm growth card."""
     PRIMARY_ACTIONS = [
         ("💬", "聊天", "chat", "#ef8fa2"),
         ("🍖", "喂食", "feed", "#f49a62"),
@@ -2265,6 +2362,9 @@ class BubbleMenu(QWidget):
         ("⋯", "更多", "more", "#e7ae64"),
     ]
     MORE_ACTIONS = [
+        ("📒", "记录", "records", "#df9f6f"),
+        ("🏅", "成就", "achievements", "#efa47d"),
+        ("🛍", "商店", "shop", "#e0a85f"),
         ("⚙️", "设置", "settings", "#e7ae64"),
         ("👁", "隐藏", "hide", "#79a9d8"),
         ("📖", "教程", "tutorial", "#d392bd"),
@@ -2289,10 +2389,8 @@ class BubbleMenu(QWidget):
         self.setAttribute(Qt.WA_DeleteOnClose, True)
 
         # Larger hit targets with room for both icon and label.
-        self.W = 590 if self.page == "primary" else max(
-            480, len(self.actions) * 102 + (len(self.actions) - 1) * 10 + 40
-        )
-        self.H = 112
+        self.W = 590 if self.page == "primary" else 500
+        self.H = 112 if self.page == "primary" else 204
         self.resize(self.W, self.H)
         self._bubble_rects = []
         self._hover = -1
@@ -2360,11 +2458,20 @@ class BubbleMenu(QWidget):
         button_w = 102
         button_h = 78
         gap = 10
-        total_w = n * button_w + (n - 1) * gap
+        columns = n if self.page == "primary" else 4
+        rows = int(math.ceil(n / columns))
+        total_w = columns * button_w + (columns - 1) * gap
+        total_h = rows * button_h + (rows - 1) * gap
         start_x = (self.W - total_w) / 2
-        cy = self.H / 2
+        start_y = (self.H - total_h) / 2
+        has_claimable = progression.has_claimable_achievements(
+            self.pet.state
+        )
         for i, (emoji, label, action, color) in enumerate(self.actions):
-            bx = start_x + i * (button_w + gap)
+            row = i // columns
+            column = i % columns
+            bx = start_x + column * (button_w + gap)
+            by = start_y + row * (button_h + gap)
             scale = 1.0 + self._hover_scales[i] * 0.07
             if self._press == i:
                 scale *= 0.96
@@ -2372,7 +2479,7 @@ class BubbleMenu(QWidget):
             bh = button_h * scale
             rect = QRectF(
                 bx + (button_w - bw) / 2,
-                cy - bh / 2,
+                by + (button_h - bh) / 2,
                 bw, bh,
             )
             self._bubble_rects.append((i, rect, action, color, emoji))
@@ -2409,6 +2516,19 @@ class BubbleMenu(QWidget):
             p.drawText(QRectF(rect.x() + 5, rect.y() + 43,
                               rect.width() - 10, 25),
                        Qt.AlignCenter | Qt.TextSingleLine, label)
+
+            # Claimable achievements place a clear red reminder on both the
+            # primary "更多" entry and the secondary "成就" entry.
+            if (
+                action in ("more", "achievements")
+                and has_claimable
+            ):
+                dot_center = QPointF(rect.right() - 10, rect.top() + 10)
+                p.setBrush(QColor(255, 255, 255))
+                p.setPen(Qt.NoPen)
+                p.drawEllipse(dot_center, 8, 8)
+                p.setBrush(QColor("#ee5e62"))
+                p.drawEllipse(dot_center, 5.5, 5.5)
 
     def mouseMoveEvent(self, e):
         pos = e.pos()
@@ -2463,6 +2583,12 @@ class BubbleMenu(QWidget):
             pet.toggle_sleep()
         elif action == "settings":
             pet.open_settings()
+        elif action == "records":
+            pet.open_records()
+        elif action == "achievements":
+            pet.open_achievements()
+        elif action == "shop":
+            pet.open_shop()
         elif action in ("hide", "tutorial", "quit"):
             self._close()
             callback = getattr(pet, "_app_action_cb", None)
@@ -2684,7 +2810,14 @@ class InteractiveBubble(QWidget):
         Compute deltas from before/after state so feedback is always shown,
         even if the pet was sleeping (we wake it first)."""
         pet = self.pet
+        progression.ensure_progression(pet.state)
         before = dict(pet.state)
+        before_xp_earned = pet.state["records"]["xp_earned"]
+        before_affection_earned = pet.state["records"]["affection_earned"]
+        before_affection_level = int(
+            pet.state.get("affection_level", 1)
+        )
+        before_level = int(pet.state.get("level", 1))
         acted = True
         # wake the pet if sleeping, so feed/play actually take effect
         if pet.state.get("sleeping") and self.action_name in ("feed", "play"):
@@ -2695,19 +2828,24 @@ class InteractiveBubble(QWidget):
             pet._auto_sleep_snooze_until = time.time() + 60.0
             pet.refresh_pose_from_state()
         if self.action_name == "feed":
-            pet.feed()
+            pet.feed(grant_xp=False)
         elif self.action_name == "play":
-            if pet.state["energy"] < 15:
+            play_cost = progression.upgrade_effects(
+                pet.state
+            )["play_energy_cost"]
+            if pet.state["energy"] < 15 and play_cost > 0:
                 pet.state["mood"] = min(100, pet.state["mood"] + 6)
                 pet.say("没力气…摸摸我也行", 1500)
                 acted = False
             else:
-                pet.play()
+                pet.play(grant_xp=False)
         elif self.action_name == "sleep":
             pet.state["energy"] = min(100, pet.state["energy"] + 30)
+            progression.grant_interaction_affection(
+                pet.state, "rest_bubble"
+            )
             pet.say("小憩一下 💤", 1800)
             pet.refresh_pose_from_state()
-            pet.add_xp(5)
             save_state(pet.state)
 
         # compute deltas from before vs after state
@@ -2719,11 +2857,28 @@ class InteractiveBubble(QWidget):
                 sign = "+" if d > 0 else ""
                 deltas.append(f"{name}{sign}{int(round(d))}")
 
-        xp_gain = 15 if (self.action_name == "play" and acted) else 10
-        leveled_up = pet.add_xp(xp_gain)
+        xp_gain = max(
+            0, pet.state["records"]["xp_earned"] - before_xp_earned
+        )
+        leveled_up = int(pet.state.get("level", 1)) > before_level
 
         parts = list(deltas)
-        parts.append(f"EXP+{xp_gain}")
+        affection_gain = max(
+            0,
+            pet.state["records"]["affection_earned"]
+            - before_affection_earned,
+        )
+        if affection_gain:
+            parts.append(f"好感+{affection_gain}")
+        if (
+            int(pet.state.get("affection_level", 1))
+            > before_affection_level
+        ):
+            parts.append(
+                f"好感Lv.{pet.state.get('affection_level', 1)}"
+            )
+        if xp_gain:
+            parts.append(f"EXP+{xp_gain}")
         if leveled_up:
             parts.append(f"LVUP→{pet.state.get('level',1)}")
         bonus_text = "  ".join(parts) if parts else "✨"
@@ -3069,9 +3224,7 @@ class FetchPlayScene(QWidget):
         except (TypeError, ValueError):
             self.fps = 14.0
 
-        ball_path = os.path.join(
-            ANIMATIONS_DIR, "sources", "fetch_ball.png"
-        )
+        ball_path = os.path.join(PROPS_DIR, "fetch_ball.png")
         self.ball_pixmap = QPixmap(ball_path)
         if not self.ball_pixmap.isNull():
             visible = QRegion(self.ball_pixmap.mask()).boundingRect()
@@ -3292,9 +3445,15 @@ class FetchPlayScene(QWidget):
             baseline.y() - size * self.FRAME_BASELINE_RATIO,
             size, size,
         )
+        self.pet._draw_equipped_decoration_layer(
+            painter, "play", target, "rear", int(frame_index)
+        )
         painter.drawPixmap(
             target, pixmap,
             QRectF(0, 0, pixmap.width(), pixmap.height()),
+        )
+        self.pet._draw_equipped_decoration_layer(
+            painter, "play", target, "front", int(frame_index)
         )
 
     def _draw_celebration(self, painter, now):
@@ -3613,6 +3772,9 @@ class PetWindow(QWidget):
         self.last_nudge_check = time.time()
         self.chat_win = None  # lazy-created on first chat
         self.settings_win = None  # lazy-created on first settings open
+        self.records_win = None
+        self.achievements_win = None
+        self.shop_win = None
         self.play_scene = None  # zoomed-out interactive fetch scene
         self._play_return_pos = None
         self._interactive_bubble = None  # current floating action bubble
@@ -3646,10 +3808,11 @@ class PetWindow(QWidget):
         self.autonomy.timeout.connect(self.on_autonomy)
         self.autonomy.start(1000)
 
-        # passive XP accrual (every 60s, based on average stat)
+        # Passive XP accrual is fractional and updates every second. Its rate
+        # depends on affection, never on hunger/mood/energy.
         self.xp_timer = QTimer(self)
         self.xp_timer.timeout.connect(self.on_passive_xp)
-        self.xp_timer.start(60000)
+        self.xp_timer.start(1000)
 
         # health reminders
         self._last_drink_t = time.time()
@@ -3711,33 +3874,42 @@ class PetWindow(QWidget):
         if msgs:
             self.say(random.choice(msgs), 4500)
 
-    def add_xp(self, amount):
+    def add_xp(self, amount, *, apply_bonus=True):
         """Add XP, level up if threshold met. Returns True if leveled up."""
+        if apply_bonus:
+            amount = progression.apply_xp_bonus(self.state, amount)
+        else:
+            amount = progression.record_xp(self.state, amount)
         if amount <= 0:
             return False
         self.state["xp"] = self.state.get("xp", 0) + amount
         leveled = False
+        levels_gained = 0
         while True:
             need = xp_to_next(self.state.get("level", 1))
             if self.state["xp"] >= need:
                 self.state["xp"] -= need
                 self.state["level"] = self.state.get("level", 1) + 1
                 leveled = True
+                levels_gained += 1
             else:
                 break
+        if levels_gained:
+            self.state["records"]["level_ups"] += levels_gained
         save_state(self.state)
         return leveled
 
     def on_passive_xp(self):
-        """Passive XP from keeping stats high (rewards good care)."""
-        if self.state.get("sleeping"):
-            # sleeping gives half passive XP
-            gain = passive_xp(self.state["hunger"], self.state["mood"], self.state["energy"]) * 0.5
-        else:
-            gain = passive_xp(self.state["hunger"], self.state["mood"], self.state["energy"])
-        if gain <= 0:
+        """Accumulate affection-driven passive XP once per second."""
+        progression.record_active_time(self.state, 1)
+        rate = progression.passive_xp_per_second(self.state)
+        buffer_value = float(self.state.get("passive_xp_buffer", 0.0))
+        buffer_value += rate
+        whole_xp = int(buffer_value)
+        self.state["passive_xp_buffer"] = buffer_value - whole_xp
+        if whole_xp <= 0:
             return
-        leveled = self.add_xp(int(round(gain)))
+        leveled = self.add_xp(whole_xp, apply_bonus=False)
         if leveled:
             self.say(f"升级啦！Lv.{self.state.get('level',1)} 🎉", 2500)
             g = self.geometry()
@@ -3913,6 +4085,220 @@ class PetWindow(QWidget):
             if frames:
                 self.animation_frames[name] = frames
 
+    @staticmethod
+    def _resolve_neck_anchor(definition, animation_name, frame_index=None):
+        """Resolve pose anchors, including interpolated per-frame keyframes."""
+        anchors = definition.get("neck_anchors", {})
+        source = anchors.get(
+            animation_name, anchors.get("default")
+        )
+        if not isinstance(source, dict):
+            return None
+        anchor = {
+            key: value for key, value in source.items()
+            if key not in ("keyframes", "frame_y_offsets")
+        }
+        keyframes = source.get("keyframes")
+        if isinstance(keyframes, dict) and frame_index is not None:
+            parsed = sorted(
+                (
+                    (int(index), values)
+                    for index, values in keyframes.items()
+                    if isinstance(values, dict)
+                ),
+                key=lambda item: item[0],
+            )
+            if parsed:
+                before = parsed[0]
+                after = parsed[-1]
+                for item in parsed:
+                    if item[0] <= frame_index:
+                        before = item
+                    if item[0] >= frame_index:
+                        after = item
+                        break
+                span = max(1, after[0] - before[0])
+                progress_value = max(
+                    0.0, min(1.0, (frame_index - before[0]) / span)
+                )
+                for key in ("left", "right"):
+                    start = before[1].get(key, anchor.get(key))
+                    end = after[1].get(key, start)
+                    if (
+                        isinstance(start, (list, tuple))
+                        and isinstance(end, (list, tuple))
+                        and len(start) >= 2 and len(end) >= 2
+                    ):
+                        anchor[key] = [
+                            float(start[0])
+                            + (float(end[0]) - float(start[0]))
+                            * progress_value,
+                            float(start[1])
+                            + (float(end[1]) - float(start[1]))
+                            * progress_value,
+                        ]
+        offsets = source.get("frame_y_offsets")
+        if (
+            isinstance(offsets, (list, tuple))
+            and frame_index is not None
+            and offsets
+        ):
+            offset = float(offsets[frame_index % len(offsets)])
+            for key in ("left", "right"):
+                point = anchor.get(key)
+                if isinstance(point, (list, tuple)) and len(point) >= 2:
+                    anchor[key] = [float(point[0]), float(point[1]) + offset]
+        return anchor
+
+    @staticmethod
+    def _cubic_midpoint(start, control1, control2, end):
+        return QPointF(
+            (
+                start.x() + 3 * control1.x()
+                + 3 * control2.x() + end.x()
+            ) / 8.0,
+            (
+                start.y() + 3 * control1.y()
+                + 3 * control2.y() + end.y()
+            ) / 8.0,
+        )
+
+    def _draw_equipped_decoration_layer(
+            self, painter, animation_name, dog_rect, layer,
+            frame_index=None):
+        """Draw collar halves around the dog instead of over it as a sticker."""
+        progression.ensure_progression(self.state)
+        equipped = self.state.get("equipped_decorations", {})
+        for category in progression.DECORATION_CATEGORIES:
+            decoration_id = equipped.get(category)
+            definition = progression.DECORATION_DEFINITIONS.get(
+                decoration_id
+            )
+            if definition is None:
+                continue
+            renderer = definition.get("renderer", {})
+            if renderer.get("type") != "layered_collar":
+                continue
+            visible_animations = renderer.get("visible_animations")
+            if (
+                isinstance(visible_animations, (list, tuple, set))
+                and animation_name not in visible_animations
+            ):
+                continue
+            anchor = self._resolve_neck_anchor(
+                definition, animation_name, frame_index
+            )
+            if not anchor or anchor.get("visible", True) is False:
+                continue
+            if (
+                layer == "rear"
+                and anchor.get("rear_visible", True) is False
+            ):
+                continue
+            left_value = anchor.get("left")
+            right_value = anchor.get("right")
+            if (
+                not isinstance(left_value, (list, tuple))
+                or not isinstance(right_value, (list, tuple))
+                or len(left_value) < 2 or len(right_value) < 2
+            ):
+                continue
+            left = QPointF(
+                dog_rect.left() + dog_rect.width() * float(left_value[0]),
+                dog_rect.top()
+                + dog_rect.height() * float(left_value[1]),
+            )
+            right = QPointF(
+                dog_rect.left() + dog_rect.width() * float(right_value[0]),
+                dog_rect.top()
+                + dog_rect.height() * float(right_value[1]),
+            )
+            thickness = max(
+                2.5,
+                dog_rect.width() * float(anchor.get("thickness", 0.03)),
+            )
+            sag = dog_rect.height() * float(anchor.get("sag", 0.03))
+            delta_x = right.x() - left.x()
+            average_y = (left.y() + right.y()) / 2.0
+            curve_y = average_y + (
+                sag if layer == "front" else -sag * 0.55
+            )
+            control1 = QPointF(left.x() + delta_x * 0.28, curve_y)
+            control2 = QPointF(right.x() - delta_x * 0.28, curve_y)
+            path = QPainterPath(left)
+            path.cubicTo(control1, control2, right)
+
+            painter.save()
+            painter.setBrush(Qt.NoBrush)
+            painter.setPen(QPen(
+                QColor(renderer.get("strap_dark", "#9f302f")),
+                thickness + 2.0, Qt.SolidLine, Qt.RoundCap,
+            ))
+            painter.drawPath(path)
+            strap_color = (
+                renderer.get("strap", "#e84f4b")
+                if layer == "front"
+                else renderer.get("strap_dark", "#9f302f")
+            )
+            painter.setPen(QPen(
+                QColor(strap_color),
+                thickness, Qt.SolidLine, Qt.RoundCap,
+            ))
+            painter.drawPath(path)
+
+            if layer == "front":
+                painter.setPen(QPen(
+                    QColor(renderer.get("strap_light", "#ff8a78")),
+                    max(1.0, thickness * 0.22),
+                    Qt.SolidLine, Qt.RoundCap,
+                ))
+                painter.drawPath(path)
+
+                midpoint = self._cubic_midpoint(
+                    left, control1, control2, right
+                )
+                ring_radius = max(2.1, thickness * 0.56)
+                tag_radius = max(2.8, thickness * 0.82)
+                hardware = QColor(
+                    renderer.get("hardware", "#f3ba50")
+                )
+                hardware_dark = QColor(
+                    renderer.get("hardware_dark", "#a96d24")
+                )
+                ring_center = QPointF(
+                    midpoint.x(), midpoint.y() + thickness * 0.60
+                )
+                painter.setPen(QPen(
+                    hardware_dark, max(1.0, thickness * 0.22)
+                ))
+                painter.setBrush(Qt.NoBrush)
+                painter.drawEllipse(
+                    ring_center, ring_radius, ring_radius
+                )
+                tag_center = QPointF(
+                    ring_center.x(),
+                    ring_center.y() + ring_radius + tag_radius * 0.72,
+                )
+                painter.setPen(QPen(
+                    hardware_dark, max(1.0, thickness * 0.20)
+                ))
+                painter.setBrush(hardware)
+                painter.drawEllipse(
+                    tag_center, tag_radius, tag_radius
+                )
+                highlight = QColor("#ffe39a")
+                painter.setPen(Qt.NoPen)
+                painter.setBrush(highlight)
+                painter.drawEllipse(
+                    QPointF(
+                        tag_center.x() - tag_radius * 0.28,
+                        tag_center.y() - tag_radius * 0.28,
+                    ),
+                    max(0.8, tag_radius * 0.20),
+                    max(0.8, tag_radius * 0.20),
+                )
+            painter.restore()
+
     def _animation_duration_ms(self, name):
         """Return the exact time needed to show every frame once."""
         frames = self.animation_frames.get(name, ())
@@ -3963,6 +4349,7 @@ class PetWindow(QWidget):
     def _animation_frame(self, name):
         frames = self.animation_frames.get(name)
         if not frames:
+            self._animation_frame_index = None
             return None
         if self._active_animation != name:
             self._active_animation = name
@@ -3977,6 +4364,7 @@ class PetWindow(QWidget):
             index %= len(frames)
         else:
             index = min(index, len(frames) - 1)
+        self._animation_frame_index = index
         return frames[index]
 
     def _fallback_pose(self, animation_name):
@@ -4008,6 +4396,11 @@ class PetWindow(QWidget):
             p.save()
             p.translate(self.PET_W, 0)
             p.scale(-1, 1)
+
+        frame_index = getattr(self, "_animation_frame_index", None)
+        self._draw_equipped_decoration_layer(
+            p, animation_name, dst, "rear", frame_index
+        )
 
         if animation_pixmap is not None or self.use_png:
             pm = (animation_pixmap or self.pose_pixmaps.get(pose)
@@ -4043,6 +4436,10 @@ class PetWindow(QWidget):
             src = QRectF(sx, 0, CELL, CELL)
             self.renderer.setViewBox(src)
             self.renderer.render(p, dst)
+
+        self._draw_equipped_decoration_layer(
+            p, animation_name, dst, "front", frame_index
+        )
 
         if self.facing < 0:
             p.restore()
@@ -4499,6 +4896,7 @@ class PetWindow(QWidget):
         self._auto_sleep_target_x = None
         self.state["sleeping"] = True
         self.state["sleep_mode"] = "auto"
+        progression.record_sleep(self.state, "auto")
         self.state["x"] = self.x()
         self.state["y"] = self.y()
         self.behavior = "idle"
@@ -4587,8 +4985,21 @@ class PetWindow(QWidget):
     def on_decay(self):
         s = self.settings
         if self.state["sleeping"]:
-            self.state["energy"] = min(100, self.state["energy"] + s["decay_energy_sleeping_gain"])
-            self.state["hunger"] = max(0, self.state["hunger"] - s["decay_hunger_sleeping"])
+            effects = progression.upgrade_effects(self.state)
+            energy_gain = (
+                s["decay_energy_sleeping_gain"]
+                + effects["sleep_energy_gain_bonus"]
+            )
+            hunger_cost = (
+                s["decay_hunger_sleeping"]
+                * effects["sleep_hunger_multiplier"]
+            )
+            self.state["energy"] = min(
+                100, self.state["energy"] + energy_gain
+            )
+            self.state["hunger"] = max(
+                0, self.state["hunger"] - hunger_cost
+            )
         else:
             self.state["hunger"] = max(0, self.state["hunger"] - s["decay_hunger"])
             self.state["energy"] = max(0, self.state["energy"] - s["decay_energy"])
@@ -4767,24 +5178,35 @@ class PetWindow(QWidget):
                 or self.state["energy"] < 40)
 
     # ---------- actions ----------
-    def feed(self):
+    def feed(self, _checked=False, *, grant_xp=True):
         if self.state["sleeping"]:
             self.say("呼…睡着呢💤"); return
-        self.state["hunger"] = min(100, self.state["hunger"] + 25)
-        self.state["mood"] = min(100, self.state["mood"] + 6)
+        effects = progression.upgrade_effects(self.state)
+        self.state["hunger"] = min(
+            100, self.state["hunger"] + effects["feed_hunger"]
+        )
+        self.state["mood"] = min(
+            100, self.state["mood"] + effects["feed_mood"]
+        )
+        progression.record_action(self.state, "feedings")
         self.behavior = "eat"
         self.behavior_until = time.time() + 1.8
         self.trigger_animation("eat", 1800)
         self.say("嗷呜嗷呜！🍖", 1800)
         self.play_sound("eat")
-        self.add_xp(8)
+        if grant_xp:
+            self.add_xp(effects["feed_xp"])
         save_state(self.state)
         self.refresh_pose_from_state()
 
-    def play(self):
+    def play(self, _checked=False, *, grant_xp=True):
         if self.state["sleeping"]:
             self.say("呼…睡着呢💤"); return
-        if self.state["energy"] < 15:
+        effects = progression.upgrade_effects(self.state)
+        if (
+            self.state["energy"] < 15
+            and effects["play_energy_cost"] > 0
+        ):
             self.say("没力气了…"); return
         if self.play_scene is not None:
             try:
@@ -4792,16 +5214,24 @@ class PetWindow(QWidget):
             except RuntimeError:
                 self.play_scene = None
             return
-        self.state["mood"] = min(100, self.state["mood"] + 20)
-        self.state["energy"] = max(0, self.state["energy"] - 12)
-        self.state["hunger"] = max(0, self.state["hunger"] - 5)
+        self.state["mood"] = min(
+            100, self.state["mood"] + effects["play_mood"]
+        )
+        self.state["energy"] = max(
+            0, self.state["energy"] - effects["play_energy_cost"]
+        )
+        self.state["hunger"] = max(
+            0, self.state["hunger"] - effects["play_hunger_cost"]
+        )
+        progression.record_action(self.state, "play_sessions")
         self.behavior = "idle"
         self.target_vx = 0
         self.vx = 0
         self.vy = 0
         self.on_ground = True
         self.play_sound("bark")
-        self.add_xp(12)
+        if grant_xp:
+            self.add_xp(effects["play_xp"])
         save_state(self.state)
         self._play_return_pos = QPoint(self.pos())
         scene = FetchPlayScene(self, self._on_play_scene_finished)
@@ -4831,6 +5261,8 @@ class PetWindow(QWidget):
         self.play_scene = None
         self._restore_after_play(show_pet=True)
         if completed:
+            progression.record_action(self.state, "fetch_catches")
+            save_state(self.state)
             self.say(random.choice([
                 "接住啦！🎾",
                 "嘿！我扑到球啦～",
@@ -4858,6 +5290,7 @@ class PetWindow(QWidget):
         if self.state["sleeping"]:
             # Manual sleep is intentionally excluded from automatic wake-up.
             self.state["sleep_mode"] = "manual"
+            progression.record_sleep(self.state, "manual")
             self.behavior = "idle"; self.target_vx = 0; self.vx = 0
             self.say("晚安主人，我会乖乖睡到你叫醒我～", 2400)
             self.play_sound("sleep")
@@ -4879,6 +5312,7 @@ class PetWindow(QWidget):
         self._auto_sleep_target_x = None
         self._auto_sleep_snooze_until = time.time() + 60.0
         self._woke_from_shake = True
+        progression.record_action(self.state, "wake_shakes")
         self._wake_shake.reset()
         self._animation_override_token += 1
         self._animation_override = None
@@ -4900,7 +5334,11 @@ class PetWindow(QWidget):
         """Called when user clicks (not drags) on the dog."""
         if self.state["sleeping"]:
             self.say("嘘…在睡觉💤"); return
-        self.state["mood"] = min(100, self.state["mood"] + 8)
+        effects = progression.upgrade_effects(self.state)
+        self.state["mood"] = min(
+            100, self.state["mood"] + effects["pet_mood"]
+        )
+        progression.record_action(self.state, "pettings")
         self.last_user_t = time.time()
         self.say(random.choice(["汪汪！","好舒服～","再摸摸！","嘿嘿","爱你哟","蹭蹭你"]),
                  random.randint(1000, 1800))
@@ -4908,7 +5346,7 @@ class PetWindow(QWidget):
         # Play every petting frame once, then return to the current state.
         self.pose = POSE["happy"]
         self.trigger_animation("pet")
-        self.add_xp(3)
+        self.add_xp(effects["pet_xp"])
         save_state(self.state)
 
     def contextMenuEvent(self, event):
@@ -4928,6 +5366,24 @@ class PetWindow(QWidget):
         self.chat_win.show_near_pet()
         # mark user activity
         self.last_user_t = time.time()
+
+    def open_records(self):
+        """Open the lifetime companion record panel."""
+        if self.records_win is None:
+            self.records_win = RecordsWindow(self, save_state)
+        self.records_win.show_near_pet()
+
+    def open_achievements(self):
+        """Open claimable and upcoming Pet-coin achievements."""
+        if self.achievements_win is None:
+            self.achievements_win = AchievementsWindow(self, save_state)
+        self.achievements_win.show_near_pet()
+
+    def open_shop(self):
+        """Open the Pet-coin shop and interaction upgrades."""
+        if self.shop_win is None:
+            self.shop_win = ShopWindow(self, save_state)
+        self.shop_win.show_near_pet()
 
     def open_settings(self):
         """Open the settings panel."""
@@ -4975,6 +5431,8 @@ class TrayApp:
         global bridge
         bridge = _Bridge()
         self.state = load_state()
+        progression.record_session(self.state)
+        save_state(self.state)
         self.pet = PetWindow(self.state)
         self.pet._app_action_cb = self._handle_bubble_action
         ai.set_pet_name(self.pet.pet_name)

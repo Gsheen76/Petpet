@@ -1,0 +1,156 @@
+{
+  "canvas": {
+    "width": 1024,
+    "height": 1024
+  },
+  "bones": [
+    {
+      "name": "root",
+      "x": 512,
+      "y": 820
+    },
+    {
+      "name": "body",
+      "parent": "root",
+      "x": 0,
+      "y": -270
+    },
+    {
+      "name": "neck",
+      "parent": "body",
+      "x": 0,
+      "y": -180
+    },
+    {
+      "name": "head",
+      "parent": "neck",
+      "x": 0,
+      "y": -100
+    },
+    {
+      "name": "ear_l",
+      "parent": "head",
+      "x": -190,
+      "y": -220
+    },
+    {
+      "name": "ear_r",
+      "parent": "head",
+      "x": 190,
+      "y": -220
+    },
+    {
+      "name": "front_leg_l",
+      "parent": "body",
+      "x": -130,
+      "y": 110
+    },
+    {
+      "name": "front_leg_r",
+      "parent": "body",
+      "x": 130,
+      "y": 110
+    },
+    {
+      "name": "hind_leg_l",
+      "parent": "body",
+      "x": -230,
+      "y": 170
+    },
+    {
+      "name": "hind_leg_r",
+      "parent": "body",
+      "x": 230,
+      "y": 170
+    },
+    {
+      "name": "tail",
+      "parent": "body",
+      "x": -270,
+      "y": 80
+    }
+  ],
+  "slots": [
+    {
+      "name": "tail",
+      "bone": "tail",
+      "asset": "layers/tail.png",
+      "order": 10,
+      "pivot_x": 0.72,
+      "pivot_y": 0.72
+    },
+    {
+      "name": "body",
+      "bone": "body",
+      "asset": "layers/body.png",
+      "order": 20
+    },
+    {
+      "name": "neck_bridge",
+      "bone": "neck",
+      "asset": "layers/neck_bridge.png",
+      "order": 30
+    },
+    {
+      "name": "head",
+      "bone": "head",
+      "asset": "layers/head.png",
+      "order": 40,
+      "pivot_x": 0.5,
+      "pivot_y": 0.72
+    },
+    {
+      "name": "ear_l",
+      "bone": "ear_l",
+      "asset": "layers/ear_l.png",
+      "order": 42,
+      "pivot_x": 0.5,
+      "pivot_y": 0.9
+    },
+    {
+      "name": "ear_r",
+      "bone": "ear_r",
+      "asset": "layers/ear_r.png",
+      "order": 42,
+      "pivot_x": 0.5,
+      "pivot_y": 0.9
+    }
+  ],
+  "animations": {
+    "idle": {
+      "fps": 12,
+      "loop": true,
+      "frames": 48,
+      "tracks": {
+        "body": [
+          {
+            "frame": 0,
+            "scale_y": 1.0
+          },
+          {
+            "frame": 24,
+            "scale_y": 1.018
+          },
+          {
+            "frame": 48,
+            "scale_y": 1.0
+          }
+        ],
+        "head": [
+          {
+            "frame": 0,
+            "rotation": -1.0
+          },
+          {
+            "frame": 24,
+            "rotation": 1.0
+          },
+          {
+            "frame": 48,
+            "rotation": -1.0
+          }
+        ]
+      }
+    }
+  }
+}

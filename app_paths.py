@@ -96,7 +96,9 @@ ASSETS_DIR = os.path.join(RESOURCE_DIR, "assets")
 POSES_DIR = os.path.join(ASSETS_DIR, "poses")
 ICONS_DIR = os.path.join(ASSETS_DIR, "icons")
 SOUNDS_DIR = os.path.join(ASSETS_DIR, "sounds")
+PROPS_DIR = os.path.join(ASSETS_DIR, "props")
 ANIMATIONS_DIR = os.path.join(ASSETS_DIR, "animations")
+DECORATIONS_DIR = os.path.join(ASSETS_DIR, "decorations")
 
 os.makedirs(DATA_DIR, exist_ok=True)
 

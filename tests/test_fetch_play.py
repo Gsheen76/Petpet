@@ -48,7 +48,7 @@ class FetchAnimationAssetTests(unittest.TestCase):
         self.assertFalse(manifest["play"]["loop"])
         self.assertTrue(manifest["play"]["anchor_bottom"])
         self.assertTrue(
-            (animation_dir / "sources" / "fetch_ball.png").exists()
+            (Path(pet.PROPS_DIR) / "fetch_ball.png").exists()
         )
 
         for frame in frames:

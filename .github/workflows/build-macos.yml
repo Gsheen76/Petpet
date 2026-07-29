@@ -33,7 +33,7 @@ jobs:
 
       - name: Create portable zip
         run: |
-          VERSION="$(python3 -c 'import pet; print(pet.VERSION)')"
+          VERSION="$(python3 -c 'from version import VERSION; print(VERSION)')"
           ditto -c -k --sequesterRsrc --keepParent dist/Petpet.app "dist/Petpet-v${VERSION}-macOS-${{ matrix.arch }}.zip"
 
       - uses: actions/upload-artifact@v4

@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import QApplication, QFrame
 
 import buddy_ai as ai
 import pet
+import progression
 
 
 class FakePet:
@@ -63,6 +64,22 @@ class ChatToolsTests(unittest.TestCase):
 
         self.assertIn("已配置", self.window.api_key_btn.text())
         self.assertEqual(ai.get_model(), "glm-4-flash")
+
+    def test_sending_a_real_message_adds_chat_affection(self):
+        progression.ensure_progression(self.window.pet.state)
+        self.window.input.setText("今天过得怎么样？")
+
+        with patch("pet.threading.Thread") as thread_cls, \
+                patch("pet.save_state"):
+            self.window.send()
+
+        self.assertEqual(
+            self.window.pet.state["records"]["chats_opened"], 1
+        )
+        self.assertEqual(
+            self.window.pet.state["affection_points"], 1
+        )
+        thread_cls.return_value.start.assert_called_once_with()
 
 
 if __name__ == "__main__":

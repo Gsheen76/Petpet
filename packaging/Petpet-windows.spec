@@ -9,6 +9,8 @@ asset_datas = [
     (str(assets_root / "poses"), "assets/poses"),
     (str(assets_root / "icons"), "assets/icons"),
     (str(assets_root / "sounds"), "assets/sounds"),
+    (str(assets_root / "props"), "assets/props"),
+    (str(assets_root / "decorations"), "assets/decorations"),
     (str(animation_root / "manifest.json"), "assets/animations"),
 ]
 asset_datas.extend(
