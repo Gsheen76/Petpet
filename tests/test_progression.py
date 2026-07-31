@@ -42,6 +42,9 @@ class ProgressionMigrationTests(unittest.TestCase):
         self.assertIn("pettings", state["affection_last_gains"])
         self.assertEqual(state["owned_decorations"], [])
         self.assertIsNone(state["equipped_decorations"]["neck"])
+        self.assertEqual(state["records"]["ai_replies"], 0)
+        self.assertEqual(state["records"]["autonomous_walks"], 0)
+        self.assertEqual(state["decoration_adjustments"], {})
 
     def test_invalid_nested_values_are_safely_normalized(self):
         state = {
@@ -203,6 +206,23 @@ class AchievementTests(unittest.TestCase):
             progression.claim_all_achievements(state, now)["reward"], 0
         )
 
+    def test_new_content_records_have_matching_achievements(self):
+        state = fresh_state()
+        for action in ("ai_replies", "autonomous_walks"):
+            progression.record_action(state, action, 5)
+        state["records"]["upgrades_purchased"] = 1
+        state["records"]["decorations_collected"] = 1
+
+        items = progression.achievement_catalog(state)
+        completed_ids = {
+            item["id"] for item in items if item["completed"]
+        }
+
+        self.assertIn("reply_5", completed_ids)
+        self.assertIn("stroll_5", completed_ids)
+        self.assertIn("upgrade_1", completed_ids)
+        self.assertIn("collect_1", completed_ids)
+
 
 class UpgradeBalanceTests(unittest.TestCase):
     def test_upgrade_purchase_spends_coins_and_changes_real_effect(self):
@@ -215,6 +235,7 @@ class UpgradeBalanceTests(unittest.TestCase):
         self.assertEqual(result["price"], 30)
         self.assertEqual(state["pet_coins"], 70)
         self.assertEqual(state["records"]["coins_spent"], 30)
+        self.assertEqual(state["records"]["upgrades_purchased"], 1)
         self.assertEqual(effects["pet_mood"], 10)
         self.assertEqual(effects["pet_xp"], 3)
 
@@ -240,14 +261,48 @@ class UpgradeBalanceTests(unittest.TestCase):
         self.assertEqual(effective, 15)
         self.assertEqual(state["records"]["xp_earned"], 15)
 
+    def test_endurance_reduces_awake_decay_but_not_sleep_hunger(self):
+        state = fresh_state(upgrades={"endurance": 1})
+
+        self.assertAlmostEqual(
+            progression.upgrade_effects(state)[
+                "awake_decay_multiplier"
+            ],
+            0.9,
+        )
+
+        state["upgrades"]["endurance"] = 5
+        effects = progression.upgrade_effects(state)
+        description = progression.upgrade_description(
+            state, "endurance"
+        )
+
+        self.assertAlmostEqual(
+            effects["awake_decay_multiplier"], 0.5
+        )
+        self.assertEqual(description, "清醒属性消耗减缓 50%")
+
+    def test_sleep_upgrade_description_uses_actual_values_not_percentages(self):
+        state = fresh_state(upgrades={"sleeping": 2})
+
+        description = progression.upgrade_description(
+            state,
+            "sleeping",
+            decay_rates={"decay_hunger_sleeping": 0.10},
+        )
+
+        self.assertIn("精力恢复 6.4 点", description)
+        self.assertIn("饱腹消耗 0.060 点", description)
+        self.assertNotIn("%", description)
+
     def test_full_upgrade_cost_stays_long_term_but_not_unreachable(self):
         total_cost = sum(
             sum(definition["prices"])
             for definition in progression.UPGRADE_DEFINITIONS.values()
         )
 
-        self.assertGreater(total_cost, 2000)
-        self.assertLess(total_cost, 3000)
+        self.assertGreater(total_cost, 3500)
+        self.assertLess(total_cost, 4000)
 
 
 class AffectionExperienceTests(unittest.TestCase):
@@ -298,6 +353,77 @@ class AffectionExperienceTests(unittest.TestCase):
 
 
 class DecorationTests(unittest.TestCase):
+    def test_new_decorations_have_consistent_categories_and_small_defaults(self):
+        expected = {
+            "black_sunglasses": ("eyes", 0.29),
+            "sky_bow_tie": ("neck", 0.23),
+            "little_orange_hat": ("head", 0.11),
+        }
+
+        for decoration_id, (category, maximum_scale) in expected.items():
+            definition = progression.DECORATION_DEFINITIONS[decoration_id]
+            self.assertEqual(definition["category"], category)
+            self.assertLessEqual(
+                definition["default_transform"]["scale"],
+                maximum_scale,
+            )
+            self.assertGreaterEqual(definition["price"], 360)
+
+    def test_paid_decorations_have_collectible_pricing(self):
+        self.assertEqual(
+            progression.DECORATION_DEFINITIONS["round_glasses"]["price"],
+            250,
+        )
+        self.assertEqual(
+            progression.DECORATION_DEFINITIONS["cream_beret"]["price"],
+            340,
+        )
+
+    def test_all_paid_decoration_prices_use_the_rebalanced_values(self):
+        expected = {
+            "round_glasses": 250,
+            "cream_beret": 340,
+            "black_sunglasses": 360,
+            "sky_bow_tie": 380,
+            "little_orange_hat": 420,
+        }
+        self.assertEqual(
+            {
+                item_id: progression.DECORATION_DEFINITIONS[item_id]["price"]
+                for item_id in expected
+            },
+            expected,
+        )
+
+    def test_dig_reward_tiers_and_cooldown_are_bounded(self):
+        class FixedRng:
+            def __init__(self, values):
+                self.values = iter(values)
+
+            def random(self):
+                return next(self.values)
+
+            def randint(self, minimum, maximum):
+                return maximum
+
+        common = progression.roll_dig_reward(FixedRng([0.0]))
+        jackpot = progression.roll_dig_reward(FixedRng([0.999]))
+        self.assertEqual(common["amount"], 10)
+        self.assertEqual(jackpot["amount"], 100)
+
+        state = fresh_state(last_dig_discovery_at=100.0)
+        self.assertEqual(
+            progression.dig_cooldown_remaining(state, now=100.0),
+            progression.DIG_COOLDOWN_SECONDS,
+        )
+        self.assertEqual(
+            progression.dig_cooldown_remaining(
+                state,
+                now=100.0 + progression.DIG_COOLDOWN_SECONDS,
+            ),
+            0.0,
+        )
+
     def test_free_collar_can_be_claimed_equipped_and_removed(self):
         state = fresh_state(pet_coins=25)
 
@@ -312,6 +438,8 @@ class DecorationTests(unittest.TestCase):
         self.assertEqual(claimed["price"], 0)
         self.assertEqual(state["pet_coins"], 25)
         self.assertTrue(equipped["ok"])
+        self.assertEqual(state["records"]["decorations_collected"], 1)
+        self.assertEqual(state["records"]["outfit_changes"], 1)
         self.assertEqual(
             state["equipped_decorations"]["neck"], "red_collar"
         )
@@ -319,6 +447,7 @@ class DecorationTests(unittest.TestCase):
         removed = progression.unequip_decoration(state, "neck")
 
         self.assertTrue(removed["ok"])
+        self.assertEqual(state["records"]["outfit_changes"], 2)
         self.assertIsNone(state["equipped_decorations"]["neck"])
         self.assertIn("red_collar", state["owned_decorations"])
 
@@ -335,6 +464,68 @@ class DecorationTests(unittest.TestCase):
         self.assertFalse(duplicate["ok"])
         self.assertEqual(
             state["owned_decorations"], ["red_collar"]
+        )
+
+    def test_decoration_adjustments_are_persisted_clamped_and_reset(self):
+        state = fresh_state()
+        default = progression.decoration_transform(
+            state, "round_glasses"
+        )
+
+        changed = progression.set_decoration_transform(
+            state,
+            "round_glasses",
+            x=99,
+            y=-99,
+            scale=0,
+            rotation=80,
+        )
+
+        self.assertEqual(changed["x"], 1.15)
+        self.assertEqual(changed["y"], -0.15)
+        self.assertEqual(changed["scale"], 0.15)
+        self.assertEqual(changed["rotation"], 30.0)
+        self.assertEqual(
+            progression.decoration_transform(
+                state, "round_glasses"
+            ),
+            changed,
+        )
+
+        reset = progression.reset_decoration_transform(
+            state, "round_glasses"
+        )
+
+        self.assertEqual(reset, default)
+        self.assertNotIn(
+            "round_glasses", state["decoration_adjustments"]
+        )
+
+    def test_invalid_saved_decoration_adjustments_are_safely_migrated(self):
+        state = fresh_state(decoration_adjustments={
+            "red_collar": {
+                "x": "broken",
+                "y": None,
+                "scale": "0.7",
+                "rotation": -999,
+            },
+            "removed_item": {"x": 0.5},
+        })
+
+        transform = progression.decoration_transform(
+            state, "red_collar"
+        )
+
+        self.assertEqual(
+            transform["x"],
+            progression.DECORATION_DEFINITIONS[
+                "red_collar"
+            ]["default_transform"]["x"],
+        )
+        self.assertEqual(transform["scale"], 0.7)
+        self.assertEqual(transform["rotation"], -30.0)
+        self.assertNotIn(
+            "removed_item", state["decoration_adjustments"]
         )
 
 

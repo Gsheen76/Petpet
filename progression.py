@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+import random
 
 
 RECORD_DEFAULTS = {
@@ -16,7 +17,9 @@ RECORD_DEFAULTS = {
     "auto_sleeps": 0,
     "fetch_catches": 0,
     "chats_opened": 0,
+    "ai_replies": 0,
     "wake_shakes": 0,
+    "autonomous_walks": 0,
     "interactions_total": 0,
     "xp_earned": 0,
     "coins_earned": 0,
@@ -24,7 +27,25 @@ RECORD_DEFAULTS = {
     "level_ups": 0,
     "affection_earned": 0,
     "affection_level_ups": 0,
+    "decorations_collected": 0,
+    "outfit_changes": 0,
+    "upgrades_purchased": 0,
+    "achievements_claimed": 0,
+    "dig_treasures_found": 0,
+    "coins_dug": 0,
 }
+
+# Digging is an occasional bonus, not a replacement for achievements.
+# A check runs once per minute; after a discovery there is a 20-minute
+# cooldown.  The weighted average discovery is about 12 Pet coins.
+DIG_COOLDOWN_SECONDS = 20 * 60
+DIG_DISCOVERY_CHANCE = 0.10
+DIG_REWARD_TIERS = (
+    (0.65, 5, 10, "小钱袋"),
+    (0.27, 12, 20, "闪亮钱袋"),
+    (0.07, 25, 40, "稀有宝藏"),
+    (0.01, 60, 100, "大宝藏"),
+)
 
 AFFECTION_ACTION_GAINS = {
     "pettings": 2,
@@ -54,32 +75,44 @@ UPGRADE_DEFINITIONS = {
     "petting": {
         "name": "温柔抚摸",
         "icon": "♡",
+        "summary": "提高每次抚摸恢复的心情值。",
         "max_level": 5,
         "prices": [30, 50, 75, 105, 145],
     },
     "feeding": {
         "name": "营养餐",
         "icon": "◇",
+        "summary": "提高每次喂食恢复的饱腹和心情值。",
         "max_level": 5,
         "prices": [35, 55, 80, 115, 155],
     },
     "playing": {
         "name": "活力玩耍",
         "icon": "○",
+        "summary": "提高玩耍带来的心情，并降低精力与饱腹消耗。",
         "max_level": 5,
         "prices": [40, 65, 95, 135, 185],
     },
     "sleeping": {
         "name": "香甜睡眠",
         "icon": "☾",
+        "summary": "提高睡眠恢复的精力，并降低睡眠期间的饱腹消耗。",
         "max_level": 5,
         "prices": [40, 60, 90, 125, 170],
     },
     "experience": {
         "name": "成长加速",
         "icon": "✦",
+        "summary": "提高互动、陪伴等所有途径获得的经验。",
         "max_level": 5,
         "prices": [60, 90, 135, 195, 270],
+    },
+    "endurance": {
+        "name": "持久活力",
+        "icon": "◴",
+        "summary": "减缓清醒状态下的属性自然消耗。",
+        "max_level": 5,
+        "prices": [80, 130, 200, 300, 420],
     },
 }
 
@@ -98,40 +131,101 @@ DECORATION_DEFINITIONS = {
         "price": 0,
         "asset": "red_collar.png",
         "description": "第一件见面礼，戴上暖暖的红色项圈吧。",
-        "renderer": {
-            "type": "layered_collar",
-            # Current animation frames were generated independently and do
-            # not share a stable skeleton. Keep accessories on trustworthy
-            # static poses; complex actions hide them until a rigged source
-            # model can provide real attachment data.
-            "visible_animations": ["idle", "happy", "sad"],
-            "strap": "#e84f4b",
-            "strap_dark": "#9f302f",
-            "strap_light": "#ff8a78",
-            "hardware": "#f3ba50",
-            "hardware_dark": "#a96d24",
+        "default_transform": {
+            "x": 0.50,
+            "y": 0.56,
+            "scale": 0.30,
+            "rotation": 0.0,
         },
-        # Static poses use two neck edges so the strap still has real front
-        # and rear layers instead of one rectangular sticker.
-        "neck_anchors": {
-            "default": {
-                "left": [0.36, 0.55], "right": [0.64, 0.55],
-                "sag": 0.035, "thickness": 0.032,
-            },
-            "idle": {
-                "left": [0.36, 0.55], "right": [0.64, 0.55],
-                "sag": 0.035, "thickness": 0.032,
-            },
-            "happy": {
-                "left": [0.36, 0.56], "right": [0.64, 0.56],
-                "sag": 0.035, "thickness": 0.032,
-            },
-            "sad": {
-                "left": [0.37, 0.56], "right": [0.63, 0.56],
-                "sag": 0.032, "thickness": 0.032,
-            },
-        },
+        "z_index": 20,
     },
+    "cream_beret": {
+        "name": "奶油贝雷帽",
+        "icon": "✿",
+        "category": "head",
+        "category_name": "帽子",
+        "price": 340,
+        "asset": "cream_beret.png",
+        "description": "软乎乎的奶油针织帽，蝴蝶结里藏着一枚小爪印。",
+        "default_transform": {
+            "x": 0.50,
+            "y": 0.11,
+            "scale": 0.36,
+            "rotation": -2.0,
+        },
+        "z_index": 10,
+    },
+    "round_glasses": {
+        "name": "暖金圆框眼镜",
+        "icon": "◎",
+        "category": "eyes",
+        "category_name": "眼镜",
+        "price": 250,
+        "asset": "round_glasses_no_temples.png",
+        "description": "轻巧的暖金圆框，让今天的小狗看起来格外聪明。",
+        "default_transform": {
+            "x": 0.50,
+            "y": 0.29,
+            "scale": 0.30,
+            "rotation": 0.0,
+        },
+        "z_index": 30,
+    },
+    "black_sunglasses": {
+        "name": "酷黑爪印墨镜",
+        "icon": "▰",
+        "category": "eyes",
+        "category_name": "眼镜",
+        "price": 360,
+        "asset": "black_sunglasses.png",
+        "description": "圆润的烟黑镜片配上金色爪印，小狗也有酷酷的一面。",
+        "default_transform": {
+            "x": 0.50,
+            "y": 0.29,
+            "scale": 0.29,
+            "rotation": 0.0,
+        },
+        "z_index": 30,
+    },
+    "sky_bow_tie": {
+        "name": "晴空爪印领结",
+        "icon": "❖",
+        "category": "neck",
+        "category_name": "颈饰",
+        "price": 380,
+        "asset": "sky_bow_tie.png",
+        "description": "柔软的晴空蓝领结，用一枚暖金爪印点亮胸前。",
+        "default_transform": {
+            "x": 0.50,
+            "y": 0.56,
+            "scale": 0.23,
+            "rotation": 0.0,
+        },
+        "z_index": 20,
+    },
+    "little_orange_hat": {
+        "name": "噜噜小橘子",
+        "icon": "●",
+        "category": "head",
+        "category_name": "帽子",
+        "price": 420,
+        "asset": "little_orange_hat.png",
+        "description": "像水豚噜噜一样，在头顶稳稳放一颗小橘子。",
+        "default_transform": {
+            "x": 0.50,
+            "y": 0.07,
+            "scale": 0.11,
+            "rotation": 0.0,
+        },
+        "z_index": 10,
+    },
+}
+
+DECORATION_TRANSFORM_LIMITS = {
+    "x": (-0.15, 1.15),
+    "y": (-0.15, 1.15),
+    "scale": (0.15, 1.20),
+    "rotation": (-30.0, 30.0),
 }
 
 
@@ -142,9 +236,40 @@ def _safe_int(value, default=0, minimum=0):
         return int(default)
 
 
+def _safe_float(value, default, minimum, maximum):
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        value = float(default)
+    return max(float(minimum), min(float(maximum), value))
+
+
+def _normalized_decoration_transform(decoration_id, values=None):
+    definition = DECORATION_DEFINITIONS[decoration_id]
+    defaults = definition["default_transform"]
+    values = values if isinstance(values, dict) else {}
+    normalized = {}
+    for key, (minimum, maximum) in DECORATION_TRANSFORM_LIMITS.items():
+        normalized[key] = _safe_float(
+            values.get(key, defaults[key]),
+            defaults[key],
+            minimum,
+            maximum,
+        )
+    return normalized
+
+
 def ensure_progression(state):
     """Normalize new progression fields without disturbing an old save."""
     state["pet_coins"] = _safe_int(state.get("pet_coins", 0))
+    state["pending_dig_reward"] = _safe_int(
+        state.get("pending_dig_reward", 0)
+    )
+    try:
+        last_dig = float(state.get("last_dig_discovery_at", 0.0))
+    except (TypeError, ValueError):
+        last_dig = 0.0
+    state["last_dig_discovery_at"] = max(0.0, last_dig)
     state["affection_level"] = _safe_int(
         state.get("affection_level", 1), default=1, minimum=1
     )
@@ -220,12 +345,38 @@ def ensure_progression(state):
             equipped[category] = None
     state["equipped_decorations"] = equipped
 
+    raw_adjustments = state.get("decoration_adjustments")
+    if not isinstance(raw_adjustments, dict):
+        raw_adjustments = {}
+    adjustments = {}
+    for decoration_id, values in raw_adjustments.items():
+        if decoration_id not in DECORATION_DEFINITIONS:
+            continue
+        adjustments[decoration_id] = _normalized_decoration_transform(
+            decoration_id, values
+        )
+    state["decoration_adjustments"] = adjustments
+
     raw_claimed = state.get("claimed_achievements")
     if not isinstance(raw_claimed, (list, tuple, set)):
         raw_claimed = []
     state["claimed_achievements"] = list(dict.fromkeys(
         str(item) for item in raw_claimed if item
     ))
+    # Reconstruct reliable lifetime totals for saves made before these
+    # counters existed, while preserving any larger recorded value.
+    records["decorations_collected"] = max(
+        records["decorations_collected"],
+        len(state["owned_decorations"]),
+    )
+    records["upgrades_purchased"] = max(
+        records["upgrades_purchased"],
+        sum(state["upgrades"].values()),
+    )
+    records["achievements_claimed"] = max(
+        records["achievements_claimed"],
+        len(state["claimed_achievements"]),
+    )
     return state
 
 
@@ -350,7 +501,38 @@ def add_coins(state, amount, source=None):
         return 0
     state["pet_coins"] += amount
     state["records"]["coins_earned"] += amount
+    if source == "digging":
+        state["records"]["coins_dug"] += amount
     return amount
+
+
+def dig_cooldown_remaining(state, now=None):
+    """Seconds until another treasure can be discovered."""
+    ensure_progression(state)
+    now = time.time() if now is None else float(now)
+    last = float(state.get("last_dig_discovery_at", 0.0))
+    if last <= 0:
+        return 0.0
+    if last > now + DIG_COOLDOWN_SECONDS:
+        state["last_dig_discovery_at"] = 0.0
+        return 0.0
+    return max(0.0, DIG_COOLDOWN_SECONDS - (now - last))
+
+
+def roll_dig_reward(rng=None):
+    """Return one balanced digging reward from the weighted tiers."""
+    rng = rng or random
+    roll = min(0.999999, max(0.0, float(rng.random())))
+    cumulative = 0.0
+    for probability, minimum, maximum, label in DIG_REWARD_TIERS:
+        cumulative += probability
+        if roll < cumulative:
+            return {
+                "amount": int(rng.randint(minimum, maximum)),
+                "tier": label,
+            }
+    probability, minimum, maximum, label = DIG_REWARD_TIERS[-1]
+    return {"amount": int(rng.randint(minimum, maximum)), "tier": label}
 
 
 def upgrade_level(state, upgrade_id):
@@ -366,6 +548,7 @@ def upgrade_effects(state):
     play_level = upgrade_level(state, "playing")
     sleep_level = upgrade_level(state, "sleeping")
     xp_level = upgrade_level(state, "experience")
+    endurance_level = upgrade_level(state, "endurance")
     play_ratio = play_level / UPGRADE_DEFINITIONS["playing"]["max_level"]
     sleep_ratio = (
         sleep_level / UPGRADE_DEFINITIONS["sleeping"]["max_level"]
@@ -385,6 +568,9 @@ def upgrade_effects(state):
         "sleep_energy_gain_bonus": 1.2 * sleep_level,
         "sleep_hunger_multiplier": max(0.0, 1.0 - sleep_ratio),
         "xp_multiplier": 1.0 + 0.1 * xp_level,
+        "awake_decay_multiplier": max(
+            0.5, 1.0 - 0.1 * endurance_level
+        ),
     }
 
 
@@ -426,7 +612,8 @@ def passive_xp_per_minute(state):
     return passive_xp_per_second(state) * 60.0
 
 
-def upgrade_description(state, upgrade_id, next_level=False):
+def upgrade_description(
+        state, upgrade_id, next_level=False, decay_rates=None):
     """Build short, truthful effect text for the shop."""
     ensure_progression(state)
     current = upgrade_level(state, upgrade_id)
@@ -438,28 +625,45 @@ def upgrade_description(state, upgrade_id, next_level=False):
     shadow = {"upgrades": dict(state["upgrades"])}
     shadow["upgrades"][upgrade_id] = level
     effects = upgrade_effects(shadow)
+    decay_rates = decay_rates if isinstance(decay_rates, dict) else {}
+    awake_hunger_decay = float(decay_rates.get("decay_hunger", 0.14))
+    awake_energy_decay = float(decay_rates.get("decay_energy", 0.10))
+    awake_mood_decay = float(decay_rates.get("decay_mood", 0.08))
+    sleeping_hunger_decay = float(
+        decay_rates.get("decay_hunger_sleeping", 0.08)
+    )
     if upgrade_id == "petting":
-        return f"抚摸：心情 +{effects['pet_mood']}"
+        return f"每次抚摸：心情恢复 {effects['pet_mood']} 点"
     if upgrade_id == "feeding":
         return (
-            f"喂食：饱腹 +{effects['feed_hunger']}，"
-            f"心情 +{effects['feed_mood']}"
+            f"每次喂食：饱腹恢复 {effects['feed_hunger']} 点，"
+            f"心情恢复 {effects['feed_mood']} 点"
         )
     if upgrade_id == "playing":
         suffix = "（满级无消耗）" if level >= definition["max_level"] else ""
         return (
-            f"玩耍：心情 +{effects['play_mood']}，"
-            f"消耗精力 {effects['play_energy_cost']} / 饱腹 "
-            f"{effects['play_hunger_cost']}{suffix}"
+            f"每次玩耍：心情恢复 {effects['play_mood']} 点；"
+            f"消耗精力 {effects['play_energy_cost']} 点、饱腹 "
+            f"{effects['play_hunger_cost']} 点{suffix}"
         )
     if upgrade_id == "sleeping":
         suffix = "（满级不消耗饱腹）" if level >= definition["max_level"] else ""
+        hunger_cost = (
+            sleeping_hunger_decay
+            * effects["sleep_hunger_multiplier"]
+        )
         return (
-            f"睡眠：每次恢复 +{4 + effects['sleep_energy_gain_bonus']:.1f} "
-            f"精力，饱腹消耗 {effects['sleep_hunger_multiplier'] * 100:.0f}%"
+            f"每 2 秒睡眠结算：精力恢复 "
+            f"{4 + effects['sleep_energy_gain_bonus']:.1f} 点；"
+            f"饱腹消耗 {hunger_cost:.3f} 点"
             f"{suffix}"
         )
-    return f"所有经验获取 ×{effects['xp_multiplier']:.1f}"
+    if upgrade_id == "endurance":
+        reduction = int(round(
+            (1.0 - effects["awake_decay_multiplier"]) * 100
+        ))
+        return f"清醒属性消耗减缓 {reduction}%"
+    return f"所有经验获取倍率：×{effects['xp_multiplier']:.1f}"
 
 
 def purchase_upgrade(state, upgrade_id):
@@ -481,6 +685,7 @@ def purchase_upgrade(state, upgrade_id):
     state["pet_coins"] -= price
     state["records"]["coins_spent"] += price
     state["upgrades"][upgrade_id] = current + 1
+    state["records"]["upgrades_purchased"] += 1
     return {
         "ok": True,
         "price": price,
@@ -501,6 +706,39 @@ def equipped_decoration(state, category):
     return state["equipped_decorations"].get(category)
 
 
+def decoration_transform(state, decoration_id, *, normalize_state=True):
+    """Return a safe idle-pose transform, including the player's adjustment."""
+    if normalize_state:
+        ensure_progression(state)
+    if decoration_id not in DECORATION_DEFINITIONS:
+        raise KeyError(decoration_id)
+    saved = state.get("decoration_adjustments", {}).get(decoration_id)
+    return _normalized_decoration_transform(decoration_id, saved)
+
+
+def set_decoration_transform(state, decoration_id, **values):
+    """Persist selected transform fields and return the normalized result."""
+    ensure_progression(state)
+    if decoration_id not in DECORATION_DEFINITIONS:
+        raise KeyError(decoration_id)
+    current = decoration_transform(state, decoration_id)
+    current.update(values)
+    normalized = _normalized_decoration_transform(
+        decoration_id, current
+    )
+    state["decoration_adjustments"][decoration_id] = normalized
+    return dict(normalized)
+
+
+def reset_decoration_transform(state, decoration_id):
+    """Discard player changes and return the authored default transform."""
+    ensure_progression(state)
+    if decoration_id not in DECORATION_DEFINITIONS:
+        raise KeyError(decoration_id)
+    state["decoration_adjustments"].pop(decoration_id, None)
+    return decoration_transform(state, decoration_id)
+
+
 def purchase_decoration(state, decoration_id):
     """Buy or claim a decoration without automatically equipping it."""
     ensure_progression(state)
@@ -519,6 +757,7 @@ def purchase_decoration(state, decoration_id):
     state["pet_coins"] -= price
     state["records"]["coins_spent"] += price
     state["owned_decorations"].append(decoration_id)
+    state["records"]["decorations_collected"] += 1
     return {
         "ok": True,
         "price": price,
@@ -539,6 +778,8 @@ def equip_decoration(state, decoration_id):
     if not decoration_owned(state, decoration_id):
         return {"ok": False, "message": "需要先获得这件装扮。"}
     category = definition["category"]
+    if state["equipped_decorations"].get(category) != decoration_id:
+        state["records"]["outfit_changes"] += 1
     state["equipped_decorations"][category] = decoration_id
     return {
         "ok": True,
@@ -554,6 +795,7 @@ def unequip_decoration(state, category):
     if not decoration_id:
         return {"ok": False, "message": "这个位置还没有装备装扮。"}
     state["equipped_decorations"][category] = None
+    state["records"]["outfit_changes"] += 1
     definition = DECORATION_DEFINITIONS.get(decoration_id, {})
     return {
         "ok": True,
@@ -635,6 +877,44 @@ def achievement_catalog(state, now=None):
             [(1, 10, "第一次谈心"), (10, 30, "好多悄悄话"),
              (30, 70, "无话不谈")],
         ),
+        (
+            "wake_shakes", "陪伴", "wake",
+            [(1, 10, "轻轻唤醒"), (5, 25, "叫醒小能手"),
+             (15, 55, "每天准时起床")],
+        ),
+        (
+            "ai_replies", "聊天", "reply",
+            [(5, 15, "有问有答"), (20, 40, "聊个不停"),
+             (50, 85, "懂你的伙伴")],
+        ),
+        (
+            "autonomous_walks", "日常", "stroll",
+            [(5, 15, "散步时间"), (20, 40, "桌面巡游"),
+             (60, 90, "活力小跑家")],
+        ),
+        (
+            "coins_earned", "Pet币", "coins",
+            [(100, 20, "第一桶 Pet币"), (500, 50, "温馨小金库"),
+             (1500, 110, "攒钱小达人")],
+        ),
+        (
+            "decorations_collected", "装扮", "collect",
+            [(1, 15, "第一件装扮"), (3, 45, "小小收藏家")],
+        ),
+        (
+            "outfit_changes", "装扮", "outfit",
+            [(1, 10, "今日穿搭"), (10, 35, "百变小狗")],
+        ),
+        (
+            "upgrades_purchased", "强化", "upgrade",
+            [(1, 15, "第一次强化"), (5, 40, "稳步成长"),
+             (15, 90, "全面提升")],
+        ),
+        (
+            "achievements_claimed", "成就", "claim",
+            [(1, 10, "领取第一份奖励"), (10, 35, "成就收集者"),
+             (25, 80, "满满荣誉")],
+        ),
     ]
     for record_key, category, prefix, tiers in series:
         current = records.get(record_key, 0)
@@ -689,6 +969,7 @@ def claim_achievement(state, achievement_id, now=None):
     if not match["completed"]:
         return {"ok": False, "message": "再努力一点就能领取啦。"}
     state["claimed_achievements"].append(match["id"])
+    state["records"]["achievements_claimed"] += 1
     reward = add_coins(state, match["reward"], source="achievement")
     return {
         "ok": True,
@@ -701,11 +982,21 @@ def claim_achievement(state, achievement_id, now=None):
 def claim_all_achievements(state, now=None):
     total = 0
     claimed = []
-    for item in claimable_achievements(state, now):
-        result = claim_achievement(state, item["id"], now)
-        if result.get("ok"):
-            total += result["reward"]
-            claimed.append(item["id"])
+    # Claiming rewards can itself unlock coin/claim-count achievements.
+    # Keep scanning until the same button press has collected that new wave.
+    while True:
+        pending = claimable_achievements(state, now)
+        if not pending:
+            break
+        claimed_this_pass = 0
+        for item in pending:
+            result = claim_achievement(state, item["id"], now)
+            if result.get("ok"):
+                total += result["reward"]
+                claimed.append(item["id"])
+                claimed_this_pass += 1
+        if claimed_this_pass == 0:
+            break
     return {"count": len(claimed), "reward": total, "ids": claimed}
 
 

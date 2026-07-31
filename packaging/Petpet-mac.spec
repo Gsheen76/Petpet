@@ -8,14 +8,18 @@ source_text = (project_root / "version.py").read_text(encoding="utf-8")
 version = re.search(r'^VERSION\s*=\s*"([^"]+)"', source_text, re.MULTILINE).group(1)
 assets_root = project_root / "assets"
 animation_root = assets_root / "animations"
+pose_datas = [
+    (str(path), "assets/poses")
+    for path in (assets_root / "poses").glob("*.png")
+]
 asset_datas = [
-    (str(assets_root / "poses"), "assets/poses"),
     (str(assets_root / "icons"), "assets/icons"),
     (str(assets_root / "sounds"), "assets/sounds"),
     (str(assets_root / "props"), "assets/props"),
     (str(assets_root / "decorations"), "assets/decorations"),
     (str(animation_root / "manifest.json"), "assets/animations"),
 ]
+asset_datas.extend(pose_datas)
 asset_datas.extend(
     (str(path), f"assets/animations/{path.name}")
     for path in animation_root.iterdir()

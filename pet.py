@@ -53,7 +53,7 @@ from PyQt5.QtNetwork import QLocalServer, QLocalSocket
 from PyQt5.QtGui import (
     QPainter, QPixmap, QImage, QCursor, QIcon, QColor, QFont, QFontMetrics, QPen,
     QLinearGradient, QRadialGradient, QTextDocument, QDesktopServices, QRegion,
-    QPainterPath, QPolygonF
+    QPainterPath, QPolygonF, QTextCursor
 )
 from PyQt5.QtCore import (
     Qt, QEvent, QTimer, QPoint, QPointF, QRect, QRectF, QByteArray, QSize,
@@ -64,6 +64,7 @@ from PyQt5.QtCore import (
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import buddy_ai as ai
 import progression
+import decoration_renderer
 from progression_ui import AchievementsWindow, RecordsWindow, ShopWindow
 
 # Sound (optional — QtMultimedia may not be installed)
@@ -152,12 +153,14 @@ DEFAULT_ANIMATIONS = {
     "eat":   {"fps": 4,  "loop": True,  "fallback": "eat",
               "scale": 1.2, "anchor_bottom": True,
               "saturation": 0.9, "brightness": 0.97},
-    "play":  {"fps": 14, "loop": False, "fallback": "happy",
+    "play":  {"fps": 24, "loop": False, "fallback": "happy",
               "scale": 1.3, "anchor_bottom": True},
     "happy": {"fps": 8,  "loop": True,  "fallback": "happy"},
     "pet":   {"fps": 8,  "loop": False, "fallback": "happy",
               "scale": 1.2, "anchor_bottom": True,
               "saturation": 0.9, "brightness": 0.97},
+    "dig_reward": {"fps": 20, "loop": False, "fallback": "happy",
+                   "scale": 1.2, "anchor_bottom": True},
     "sleep": {"fps": 2.4, "loop": True,  "fallback": "sleep",
               "scale": 0.8, "anchor_bottom": True},
     "drag":  {"fps": 6,  "loop": True,  "fallback": "drag"},
@@ -425,6 +428,8 @@ DEFAULT_STATE = {
     "affection_level": 1, "affection_points": 0,
     "passive_xp_buffer": 0.0,
     "pet_coins": 0,
+    "pending_dig_reward": 0,
+    "last_dig_discovery_at": 0.0,
     "pet_name": ai.DEFAULT_PET_NAME,
     "tutorial_completed": False,
 }
@@ -924,8 +929,22 @@ class ChatWindow(QWidget):
 
     def _set_log_html(self, html):
         self.log.setHtml(html)
-        sb = self.log.verticalScrollBar()
-        sb.setValue(sb.maximum())
+        self._scroll_log_to_bottom()
+        # Rich text may finish laying out after setHtml() returns.
+        QTimer.singleShot(0, self._scroll_log_to_bottom)
+        QTimer.singleShot(40, self._scroll_log_to_bottom)
+
+    def _scroll_log_to_bottom(self):
+        try:
+            cursor = self.log.textCursor()
+            cursor.movePosition(QTextCursor.End)
+            self.log.setTextCursor(cursor)
+            self.log.ensureCursorVisible()
+            scrollbar = self.log.verticalScrollBar()
+            scrollbar.setValue(scrollbar.maximum())
+        except RuntimeError:
+            # A delayed callback may arrive just after the window was closed.
+            pass
 
     def _title_press(self, e):
         if e.button() == Qt.LeftButton:
@@ -1019,6 +1038,8 @@ class ChatWindow(QWidget):
         # commit to memory
         ai.append_history(self.mem, "user", self._pending_user)
         ai.append_history(self.mem, "assistant", full)
+        progression.record_action(self.pet.state, "ai_replies")
+        save_state(self.pet.state)
         self.mem = ai.load_memory()
         self._pending_user = None
         self._streaming = ""
@@ -1037,6 +1058,8 @@ class ChatWindow(QWidget):
         if self._pending_user:
             ai.append_history(self.mem, "user", self._pending_user)
             ai.append_history(self.mem, "assistant", reply)
+            progression.record_action(self.pet.state, "ai_replies")
+            save_state(self.pet.state)
         self.mem = ai.load_memory()
         self._pending_user = None
         self._streaming = ""
@@ -2811,6 +2834,11 @@ class InteractiveBubble(QWidget):
         even if the pet was sleeping (we wake it first)."""
         pet = self.pet
         progression.ensure_progression(pet.state)
+        if self.action_name == "dig_reward":
+            pet._interactive_bubble = None
+            self.close()
+            pet.claim_dig_reward()
+            return
         before = dict(pet.state)
         before_xp_earned = pet.state["records"]["xp_earned"]
         before_affection_earned = pet.state["records"]["affection_earned"]
@@ -3018,6 +3046,20 @@ class InteractiveBubble(QWidget):
             painter.drawEllipse(ball)
             painter.drawArc(ball.adjusted(4, -1, 4, 1), 80 * 16, 95 * 16)
             painter.drawArc(ball.adjusted(-4, -1, -4, 1), 260 * 16, 95 * 16)
+        elif self.action_name == "dig_reward":
+            painter.setBrush(QColor("#f7bd35"))
+            painter.setPen(QPen(color, 1.8))
+            painter.drawEllipse(center, 9, 9)
+            painter.setBrush(Qt.NoBrush)
+            painter.drawEllipse(center, 5.5, 5.5)
+            painter.drawLine(
+                QPointF(center.x() - 3, center.y()),
+                QPointF(center.x() + 3, center.y()),
+            )
+            painter.drawLine(
+                QPointF(center.x(), center.y() - 3),
+                QPointF(center.x(), center.y() + 3),
+            )
         else:
             painter.setFont(pixel_font(14, QFont.Bold))
             painter.drawText(
@@ -3048,7 +3090,7 @@ def _esc(text):
 
 
 class SpeechBubble(QWidget):
-    """A single-line speech bubble that grows horizontally with its text."""
+    """A complete, queued speech bubble that wraps long messages."""
     def __init__(self, pet):
         super().__init__()
         self.pet = pet
@@ -3061,36 +3103,88 @@ class SpeechBubble(QWidget):
         self.setAttribute(Qt.WA_ShowWithoutActivating, True)
         self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
         self.setFont(pixel_font(11, QFont.Bold))
+        self._pending_messages = []
         self._hide_timer = QTimer(self)
         self._hide_timer.setSingleShot(True)
-        self._hide_timer.timeout.connect(self.hide)
+        self._hide_timer.timeout.connect(self._show_next_or_hide)
 
     def show_text(self, text, ms):
-        # Flatten all input so the bubble can never wrap onto a second line.
-        # Stop the previous countdown first.  Rapid clicks can otherwise leave
-        # an old timeout queued while the same translucent window is resized.
-        self._hide_timer.stop()
         text = " ".join(str(text).replace("\r", "\n").splitlines()).strip()
-        screen = self.pet.current_screen_rect()
+        duration = max(1, int(ms))
+        if not text:
+            return
+        # Never cut off a message that is already being read. Interactions,
+        # autonomous reminders and level-up lines can arrive in the same event
+        # loop, so subsequent lines wait their turn instead of resizing and
+        # repainting the visible translucent window underneath the reader.
+        if self.isVisible() and self._hide_timer.isActive():
+            if text == self.text:
+                self._hide_timer.start(
+                    max(duration, self._hide_timer.remainingTime())
+                )
+            elif not self._pending_messages or (
+                self._pending_messages[-1][0] != text
+            ):
+                self._pending_messages.append((text, duration))
+            return
+        self._display_text(text, duration)
+
+    def _display_text(self, text, duration):
+        self._hide_timer.stop()
+        screen = self._available_screen_rect()
         fm = self.fontMetrics()
         padding_x = 18
-        max_text_width = max(80, screen.width() - padding_x * 2 - 24)
-        self.text = fm.elidedText(text, Qt.ElideRight, max_text_width)
-        text_width = fm.horizontalAdvance(self.text)
+        max_bubble_width = max(126, min(520, screen.width() - 8))
+        max_text_width = max(80, max_bubble_width - padding_x * 2 - 10)
+        natural_width = max(1, fm.horizontalAdvance(text) + 2)
+        text_width = min(natural_width, max_text_width)
+        text_bounds = fm.boundingRect(
+            QRect(0, 0, int(text_width), 10000),
+            Qt.AlignCenter | Qt.TextWordWrap,
+            text,
+        )
+        self.text = text
         width = text_width + padding_x * 2 + 10
-        height = fm.height() + 28
+        height = max(fm.height(), text_bounds.height()) + 28
+        # Hiding first forces Windows to allocate a correctly sized backing
+        # surface for this translucent top-level window. Resizing it while
+        # visible can leave the newly exposed right/bottom area unpainted.
+        if self.isVisible():
+            self.hide()
         self.setGeometry(self._bubble_geometry(width, height))
-        if not self.isVisible():
-            self.show()
+        self.show()
         self.raise_()
-        # A synchronous full repaint prevents Windows' translucent backing
-        # surface from briefly retaining the old width after rapid updates.
         self.repaint()
-        self._hide_timer.start(max(1, int(ms)))
+        self._hide_timer.start(duration)
+
+    def _show_next_or_hide(self):
+        if not self.pet.isVisible():
+            self.clear_messages()
+            return
+        if self._pending_messages:
+            text, duration = self._pending_messages.pop(0)
+            # A brand-new top-level widget gets a fresh native translucent
+            # surface. Reusing a previously shown window can leave its right
+            # side permanently clipped on Windows after the width changes.
+            replacement = SpeechBubble(self.pet)
+            replacement._pending_messages = self._pending_messages
+            self._pending_messages = []
+            if getattr(self.pet, "_speech_bubble", None) is self:
+                self.pet._speech_bubble = replacement
+            self._hide_timer.stop()
+            self.close()
+            replacement._display_text(text, duration)
+            return
+        self.hide()
+
+    def clear_messages(self):
+        self._hide_timer.stop()
+        self._pending_messages.clear()
+        self.hide()
 
     def follow_pet(self):
         if not self.pet.isVisible():
-            self.hide()
+            self.clear_messages()
             return
         rect = self._bubble_geometry(self.width(), self.height())
         self.move(rect.topLeft())
@@ -3098,13 +3192,22 @@ class SpeechBubble(QWidget):
     def _bubble_geometry(self, width, height):
         """Return one complete on-screen geometry for an atomic update."""
         g = self.pet.geometry()
-        screen = self.pet.current_screen_rect()
+        screen = self._available_screen_rect()
         x = g.center().x() - width // 2
-        # Keep the one-line bubble inside the pet window's reserved head space.
-        y = g.top() + 3
+        # Keep the tail close to the dog's head even when long text wraps.
+        y = g.top() + 3 - max(0, height - 56)
         x = max(screen.left() + 4, min(x, screen.right() - width - 4))
         y = max(screen.top() + 4, min(y, screen.bottom() - height - 4))
         return QRect(int(x), int(y), int(width), int(height))
+
+    def _available_screen_rect(self):
+        """Resolve the pet's screen without using its one-second movement cache."""
+        screen_at = getattr(self.pet, "screen_at", None)
+        if callable(screen_at):
+            screen = screen_at(self.pet.geometry().center())
+            if screen is not None:
+                return screen.availableGeometry()
+        return self.pet.current_screen_rect()
 
     def paintEvent(self, event):
         p = QPainter(self)
@@ -3139,7 +3242,7 @@ class SpeechBubble(QWidget):
         p.setFont(self.font())
         p.setPen(QColor(80, 50, 20))
         p.drawText(body.adjusted(18, 0, -18, 0),
-                   Qt.AlignVCenter | Qt.AlignHCenter | Qt.TextSingleLine,
+                   Qt.AlignCenter | Qt.TextWordWrap,
                    self.text)
 
 
@@ -3222,7 +3325,7 @@ class FetchPlayScene(QWidget):
                 float(self.pet.animation_specs.get("play", {}).get("fps", 14)),
             )
         except (TypeError, ValueError):
-            self.fps = 14.0
+            self.fps = 24.0
 
         ball_path = os.path.join(PROPS_DIR, "fetch_ball.png")
         self.ball_pixmap = QPixmap(ball_path)
@@ -3445,15 +3548,9 @@ class FetchPlayScene(QWidget):
             baseline.y() - size * self.FRAME_BASELINE_RATIO,
             size, size,
         )
-        self.pet._draw_equipped_decoration_layer(
-            painter, "play", target, "rear", int(frame_index)
-        )
         painter.drawPixmap(
             target, pixmap,
             QRectF(0, 0, pixmap.width(), pixmap.height()),
-        )
-        self.pet._draw_equipped_decoration_layer(
-            painter, "play", target, "front", int(frame_index)
         )
 
     def _draw_celebration(self, painter, now):
@@ -3673,6 +3770,9 @@ class PetWindow(QWidget):
     AUTO_WAKE_ENERGY_THRESHOLD = 80.0
     AUTO_SLEEP_WALK_SPEED = 118.0
     AUTO_SLEEP_CORNER_MARGIN = 18
+    AUTONOMY_IDLE_WEIGHT = 9.0
+    AUTONOMY_WALK_WEIGHT = 1.0
+    AUTONOMY_SIT_WEIGHT = 2.0
 
     def __init__(self, state):
         super().__init__()
@@ -3711,6 +3811,10 @@ class PetWindow(QWidget):
             self.renderer = QSvgRenderer(self.svg_bytes)
             if not self.renderer.isValid():
                 raise RuntimeError("no pose PNGs and pet.svg invalid")
+
+        self.decoration_pixmaps = (
+            decoration_renderer.load_decoration_pixmaps()
+        )
 
         # Optional multi-frame actions. Each action lives in
         # assets/animations/<action>/ and falls back to the static pose above.
@@ -3757,7 +3861,7 @@ class PetWindow(QWidget):
         # walk timer / autonomous behavior
         self.behavior = "idle"  # idle / walk / sit / nap / ask
         self.behavior_until = 0.0
-        self.next_behavior_at = time.time() + random.uniform(3, 7)
+        self.next_behavior_at = time.time() + random.uniform(7, 13)
         self._auto_sleep_phase = (
             "sleeping"
             if self.state.get("sleeping")
@@ -3778,14 +3882,15 @@ class PetWindow(QWidget):
         self.play_scene = None  # zoomed-out interactive fetch scene
         self._play_return_pos = None
         self._interactive_bubble = None  # current floating action bubble
+        self._dig_reward_claiming = False
         self._bubble_menu = None         # radial bubble menu (right-click)
         self._last_interactive_t = 0.0   # throttle: don't spam
         self._ctx_menu_cb = None  # set by TrayApp to provide a right-click menu
         self._settings_applied_cb = None
         self._app_action_cb = None
 
-        # Single-line speech bubble is a separate window so it can grow wider
-        # than the pet widget without clipping or wrapping.
+        # Speech uses a detached top-level window so it can wrap outside the
+        # pet widget without being clipped by the pet's own bounds.
         self._speech_bubble = None
 
         # resize to pet size; place at saved pos
@@ -3813,6 +3918,13 @@ class PetWindow(QWidget):
         self.xp_timer = QTimer(self)
         self.xp_timer.timeout.connect(self.on_passive_xp)
         self.xp_timer.start(1000)
+
+        # Treasure checks are deliberately sparse. A pending find survives a
+        # restart and keeps returning until the player chooses to claim it.
+        self._dig_timer = QTimer(self)
+        self._dig_timer.timeout.connect(self.maybe_discover_dig_reward)
+        self._dig_timer.start(60000)
+        QTimer.singleShot(5000, self.maybe_discover_dig_reward)
 
         # health reminders
         self._last_drink_t = time.time()
@@ -4086,218 +4198,16 @@ class PetWindow(QWidget):
                 self.animation_frames[name] = frames
 
     @staticmethod
-    def _resolve_neck_anchor(definition, animation_name, frame_index=None):
-        """Resolve pose anchors, including interpolated per-frame keyframes."""
-        anchors = definition.get("neck_anchors", {})
-        source = anchors.get(
-            animation_name, anchors.get("default")
-        )
-        if not isinstance(source, dict):
-            return None
-        anchor = {
-            key: value for key, value in source.items()
-            if key not in ("keyframes", "frame_y_offsets")
-        }
-        keyframes = source.get("keyframes")
-        if isinstance(keyframes, dict) and frame_index is not None:
-            parsed = sorted(
-                (
-                    (int(index), values)
-                    for index, values in keyframes.items()
-                    if isinstance(values, dict)
-                ),
-                key=lambda item: item[0],
-            )
-            if parsed:
-                before = parsed[0]
-                after = parsed[-1]
-                for item in parsed:
-                    if item[0] <= frame_index:
-                        before = item
-                    if item[0] >= frame_index:
-                        after = item
-                        break
-                span = max(1, after[0] - before[0])
-                progress_value = max(
-                    0.0, min(1.0, (frame_index - before[0]) / span)
-                )
-                for key in ("left", "right"):
-                    start = before[1].get(key, anchor.get(key))
-                    end = after[1].get(key, start)
-                    if (
-                        isinstance(start, (list, tuple))
-                        and isinstance(end, (list, tuple))
-                        and len(start) >= 2 and len(end) >= 2
-                    ):
-                        anchor[key] = [
-                            float(start[0])
-                            + (float(end[0]) - float(start[0]))
-                            * progress_value,
-                            float(start[1])
-                            + (float(end[1]) - float(start[1]))
-                            * progress_value,
-                        ]
-        offsets = source.get("frame_y_offsets")
+    def _show_idle_decorations(
+            animation_name, pose, animation_pixmap):
+        """Keep passive states on the same decorated idle appearance."""
         if (
-            isinstance(offsets, (list, tuple))
-            and frame_index is not None
-            and offsets
+            animation_pixmap is not None
+            or animation_name not in ("idle", "sit", "ask")
+            or pose not in (POSE["idle"], POSE["close"])
         ):
-            offset = float(offsets[frame_index % len(offsets)])
-            for key in ("left", "right"):
-                point = anchor.get(key)
-                if isinstance(point, (list, tuple)) and len(point) >= 2:
-                    anchor[key] = [float(point[0]), float(point[1]) + offset]
-        return anchor
-
-    @staticmethod
-    def _cubic_midpoint(start, control1, control2, end):
-        return QPointF(
-            (
-                start.x() + 3 * control1.x()
-                + 3 * control2.x() + end.x()
-            ) / 8.0,
-            (
-                start.y() + 3 * control1.y()
-                + 3 * control2.y() + end.y()
-            ) / 8.0,
-        )
-
-    def _draw_equipped_decoration_layer(
-            self, painter, animation_name, dog_rect, layer,
-            frame_index=None):
-        """Draw collar halves around the dog instead of over it as a sticker."""
-        progression.ensure_progression(self.state)
-        equipped = self.state.get("equipped_decorations", {})
-        for category in progression.DECORATION_CATEGORIES:
-            decoration_id = equipped.get(category)
-            definition = progression.DECORATION_DEFINITIONS.get(
-                decoration_id
-            )
-            if definition is None:
-                continue
-            renderer = definition.get("renderer", {})
-            if renderer.get("type") != "layered_collar":
-                continue
-            visible_animations = renderer.get("visible_animations")
-            if (
-                isinstance(visible_animations, (list, tuple, set))
-                and animation_name not in visible_animations
-            ):
-                continue
-            anchor = self._resolve_neck_anchor(
-                definition, animation_name, frame_index
-            )
-            if not anchor or anchor.get("visible", True) is False:
-                continue
-            if (
-                layer == "rear"
-                and anchor.get("rear_visible", True) is False
-            ):
-                continue
-            left_value = anchor.get("left")
-            right_value = anchor.get("right")
-            if (
-                not isinstance(left_value, (list, tuple))
-                or not isinstance(right_value, (list, tuple))
-                or len(left_value) < 2 or len(right_value) < 2
-            ):
-                continue
-            left = QPointF(
-                dog_rect.left() + dog_rect.width() * float(left_value[0]),
-                dog_rect.top()
-                + dog_rect.height() * float(left_value[1]),
-            )
-            right = QPointF(
-                dog_rect.left() + dog_rect.width() * float(right_value[0]),
-                dog_rect.top()
-                + dog_rect.height() * float(right_value[1]),
-            )
-            thickness = max(
-                2.5,
-                dog_rect.width() * float(anchor.get("thickness", 0.03)),
-            )
-            sag = dog_rect.height() * float(anchor.get("sag", 0.03))
-            delta_x = right.x() - left.x()
-            average_y = (left.y() + right.y()) / 2.0
-            curve_y = average_y + (
-                sag if layer == "front" else -sag * 0.55
-            )
-            control1 = QPointF(left.x() + delta_x * 0.28, curve_y)
-            control2 = QPointF(right.x() - delta_x * 0.28, curve_y)
-            path = QPainterPath(left)
-            path.cubicTo(control1, control2, right)
-
-            painter.save()
-            painter.setBrush(Qt.NoBrush)
-            painter.setPen(QPen(
-                QColor(renderer.get("strap_dark", "#9f302f")),
-                thickness + 2.0, Qt.SolidLine, Qt.RoundCap,
-            ))
-            painter.drawPath(path)
-            strap_color = (
-                renderer.get("strap", "#e84f4b")
-                if layer == "front"
-                else renderer.get("strap_dark", "#9f302f")
-            )
-            painter.setPen(QPen(
-                QColor(strap_color),
-                thickness, Qt.SolidLine, Qt.RoundCap,
-            ))
-            painter.drawPath(path)
-
-            if layer == "front":
-                painter.setPen(QPen(
-                    QColor(renderer.get("strap_light", "#ff8a78")),
-                    max(1.0, thickness * 0.22),
-                    Qt.SolidLine, Qt.RoundCap,
-                ))
-                painter.drawPath(path)
-
-                midpoint = self._cubic_midpoint(
-                    left, control1, control2, right
-                )
-                ring_radius = max(2.1, thickness * 0.56)
-                tag_radius = max(2.8, thickness * 0.82)
-                hardware = QColor(
-                    renderer.get("hardware", "#f3ba50")
-                )
-                hardware_dark = QColor(
-                    renderer.get("hardware_dark", "#a96d24")
-                )
-                ring_center = QPointF(
-                    midpoint.x(), midpoint.y() + thickness * 0.60
-                )
-                painter.setPen(QPen(
-                    hardware_dark, max(1.0, thickness * 0.22)
-                ))
-                painter.setBrush(Qt.NoBrush)
-                painter.drawEllipse(
-                    ring_center, ring_radius, ring_radius
-                )
-                tag_center = QPointF(
-                    ring_center.x(),
-                    ring_center.y() + ring_radius + tag_radius * 0.72,
-                )
-                painter.setPen(QPen(
-                    hardware_dark, max(1.0, thickness * 0.20)
-                ))
-                painter.setBrush(hardware)
-                painter.drawEllipse(
-                    tag_center, tag_radius, tag_radius
-                )
-                highlight = QColor("#ffe39a")
-                painter.setPen(Qt.NoPen)
-                painter.setBrush(highlight)
-                painter.drawEllipse(
-                    QPointF(
-                        tag_center.x() - tag_radius * 0.28,
-                        tag_center.y() - tag_radius * 0.28,
-                    ),
-                    max(0.8, tag_radius * 0.20),
-                    max(0.8, tag_radius * 0.20),
-                )
-            painter.restore()
+            return False
+        return True
 
     def _animation_duration_ms(self, name):
         """Return the exact time needed to show every frame once."""
@@ -4311,7 +4221,9 @@ class PetWindow(QWidget):
             return 1
         return max(1, int(math.ceil(len(frames) * 1000.0 / fps)))
 
-    def trigger_animation(self, name, duration_ms=None):
+    def trigger_animation(
+        self, name, duration_ms=None, finished_callback=None
+    ):
         """Temporarily override state animation, optionally for one full run."""
         if duration_ms is None:
             duration_ms = self._animation_duration_ms(name)
@@ -4327,6 +4239,8 @@ class PetWindow(QWidget):
                 self._active_animation = None
                 self._animation_started_at = time.monotonic()
                 self.refresh_pose_from_state()
+            if callable(finished_callback):
+                finished_callback()
 
         QTimer.singleShot(max(1, int(duration_ms)), finish)
         self.update()
@@ -4372,6 +4286,17 @@ class PetWindow(QWidget):
         fallback = str(spec.get("fallback", animation_name))
         return POSE.get(fallback, self.pose)
 
+    @staticmethod
+    def _apply_blink_frame(blink, pose, animation_pixmap):
+        """Blink without replacing an active action-animation frame."""
+        if (
+            blink
+            and animation_pixmap is None
+            and pose in (POSE["idle"], POSE["happy"])
+        ):
+            return POSE["close"], None
+        return pose, animation_pixmap
+
     # ---------- painting ----------
     def paintEvent(self, event):
         p = QPainter(self)
@@ -4382,10 +4307,17 @@ class PetWindow(QWidget):
         animation_name = self._current_animation_name()
         pose = self._fallback_pose(animation_name)
         animation_pixmap = self._animation_frame(animation_name)
+        # Passive sit/ask behavior changes dialogue timing, not appearance.
+        # Keep the authored idle model so equipped decorations never vanish.
+        if (
+            animation_pixmap is None
+            and animation_name in ("idle", "sit", "ask")
+        ):
+            pose = POSE["idle"]
         # blink: briefly switch to "close" (eyes-closed) pose if available
-        if self.blink and pose in (POSE["idle"], POSE["happy"]):
-            pose = POSE["close"]
-            animation_pixmap = None
+        pose, animation_pixmap = self._apply_blink_frame(
+            self.blink, pose, animation_pixmap
+        )
 
         # dog occupies lower part of widget; top is reserved for speech bubble
         dog_y = self.PET_H - self.DOG_H
@@ -4396,11 +4328,6 @@ class PetWindow(QWidget):
             p.save()
             p.translate(self.PET_W, 0)
             p.scale(-1, 1)
-
-        frame_index = getattr(self, "_animation_frame_index", None)
-        self._draw_equipped_decoration_layer(
-            p, animation_name, dst, "rear", frame_index
-        )
 
         if animation_pixmap is not None or self.use_png:
             pm = (animation_pixmap or self.pose_pixmaps.get(pose)
@@ -4437,9 +4364,14 @@ class PetWindow(QWidget):
             self.renderer.setViewBox(src)
             self.renderer.render(p, dst)
 
-        self._draw_equipped_decoration_layer(
-            p, animation_name, dst, "front", frame_index
-        )
+        if self._show_idle_decorations(
+                animation_name, pose, animation_pixmap):
+            decoration_renderer.draw_equipped_idle(
+                p,
+                self.state,
+                dst,
+                self.decoration_pixmaps,
+            )
 
         if self.facing < 0:
             p.restore()
@@ -4532,7 +4464,17 @@ class PetWindow(QWidget):
     def say(self, text, ms=2200):
         if not self.isVisible():
             return
-        if self._speech_bubble is None:
+        speech = self._speech_bubble
+        if speech is not None:
+            try:
+                # Do not reuse a hidden native translucent window at a new
+                # size; construct a fresh backing surface for the next line.
+                if not speech.isVisible():
+                    speech.close()
+                    speech = None
+            except RuntimeError:
+                speech = None
+        if speech is None:
             self._speech_bubble = SpeechBubble(self)
         self._speech_bubble.show_text(text, ms)
 
@@ -4541,8 +4483,7 @@ class PetWindow(QWidget):
         speech = self._speech_bubble
         if speech is not None:
             try:
-                speech._hide_timer.stop()
-                speech.hide()
+                speech.clear_messages()
             except RuntimeError:
                 self._speech_bubble = None
 
@@ -4807,7 +4748,7 @@ class PetWindow(QWidget):
             except RuntimeError:
                 self._bubble_menu = None
 
-        # keep the single-line speech bubble following the pet
+        # keep the detached speech bubble following the pet
         if self._speech_bubble is not None and self._speech_bubble.isVisible():
             try:
                 self._speech_bubble.follow_pet()
@@ -4984,8 +4925,9 @@ class PetWindow(QWidget):
     # ---------- decay ----------
     def on_decay(self):
         s = self.settings
+        effects = progression.upgrade_effects(self.state)
+        awake_decay_multiplier = effects["awake_decay_multiplier"]
         if self.state["sleeping"]:
-            effects = progression.upgrade_effects(self.state)
             energy_gain = (
                 s["decay_energy_sleeping_gain"]
                 + effects["sleep_energy_gain_bonus"]
@@ -5001,9 +4943,21 @@ class PetWindow(QWidget):
                 0, self.state["hunger"] - hunger_cost
             )
         else:
-            self.state["hunger"] = max(0, self.state["hunger"] - s["decay_hunger"])
-            self.state["energy"] = max(0, self.state["energy"] - s["decay_energy"])
-            self.state["mood"] = max(0, self.state["mood"] - s["decay_mood"])
+            self.state["hunger"] = max(
+                0,
+                self.state["hunger"]
+                - s["decay_hunger"] * awake_decay_multiplier,
+            )
+            self.state["energy"] = max(
+                0,
+                self.state["energy"]
+                - s["decay_energy"] * awake_decay_multiplier,
+            )
+            self.state["mood"] = max(
+                0,
+                self.state["mood"]
+                - s["decay_mood"] * awake_decay_multiplier,
+            )
         auto_sleep_event = self._update_auto_sleep_state()
         save_state(self.state)
         self.refresh_pose_from_state()
@@ -5058,19 +5012,26 @@ class PetWindow(QWidget):
         candidates = []
         if self.state["hunger"] < 40:
             candidates.append((
-                "feed", "肚子饿啦 · 喂喂我", "#f39a68", "饱腹"
+                "feed", "喂喂我", "#f39a68", "饱腹"
             ))
         if self.state["mood"] < 40:
             candidates.append((
-                "play", "有点难过 · 陪我玩", "#75cda8", "心情"
+                "play", "陪我玩", "#75cda8", "心情"
             ))
         if not candidates:
             return
-        # ~25% chance per decay tick (every 2s) when a stat is low ->
-        # feels organic, not spammy
-        if random.random() > 0.25:
-            return
-        action, label, color, _ = random.choice(candidates)
+        # Mood is communicated by a nearby action bubble instead of swapping
+        # the decorated idle model for the legacy sad pose. Prefer that bubble
+        # when hunger and mood happen to be low at the same time.
+        mood_candidates = [
+            candidate for candidate in candidates
+            if candidate[0] == "play"
+        ]
+        action, label, color, _ = (
+            mood_candidates[0]
+            if mood_candidates
+            else candidates[0]
+        )
         # bonus_text not pre-computed; computed from actual deltas on click
         self._interactive_bubble = InteractiveBubble(self, label, action, color, "")
         self._last_interactive_t = time.time()
@@ -5080,6 +5041,92 @@ class PetWindow(QWidget):
         elif action == "play":
             self.say("心情有点低落，陪我玩一会儿嘛～", 2500)
 
+    def _show_pending_dig_bubble(self):
+        if int(self.state.get("pending_dig_reward", 0)) <= 0:
+            return False
+        if self._interactive_bubble is not None:
+            try:
+                if self._interactive_bubble.isVisible():
+                    return False
+            except RuntimeError:
+                self._interactive_bubble = None
+        self._interactive_bubble = InteractiveBubble(
+            self, "发现宝藏", "dig_reward", "#e3ac36", ""
+        )
+        self._last_interactive_t = time.time()
+        return True
+
+    def maybe_discover_dig_reward(self, now=None, rng=None):
+        """Occasionally surface one persistent, cooldown-limited treasure."""
+        progression.ensure_progression(self.state)
+        if not self.isVisible():
+            return False
+        if int(self.state.get("pending_dig_reward", 0)) > 0:
+            if self.dragging or self.state.get("sleeping") or self.play_scene:
+                return False
+            return self._show_pending_dig_bubble()
+        if (
+            self.dragging
+            or self.state.get("sleeping")
+            or self.play_scene is not None
+            or self._dig_reward_claiming
+        ):
+            return False
+        now = time.time() if now is None else float(now)
+        if progression.dig_cooldown_remaining(self.state, now) > 0:
+            return False
+        rng = rng or random
+        if float(rng.random()) >= progression.DIG_DISCOVERY_CHANCE:
+            return False
+        reward = progression.roll_dig_reward(rng)
+        self.state["pending_dig_reward"] = int(reward["amount"])
+        self.state["last_dig_discovery_at"] = now
+        save_state(self.state)
+        shown = self._show_pending_dig_bubble()
+        if shown:
+            self.say("好像挖到亮闪闪的东西啦！", 2400)
+        return True
+
+    def claim_dig_reward(self):
+        """Play the full reveal first, then add the pending Pet coins."""
+        progression.ensure_progression(self.state)
+        if self._dig_reward_claiming:
+            return False
+        amount = int(self.state.get("pending_dig_reward", 0))
+        if amount <= 0:
+            return False
+        self._dig_reward_claiming = True
+
+        def award():
+            pending = int(self.state.get("pending_dig_reward", 0))
+            if pending > 0:
+                self.state["pending_dig_reward"] = 0
+                self.state["records"]["dig_treasures_found"] += 1
+                progression.add_coins(
+                    self.state, pending, source="digging"
+                )
+                save_state(self.state)
+                try:
+                    geometry = self.geometry()
+                    self._last_bonus = BonusBubble(
+                        f"Pet币 +{pending}",
+                        geometry.center().x(),
+                        geometry.top() - 10,
+                        "#e3ac36",
+                    )
+                except Exception:
+                    pass
+                self.say(f"挖到 {pending} 枚 Pet币！", 2500)
+                if self.shop_win is not None:
+                    try:
+                        self.shop_win.refresh()
+                    except RuntimeError:
+                        self.shop_win = None
+            self._dig_reward_claiming = False
+
+        self.trigger_animation("dig_reward", finished_callback=award)
+        return True
+
     def refresh_pose_from_state(self):
         if self.state["sleeping"]:
             self.pose = POSE["sleep"]; return
@@ -5087,10 +5134,8 @@ class PetWindow(QWidget):
             self.pose = POSE["drag"]; return
         if self.behavior == "eat":
             self.pose = POSE["eat"]; return
-        # sad only when very low mood or very hungry
-        if self.state["mood"] < 25 or self.state["hunger"] < 20:
-            self.pose = POSE["sad"]; return
-        # default: idle (happy is only set temporarily by interactions)
+        # Hunger and mood are expressed through nearby action bubbles. Passive
+        # appearance always returns to the decorated idle model.
         self.pose = POSE["idle"]
 
     # ---------- autonomous behavior ----------
@@ -5115,11 +5160,19 @@ class PetWindow(QWidget):
                      else s["ask_weight_normal"]) * boost
             choice = random.choices(
                 ["idle","walk","sit","ask"],
-                weights=[4, 4, 2, ask_w],
+                weights=[
+                    self.AUTONOMY_IDLE_WEIGHT,
+                    self.AUTONOMY_WALK_WEIGHT,
+                    self.AUTONOMY_SIT_WEIGHT,
+                    ask_w,
+                ],
                 k=1
             )[0]
             if choice == "walk":
                 self.behavior = "walk"
+                progression.record_action(
+                    self.state, "autonomous_walks"
+                )
                 self.target_vx = random.choice([-1,1]) * random.uniform(60, 180)
                 self.behavior_until = now + random.uniform(2, 5)
                 self.facing = 1 if self.target_vx > 0 else -1
@@ -5164,8 +5217,10 @@ class PetWindow(QWidget):
                 self.behavior = "idle"
                 self.target_vx = 0
                 self.vx = 0
-                self.behavior_until = now + random.uniform(1, 3)
-            self.next_behavior_at = self.behavior_until + random.uniform(2, 6)
+                self.behavior_until = now + random.uniform(4, 8)
+            self.next_behavior_at = (
+                self.behavior_until + random.uniform(5, 10)
+            )
         # stop walking when deadline hits
         if self.behavior == "walk" and now >= self.behavior_until:
             self.behavior = "idle"
@@ -5839,11 +5894,11 @@ class TrayApp:
         candidates = []
         if s["hunger"] < 100:
             candidates.append((
-                "feed", "肚子饿啦 · 喂喂我", "#f39a68"
+                "feed", "喂喂我", "#f39a68"
             ))
         if s["mood"] < 100:
             candidates.append((
-                "play", "有点难过 · 陪我玩", "#75cda8"
+                "play", "陪我玩", "#75cda8"
             ))
         if not candidates: return
         # choose the lowest

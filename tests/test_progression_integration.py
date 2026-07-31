@@ -101,6 +101,56 @@ class InteractionUpgradeIntegrationTests(unittest.TestCase):
         self.assertEqual(state["hunger"], 50)
         self.assertEqual(state["energy"], 30)
 
+    def test_max_endurance_halves_all_awake_natural_decay(self):
+        state = progression.ensure_progression({
+            "sleeping": False,
+            "hunger": 100,
+            "mood": 100,
+            "energy": 100,
+            "upgrades": {"endurance": 5},
+        })
+        fake = SimpleNamespace(
+            state=state,
+            settings={
+                "decay_hunger": 0.14,
+                "decay_energy": 0.10,
+                "decay_mood": 0.08,
+            },
+            _update_auto_sleep_state=Mock(return_value="walking"),
+            refresh_pose_from_state=Mock(),
+        )
+
+        with patch("pet.save_state"):
+            pet.PetWindow.on_decay(fake)
+
+        self.assertAlmostEqual(state["hunger"], 99.93)
+        self.assertAlmostEqual(state["energy"], 99.95)
+        self.assertAlmostEqual(state["mood"], 99.96)
+
+    def test_endurance_does_not_change_sleeping_hunger_cost(self):
+        state = progression.ensure_progression({
+            "sleeping": True,
+            "sleep_mode": "manual",
+            "hunger": 50,
+            "mood": 70,
+            "energy": 20,
+            "upgrades": {"endurance": 5},
+        })
+        fake = SimpleNamespace(
+            state=state,
+            settings={
+                "decay_energy_sleeping_gain": 4,
+                "decay_hunger_sleeping": 0.08,
+            },
+            _update_auto_sleep_state=Mock(return_value="sleeping"),
+            refresh_pose_from_state=Mock(),
+        )
+
+        with patch("pet.save_state"):
+            pet.PetWindow.on_decay(fake)
+
+        self.assertAlmostEqual(state["hunger"], 49.92)
+
     def test_experience_upgrade_is_used_by_pet_leveling(self):
         state = progression.ensure_progression({
             "level": 1,

@@ -81,6 +81,22 @@ class ChatToolsTests(unittest.TestCase):
         )
         thread_cls.return_value.start.assert_called_once_with()
 
+    def test_long_chat_content_finishes_at_the_bottom(self):
+        self.window.show()
+        long_reply = "\n\n".join(
+            f"第 {index} 段：" + "这是较长的回复内容。" * 12
+            for index in range(30)
+        )
+
+        self.window._set_log_html(
+            self.window._bubble_html("assistant", long_reply)
+        )
+        QApplication.processEvents()
+        self.window._scroll_log_to_bottom()
+
+        scrollbar = self.window.log.verticalScrollBar()
+        self.assertEqual(scrollbar.value(), scrollbar.maximum())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -10,7 +10,14 @@ from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import QApplication, QLabel, QPushButton
 
 import progression
-from progression_ui import AchievementsWindow, RecordsWindow, ShopWindow
+from progression_ui import (
+    AchievementsWindow,
+    DecorationAdjustWindow,
+    DecorationPreview,
+    DecorationPreviewWindow,
+    RecordsWindow,
+    ShopWindow,
+)
 
 
 class ProgressionWindowUiTests(unittest.TestCase):
@@ -71,11 +78,38 @@ class ProgressionWindowUiTests(unittest.TestCase):
             button.text() for button in shop.findChildren(QPushButton)
             if button.objectName() == "tabButton"
         ]
-        self.assertTrue(any("第一页 · 装饰" in text for text in tab_texts))
-        self.assertTrue(any("第二页 · 强化" in text for text in tab_texts))
+        self.assertEqual(tab_texts, ["🎀 装饰", "✨ 强化"])
+        category_texts = [
+            button.text() for button in shop.findChildren(QPushButton)
+            if button.objectName() == "categoryTabButton"
+        ]
+        self.assertEqual(category_texts, ["颈饰", "帽子", "眼镜"])
         self.assertIn("装饰小铺", decoration_text)
         self.assertIn("暖心红项圈", decoration_text)
+        self.assertIn("晴空爪印领结", decoration_text)
+        self.assertNotIn("奶油贝雷帽", decoration_text)
+        self.assertNotIn("暖金圆框眼镜", decoration_text)
         self.assertNotIn("温柔抚摸", decoration_text)
+
+        shop._set_decoration_category("head")
+        QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+        QApplication.processEvents()
+        hat_text = " ".join(
+            label.text() for label in shop.findChildren(QLabel)
+        )
+        self.assertIn("奶油贝雷帽", hat_text)
+        self.assertIn("噜噜小橘子", hat_text)
+        self.assertNotIn("暖心红项圈", hat_text)
+
+        shop._set_decoration_category("eyes")
+        QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+        QApplication.processEvents()
+        glasses_text = " ".join(
+            label.text() for label in shop.findChildren(QLabel)
+        )
+        self.assertIn("暖金圆框眼镜", glasses_text)
+        self.assertIn("酷黑爪印墨镜", glasses_text)
+        self.assertNotIn("奶油贝雷帽", glasses_text)
 
         shop._set_page("upgrades")
         QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
@@ -85,6 +119,9 @@ class ProgressionWindowUiTests(unittest.TestCase):
         )
         self.assertIn("成长强化", upgrade_text)
         self.assertIn("温柔抚摸", upgrade_text)
+        self.assertIn("持久活力", upgrade_text)
+        self.assertIn("清醒属性消耗减缓 0%", upgrade_text)
+        self.assertIn("清醒属性消耗减缓 10%", upgrade_text)
         self.assertNotIn("装饰小铺", upgrade_text)
 
     def test_new_panels_use_the_larger_typography(self):
@@ -92,8 +129,39 @@ class ProgressionWindowUiTests(unittest.TestCase):
         self.windows = [shop]
         stylesheet = shop.styleSheet()
 
-        self.assertIn("font-size: 19px", stylesheet)
-        self.assertIn("font-size: 30px", stylesheet)
+        self.assertIn("font-size: 20px", stylesheet)
+        self.assertIn("font-size: 33px", stylesheet)
+        self.assertIn("QLabel#effectCurrent", stylesheet)
+        self.assertIn("QLabel#effectNext", stylesheet)
+
+    def test_achievement_header_shows_completed_over_total(self):
+        achievements = AchievementsWindow(self.pet, Mock())
+        self.windows = [achievements]
+
+        achievements.refresh()
+        texts = [
+            label.text() for label in achievements.findChildren(QLabel)
+        ]
+
+        self.assertTrue(any(
+            text.startswith("已完成 ") and "/" in text
+            for text in texts
+        ))
+
+    def test_records_include_new_activity_and_collection_counters(self):
+        records = RecordsWindow(self.pet, Mock())
+        self.windows = [records]
+
+        records.refresh()
+        text = " ".join(
+            label.text() for label in records.findChildren(QLabel)
+        )
+
+        for title in (
+            "AI 回复", "自主散步", "收集装扮",
+            "更换装扮", "购买强化", "领取成就",
+        ):
+            self.assertIn(title, text)
 
     def test_free_collar_runs_through_claim_equip_and_unequip(self):
         save = Mock()
@@ -116,6 +184,67 @@ class ProgressionWindowUiTests(unittest.TestCase):
         )
         self.assertEqual(save.call_count, 3)
         self.assertEqual(self.pet.update.call_count, 3)
+
+    def test_equipped_decoration_opens_idle_adjustment_editor(self):
+        save = Mock()
+        shop = ShopWindow(self.pet, save)
+        self.windows = [shop]
+        shop._purchase_decoration("red_collar")
+        shop._equip_decoration("red_collar")
+
+        adjust_buttons = [
+            button for button in shop.findChildren(QPushButton)
+            if button.text() == "微调位置"
+        ]
+        self.assertEqual(len(adjust_buttons), 1)
+
+        shop._open_decoration_adjuster("red_collar")
+        editor = shop.adjust_window
+        self.assertIsInstance(editor, DecorationAdjustWindow)
+        labels = [
+            label.text() for label in editor.findChildren(QLabel)
+        ]
+        self.assertNotIn("位置微调", labels)
+        button_texts = [
+            button.text() for button in editor.findChildren(QPushButton)
+        ]
+        for arrow in ("←", "↑", "↓", "→"):
+            self.assertNotIn(arrow, button_texts)
+        self.assertEqual(DecorationPreview.SELECTION_COLOR, "#f2b705")
+        before = progression.decoration_transform(
+            self.pet.state, "red_collar"
+        )
+        editor._change(x=0.015, scale=0.035, rotation=2.0)
+        after = progression.decoration_transform(
+            self.pet.state, "red_collar"
+        )
+
+        self.assertGreater(after["x"], before["x"])
+        self.assertGreater(after["scale"], before["scale"])
+        self.assertGreater(after["rotation"], before["rotation"])
+        self.assertGreaterEqual(save.call_count, 3)
+
+    def test_shop_preview_is_non_destructive_and_try_on_equips_copy(self):
+        shop = ShopWindow(self.pet, Mock())
+        self.windows = [shop]
+        original_owned = list(self.pet.state["owned_decorations"])
+        original_equipped = dict(self.pet.state["equipped_decorations"])
+
+        shop._open_decoration_preview("black_sunglasses")
+        preview = shop.preview_window
+        self.assertIsInstance(preview, DecorationPreviewWindow)
+        self.assertEqual(self.pet.state["owned_decorations"], original_owned)
+        self.assertEqual(
+            self.pet.state["equipped_decorations"], original_equipped
+        )
+        self.assertIn(
+            "black_sunglasses", preview.preview_state["owned_decorations"]
+        )
+        self.assertEqual(
+            preview.preview_state["equipped_decorations"]["eyes"],
+            "black_sunglasses",
+        )
+        self.assertFalse(preview.preview.allow_drag)
 
 
 if __name__ == "__main__":

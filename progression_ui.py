@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import os
 import time
+import copy
 
-from PyQt5.QtCore import Qt, QPoint
+from PyQt5.QtCore import Qt, QPoint, QRectF
 from PyQt5.QtGui import QColor, QLinearGradient, QPainter, QPen, QPixmap
 from PyQt5.QtWidgets import (
     QApplication,
@@ -21,7 +22,8 @@ from PyQt5.QtWidgets import (
 )
 
 import progression
-from app_paths import DECORATIONS_DIR
+import decoration_renderer
+from app_paths import DECORATIONS_DIR, POSES_DIR
 
 
 PANEL_STYLE = """
@@ -29,7 +31,7 @@ PANEL_STYLE = """
         background: transparent;
         color: #65483b;
         font-family: 'Microsoft YaHei', sans-serif;
-        font-size: 19px;
+        font-size: 20px;
     }
     QWidget#cozyProgressWindow {
         background: #fff8ec;
@@ -38,12 +40,12 @@ PANEL_STYLE = """
     }
     QLabel#panelTitle {
         color: #754b3a;
-        font-size: 30px;
+        font-size: 33px;
         font-weight: 900;
     }
     QLabel#panelSubtitle {
         color: #a27a68;
-        font-size: 17px;
+        font-size: 19px;
     }
     QLabel#coinPill {
         background: #fff0c8;
@@ -56,13 +58,13 @@ PANEL_STYLE = """
     }
     QLabel#sectionTitle {
         color: #8b5744;
-        font-size: 23px;
+        font-size: 25px;
         font-weight: 900;
         padding: 5px 2px;
     }
     QLabel#muted {
         color: #a98270;
-        font-size: 16px;
+        font-size: 18px;
     }
     QLabel#status {
         color: #c96f59;
@@ -84,7 +86,7 @@ PANEL_STYLE = """
     }
     QLabel#cardTitle {
         color: #7a5040;
-        font-size: 20px;
+        font-size: 22px;
         font-weight: 900;
     }
     QLabel#cardValue {
@@ -97,6 +99,7 @@ PANEL_STYLE = """
         color: #a96e27;
         border-radius: 11px;
         padding: 4px 9px;
+        font-size: 18px;
         font-weight: 800;
     }
     QLabel#levelBadge {
@@ -104,6 +107,7 @@ PANEL_STYLE = """
         color: #a8604e;
         border-radius: 12px;
         padding: 5px 10px;
+        font-size: 18px;
         font-weight: 900;
     }
     QPushButton {
@@ -112,7 +116,7 @@ PANEL_STYLE = """
         border: 0;
         border-radius: 12px;
         padding: 9px 17px;
-        font-size: 18px;
+        font-size: 19px;
         font-weight: 800;
     }
     QPushButton:hover { background: #f5a08a; }
@@ -161,6 +165,50 @@ PANEL_STYLE = """
     QPushButton#tabButton:checked {
         background: #f28f76;
         color: #ffffff;
+    }
+    QFrame#categoryTabBar {
+        background: #fff7eb;
+        border: 1px solid #edcfb8;
+        border-radius: 15px;
+    }
+    QPushButton#categoryTabButton {
+        background: transparent;
+        color: #966451;
+        border: 0;
+        border-radius: 11px;
+        padding: 9px 22px;
+        font-size: 19px;
+        font-weight: 900;
+    }
+    QPushButton#categoryTabButton:hover {
+        background: #fff0df;
+    }
+    QPushButton#categoryTabButton:checked {
+        background: #f7c86e;
+        color: #704532;
+    }
+    QLabel#upgradeSummary {
+        color: #8f6b5c;
+        font-size: 18px;
+        padding: 2px 0 5px 0;
+    }
+    QLabel#effectCurrent {
+        background: #f8eee5;
+        color: #6e4b3e;
+        border: 1px solid #ead1bf;
+        border-radius: 12px;
+        padding: 10px 13px;
+        font-size: 19px;
+        font-weight: 700;
+    }
+    QLabel#effectNext {
+        background: #fff4cf;
+        color: #8a5b22;
+        border: 1px solid #efcf79;
+        border-radius: 12px;
+        padding: 10px 13px;
+        font-size: 19px;
+        font-weight: 800;
     }
     QProgressBar {
         background: #f2e3d6;
@@ -459,6 +507,26 @@ class RecordsWindow(CozyProgressWindow):
                 self._data_card(*item), index // 2, index % 2
             )
         self.content_layout.addWidget(growth_host)
+        section = QLabel("🎀 收藏与探索")
+        section.setObjectName("sectionTitle")
+        self.content_layout.addWidget(section)
+        explore_host = QWidget()
+        explore_grid = QGridLayout(explore_host)
+        explore_grid.setContentsMargins(0, 0, 0, 0)
+        explore_grid.setSpacing(10)
+        explore_cards = [
+            ("AI 回复", records["ai_replies"], "小狗认真回复消息的次数"),
+            ("自主散步", records["autonomous_walks"], "自己在桌面散步的次数"),
+            ("收集装扮", records["decorations_collected"], "已经拥有的装扮数量"),
+            ("更换装扮", records["outfit_changes"], "穿上或收好装扮的次数"),
+            ("购买强化", records["upgrades_purchased"], "累计完成的强化次数"),
+            ("领取成就", records["achievements_claimed"], "已经领取奖励的成就"),
+        ]
+        for index, item in enumerate(explore_cards):
+            explore_grid.addWidget(
+                self._data_card(*item), index // 2, index % 2
+            )
+        self.content_layout.addWidget(explore_host)
         self.content_layout.addStretch(1)
 
     @staticmethod
@@ -492,6 +560,7 @@ class AchievementsWindow(CozyProgressWindow):
         _clear_layout(self.content_layout)
         items = progression.achievement_catalog(self.pet.state)
         claimable = [item for item in items if item["claimable"]]
+        completed_count = sum(1 for item in items if item["completed"])
         claimed_count = sum(1 for item in items if item["claimed"])
 
         summary = QFrame()
@@ -503,6 +572,11 @@ class AchievementsWindow(CozyProgressWindow):
             f"待领取 {len(claimable)} 项"
         )
         info.setObjectName("cardTitle")
+        info.setText(
+            f"已完成 {completed_count}/{len(items)}  ·  "
+            f"已领取 {claimed_count} 项  ·  "
+            f"待领取 {len(claimable)} 项"
+        )
         claim_all = QPushButton(
             f"一键领取（{len(claimable)}）"
             if claimable else "暂无待领取奖励"
@@ -616,15 +690,324 @@ class AchievementsWindow(CozyProgressWindow):
         self.status_label.setText(message)
 
 
+class DecorationPreview(QWidget):
+    """Large idle-pose preview whose selected decoration can be dragged."""
+
+    SELECTION_COLOR = "#f2b705"
+
+    def __init__(
+        self,
+        pet,
+        decoration_id,
+        on_drag_finished=None,
+        preview_state=None,
+        allow_drag=True,
+    ):
+        super().__init__()
+        self.pet = pet
+        self.decoration_id = decoration_id
+        self.on_drag_finished = on_drag_finished
+        self.preview_state = preview_state
+        self.allow_drag = bool(allow_drag)
+        self.base_pixmap = QPixmap(os.path.join(POSES_DIR, "idle.png"))
+        self.decoration_pixmaps = (
+            decoration_renderer.load_decoration_pixmaps()
+        )
+        self._dog_bounds = QRectF()
+        self._selected_bounds = QRectF()
+        self._last_drag_pos = None
+        self.setMinimumHeight(370)
+        self.setCursor(
+            Qt.OpenHandCursor if self.allow_drag else Qt.ArrowCursor
+        )
+
+    def _state(self):
+        return self.preview_state or self.pet.state
+
+    def _preview_bounds(self):
+        available_width = max(1.0, self.width() - 36.0)
+        available_height = max(1.0, self.height() - 48.0)
+        width = min(available_width, available_height * 190.0 / 160.0)
+        height = width * 160.0 / 190.0
+        return QRectF(
+            (self.width() - width) / 2.0,
+            16.0 + (available_height - height) / 2.0,
+            width,
+            height,
+        )
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        card = QRectF(self.rect()).adjusted(1, 1, -2, -2)
+        gradient = QLinearGradient(card.topLeft(), card.bottomRight())
+        gradient.setColorAt(0.0, QColor("#fffdf8"))
+        gradient.setColorAt(1.0, QColor("#f9e7d8"))
+        painter.setBrush(gradient)
+        painter.setPen(QPen(QColor("#e9c9b1"), 1.4))
+        painter.drawRoundedRect(card, 18, 18)
+
+        self._dog_bounds = self._preview_bounds()
+        dog_rect = decoration_renderer.fit_pixmap_rect(
+            self.base_pixmap, self._dog_bounds
+        )
+        if not dog_rect.isEmpty():
+            painter.drawPixmap(
+                dog_rect,
+                self.base_pixmap,
+                QRectF(
+                    0,
+                    0,
+                    self.base_pixmap.width(),
+                    self.base_pixmap.height(),
+                ),
+            )
+        geometries = decoration_renderer.draw_equipped_idle(
+            painter,
+            self._state(),
+            self._dog_bounds,
+            self.decoration_pixmaps,
+            selected_id=(self.decoration_id if self.allow_drag else None),
+        )
+        self._selected_bounds = geometries.get(
+            self.decoration_id, QRectF()
+        )
+        if self.allow_drag and not self._selected_bounds.isEmpty():
+            painter.setBrush(Qt.NoBrush)
+            painter.setPen(QPen(
+                QColor(self.SELECTION_COLOR), 3.0, Qt.DashLine
+            ))
+            painter.drawRoundedRect(
+                self._selected_bounds.adjusted(-5, -5, 5, 5),
+                8,
+                8,
+            )
+
+        painter.setPen(QColor("#9b7565"))
+        painter.drawText(
+            QRectF(14, self.height() - 31, self.width() - 28, 22),
+            Qt.AlignCenter,
+            "按住装饰拖动位置" if self.allow_drag else "待机姿势试戴效果",
+        )
+
+    def mousePressEvent(self, event):
+        if (
+            self.allow_drag
+            and
+            event.button() == Qt.LeftButton
+            and self._selected_bounds.adjusted(
+                -10, -10, 10, 10
+            ).contains(event.pos())
+        ):
+            self._last_drag_pos = event.pos()
+            self.setCursor(Qt.ClosedHandCursor)
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if (
+            self._last_drag_pos is None
+            or not (event.buttons() & Qt.LeftButton)
+            or self._dog_bounds.isEmpty()
+        ):
+            super().mouseMoveEvent(event)
+            return
+        delta = event.pos() - self._last_drag_pos
+        self._last_drag_pos = event.pos()
+        current = progression.decoration_transform(
+            self._state(), self.decoration_id
+        )
+        progression.set_decoration_transform(
+            self._state(),
+            self.decoration_id,
+            x=current["x"] + delta.x() / self._dog_bounds.width(),
+            y=current["y"] + delta.y() / self._dog_bounds.height(),
+        )
+        self.pet.update()
+        self.update()
+        event.accept()
+
+    def mouseReleaseEvent(self, event):
+        if self._last_drag_pos is not None:
+            self._last_drag_pos = None
+            self.setCursor(Qt.OpenHandCursor)
+            if callable(self.on_drag_finished):
+                self.on_drag_finished()
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
+
+
+class DecorationPreviewWindow(CozyProgressWindow):
+    """Non-destructive try-on for decorations before purchase."""
+
+    def __init__(self, pet, decoration_id, closed_callback=None):
+        self.decoration_id = decoration_id
+        self.closed_callback = closed_callback
+        definition = progression.DECORATION_DEFINITIONS[decoration_id]
+        self.preview_state = copy.deepcopy(pet.state)
+        progression.ensure_progression(self.preview_state)
+        if decoration_id not in self.preview_state["owned_decorations"]:
+            self.preview_state["owned_decorations"].append(decoration_id)
+        self.preview_state["equipped_decorations"][
+            definition["category"]
+        ] = decoration_id
+        super().__init__(
+            pet,
+            f"👀 试戴 · {definition['name']}",
+            "购买前预览，不会改变当前装扮。",
+            (620, 610),
+        )
+        self.preview = DecorationPreview(
+            pet,
+            decoration_id,
+            preview_state=self.preview_state,
+            allow_drag=False,
+        )
+        self.content_layout.addWidget(self.preview)
+        self.content_layout.addStretch(1)
+        self.refresh()
+
+    def refresh(self):
+        self._refresh_coin_label()
+        self.status_label.setText("仅供预览 · 购买后可自由微调")
+        if hasattr(self, "preview"):
+            self.preview.update()
+
+    def closeEvent(self, event):
+        if callable(self.closed_callback):
+            self.closed_callback(self)
+        super().closeEvent(event)
+
+
+class DecorationAdjustWindow(CozyProgressWindow):
+    """Player-facing idle decoration transform editor."""
+
+    def __init__(
+        self,
+        pet,
+        decoration_id,
+        save_callback,
+        closed_callback=None,
+    ):
+        self.decoration_id = decoration_id
+        self.save_callback = save_callback
+        self.closed_callback = closed_callback
+        definition = progression.DECORATION_DEFINITIONS[decoration_id]
+        super().__init__(
+            pet,
+            f"🎀 微调 · {definition['name']}",
+            "只调整待机姿势。拖动装饰改变位置，也可以精细调整大小和角度。",
+            (690, 650),
+        )
+        self.preview = DecorationPreview(
+            pet, decoration_id, self._finish_drag
+        )
+        self.content_layout.addWidget(self.preview)
+
+        shape_title = QLabel("大小与角度")
+        shape_title.setObjectName("sectionTitle")
+        self.content_layout.addWidget(shape_title)
+        shape_row = QHBoxLayout()
+        for text, scale, rotation in (
+            ("缩小", -0.035, 0.0),
+            ("放大", 0.035, 0.0),
+            ("左转", 0.0, -2.0),
+            ("右转", 0.0, 2.0),
+        ):
+            button = QPushButton(text)
+            button.setObjectName("softButton")
+            button.clicked.connect(
+                lambda _checked=False, s=scale, r=rotation:
+                self._change(scale=s, rotation=r)
+            )
+            shape_row.addWidget(button)
+        self.content_layout.addLayout(shape_row)
+
+        reset_button = QPushButton("恢复这件装饰的默认位置")
+        reset_button.setObjectName("softButton")
+        reset_button.clicked.connect(self._reset)
+        self.content_layout.addWidget(reset_button)
+        self.content_layout.addStretch(1)
+        self.refresh()
+
+    def _save_and_repaint(self):
+        self.save_callback(self.pet.state)
+        self.pet.update()
+        self.preview.update()
+        self.refresh()
+
+    def _change(
+        self,
+        *,
+        x=0.0,
+        y=0.0,
+        scale=0.0,
+        rotation=0.0,
+    ):
+        current = progression.decoration_transform(
+            self.pet.state, self.decoration_id
+        )
+        progression.set_decoration_transform(
+            self.pet.state,
+            self.decoration_id,
+            x=current["x"] + x,
+            y=current["y"] + y,
+            scale=current["scale"] + scale,
+            rotation=current["rotation"] + rotation,
+        )
+        self._save_and_repaint()
+
+    def _finish_drag(self):
+        self._save_and_repaint()
+
+    def _reset(self):
+        progression.reset_decoration_transform(
+            self.pet.state, self.decoration_id
+        )
+        self._save_and_repaint()
+        self.status_label.setText("已经恢复默认位置。")
+
+    def refresh(self):
+        self._refresh_coin_label()
+        transform = progression.decoration_transform(
+            self.pet.state, self.decoration_id
+        )
+        self.status_label.setText(
+            "位置 "
+            f"{transform['x']:.3f}, {transform['y']:.3f}"
+            f"  ·  大小 {transform['scale']:.2f}"
+            f"  ·  角度 {transform['rotation']:+.0f}°"
+        )
+        if hasattr(self, "preview"):
+            self.preview.update()
+
+    def closeEvent(self, event):
+        if callable(self.closed_callback):
+            self.closed_callback(self)
+        super().closeEvent(event)
+
+
 class ShopWindow(CozyProgressWindow):
+    DECORATION_TABS = (
+        ("neck", "颈饰"),
+        ("head", "帽子"),
+        ("eyes", "眼镜"),
+    )
+
     def __init__(self, pet, save_callback):
         self.save_callback = save_callback
         self.page = "decorations"
+        self.decoration_category = "neck"
+        self.adjust_window = None
+        self.preview_window = None
         super().__init__(
             pet,
             "🛍 Pet币商店",
             "挑选可爱装扮，或用成就奖励强化日常互动。",
-            (820, 800),
+            (850, 960),
         )
 
     def refresh(self):
@@ -638,8 +1021,8 @@ class ShopWindow(CozyProgressWindow):
         tab_layout.setContentsMargins(5, 5, 5, 5)
         tab_layout.setSpacing(7)
         for page, text in (
-            ("decorations", "🎀 第一页 · 装饰"),
-            ("upgrades", "✨ 第二页 · 强化"),
+            ("decorations", "🎀 装饰"),
+            ("upgrades", "✨ 强化"),
         ):
             button = QPushButton(text)
             button.setObjectName("tabButton")
@@ -673,14 +1056,41 @@ class ShopWindow(CozyProgressWindow):
         self.content_layout.addWidget(products_title)
         tip = QLabel(
             "同一分类同时只能装备一件。领取后可以随时装备或卸下，"
-            "当前装扮在小狗静止时显示，复杂动作期间会暂时收起。"
+            "装饰只显示在待机姿势，并且可以自由微调位置、大小和角度。"
         )
         tip.setObjectName("muted")
         tip.setWordWrap(True)
         self.content_layout.addWidget(tip)
+
+        category_bar = QFrame()
+        category_bar.setObjectName("categoryTabBar")
+        category_layout = QHBoxLayout(category_bar)
+        category_layout.setContentsMargins(5, 5, 5, 5)
+        category_layout.setSpacing(7)
+        for category, label in self.DECORATION_TABS:
+            button = QPushButton(label)
+            button.setObjectName("categoryTabButton")
+            button.setCheckable(True)
+            button.setChecked(self.decoration_category == category)
+            button.clicked.connect(
+                lambda _checked=False, selected=category:
+                self._set_decoration_category(selected)
+            )
+            category_layout.addWidget(button)
+        self.content_layout.addWidget(category_bar)
+
+        category_label = dict(self.DECORATION_TABS)[
+            self.decoration_category
+        ]
+        category_title = QLabel(f"当前分类 · {category_label}")
+        category_title.setObjectName("sectionTitle")
+        self.content_layout.addWidget(category_title)
+
         for decoration_id, definition in (
             progression.DECORATION_DEFINITIONS.items()
         ):
+            if definition["category"] != self.decoration_category:
+                continue
             self.content_layout.addWidget(
                 self._decoration_card(decoration_id, definition)
             )
@@ -689,15 +1099,24 @@ class ShopWindow(CozyProgressWindow):
         upcoming.setObjectName("placeholderCard")
         upcoming_layout = QVBoxLayout(upcoming)
         upcoming_layout.setContentsMargins(18, 14, 18, 14)
-        upcoming_title = QLabel("🌷 更多装扮正在准备")
+        upcoming_title = QLabel(f"🌷 更多{category_label}正在准备")
         upcoming_title.setObjectName("cardTitle")
         upcoming_note = QLabel(
-            "后续可以直接加入头饰、眼镜、身体装饰和更多颈饰。"
+            f"后续会继续补充新的{category_label}，已购买的装饰可以随时更换。"
         )
         upcoming_note.setObjectName("muted")
         upcoming_layout.addWidget(upcoming_title)
         upcoming_layout.addWidget(upcoming_note)
         self.content_layout.addWidget(upcoming)
+
+    def _set_decoration_category(self, category):
+        valid = {item[0] for item in self.DECORATION_TABS}
+        if category not in valid or category == self.decoration_category:
+            return
+        self.decoration_category = category
+        self.status_label.clear()
+        self.scroll.verticalScrollBar().setValue(0)
+        self.refresh()
 
     def _decoration_card(self, decoration_id, definition):
         state = self.pet.state
@@ -781,6 +1200,21 @@ class ShopWindow(CozyProgressWindow):
             )
         action_row.addWidget(price_text)
         action_row.addStretch(1)
+        preview_button = QPushButton("预览")
+        preview_button.setObjectName("softButton")
+        preview_button.clicked.connect(
+            lambda _checked=False, selected=decoration_id:
+            self._open_decoration_preview(selected)
+        )
+        action_row.addWidget(preview_button)
+        if equipped:
+            adjust_button = QPushButton("微调位置")
+            adjust_button.setObjectName("softButton")
+            adjust_button.clicked.connect(
+                lambda _checked=False, selected=decoration_id:
+                self._open_decoration_adjuster(selected)
+            )
+            action_row.addWidget(adjust_button)
         action_row.addWidget(button)
         info.addLayout(action_row)
         layout.addLayout(info, 1)
@@ -816,6 +1250,68 @@ class ShopWindow(CozyProgressWindow):
             )
         )
 
+    def _open_decoration_adjuster(self, decoration_id):
+        definition = progression.DECORATION_DEFINITIONS.get(decoration_id)
+        if definition is None:
+            return
+        if (
+            progression.equipped_decoration(
+                self.pet.state, definition["category"]
+            ) != decoration_id
+        ):
+            self.status_label.setText("请先装备这件装饰，再调整位置。")
+            return
+        if self.adjust_window is not None:
+            try:
+                self.adjust_window.close()
+            except RuntimeError:
+                pass
+        self.adjust_window = DecorationAdjustWindow(
+            self.pet,
+            decoration_id,
+            self.save_callback,
+            closed_callback=self._adjuster_closed,
+        )
+        self.adjust_window.show_near_pet()
+
+    def _open_decoration_preview(self, decoration_id):
+        if decoration_id not in progression.DECORATION_DEFINITIONS:
+            return
+        if self.preview_window is not None:
+            try:
+                self.preview_window.close()
+            except RuntimeError:
+                pass
+        self.preview_window = DecorationPreviewWindow(
+            self.pet,
+            decoration_id,
+            closed_callback=self._preview_closed,
+        )
+        self.preview_window.show_near_pet()
+
+    def _preview_closed(self, window):
+        if self.preview_window is window:
+            self.preview_window = None
+
+    def _adjuster_closed(self, window):
+        if self.adjust_window is window:
+            self.adjust_window = None
+
+    def closeEvent(self, event):
+        if self.adjust_window is not None:
+            try:
+                self.adjust_window.close()
+            except RuntimeError:
+                pass
+            self.adjust_window = None
+        if self.preview_window is not None:
+            try:
+                self.preview_window.close()
+            except RuntimeError:
+                pass
+            self.preview_window = None
+        super().closeEvent(event)
+
     def _build_upgrades_page(self):
         upgrades_title = QLabel("✨ 成长强化")
         upgrades_title.setObjectName("sectionTitle")
@@ -840,7 +1336,7 @@ class ShopWindow(CozyProgressWindow):
         card.setObjectName("upgradeCard")
         layout = QVBoxLayout(card)
         layout.setContentsMargins(18, 14, 18, 14)
-        layout.setSpacing(7)
+        layout.setSpacing(10)
 
         top = QHBoxLayout()
         title = QLabel(f"{definition['icon']} {definition['name']}")
@@ -852,28 +1348,38 @@ class ShopWindow(CozyProgressWindow):
         top.addWidget(level_badge)
         layout.addLayout(top)
 
+        summary = QLabel(definition.get("summary", "强化对应的互动效果。"))
+        summary.setObjectName("upgradeSummary")
+        summary.setWordWrap(True)
+        layout.addWidget(summary)
+
         current = QLabel(
-            "当前：" + progression.upgrade_description(
-                state, upgrade_id, next_level=False
+            "当前效果\n" + progression.upgrade_description(
+                state,
+                upgrade_id,
+                next_level=False,
+                decay_rates=getattr(self.pet, "settings", None),
             )
         )
-        current.setObjectName("muted")
+        current.setObjectName("effectCurrent")
         current.setWordWrap(True)
         layout.addWidget(current)
 
-        bottom = QHBoxLayout()
         if level >= maximum:
-            next_text = QLabel("已经达到满级，效果全部生效。")
+            next_text = QLabel("已达到满级，以上效果已经全部生效。")
             next_text.setObjectName("reward")
             button = QPushButton("已满级")
             button.setEnabled(False)
         else:
             next_text = QLabel(
-                "下一级：" + progression.upgrade_description(
-                    state, upgrade_id, next_level=True
+                "升级后效果\n" + progression.upgrade_description(
+                    state,
+                    upgrade_id,
+                    next_level=True,
+                    decay_rates=getattr(self.pet, "settings", None),
                 )
             )
-            next_text.setObjectName("muted")
+            next_text.setObjectName("effectNext")
             next_text.setWordWrap(True)
             price = definition["prices"][level]
             button = QPushButton(f"{price} Pet币 · 强化")
@@ -882,7 +1388,16 @@ class ShopWindow(CozyProgressWindow):
                 lambda _checked=False, selected=upgrade_id:
                 self._purchase(selected)
             )
-        bottom.addWidget(next_text, 1)
+        layout.addWidget(next_text)
+
+        bottom = QHBoxLayout()
+        if level < maximum:
+            price_label = QLabel(
+                f"本次强化费用：{definition['prices'][level]} Pet币"
+            )
+            price_label.setObjectName("reward")
+            bottom.addWidget(price_label)
+        bottom.addStretch(1)
         bottom.addWidget(button)
         layout.addLayout(bottom)
         return card

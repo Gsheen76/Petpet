@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_public_version_has_one_source_of_truth():
-    assert VERSION == "1.3.0"
+    assert VERSION == "1.3.1"
     assert pet.VERSION == VERSION
 
 
@@ -31,7 +31,7 @@ def test_macos_build_uses_lightweight_version_module():
     ).read_text(encoding="utf-8")
     assert "from version import VERSION" in workflow
     assert 'project_root / "version.py"' in mac_spec
-    assert re.search(r'^VERSION = "1\.3\.0"$', (
+    assert re.search(r'^VERSION = "1\.3\.1"$', (
         ROOT / "version.py"
     ).read_text(encoding="utf-8"), re.MULTILINE)
 
@@ -43,3 +43,13 @@ def test_runtime_props_are_packaged_on_both_platforms():
         ).read_text(encoding="utf-8")
         assert '(str(assets_root / "props"), "assets/props")' in spec
     assert (ROOT / "assets" / "props" / "fetch_ball.png").is_file()
+
+
+def test_packaging_uses_independent_decorations_not_outfit_combinations():
+    for filename in ("Petpet-windows.spec", "Petpet-mac.spec"):
+        spec = (
+            ROOT / "packaging" / filename
+        ).read_text(encoding="utf-8")
+        assert '(str(assets_root / "decorations"), "assets/decorations")' in spec
+        assert '(assets_root / "poses").glob("*.png")' in spec
+        assert "poses/outfits" not in spec

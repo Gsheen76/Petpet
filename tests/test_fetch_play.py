@@ -25,7 +25,7 @@ class FakeScenePet:
                 for path in sorted(animation_dir.glob("*.png"))
             ]
         }
-        self.animation_specs = {"play": {"fps": 14}}
+        self.animation_specs = {"play": {"fps": 24}}
         self.pose_pixmaps = {}
 
     def current_screen_rect(self):
@@ -44,7 +44,7 @@ class FetchAnimationAssetTests(unittest.TestCase):
         frames = sorted((animation_dir / "play").glob("*.png"))
 
         self.assertEqual(len(frames), 24)
-        self.assertEqual(manifest["play"]["fps"], 14)
+        self.assertEqual(manifest["play"]["fps"], 24)
         self.assertFalse(manifest["play"]["loop"])
         self.assertTrue(manifest["play"]["anchor_bottom"])
         self.assertTrue(
