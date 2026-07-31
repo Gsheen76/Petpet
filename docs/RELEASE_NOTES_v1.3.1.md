@@ -28,8 +28,8 @@
 ## 下载
 
 - Windows：下载 `Petpet.exe` 或 `Petpet-v1.3.1-windows.zip`。
-- Apple 芯片 Mac：等待对应构建产物 `Petpet-v1.3.1-macOS-arm64.zip`。
-- Intel Mac：等待对应构建产物 `Petpet-v1.3.1-macOS-intel.zip`。
+- Apple 芯片 Mac：下载 `Petpet-v1.3.1-macOS-arm64.zip`。
+- Intel Mac：下载 `Petpet-v1.3.1-macOS-intel.zip`。
 
 macOS 应用当前尚未进行 Apple Developer ID 签名和公证。
 
