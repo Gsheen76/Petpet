@@ -46,14 +46,14 @@ from PyQt5.QtWidgets import (
     QSystemTrayIcon, QVBoxLayout, QHBoxLayout, QPushButton, QFrame,
     QGroupBox, QSpinBox, QDoubleSpinBox, QMessageBox, QProgressBar,
     QProgressDialog, QComboBox, QScrollArea, QAbstractSpinBox,
-    QAbstractButton, QDialog
+    QAbstractButton, QDialog, QSizePolicy
 )
 from PyQt5.QtSvg import QSvgRenderer
 from PyQt5.QtNetwork import QLocalServer, QLocalSocket
 from PyQt5.QtGui import (
     QPainter, QPixmap, QImage, QCursor, QIcon, QColor, QFont, QFontMetrics, QPen,
     QLinearGradient, QRadialGradient, QTextDocument, QDesktopServices, QRegion,
-    QPainterPath, QPolygonF, QTextCursor
+    QPainterPath, QPolygonF
 )
 from PyQt5.QtCore import (
     Qt, QEvent, QTimer, QPoint, QPointF, QRect, QRectF, QByteArray, QSize,
@@ -65,7 +65,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import buddy_ai as ai
 import progression
 import decoration_renderer
+import minigames
 from progression_ui import AchievementsWindow, RecordsWindow, ShopWindow
+from minigames import MiniGameHubWindow
 
 # Sound (optional — QtMultimedia may not be installed)
 try:
@@ -106,6 +108,8 @@ def configure_display_scaling():
 
 FIXED_FONT_SCALE = 2.0
 SETTINGS_FONT_SCALE = 1.08
+DEFAULT_PET_SIZE = (190, 220, 160)
+MACOS_PET_SIZE = (150, 180, 132)
 
 
 def font_px(size):
@@ -142,6 +146,7 @@ SVG_PATH = os.path.join(RES_DIR, "pet.svg")
 ICON_PATH = os.path.join(ICONS_DIR, "icon-64.png")
 SAVE_PATH = os.path.join(DATA_DIR, "pet_state.json")
 SETTINGS_PATH = os.path.join(DATA_DIR, "pet_settings.json")
+DEBUG_PARAMETERS_PATH = os.path.join(DATA_DIR, "debug_parameters.json")
 POSE_NAMES = ["idle", "happy", "sad", "eat", "sleep", "drag", "close"]
 POSE = {name: i for i, name in enumerate(POSE_NAMES)}
 CELL = 200  # each pose is 200x200; spritesheet is 1200x200
@@ -150,13 +155,13 @@ DEFAULT_ANIMATIONS = {
     "idle":  {"fps": 5,  "loop": True,  "fallback": "idle"},
     "walk":  {"fps": 6,  "loop": True,  "fallback": "idle",
               "scale": 1.56, "anchor_bottom": True},
-    "eat":   {"fps": 4,  "loop": True,  "fallback": "eat",
+    "eat":   {"fps": 20, "loop": True,  "fallback": "eat",
               "scale": 1.2, "anchor_bottom": True,
               "saturation": 0.9, "brightness": 0.97},
     "play":  {"fps": 24, "loop": False, "fallback": "happy",
               "scale": 1.3, "anchor_bottom": True},
     "happy": {"fps": 8,  "loop": True,  "fallback": "happy"},
-    "pet":   {"fps": 8,  "loop": False, "fallback": "happy",
+    "pet":   {"fps": 20, "loop": False, "fallback": "happy",
               "scale": 1.2, "anchor_bottom": True,
               "saturation": 0.9, "brightness": 0.97},
     "dig_reward": {"fps": 20, "loop": False, "fallback": "happy",
@@ -167,6 +172,53 @@ DEFAULT_ANIMATIONS = {
     "sad":   {"fps": 5,  "loop": True,  "fallback": "sad"},
     "sit":   {"fps": 6,  "loop": True,  "fallback": "idle"},
     "ask":   {"fps": 8,  "loop": False, "fallback": "idle"},
+}
+
+# Source-only live tuning defaults.  These values mirror the authored game
+# constants so the tuner can restore a known baseline without touching user
+# save data or release settings.
+DEFAULT_DEBUG_PARAMETERS = {
+    "pet_width": DEFAULT_PET_SIZE[0],
+    "pet_height": DEFAULT_PET_SIZE[1],
+    "dog_height": DEFAULT_PET_SIZE[2],
+    "gravity": 2200.0,
+    "wall_bounce": 0.55,
+    "floor_bounce": 0.45,
+    "ground_friction": 0.88,
+    "walk_speed_min": 60.0,
+    "walk_speed_max": 180.0,
+    "auto_sleep_walk_speed": 118.0,
+    "animation_idle_fps": 5.0,
+    "animation_walk_fps": 6.0,
+    "animation_eat_fps": 20.0,
+    "animation_pet_fps": 20.0,
+    "animation_play_fps": 24.0,
+    "animation_sleep_fps": 2.4,
+    "animation_dig_reward_fps": 20.0,
+    "decay_hunger": 0.14,
+    "decay_mood": 0.08,
+    "decay_energy": 0.10,
+    "decay_hunger_sleeping": 0.08,
+    "decay_energy_sleeping_gain": 4.0,
+    "auto_sleep_energy_threshold": 30.0,
+    "auto_wake_energy_threshold": 80.0,
+    "autonomy_idle_weight": 9.0,
+    "autonomy_walk_weight": 1.0,
+    "autonomy_sit_weight": 2.0,
+    "dig_discovery_chance": progression.DIG_DISCOVERY_CHANCE,
+    "dig_cooldown_minutes": progression.DIG_COOLDOWN_SECONDS / 60.0,
+    "petting_affection_gain": progression.AFFECTION_ACTION_GAINS["pettings"],
+    "feeding_affection_gain": progression.AFFECTION_ACTION_GAINS["feedings"],
+    "play_affection_gain": progression.AFFECTION_ACTION_GAINS["play_sessions"],
+    "petting_cooldown": progression.AFFECTION_ACTION_COOLDOWNS["pettings"],
+    "feeding_cooldown": progression.AFFECTION_ACTION_COOLDOWNS["feedings"],
+    "play_cooldown": progression.AFFECTION_ACTION_COOLDOWNS["play_sessions"],
+    "feed_animation_duration": 1.5,
+    "coin_catch_duration": minigames.CoinCatchCanvas.DURATION_SECONDS,
+    "coin_target_lifetime": minigames.CoinCatchCanvas.TARGET_LIFETIME,
+    "lucky_swap_1": minigames.LuckyPawsGameWindow.ROUND_CONFIG[1]["swap_duration"],
+    "lucky_swap_2": minigames.LuckyPawsGameWindow.ROUND_CONFIG[2]["swap_duration"],
+    "lucky_swap_3": minigames.LuckyPawsGameWindow.ROUND_CONFIG[3]["swap_duration"],
 }
 
 INSTANCE_SERVER_NAME = "com.gsheen.petpet.single-instance"
@@ -418,6 +470,34 @@ def save_settings(s):
         pass
 
 
+def load_debug_parameters():
+    """Load source-only tuning values, ignoring unknown or invalid entries."""
+    values = dict(DEFAULT_DEBUG_PARAMETERS)
+    try:
+        with open(DEBUG_PARAMETERS_PATH, "r", encoding="utf-8-sig") as f:
+            loaded = json.load(f)
+        if isinstance(loaded, dict):
+            for key, default in DEFAULT_DEBUG_PARAMETERS.items():
+                value = loaded.get(key, default)
+                try:
+                    value = float(value)
+                    values[key] = value if math.isfinite(value) else default
+                except (TypeError, ValueError):
+                    values[key] = default
+    except (OSError, ValueError, TypeError):
+        pass
+    return values
+
+
+def save_debug_parameters(values):
+    try:
+        os.makedirs(DATA_DIR, exist_ok=True)
+        with open(DEBUG_PARAMETERS_PATH, "w", encoding="utf-8") as f:
+            json.dump(values, f, ensure_ascii=False, indent=2)
+    except OSError:
+        pass
+
+
 # ---------- state ----------
 DEFAULT_STATE = {
     "hunger": 80, "mood": 70, "energy": 90,
@@ -503,81 +583,103 @@ class ChatWindow(QWidget):
     def _pet_name(self):
         return self.pet.pet_name
 
+    def _chat_font_px(self):
+        return independent_font_px(self.s["chat_font_size"])
+
     def _apply_style(self):
         # The chat window has its own user-controlled font setting. Keep it
         # independent from the compact pet-surface enlargement.
-        fs = independent_font_px(self.s["chat_font_size"])
+        fs = self._chat_font_px()
         self.setStyleSheet(f"""
             QWidget#chat {{
-                background:#fff8ec;
-                border:1px solid #efc5a5;
-                border-radius:20px;
+                background:#faf7f3;
+                border:1px solid #e6d8cf;
+                border-radius:18px;
             }}
-            QTextEdit {{
-                background:#fffdf8;
-                border:1px solid #f0d8c2;
-                border-radius:16px;
-                padding:12px;
-                font-family:'Microsoft YaHei',sans-serif;
-                font-size:{fs}px;
-                color:#5f463b;
-                selection-background-color:#ffc9b8;
+            QScrollArea#chatHistory {{
+                background:#fffdfa;
+                border:1px solid #eee4dd;
+                border-radius:12px;
+            }}
+            QWidget#chatHistoryBody {{
+                background:#fffdfa;
+            }}
+            QScrollBar:vertical {{
+                background:#f5efea;
+                width:10px;
+                margin:8px 4px 8px 0;
+                border-radius:5px;
+            }}
+            QScrollBar::handle:vertical {{
+                background:#d8c5b8;
+                min-height:34px;
+                border-radius:5px;
+            }}
+            QScrollBar::handle:vertical:hover {{ background:#c9ad9d; }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                height:0;
             }}
             QLineEdit {{
-                background:#ffffff;
-                border:1px solid #edcdb3;
-                border-radius:15px;
-                padding:9px 13px;
+                background:#fffefc;
+                border:1px solid #e4d5ca;
+                border-radius:13px;
+                padding:10px 14px;
                 font-family:'Microsoft YaHei',sans-serif;
                 font-size:{fs}px;
                 color:#65483b;
             }}
-            QLineEdit:focus {{ border:2px solid #f39b80; }}
-            QPushButton#send {{
-                background:#f28f76; color:#fff; border:0;
-                border-radius:15px;
-                padding:9px 22px; font-weight:700; font-size:{fs}px;
+            QLineEdit:focus {{
+                border:2px solid #dfa48e;
+                background:#ffffff;
             }}
-            QPushButton#send:hover {{ background:#f59f88; }}
-            QPushButton#send:disabled {{ background:#d9c6bb; }}
-            QPushButton#send:pressed {{ background:#df7d67; }}
+            QPushButton#send {{
+                background:#dc806a; color:#fff; border:0;
+                border-radius:13px;
+                padding:10px 23px; font-weight:700; font-size:{fs}px;
+            }}
+            QPushButton#send:hover {{ background:#e19179; }}
+            QPushButton#send:disabled {{ background:#ccb9ae; }}
+            QPushButton#send:pressed {{ background:#c66e5b; }}
             QFrame#chatTools {{
-                background:#fff1e5;
-                border:1px solid #efd3bc;
-                border-radius:14px;
+                background:#f8f2ed;
+                border:1px solid #eaded5;
+                border-radius:12px;
             }}
             QPushButton#chatTool, QPushButton#clearTool {{
-                background:#fffaf5; color:#8a6251;
-                border:1px solid #e9c8ae; border-radius:10px;
-                padding:7px 11px;
+                background:#fffdfb; color:#76594b;
+                border:1px solid #e5d5ca; border-radius:9px;
+                padding:7px 12px;
                 font-size:{max(fs-5,12)}px; font-weight:700;
             }}
             QPushButton#chatTool:hover {{
-                background:#ffe5d8; color:#a65e4e; border-color:#efaa8f;
+                background:#f8e9e1; color:#8f604e; border-color:#ddbaa8;
             }}
             QPushButton#chatTool:pressed {{
-                background:#ffd5c5;
+                background:#efd9cc;
             }}
             QPushButton#clearTool {{
-                color:#ae706b; background:#fff7f3; border-color:#edcdc5;
+                color:#9a7067; background:#fffaf8; border-color:#e6d3cc;
             }}
             QPushButton#clearTool:hover {{
-                color:#cf5f5f; background:#ffe5e1; border-color:#efa9a2;
+                color:#b45d56; background:#f9e8e3; border-color:#dfb2a9;
             }}
             QLabel#title {{
-                font-size:{fs+2}px; font-weight:700; color:#7a4d3b;
-                padding:6px 12px;
+                font-size:{fs+2}px; font-weight:800; color:#70483c;
+                padding:7px 12px;
             }}
         """)
+
+        # Runtime settings refreshes must only restyle the existing widgets.
+        if getattr(self, "_ui_built", False):
+            return
 
         # title bar (draggable) — title label on the left, close button on the right
         self.title = QLabel(f"  🐶 {self._pet_name()}")
         self.title.setObjectName("title")
         self.title.setFixedHeight(38)
         self.title.setStyleSheet(
-            "background:qlineargradient(x1:0,y1:0,x2:1,y2:0,"
-            "stop:0 #fff0df, stop:1 #ffe2d8);"
-            "color:#7a4d3b;"
+            "background:#faf0ea;"
+            "color:#755448;"
             "border-top-left-radius:18px;"
             "border-top-right-radius:18px;"
             "padding:6px 10px;")
@@ -603,10 +705,21 @@ class ChatWindow(QWidget):
         title_row.addWidget(self.title, 1)
         title_row.addWidget(self.close_btn)
 
-        # chat history
-        self.log = QTextEdit()
-        self.log.setReadOnly(True)
-        self.log.setText(self._render_history())
+        # Real widgets keep each message softly rounded on every platform.
+        # QTextEdit's HTML renderer ignores several modern CSS properties.
+        self.log = QScrollArea()
+        self.log.setObjectName("chatHistory")
+        self.log.setFrameShape(QFrame.NoFrame)
+        self.log.setWidgetResizable(True)
+        self.log.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.log_body = QWidget()
+        self.log_body.setObjectName("chatHistoryBody")
+        self.log_layout = QVBoxLayout(self.log_body)
+        self.log_layout.setContentsMargins(16, 14, 16, 14)
+        self.log_layout.setSpacing(4)
+        self.log.setWidget(self.log_body)
+        self._displayed_messages = []
+        self._set_log_messages(self._history_messages())
 
         # input row
         self.input = QLineEdit()
@@ -623,6 +736,13 @@ class ChatWindow(QWidget):
         self.api_key_btn.setObjectName("chatTool")
         self.api_key_btn.setCursor(Qt.PointingHandCursor)
         self.api_key_btn.clicked.connect(self.configure_api_key)
+        self.api_key_badge = QLabel(self.api_key_btn)
+        self.api_key_badge.setObjectName("apiKeyBadge")
+        self.api_key_badge.setFixedSize(12, 12)
+        self.api_key_badge.setStyleSheet(
+            "background:#e85d62;border:2px solid #fffdfb;border-radius:6px;"
+        )
+        self.api_key_badge.hide()
 
         self.model_btn = QPushButton()
         self.model_btn.setObjectName("chatTool")
@@ -655,12 +775,13 @@ class ChatWindow(QWidget):
         tools_row.addWidget(self.clear_btn)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(14, 12, 14, 14)
-        layout.setSpacing(8)
+        layout.setContentsMargins(12, 10, 12, 12)
+        layout.setSpacing(9)
         layout.addLayout(title_row)
         layout.addWidget(self.log, 1)
         layout.addLayout(row)
         layout.addWidget(self.tools_frame)
+        self._ui_built = True
 
     def refresh_pet_name(self):
         """Refresh every visible name after onboarding or renaming."""
@@ -671,21 +792,39 @@ class ChatWindow(QWidget):
         if not self.busy:
             self.input.setPlaceholderText(f"跟 {name} 说点什么…")
 
+    def _position_api_key_badge(self):
+        badge = self.api_key_badge
+        badge.move(
+            max(0, self.api_key_btn.width() - badge.width() - 2),
+            2,
+        )
+
+    def _set_api_key_badge(self, visible):
+        self.api_key_badge.setVisible(bool(visible))
+        if visible:
+            QTimer.singleShot(0, self._position_api_key_badge)
+
     def _refresh_ai_tool_buttons(self):
         source = ai.get_api_key_source()
+        self._set_api_key_badge(source == "none")
         if source == "environment":
+            self._set_api_key_badge(False)
             self.api_key_btn.setText("🔑 API Key：环境变量")
             self.api_key_btn.setToolTip(
                 "当前优先使用系统环境变量 ZHIPU_API_KEY；"
                 "仍可在这里保存本机备用 Key"
             )
         elif source == "config":
+            self._set_api_key_badge(False)
             self.api_key_btn.setText("🔑 API Key：已配置")
             self.api_key_btn.setToolTip("修改或移除本机保存的 API Key")
         else:
             self.api_key_btn.setText("🔑 添加 API Key")
             self.api_key_btn.setToolTip("添加智谱 API Key，开启 AI 聊天")
         self.model_btn.setText(f"🤖 {ai.get_model_name()} ▾")
+
+        if source == "none":
+            self.api_key_btn.setText("🔑 API Key：未配置")
 
     def configure_api_key(self):
         """Open a password-form editor without ever displaying the saved key."""
@@ -898,48 +1037,83 @@ class ChatWindow(QWidget):
             return
         self._refresh_ai_tool_buttons()
 
-    def _render_history(self, exclude_last_assistant=False):
-        """Render last N turns as HTML chat bubbles.
-        exclude_last_assistant: drop the trailing assistant turn (used while streaming).
-        """
+    def _history_messages(self, exclude_last_assistant=False):
+        """Return the recent transcript for the native message widget list."""
         hs = list(self.mem.get("history", []))[-20:]
         if exclude_last_assistant and hs and hs[-1]["role"] == "assistant":
             hs = hs[:-1]
-        if not hs:
-            return '<div style="color:#bbb;text-align:center;padding:20px;">🐶 汪！来聊聊吧～</div>'
-        html = []
-        for h in hs:
-            html.append(self._bubble_html(h["role"], h["content"]))
-        return "".join(html)
+        return [
+            (str(item.get("role", "assistant")), str(item.get("content", "")))
+            for item in hs
+        ]
 
-    def _bubble_html(self, role, text):
-        # Keep bubbles proportional to the selected chat window size.
-        W = max(260, min(620, int(self.width() * 0.72)))
-        if role == "user":
-            return (f'<div style="margin:6px 0;text-align:right;">'
-                    f'<span style="background:#f28f76;color:#fff;padding:8px 14px;'
-                    f'border-radius:14px 14px 4px 14px;display:inline-block;'
-                    f'max-width:{W}px;white-space:pre-wrap;'
-                    f'box-shadow:0 1px 2px rgba(242,143,118,0.25);">{_esc(text)}</span></div>')
-        return (f'<div style="margin:6px 0;text-align:left;">'
-                f'<span style="background:#fff0df;color:#5f463b;padding:8px 14px;'
-                f'border-radius:14px 14px 14px 4px;display:inline-block;'
-                f'max-width:{W}px;white-space:pre-wrap;">'
-                f'🐶 {_esc(text)}</span></div>')
+    def _message_width(self):
+        viewport_width = self.log.viewport().width()
+        if viewport_width <= 1:
+            viewport_width = self.width() - 32
+        return max(240, int(viewport_width * 0.72))
 
-    def _set_log_html(self, html):
-        self.log.setHtml(html)
+    def _set_log_messages(self, messages):
+        """Render actual rounded message widgets instead of rich-text blocks."""
+        self._displayed_messages = list(messages)
+        chat_font_size = self._chat_font_px()
+        while self.log_layout.count():
+            item = self.log_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.hide()
+                widget.setParent(None)
+                widget.deleteLater()
+
+        if not self._displayed_messages:
+            empty = QLabel("🐶 汪！来聊聊吧～")
+            empty.setObjectName("emptyChat")
+            empty.setAlignment(Qt.AlignCenter)
+            empty.setStyleSheet(
+                f"color:#9b8174;font-size:{chat_font_size}px;padding:36px 12px;"
+            )
+            self.log_layout.addWidget(empty)
+        else:
+            width = self._message_width()
+            for role, text in self._displayed_messages:
+                row = QWidget()
+                row_layout = QHBoxLayout(row)
+                row_layout.setContentsMargins(0, 3, 0, 3)
+                row_layout.setSpacing(0)
+
+                bubble = QLabel(text if role == "user" else f"🐶 {text}")
+                bubble.setObjectName("chatMessage")
+                bubble.setWordWrap(True)
+                bubble.setTextInteractionFlags(Qt.TextSelectableByMouse)
+                bubble.setMaximumWidth(width)
+                bubble.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
+                if role == "user":
+                    bubble.setProperty("messageRole", "user")
+                    bubble.setStyleSheet(
+                        f"background:#fbf1ec;color:#704f43;font-size:{chat_font_size}px;"
+                        "border:1px solid #ead9d1;border-radius:14px;"
+                        "padding:9px 13px;"
+                    )
+                    row_layout.addStretch(1)
+                    row_layout.addWidget(bubble)
+                else:
+                    bubble.setProperty("messageRole", "assistant")
+                    bubble.setStyleSheet(
+                        f"background:#f5e9df;color:#55433a;font-size:{chat_font_size}px;"
+                        "border:1px solid #dfc9ba;border-radius:14px;"
+                        "padding:9px 13px;"
+                    )
+                    row_layout.addWidget(bubble)
+                    row_layout.addStretch(1)
+                self.log_layout.addWidget(row)
+        self.log_layout.addStretch(1)
         self._scroll_log_to_bottom()
-        # Rich text may finish laying out after setHtml() returns.
+        # A new layout may finish after the current event loop returns.
         QTimer.singleShot(0, self._scroll_log_to_bottom)
         QTimer.singleShot(40, self._scroll_log_to_bottom)
 
     def _scroll_log_to_bottom(self):
         try:
-            cursor = self.log.textCursor()
-            cursor.movePosition(QTextCursor.End)
-            self.log.setTextCursor(cursor)
-            self.log.ensureCursorVisible()
             scrollbar = self.log.verticalScrollBar()
             scrollbar.setValue(scrollbar.maximum())
         except RuntimeError:
@@ -991,9 +1165,10 @@ class ChatWindow(QWidget):
         # add user bubble immediately
         self._pending_user = text
         self._streaming = ""
-        self._set_log_html(self._render_history(exclude_last_assistant=False)
-                           + self._bubble_html("user", text)
-                           + self._bubble_html("assistant", "🐶 …"))
+        self._set_log_messages(
+            self._history_messages()
+            + [("user", text), ("assistant", "…")]
+        )
         self.busy = True
         self.send_btn.setEnabled(False)
         self.input.setPlaceholderText(f"{self._pet_name()} 正在思考…")
@@ -1027,12 +1202,12 @@ class ChatWindow(QWidget):
     # slots (connected in main)
     def on_token(self, chunk):
         self._streaming += chunk
-        # rebuild: history (incl. user turn just added via append_history below? no —
-        # we haven't saved yet) + pending user bubble + streaming assistant bubble
-        html = (self._render_history()
-                + self._bubble_html("user", self._pending_user)
-                + self._bubble_html("assistant", self._streaming + "▍"))
-        self._set_log_html(html)
+        # The history has not been saved yet, so render the pending pair.
+        self._set_log_messages(
+            self._history_messages()
+            + [("user", self._pending_user),
+               ("assistant", self._streaming + "▍")]
+        )
 
     def on_done(self, full):
         # commit to memory
@@ -1049,7 +1224,7 @@ class ChatWindow(QWidget):
             f"跟 {self._pet_name()} 说点什么…"
         )
         self.input.setFocus()
-        self._set_log_html(self._render_history())
+        self._set_log_messages(self._history_messages())
         # also show a speech bubble on the pet
         short = full if len(full) < 40 else full[:38] + "…"
         self.pet.say(short, 3000)
@@ -1068,7 +1243,7 @@ class ChatWindow(QWidget):
         self.input.setPlaceholderText(
             f"跟 {self._pet_name()} 说点什么…"
         )
-        self._set_log_html(self._render_history())
+        self._set_log_messages(self._history_messages())
         self.pet.say(reply[:30], 2000)
 
     def confirm_clear_memory(self):
@@ -1093,7 +1268,9 @@ class ChatWindow(QWidget):
                 pass
             self.mem = ai._default_memory()
             ai.save_memory(self.mem)
-            self._set_log_html('<div style="color:#bbb;text-align:center;padding:20px;">🐶 汪？你是…我们重新认识一下吧。</div>')
+            self._set_log_messages([
+                ("assistant", "汪？你是…我们重新认识一下吧。")
+            ])
             self.pet.say("汪？我们重新认识一下吧 🐶", 2500)
 
 
@@ -2388,6 +2565,7 @@ class BubbleMenu(QWidget):
         ("📒", "记录", "records", "#df9f6f"),
         ("🏅", "成就", "achievements", "#efa47d"),
         ("🛍", "商店", "shop", "#e0a85f"),
+        ("🎮", "小游戏", "minigames", "#72b6b0"),
         ("⚙️", "设置", "settings", "#e7ae64"),
         ("👁", "隐藏", "hide", "#79a9d8"),
         ("📖", "教程", "tutorial", "#d392bd"),
@@ -2413,7 +2591,7 @@ class BubbleMenu(QWidget):
 
         # Larger hit targets with room for both icon and label.
         self.W = 590 if self.page == "primary" else 500
-        self.H = 112 if self.page == "primary" else 204
+        self.H = 112 if self.page == "primary" else 292
         self.resize(self.W, self.H)
         self._bubble_rects = []
         self._hover = -1
@@ -2473,6 +2651,10 @@ class BubbleMenu(QWidget):
         y = max(scr.top(), min(y, scr.bottom() - self.H))
         self.move(int(x), int(y))
 
+    @staticmethod
+    def needs_api_key_configuration():
+        return ai.get_api_key_source() == "none"
+
     def paintEvent(self, e):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
@@ -2481,7 +2663,7 @@ class BubbleMenu(QWidget):
         button_w = 102
         button_h = 78
         gap = 10
-        columns = n if self.page == "primary" else 4
+        columns = n if self.page == "primary" else 3
         rows = int(math.ceil(n / columns))
         total_w = columns * button_w + (columns - 1) * gap
         total_h = rows * button_h + (rows - 1) * gap
@@ -2490,6 +2672,7 @@ class BubbleMenu(QWidget):
         has_claimable = progression.has_claimable_achievements(
             self.pet.state
         )
+        needs_api_key = self.needs_api_key_configuration()
         for i, (emoji, label, action, color) in enumerate(self.actions):
             row = i // columns
             column = i % columns
@@ -2543,8 +2726,8 @@ class BubbleMenu(QWidget):
             # Claimable achievements place a clear red reminder on both the
             # primary "更多" entry and the secondary "成就" entry.
             if (
-                action in ("more", "achievements")
-                and has_claimable
+                (action in ("more", "achievements") and has_claimable)
+                or (action == "settings" and needs_api_key)
             ):
                 dot_center = QPointF(rect.right() - 10, rect.top() + 10)
                 p.setBrush(QColor(255, 255, 255))
@@ -2612,6 +2795,8 @@ class BubbleMenu(QWidget):
             pet.open_achievements()
         elif action == "shop":
             pet.open_shop()
+        elif action == "minigames":
+            pet.open_minigames()
         elif action in ("hide", "tutorial", "quit"):
             self._close()
             callback = getattr(pet, "_app_action_cb", None)
@@ -3774,19 +3959,50 @@ class PetWindow(QWidget):
     AUTONOMY_WALK_WEIGHT = 1.0
     AUTONOMY_SIT_WEIGHT = 2.0
 
+    @staticmethod
+    def needs_api_key_configuration():
+        return ai.get_api_key_source() == "none"
+
     def __init__(self, state):
         super().__init__()
         self.state = state
         self.settings = load_settings()
-        self.PET_W, self.PET_H = 190, 220
-        self.DOG_H = 160  # actual dog drawing height; top 60px is bubble space
-        self.scale = 0.8  # render scale
+        self.debug_parameters = self.debug_parameter_defaults()
+        loaded_debug = load_debug_parameters()
+        if IS_MACOS and not os.path.exists(DEBUG_PARAMETERS_PATH):
+            loaded_debug.update(dict(zip(
+                ("pet_width", "pet_height", "dog_height"), MACOS_PET_SIZE
+            )))
+        self.debug_parameters.update(loaded_debug)
+        self.debug_physics = {
+            "gravity": self.debug_parameters["gravity"],
+            "wall_bounce": self.debug_parameters["wall_bounce"],
+            "floor_bounce": self.debug_parameters["floor_bounce"],
+            "ground_friction": self.debug_parameters["ground_friction"],
+        }
+        self.walk_speed_min = self.debug_parameters["walk_speed_min"]
+        self.walk_speed_max = self.debug_parameters["walk_speed_max"]
+        self.feed_animation_duration = self.debug_parameters["feed_animation_duration"]
+        self.auto_sleep_energy_threshold = self.debug_parameters["auto_sleep_energy_threshold"]
+        self.auto_wake_energy_threshold = self.debug_parameters["auto_wake_energy_threshold"]
+        platform_size = MACOS_PET_SIZE if IS_MACOS else DEFAULT_PET_SIZE
+        pet_w = int(self.debug_parameters["pet_width"] or platform_size[0])
+        pet_h = int(self.debug_parameters["pet_height"])
+        dog_h = int(self.debug_parameters["dog_height"])
+        self.PET_W, self.PET_H = pet_w, pet_h
+        self.DOG_H = dog_h  # actual dog drawing height; remaining space is for bubbles
 
         # transparent, frameless, always-on-top, no taskbar button, tool window
-        self.setWindowFlags(
-            Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint |
-            Qt.Tool | Qt.WindowDoesNotAcceptFocus
-        )
+        on_top = self.settings.get("always_on_top", True)
+        flags = Qt.FramelessWindowHint | Qt.Tool | Qt.WindowDoesNotAcceptFocus
+        if on_top:
+            flags |= Qt.WindowStaysOnTopHint
+        self.setWindowFlags(flags)
+        if IS_MACOS:
+            self.setAttribute(
+                Qt.WA_MacAlwaysShowToolWindow,
+                bool(on_top),
+            )
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WA_NoSystemBackground, True)
         self.setAttribute(Qt.WA_ShowWithoutActivating, True)
@@ -3825,6 +4041,9 @@ class PetWindow(QWidget):
         self._animation_override = None
         self._animation_override_token = 0
         self._load_animations()
+        # Apply persisted source-tuning values after animation specs exist.
+        for _key, _value in self.debug_parameters.items():
+            self.set_debug_parameter(_key, _value)
 
         # current pose + blink timer
         self.pose = POSE["idle"]
@@ -3879,6 +4098,8 @@ class PetWindow(QWidget):
         self.records_win = None
         self.achievements_win = None
         self.shop_win = None
+        self.minigames_win = None
+        self.parameter_tuner_win = None
         self.play_scene = None  # zoomed-out interactive fetch scene
         self._play_return_pos = None
         self._interactive_bubble = None  # current floating action bubble
@@ -3940,6 +4161,161 @@ class PetWindow(QWidget):
     @property
     def pet_name(self):
         return ai.normalize_pet_name(self.state.get("pet_name"))
+
+    def debug_parameter_defaults(self):
+        defaults = dict(DEFAULT_DEBUG_PARAMETERS)
+        if IS_MACOS:
+            defaults.update(dict(zip(
+                ("pet_width", "pet_height", "dog_height"), MACOS_PET_SIZE
+            )))
+        return defaults
+
+    def debug_parameter_value(self, key):
+        if key in self.debug_parameters:
+            return self.debug_parameters[key]
+        return self.debug_parameter_defaults().get(key, 0)
+
+    def debug_parameter_snapshot(self, keys=None):
+        selected = self.debug_parameters if keys is None else {
+            key: self.debug_parameter_value(key) for key in keys
+        }
+        return {key: float(value) if isinstance(value, (int, float)) else value
+                for key, value in selected.items()}
+
+    def set_debug_parameter(self, key, value):
+        if key not in DEFAULT_DEBUG_PARAMETERS:
+            return False
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            return False
+        if key in {"pet_width", "pet_height", "dog_height"}:
+            value = max(
+                {"pet_width": 40, "pet_height": 60, "dog_height": 30}[key],
+                int(round(value)),
+            )
+        elif key == "gravity":
+            value = max(0.0, value)
+        elif key in {"wall_bounce", "floor_bounce"}:
+            value = max(0.0, min(1.0, value))
+        elif key == "ground_friction":
+            value = max(0.0, value)
+        elif key in {"walk_speed_min", "walk_speed_max", "auto_sleep_walk_speed"}:
+            value = max(0.0, value)
+        elif key.startswith("animation_") and key.endswith("_fps"):
+            value = max(0.1, value)
+        elif key in {
+            "decay_hunger", "decay_mood", "decay_energy",
+            "decay_hunger_sleeping",
+        }:
+            value = max(0.0, value)
+        elif key == "decay_energy_sleeping_gain":
+            value = max(0.0, value)
+        elif key in {"auto_sleep_energy_threshold", "auto_wake_energy_threshold"}:
+            value = max(0.0, min(100.0, value))
+        elif key in {
+            "autonomy_idle_weight", "autonomy_walk_weight",
+            "autonomy_sit_weight", "dig_discovery_chance",
+        }:
+            value = max(0.0, min(1.0, value)) if key == "dig_discovery_chance" else max(0.0, value)
+        elif key == "dig_cooldown_minutes":
+            value = max(1.0, value)
+        elif key in {
+            "petting_affection_gain", "feeding_affection_gain",
+            "play_affection_gain", "petting_cooldown", "feeding_cooldown",
+            "play_cooldown",
+        }:
+            value = max(0, int(round(value)))
+        elif key == "feed_animation_duration":
+            value = max(0.05, value)
+        elif key == "coin_catch_duration":
+            value = max(1.0, value)
+        elif key == "coin_target_lifetime":
+            value = max(0.05, value)
+        elif key.startswith("lucky_swap_"):
+            value = max(0.03, value)
+        old_geometry = self.geometry()
+        self.debug_parameters[key] = value
+        if key == "pet_width":
+            self.PET_W = max(40, int(round(value)))
+        elif key == "pet_height":
+            self.PET_H = max(60, int(round(value)))
+        elif key == "dog_height":
+            self.DOG_H = max(30, int(round(value)))
+        elif key in self.debug_physics:
+            self.debug_physics[key] = value
+        elif key in ("walk_speed_min", "walk_speed_max"):
+            self.walk_speed_min = self.debug_parameters["walk_speed_min"]
+            self.walk_speed_max = self.debug_parameters["walk_speed_max"]
+        elif key == "auto_sleep_walk_speed":
+            self.AUTO_SLEEP_WALK_SPEED = value
+        elif key.startswith("animation_") and key.endswith("_fps"):
+            animation_name = key[len("animation_"):-len("_fps")]
+            if animation_name in self.animation_specs:
+                self.animation_specs[animation_name]["fps"] = max(0.1, value)
+        elif key in {
+            "decay_hunger", "decay_mood", "decay_energy",
+            "decay_hunger_sleeping", "decay_energy_sleeping_gain",
+        }:
+            self.settings[key] = value
+        elif key == "auto_sleep_energy_threshold":
+            self.auto_sleep_energy_threshold = value
+        elif key == "auto_wake_energy_threshold":
+            self.auto_wake_energy_threshold = value
+        elif key == "autonomy_idle_weight":
+            self.AUTONOMY_IDLE_WEIGHT = max(0.0, value)
+        elif key == "autonomy_walk_weight":
+            self.AUTONOMY_WALK_WEIGHT = max(0.0, value)
+        elif key == "autonomy_sit_weight":
+            self.AUTONOMY_SIT_WEIGHT = max(0.0, value)
+        elif key == "dig_discovery_chance":
+            progression.DIG_DISCOVERY_CHANCE = max(0.0, min(1.0, value))
+        elif key == "dig_cooldown_minutes":
+            progression.DIG_COOLDOWN_SECONDS = max(60.0, value * 60.0)
+        elif key in {
+            "petting_affection_gain", "feeding_affection_gain",
+            "play_affection_gain",
+        }:
+            action = {
+                "petting_affection_gain": "pettings",
+                "feeding_affection_gain": "feedings",
+                "play_affection_gain": "play_sessions",
+            }[key]
+            progression.AFFECTION_ACTION_GAINS[action] = max(0, int(round(value)))
+        elif key in {"petting_cooldown", "feeding_cooldown", "play_cooldown"}:
+            action = {
+                "petting_cooldown": "pettings",
+                "feeding_cooldown": "feedings",
+                "play_cooldown": "play_sessions",
+            }[key]
+            progression.AFFECTION_ACTION_COOLDOWNS[action] = max(0, int(round(value)))
+        elif key == "feed_animation_duration":
+            self.feed_animation_duration = max(0.05, value)
+        elif key == "coin_catch_duration":
+            minigames.CoinCatchCanvas.DURATION_SECONDS = max(1.0, value)
+        elif key == "coin_target_lifetime":
+            minigames.CoinCatchCanvas.TARGET_LIFETIME = max(0.05, value)
+        elif key.startswith("lucky_swap_"):
+            round_number = int(key.rsplit("_", 1)[1])
+            minigames.LuckyPawsGameWindow.ROUND_CONFIG[round_number]["swap_duration"] = max(0.03, value)
+        if key in ("pet_width", "pet_height"):
+            self.resize(int(self.PET_W), int(self.PET_H))
+            self.move(old_geometry.x(), old_geometry.bottom() - self.PET_H + 1)
+        self.update()
+        self.repaint()
+        return True
+
+    def save_debug_parameters(self, values):
+        values = {key: self.debug_parameter_value(key) for key in DEFAULT_DEBUG_PARAMETERS}
+        save_debug_parameters(values)
+
+    def open_parameter_tuner(self):
+        if IS_FROZEN:
+            return
+        if self.parameter_tuner_win is None:
+            from parameter_tuner import ParameterTunerWindow
+            self.parameter_tuner_win = ParameterTunerWindow(self)
+        self.parameter_tuner_win.show_near_pet()
 
     def set_pet_name(self, value):
         """Persist a new name and refresh already-open pet windows."""
@@ -4077,19 +4453,21 @@ class PetWindow(QWidget):
         save_state(self.state)
         self.say("我回来啦！🐶", 1500)
 
-    def apply_window_flags(self):
+    def apply_window_flags(self, show=True):
         """Toggle always-on-top based on settings. Call after settings change."""
         on_top = self.settings.get("always_on_top", True)
-        was_visible = self.isVisible()
+        was_visible = show and self.isVisible()
+        flags = Qt.FramelessWindowHint | Qt.Tool | Qt.WindowDoesNotAcceptFocus
         if on_top:
-            self.setWindowFlags(
-                Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint |
-                Qt.Tool | Qt.WindowDoesNotAcceptFocus
-            )
-        else:
-            self.setWindowFlags(
-                Qt.FramelessWindowHint |
-                Qt.Tool | Qt.WindowDoesNotAcceptFocus
+            flags |= Qt.WindowStaysOnTopHint
+        self.setWindowFlags(flags)
+        # On macOS, Qt.Tool windows are normally hidden when the application
+        # loses activation. This attribute promotes the tool window to the
+        # persistent desktop layer while preserving the user's toggle.
+        if IS_MACOS:
+            self.setAttribute(
+                Qt.WA_MacAlwaysShowToolWindow,
+                bool(on_top),
             )
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WA_NoSystemBackground, True)
@@ -4127,7 +4505,8 @@ class PetWindow(QWidget):
             )
             chat.setFixedSize(width, height)
             chat._apply_style()
-            chat._set_log_html(chat._render_history())
+            chat._refresh_ai_tool_buttons()
+            chat._set_log_messages(chat._history_messages())
             if chat.isVisible():
                 chat.show_near_pet()
                 chat.update()
@@ -4138,11 +4517,13 @@ class PetWindow(QWidget):
 
     def is_visible_on_screen(self):
         g = self.geometry()
-        s = self.screen_rect()
-        # at least 30x30 px overlap with screen
-        ox = max(0, min(g.right(), s.right()) - max(g.left(), s.left()))
-        oy = max(0, min(g.bottom(), s.bottom()) - max(g.top(), s.top()))
-        return ox >= 30 and oy >= 30
+        # A virtual desktop can contain gaps between differently arranged
+        # monitors. Check each physical screen instead of its outer bounds.
+        for screen in QApplication.screens():
+            overlap = g.intersected(screen.geometry())
+            if overlap.width() >= 30 and overlap.height() >= 30:
+                return True
+        return False
 
     def pet_center(self):
         g = self.geometry()
@@ -4209,8 +4590,8 @@ class PetWindow(QWidget):
             return False
         return True
 
-    def _animation_duration_ms(self, name):
-        """Return the exact time needed to show every frame once."""
+    def _animation_duration_ms(self, name, cycles=1):
+        """Return the exact time needed to show an animation for N cycles."""
         frames = self.animation_frames.get(name, ())
         spec = self.animation_specs.get(name, {})
         try:
@@ -4219,7 +4600,8 @@ class PetWindow(QWidget):
             fps = 8.0
         if not frames:
             return 1
-        return max(1, int(math.ceil(len(frames) * 1000.0 / fps)))
+        cycles = max(1, int(cycles))
+        return max(1, int(math.ceil(len(frames) * cycles * 1000.0 / fps)))
 
     def trigger_animation(
         self, name, duration_ms=None, finished_callback=None
@@ -4375,6 +4757,14 @@ class PetWindow(QWidget):
 
         if self.facing < 0:
             p.restore()
+
+        if self.needs_api_key_configuration():
+            badge_center = QPointF(self.PET_W - 13, dog_y + 13)
+            p.setPen(Qt.NoPen)
+            p.setBrush(QColor(255, 255, 255))
+            p.drawEllipse(badge_center, 8, 8)
+            p.setBrush(QColor("#ee5e62"))
+            p.drawEllipse(badge_center, 5.5, 5.5)
 
         p.end()
 
@@ -4614,12 +5004,12 @@ class PetWindow(QWidget):
         w, h = g.width(), g.height()
 
         dt = 0.033           # ~30 fps
-        G = 2200.0           # gravity, px/s^2
+        G = self.debug_physics["gravity"]
         GROUND_PAD = 10      # pixels above taskbar
         ground_y = screen.bottom() - h - GROUND_PAD
-        BOUNCE = 0.55        # energy retained on wall bounce
-        BOUNCE_FLOOR = 0.45  # energy retained on floor bounce
-        FRICTION = 0.88      # per-tick ground friction
+        BOUNCE = self.debug_physics["wall_bounce"]
+        BOUNCE_FLOOR = self.debug_physics["floor_bounce"]
+        FRICTION = self.debug_physics["ground_friction"]
         STOP_V = 2.0         # below this, snap to 0
         auto_sleep_arrived = False
 
@@ -4902,7 +5292,11 @@ class PetWindow(QWidget):
         if self.state.get("sleeping"):
             if self.state.get("sleep_mode") == "auto":
                 self._auto_sleep_phase = "sleeping"
-                if self.state.get("energy", 0) > self.AUTO_WAKE_ENERGY_THRESHOLD:
+                wake_threshold = getattr(
+                    self, "auto_wake_energy_threshold",
+                    self.AUTO_WAKE_ENERGY_THRESHOLD,
+                )
+                if self.state.get("energy", 0) > wake_threshold:
                     self._wake_from_auto_sleep()
                     return "woke"
             else:
@@ -4914,8 +5308,12 @@ class PetWindow(QWidget):
             self._auto_sleep_phase = None
         if self._auto_sleep_phase == "walking":
             return "walking"
+        sleep_threshold = getattr(
+            self, "auto_sleep_energy_threshold",
+            self.AUTO_SLEEP_ENERGY_THRESHOLD,
+        )
         if (
-            self.state.get("energy", 0) < self.AUTO_SLEEP_ENERGY_THRESHOLD
+            self.state.get("energy", 0) < sleep_threshold
             and now >= self._auto_sleep_snooze_until
             and self._begin_auto_sleep(now)
         ):
@@ -5173,7 +5571,10 @@ class PetWindow(QWidget):
                 progression.record_action(
                     self.state, "autonomous_walks"
                 )
-                self.target_vx = random.choice([-1,1]) * random.uniform(60, 180)
+                self.target_vx = random.choice([-1,1]) * random.uniform(
+                    min(self.walk_speed_min, self.walk_speed_max),
+                    max(self.walk_speed_min, self.walk_speed_max),
+                )
                 self.behavior_until = now + random.uniform(2, 5)
                 self.facing = 1 if self.target_vx > 0 else -1
             elif choice == "sit":
@@ -5221,6 +5622,8 @@ class PetWindow(QWidget):
             self.next_behavior_at = (
                 self.behavior_until + random.uniform(5, 10)
             )
+        if self.behavior == "eat" and now >= self.behavior_until:
+            self.behavior = "idle"
         # stop walking when deadline hits
         if self.behavior == "walk" and now >= self.behavior_until:
             self.behavior = "idle"
@@ -5245,9 +5648,14 @@ class PetWindow(QWidget):
         )
         progression.record_action(self.state, "feedings")
         self.behavior = "eat"
-        self.behavior_until = time.time() + 1.8
-        self.trigger_animation("eat", 1800)
-        self.say("嗷呜嗷呜！🍖", 1800)
+        feed_duration = float(getattr(self, "feed_animation_duration", 1.5))
+        if getattr(self, "animation_frames", {}).get("eat"):
+            duration_ms = self._animation_duration_ms("eat", cycles=2)
+        else:
+            duration_ms = int(round(feed_duration * 1000))
+        self.behavior_until = time.time() + feed_duration
+        self.trigger_animation("eat", duration_ms)
+        self.say("嗷呜嗷呜！🍖", duration_ms)
         self.play_sound("eat")
         if grant_xp:
             self.add_xp(effects["feed_xp"])
@@ -5440,6 +5848,12 @@ class PetWindow(QWidget):
             self.shop_win = ShopWindow(self, save_state)
         self.shop_win.show_near_pet()
 
+    def open_minigames(self):
+        """Open the expandable mini-game picker."""
+        if self.minigames_win is None:
+            self.minigames_win = MiniGameHubWindow(self, save_state)
+        self.minigames_win.show_near_pet()
+
     def open_settings(self):
         """Open the settings panel."""
         if self.settings_win is None:
@@ -5560,6 +5974,9 @@ class TrayApp:
                     return
             except RuntimeError:
                 self.pet.play_scene = None
+        # A second launch is an explicit summon action. Reposition first so
+        # a pet that walked to an edge or stale monitor coordinate is visible.
+        self.pet.recall()
         if not self.pet.isVisible():
             self.pet.show()
         self.pet.raise_()
@@ -5857,6 +6274,11 @@ class TrayApp:
     def _add_debug_menu(self, parent_menu):
         """Add a '调试' submenu with stat-tweaking shortcuts."""
         dm = QMenu("🔧 调试", parent_menu)
+        a_tuner = QAction("🧪 参数调试器", dm)
+        tuner_callback = getattr(self.pet, "open_parameter_tuner", lambda: None)
+        a_tuner.triggered.connect(tuner_callback)
+        dm.addAction(a_tuner)
+        dm.addSeparator()
         a_low = QAction("降低所有属性 (测试气泡)", dm)
         a_low.triggered.connect(lambda: self._debug_set_stats(20, 20, 20))
         dm.addAction(a_low)

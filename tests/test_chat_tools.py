@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt5.QtWidgets import QApplication, QFrame
+from PyQt5.QtWidgets import QApplication, QFrame, QLabel
 
 import buddy_ai as ai
 import pet
@@ -52,10 +52,53 @@ class ChatToolsTests(unittest.TestCase):
         tools = self.window.findChild(QFrame, "chatTools")
 
         self.assertIsNotNone(tools)
-        self.assertIn("添加 API Key", self.window.api_key_btn.text())
+        self.assertIn("未配置", self.window.api_key_btn.text())
         self.assertIn("GLM-4-Flash", self.window.model_btn.text())
         self.assertEqual(self.window.clear_btn.objectName(), "clearTool")
         self.assertIn("清除记忆", self.window.clear_btn.text())
+
+    def test_missing_key_uses_unconfigured_text_and_badge(self):
+        self.window._refresh_ai_tool_buttons()
+
+        self.assertIn("未配置", self.window.api_key_btn.text())
+        self.assertFalse(self.window.api_key_badge.isHidden())
+
+    def test_chat_surface_uses_warm_layered_palette(self):
+        style = self.window.styleSheet()
+        self.assertIn("background:#faf7f3", style)
+        self.assertIn("background:#fffdfa", style)
+        self.assertIn("QScrollBar::handle:vertical", style)
+        self.window._set_log_messages([
+            ("assistant", "你好"),
+            ("user", "你好呀"),
+        ])
+        bubbles = [
+            bubble
+            for bubble in self.window.findChildren(QLabel, "chatMessage")
+            if bubble.property("messageRole") in ("assistant", "user")
+        ]
+        self.assertEqual(len(bubbles), 2)
+        assistant, user = bubbles
+        self.assertEqual(assistant.property("messageRole"), "assistant")
+        self.assertIn("border-radius:14px", assistant.styleSheet())
+        self.assertIn("background:#f5e9df", assistant.styleSheet())
+        self.assertIn("background:#fbf1ec", user.styleSheet())
+        self.assertEqual(user.property("messageRole"), "user")
+
+    def test_message_fonts_track_chat_font_setting(self):
+        self.window.pet.settings["chat_font_size"] = 24
+        self.window.s = self.window.pet.settings
+        self.window._apply_style()
+        self.window._set_log_messages([
+            ("assistant", "测试消息"),
+            ("user", "测试消息"),
+        ])
+
+        bubbles = self.window.findChildren(QLabel, "chatMessage")
+        self.assertEqual(len(bubbles), 2)
+        self.assertTrue(all(
+            "font-size:24px" in bubble.styleSheet() for bubble in bubbles
+        ))
 
     def test_saved_key_and_model_update_toolbar_status(self):
         ai.set_api_key("id.secret")
@@ -64,6 +107,7 @@ class ChatToolsTests(unittest.TestCase):
 
         self.assertIn("已配置", self.window.api_key_btn.text())
         self.assertEqual(ai.get_model(), "glm-4-flash")
+        self.assertTrue(self.window.api_key_badge.isHidden())
 
     def test_sending_a_real_message_adds_chat_affection(self):
         progression.ensure_progression(self.window.pet.state)
@@ -88,9 +132,7 @@ class ChatToolsTests(unittest.TestCase):
             for index in range(30)
         )
 
-        self.window._set_log_html(
-            self.window._bubble_html("assistant", long_reply)
-        )
+        self.window._set_log_messages([("assistant", long_reply)])
         QApplication.processEvents()
         self.window._scroll_log_to_bottom()
 

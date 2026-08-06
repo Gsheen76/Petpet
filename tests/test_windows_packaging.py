@@ -2,6 +2,8 @@ import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+import pet
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -41,6 +43,13 @@ class WindowsPackagingTests(unittest.TestCase):
         self.assertIn("Qt.AA_DisableHighDpiScaling", source)
         self.assertIn("SetProcessDpiAwarenessContext", source)
         self.assertIn("configure_display_scaling()", source)
+
+    def test_platform_pet_sizes_and_macos_tool_window_visibility_are_defined(self):
+        source = (ROOT / "pet.py").read_text(encoding="utf-8")
+        self.assertEqual(pet.MACOS_PET_SIZE, (150, 180, 132))
+        self.assertEqual(pet.DEFAULT_PET_SIZE, (190, 220, 160))
+        self.assertIn("Qt.WA_MacAlwaysShowToolWindow", source)
+        self.assertIn("MACOS_PET_SIZE if IS_MACOS else DEFAULT_PET_SIZE", source)
 
 
 if __name__ == "__main__":

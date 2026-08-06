@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -24,6 +25,33 @@ RELEASES_URL = "https://api.github.com/repos/Gsheen76/Petpet/releases/latest"
 RELEASE_PAGE_URL = "https://github.com/Gsheen76/Petpet/releases/latest"
 USER_AGENT = "Petpet-Updater"
 LEGACY_UPDATE_DIR_NAMES = {"update", "updates", "updata"}
+NETWORK_ATTEMPTS = 2
+NETWORK_RETRY_DELAY_SECONDS = 1.0
+
+
+def _urlopen_with_retries(request, timeout, attempts=NETWORK_ATTEMPTS):
+    """Open a URL again after transient connection/TLS failures."""
+    attempts = max(1, int(attempts))
+    for attempt in range(attempts):
+        try:
+            return urllib.request.urlopen(request, timeout=timeout)
+        except urllib.error.HTTPError:
+            raise
+        except (urllib.error.URLError, TimeoutError):
+            if attempt + 1 >= attempts:
+                raise
+            time.sleep(NETWORK_RETRY_DELAY_SECONDS * (attempt + 1))
+
+
+def _download_error_message(error):
+    """Translate network failures without exposing Python internals to players."""
+    if isinstance(error, (urllib.error.URLError, TimeoutError)):
+        reason = getattr(error, "reason", error)
+        details = str(reason).lower()
+        if "timed out" in details or "timeout" in details:
+            return "网络连接超时，请稍后重试。"
+        return "网络连接失败，请检查网络后重试。"
+    return str(error)
 
 
 def version_tuple(value):
@@ -103,7 +131,7 @@ def _fetch_release_page_fallback(current_version, platform_name, machine,
     request = urllib.request.Request(
         RELEASE_PAGE_URL, headers={"User-Agent": USER_AGENT}
     )
-    with urllib.request.urlopen(request, timeout=timeout) as response:
+    with _urlopen_with_retries(request, timeout) as response:
         release_page = response.read().decode("utf-8", "ignore")
         release_url = response.geturl()
     match = re.search(r"/releases/tag/([^/?#]+)", release_url)
@@ -132,7 +160,7 @@ def _fetch_release_page_fallback(current_version, platform_name, machine,
     expanded_request = urllib.request.Request(
         expanded_url, headers={"User-Agent": USER_AGENT}
     )
-    with urllib.request.urlopen(expanded_request, timeout=timeout) as response:
+    with _urlopen_with_retries(expanded_request, timeout) as response:
         expanded_page = response.read().decode("utf-8", "ignore")
     links = sorted(set(re.findall(
         r'href="([^"]*/releases/download/[^"]+)"',
@@ -176,7 +204,7 @@ def fetch_latest_release(current_version, releases_url=RELEASES_URL,
             "User-Agent": f"{USER_AGENT}/{current_version}",
             "X-GitHub-Api-Version": "2022-11-28",
         })
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        with _urlopen_with_retries(request, timeout) as response:
             payload = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         if exc.code in (403, 429):
@@ -265,7 +293,7 @@ def download_release(info, destination_dir, progress=None, cancel_event=None,
         })
         digest = hashlib.sha256()
         done = 0
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        with _urlopen_with_retries(request, timeout) as response:
             total = int(response.headers.get("Content-Length") or expected_size or 0)
             with open(partial_path, "wb") as output:
                 while True:
@@ -296,7 +324,11 @@ def download_release(info, destination_dir, progress=None, cancel_event=None,
             partial_path.unlink()
         except OSError:
             pass
-        return {"ok": False, "message": str(exc)}
+        return {
+            "ok": False,
+            "message": _download_error_message(exc),
+            "detail": str(exc),
+        }
 
 
 def _extract_windows_executable(download_path, staging_dir):
@@ -477,8 +509,9 @@ def launch_windows_replacement(download_path, current_executable, work_dir,
         "  }\n"
         "}\n"
         "if ($updated) {\n"
-        "  Start-Process -FilePath $targetExecutable "
-        "-WorkingDirectory $executableDir -WindowStyle Hidden\n"
+        # Remove the old image before starting the replacement. Starting the
+        # new PyInstaller process first can keep the File.Replace backup
+        # handle alive and leave a locked .backup-* artifact behind.
         "  for ($attempt = 1; $attempt -le 120; $attempt++) {\n"
         "    try {\n"
         "      if (Test-Path -LiteralPath $backupExecutable) {\n"
@@ -490,6 +523,8 @@ def launch_windows_replacement(download_path, current_executable, work_dir,
         "      Start-Sleep -Milliseconds 500\n"
         "    }\n"
         "  }\n"
+        "  Start-Process -FilePath $targetExecutable "
+        "-WorkingDirectory $executableDir -WindowStyle Hidden\n"
         "} else {\n"
         "  Remove-Item -LiteralPath $pendingExecutable -Force "
         "-ErrorAction SilentlyContinue\n"

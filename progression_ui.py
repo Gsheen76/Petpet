@@ -521,6 +521,8 @@ class RecordsWindow(CozyProgressWindow):
             ("更换装扮", records["outfit_changes"], "穿上或收好装扮的次数"),
             ("购买强化", records["upgrades_purchased"], "累计完成的强化次数"),
             ("领取成就", records["achievements_claimed"], "已经领取奖励的成就"),
+            ("小游戏局数", records["minigame_rounds"], "完成小游戏的累计局数"),
+            ("游戏收入", records["coins_minigames"], "小游戏累计获得的Pet币"),
         ]
         for index, item in enumerate(explore_cards):
             explore_grid.addWidget(

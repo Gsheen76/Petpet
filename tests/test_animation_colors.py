@@ -35,6 +35,7 @@ class AnimationColorTests(unittest.TestCase):
             Path(pet.ANIMATIONS_DIR) / "manifest.json"
         )
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        self.assertEqual(manifest["eat"]["fps"], 20)
         self.assertEqual(manifest["eat"]["saturation"], 0.9)
         self.assertEqual(manifest["eat"]["brightness"], 0.97)
 

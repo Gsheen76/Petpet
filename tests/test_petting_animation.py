@@ -9,7 +9,7 @@ import pet
 
 
 class PettingAnimationAssetTests(unittest.TestCase):
-    def test_petting_animation_is_a_non_looping_24_frame_sequence(self):
+    def test_petting_animation_is_a_non_looping_24_frame_20_fps_sequence(self):
         animation_dir = Path(pet.ANIMATIONS_DIR)
         manifest = json.loads(
             (animation_dir / "manifest.json").read_text(encoding="utf-8")
@@ -17,7 +17,7 @@ class PettingAnimationAssetTests(unittest.TestCase):
         frames = sorted((animation_dir / "pet").glob("*.png"))
 
         self.assertEqual(len(frames), 24)
-        self.assertEqual(manifest["pet"]["fps"], 8)
+        self.assertEqual(manifest["pet"]["fps"], 20)
         self.assertFalse(manifest["pet"]["loop"])
         self.assertEqual(manifest["pet"]["fallback"], "happy")
         self.assertTrue(manifest["pet"]["anchor_bottom"])
@@ -83,12 +83,22 @@ class PetClickAnimationTests(unittest.TestCase):
     def test_sequence_duration_is_derived_from_frames_and_fps(self):
         fake = type("FakePet", (), {
             "animation_frames": {"pet": [object()] * 24},
-            "animation_specs": {"pet": {"fps": 8}},
+            "animation_specs": {"pet": {"fps": 20}},
         })()
 
         duration = pet.PetWindow._animation_duration_ms(fake, "pet")
 
-        self.assertEqual(duration, 3000)
+        self.assertEqual(duration, 1200)
+
+    def test_eat_sequence_duration_covers_two_complete_cycles(self):
+        fake = type("FakePet", (), {
+            "animation_frames": {"eat": [object()] * 8},
+            "animation_specs": {"eat": {"fps": 6}},
+        })()
+
+        duration = pet.PetWindow._animation_duration_ms(fake, "eat", cycles=2)
+
+        self.assertEqual(duration, 2667)
 
 
 if __name__ == "__main__":

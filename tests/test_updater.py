@@ -1,6 +1,7 @@
 import hashlib
 import tempfile
 import unittest
+import urllib.error
 import zipfile
 from pathlib import Path
 from unittest.mock import patch
@@ -19,7 +20,60 @@ from updater import (
 )
 
 
+class _FakeResponse:
+    def __init__(self, payload=b"ok"):
+        self.payload = payload
+        self.headers = {}
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        return False
+
+    def read(self, *args):
+        return self.payload
+
+
 class UpdaterTests(unittest.TestCase):
+    def test_urlopen_retries_tls_handshake_timeout(self):
+        import updater
+
+        with patch.object(
+            updater.urllib.request,
+            "urlopen",
+            side_effect=[
+                urllib.error.URLError(
+                    TimeoutError("_ssl.c:983: handshake operation timed out")
+                ),
+                _FakeResponse(),
+            ],
+        ) as urlopen, patch.object(updater.time, "sleep") as sleep:
+            with updater._urlopen_with_retries("request", timeout=1) as response:
+                self.assertEqual(response.read(), b"ok")
+
+        self.assertEqual(urlopen.call_count, 2)
+        sleep.assert_called_once()
+
+    def test_download_reports_network_timeout_in_player_facing_message(self):
+        import updater
+
+        info = {
+            "asset_name": "Petpet.exe",
+            "download_url": "https://example.invalid/Petpet.exe",
+        }
+        with patch.object(
+            updater.urllib.request,
+            "urlopen",
+            side_effect=urllib.error.URLError(
+                TimeoutError("_ssl.c:983: handshake operation timed out")
+            ),
+        ), patch.object(updater.time, "sleep"):
+            result = updater.download_release(info, tempfile.mkdtemp(), timeout=1)
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["message"], "网络连接超时，请稍后重试。")
+
     def test_version_comparison_is_numeric(self):
         self.assertEqual(version_tuple("v1.10.2"), (1, 10, 2))
         self.assertTrue(is_newer_version("1.10.0", "1.9.9"))
@@ -96,11 +150,15 @@ class UpdaterTests(unittest.TestCase):
             script = helper.read_text(encoding="utf-8-sig")
             self.assertIn("Wait-Process -Id $petProcessId", script)
             self.assertIn("[System.IO.File]::Replace(", script)
-            self.assertIn("$backupExecutable", script)
             self.assertIn("$attempt -le 120", script)
+            self.assertIn("$backupExecutable", script)
             self.assertIn(
                 "Remove-Item -LiteralPath $backupExecutable -Force",
                 script,
+            )
+            self.assertLess(
+                script.index("Remove-Item -LiteralPath $backupExecutable -Force"),
+                script.index("Start-Process -FilePath $targetExecutable"),
             )
             self.assertIn("Remove-Item -LiteralPath $workDir", script)
             self.assertIn("Remove-Item -LiteralPath $PSCommandPath", script)

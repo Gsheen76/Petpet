@@ -53,7 +53,7 @@ class MenuUiTests(unittest.TestCase):
         self.assertEqual(
             [action for _, _, action, _ in pet.BubbleMenu.MORE_ACTIONS],
             [
-                "records", "achievements", "shop", "settings",
+                "records", "achievements", "shop", "minigames", "settings",
                 "hide", "tutorial", "back", "quit",
             ],
         )
@@ -61,6 +61,45 @@ class MenuUiTests(unittest.TestCase):
             [action for _, _, action, _ in pet.BubbleMenu.MORE_ACTIONS][-2:],
             ["back", "quit"],
         )
+
+    def test_settings_entry_requires_badge_without_api_key(self):
+        with patch("pet.ai.get_api_key_source", return_value="none"):
+            self.assertTrue(pet.BubbleMenu.needs_api_key_configuration())
+
+        with patch("pet.ai.get_api_key_source", return_value="config"):
+            self.assertFalse(pet.BubbleMenu.needs_api_key_configuration())
+
+    def test_pet_surface_requires_badge_without_api_key(self):
+        with patch("pet.ai.get_api_key_source", return_value="none"):
+            self.assertTrue(pet.PetWindow.needs_api_key_configuration())
+
+        with patch("pet.ai.get_api_key_source", return_value="config"):
+            self.assertFalse(pet.PetWindow.needs_api_key_configuration())
+
+    def test_pet_outside_actual_screens_is_not_visible(self):
+        fake_pet = SimpleNamespace(
+            geometry=lambda: QRect(2369, 1209, 190, 220),
+            screen_rect=lambda: QRect(0, 0, 3000, 1600),
+        )
+        screen = SimpleNamespace(geometry=lambda: QRect(0, 0, 1707, 960))
+
+        with patch("pet.QApplication.screens", return_value=[screen]):
+            self.assertFalse(pet.PetWindow.is_visible_on_screen(fake_pet))
+
+    def test_second_launch_recalls_pet_to_a_discoverable_position(self):
+        fake_pet = SimpleNamespace(
+            play_scene=None,
+            isVisible=Mock(return_value=True),
+            recall=Mock(),
+            show=Mock(),
+            raise_=Mock(),
+            say=Mock(),
+        )
+        fake_tray_app = SimpleNamespace(pet=fake_pet)
+
+        pet.TrayApp.activate_existing_instance(fake_tray_app)
+
+        fake_pet.recall.assert_called_once_with()
 
     def test_right_long_press_stats_feature_is_removed(self):
         self.assertFalse(hasattr(pet.PetWindow, "open_stats"))
@@ -93,6 +132,15 @@ class MenuUiTests(unittest.TestCase):
         pet.BubbleMenu._run_action(fake_menu, "hide")
         fake_menu._close.assert_called_once_with()
         callback.assert_called_once_with("hide")
+
+    def test_more_canvas_opens_minigame_hub(self):
+        fake_pet = SimpleNamespace(open_minigames=Mock())
+        fake_menu = SimpleNamespace(pet=fake_pet, _close=Mock())
+
+        pet.BubbleMenu._run_action(fake_menu, "minigames")
+
+        fake_pet.open_minigames.assert_called_once_with()
+        fake_menu._close.assert_called_once_with()
 
     def test_any_non_left_click_closes_bubble_canvas(self):
         fake_menu = SimpleNamespace(_close=Mock())

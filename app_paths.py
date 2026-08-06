@@ -80,17 +80,22 @@ def _copy_missing_data_files(source_dirs, target_dir):
 
 if IS_FROZEN:
     RESOURCE_DIR = sys._MEIPASS
-    if sys.platform == "darwin":
-        DATA_DIR = os.path.join(
-            os.path.expanduser("~/Library/Application Support"), APP_NAME
-        )
-    elif sys.platform.startswith("win"):
-        DATA_DIR = _windows_app_data_dir()
-    else:
-        DATA_DIR = os.path.dirname(sys.executable)
 else:
     RESOURCE_DIR = SOURCE_DIR
-    DATA_DIR = os.path.join(SOURCE_DIR, "data")
+
+if sys.platform == "darwin":
+    DATA_DIR = os.path.join(
+        os.path.expanduser("~/Library/Application Support"), APP_NAME
+    )
+elif sys.platform.startswith("win"):
+    # Source and packaged Windows builds share one stable profile.  This
+    # prevents switching between `python pet.py` and Petpet.exe from creating
+    # a second empty save inside the repository.
+    DATA_DIR = _windows_app_data_dir()
+else:
+    DATA_DIR = os.path.dirname(sys.executable) if IS_FROZEN else os.path.join(
+        SOURCE_DIR, "data"
+    )
 
 ASSETS_DIR = os.path.join(RESOURCE_DIR, "assets")
 POSES_DIR = os.path.join(ASSETS_DIR, "poses")
@@ -110,6 +115,11 @@ def _migrate_legacy_source_data() -> None:
             _copy_missing_data_files(
                 _legacy_windows_data_dirs(), DATA_DIR
             )
+        return
+    if sys.platform.startswith("win"):
+        _copy_missing_data_files(
+            [SOURCE_DIR, os.path.join(SOURCE_DIR, "data")], DATA_DIR
+        )
         return
     for filename in DATA_FILENAMES:
         legacy_path = os.path.join(SOURCE_DIR, filename)

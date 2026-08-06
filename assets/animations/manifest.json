@@ -10,7 +10,7 @@
   },
   "eat": {
     "folder": "eat",
-    "fps": 4,
+    "fps": 20,
     "loop": true,
     "fallback": "eat",
     "scale": 1.2,
@@ -29,7 +29,7 @@
   "happy": {"folder": "happy", "fps": 8,  "loop": true,  "fallback": "happy"},
   "pet": {
     "folder": "pet",
-    "fps": 8,
+    "fps": 20,
     "loop": false,
     "fallback": "happy",
     "scale": 1.2,

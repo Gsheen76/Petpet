@@ -33,6 +33,8 @@ RECORD_DEFAULTS = {
     "achievements_claimed": 0,
     "dig_treasures_found": 0,
     "coins_dug": 0,
+    "minigame_rounds": 0,
+    "coins_minigames": 0,
 }
 
 # Digging is an occasional bonus, not a replacement for achievements.
@@ -46,6 +48,8 @@ DIG_REWARD_TIERS = (
     (0.07, 25, 40, "稀有宝藏"),
     (0.01, 60, 100, "大宝藏"),
 )
+
+MINIGAME_IDS = ("coin_catch", "lucky_paws")
 
 AFFECTION_ACTION_GAINS = {
     "pettings": 2,
@@ -270,6 +274,13 @@ def ensure_progression(state):
     except (TypeError, ValueError):
         last_dig = 0.0
     state["last_dig_discovery_at"] = max(0.0, last_dig)
+    raw_best_scores = state.get("minigame_best_scores")
+    if not isinstance(raw_best_scores, dict):
+        raw_best_scores = {}
+    state["minigame_best_scores"] = {
+        game_id: _safe_int(raw_best_scores.get(game_id, 0))
+        for game_id in MINIGAME_IDS
+    }
     state["affection_level"] = _safe_int(
         state.get("affection_level", 1), default=1, minimum=1
     )
@@ -503,7 +514,34 @@ def add_coins(state, amount, source=None):
     state["records"]["coins_earned"] += amount
     if source == "digging":
         state["records"]["coins_dug"] += amount
+    elif source == "minigame":
+        state["records"]["coins_minigames"] += amount
     return amount
+
+
+def award_minigame_coins(
+        state, game_id, requested, score=0, now=None):
+    """Settle one completed mini-game round without a daily earning cap."""
+    ensure_progression(state)
+    if game_id not in MINIGAME_IDS:
+        return {"ok": False, "reward": 0, "message": "没有找到这个小游戏。"}
+    requested = _safe_int(requested)
+    score = _safe_int(score)
+    reward = requested
+    state["records"]["minigame_rounds"] += 1
+    state["minigame_best_scores"][game_id] = max(
+        state["minigame_best_scores"].get(game_id, 0), score
+    )
+    if reward > 0:
+        add_coins(state, reward, source="minigame")
+    message = f"Pet币 +{reward}"
+    return {
+        "ok": True,
+        "reward": reward,
+        "requested": requested,
+        "score": score,
+        "message": message,
+    }
 
 
 def dig_cooldown_remaining(state, now=None):
@@ -891,6 +929,11 @@ def achievement_catalog(state, now=None):
             "autonomous_walks", "日常", "stroll",
             [(5, 15, "散步时间"), (20, 40, "桌面巡游"),
              (60, 90, "活力小跑家")],
+        ),
+        (
+            "minigame_rounds", "小游戏", "minigame",
+            [(1, 10, "第一次小游戏"), (10, 30, "游戏搭档"),
+             (50, 80, "小游戏达人")],
         ),
         (
             "coins_earned", "Pet币", "coins",

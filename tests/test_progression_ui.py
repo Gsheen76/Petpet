@@ -160,6 +160,7 @@ class ProgressionWindowUiTests(unittest.TestCase):
         for title in (
             "AI 回复", "自主散步", "收集装扮",
             "更换装扮", "购买强化", "领取成就",
+            "小游戏局数", "游戏收入",
         ):
             self.assertIn(title, text)
 
