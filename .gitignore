@@ -28,6 +28,7 @@ config.json
 .idea/
 .vscode/
 .agents/
+.worktrees/
 *.log
 *.bak
 assets/poses/clean/
