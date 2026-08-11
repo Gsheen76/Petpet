@@ -2,6 +2,11 @@ name: Build macOS app
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Optional existing draft release tag to upload the ZIP into
+        required: false
+        type: string
 
 jobs:
   build-macos:
@@ -15,10 +20,12 @@ jobs:
             arch: arm64
     runs-on: ${{ matrix.runner }}
     permissions:
-      contents: read
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
 
       - uses: actions/setup-python@v5
         with:
@@ -41,3 +48,11 @@ jobs:
           name: Petpet-macOS-${{ matrix.arch }}
           path: dist/Petpet-v*-macOS-${{ matrix.arch }}.zip
           if-no-files-found: error
+
+      - name: Upload portable zip to draft release
+        if: ${{ inputs.release_tag != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release upload "${{ inputs.release_tag }}"
+          dist/Petpet-v*-macOS-${{ matrix.arch }}.zip
