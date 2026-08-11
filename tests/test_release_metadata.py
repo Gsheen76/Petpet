@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_public_version_has_one_source_of_truth():
-    assert VERSION == "1.3.2"
+    assert VERSION == "1.4.0"
     assert pet.VERSION == VERSION
 
 
@@ -31,7 +31,7 @@ def test_macos_build_uses_lightweight_version_module():
     ).read_text(encoding="utf-8")
     assert "from version import VERSION" in workflow
     assert 'project_root / "version.py"' in mac_spec
-    assert re.search(r'^VERSION = "1\.3\.2"$', (
+    assert re.search(r'^VERSION = "1\.4\.0"$', (
         ROOT / "version.py"
     ).read_text(encoding="utf-8"), re.MULTILINE)
 

@@ -1,11 +1,12 @@
 import os
+import time
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt5.QtCore import QEvent, QPoint, QRect, QRectF, Qt, QTimer
+from PyQt5.QtCore import QEvent, QPoint, QRect, QRectF, QSize, Qt, QTimer
 from PyQt5.QtGui import QColor, QImage, QPainter
 from PyQt5.QtWidgets import QApplication, QMenu
 
@@ -48,12 +49,12 @@ class MenuUiTests(unittest.TestCase):
     def test_primary_and_more_bubble_actions(self):
         self.assertEqual(
             [action for _, _, action, _ in pet.BubbleMenu.PRIMARY_ACTIONS],
-            ["chat", "feed", "play", "sleep", "more"],
+            ["chat", "home", "shop", "interaction", "more"],
         )
         self.assertEqual(
             [action for _, _, action, _ in pet.BubbleMenu.MORE_ACTIONS],
             [
-                "records", "achievements", "shop", "minigames", "settings",
+                "records", "achievements", "minigames", "settings",
                 "hide", "tutorial", "back", "quit",
             ],
         )
@@ -61,6 +62,12 @@ class MenuUiTests(unittest.TestCase):
             [action for _, _, action, _ in pet.BubbleMenu.MORE_ACTIONS][-2:],
             ["back", "quit"],
         )
+        self.assertEqual(
+            [action for _, _, action, _ in pet.BubbleMenu.INTERACTION_ACTIONS],
+            ["pet", "feed", "play", "sleep"],
+        )
+        self.assertEqual(pet.BubbleMenu.PAGE_COLUMNS["more"], 5)
+        self.assertEqual(pet.BubbleMenu.PAGE_COLUMNS["interaction"], 4)
 
     def test_settings_entry_requires_badge_without_api_key(self):
         with patch("pet.ai.get_api_key_source", return_value="none"):
@@ -75,6 +82,218 @@ class MenuUiTests(unittest.TestCase):
 
         with patch("pet.ai.get_api_key_source", return_value="config"):
             self.assertFalse(pet.PetWindow.needs_api_key_configuration())
+
+    def test_interface_anchor_uses_home_pet_while_home_is_visible(self):
+        home_rect = QRect(1100, 620, 140, 126)
+        home = SimpleNamespace(home_pet_global_rect=lambda: home_rect)
+        harness = SimpleNamespace(
+            _active_home_interface=lambda: home,
+            geometry=lambda: QRect(20, 30, 190, 220),
+            isVisible=lambda: False,
+        )
+
+        self.assertEqual(pet.PetWindow.interface_anchor_rect(harness), home_rect)
+        self.assertTrue(pet.PetWindow.interface_anchor_visible(harness))
+
+    def test_active_home_interface_requires_visible_non_decorating_pet(self):
+        home = SimpleNamespace(
+            isVisible=lambda: True,
+            is_decorating=lambda: False,
+            home_pet_visible=lambda: True,
+        )
+        harness = SimpleNamespace(home_scene_window=home)
+
+        self.assertIs(pet.PetWindow._active_home_interface(harness), home)
+        home.is_decorating = lambda: True
+        self.assertIsNone(pet.PetWindow._active_home_interface(harness))
+
+    def test_interface_anchor_falls_back_to_visible_desktop_pet(self):
+        desktop = QRect(20, 30, 190, 220)
+        harness = SimpleNamespace(
+            _active_home_interface=lambda: None,
+            geometry=lambda: desktop,
+            isVisible=lambda: True,
+        )
+
+        self.assertEqual(pet.PetWindow.interface_anchor_rect(harness), desktop)
+        self.assertTrue(pet.PetWindow.interface_anchor_visible(harness))
+
+    def test_interface_window_position_prefers_space_beside_anchor(self):
+        harness = SimpleNamespace(
+            interface_anchor_rect=lambda: QRect(900, 500, 120, 100),
+            interface_screen_rect=lambda: QRect(0, 0, 1920, 1080),
+        )
+
+        point = pet.PetWindow.interface_window_position(
+            harness,
+            QSize(500, 700),
+            gap=16,
+        )
+
+        self.assertEqual(point, QPoint(1035, 199))
+
+    def test_open_bubble_menu_closes_old_menu_before_replacement(self):
+        old = SimpleNamespace(_close=Mock())
+        harness = SimpleNamespace(_bubble_menu=old)
+
+        with patch("pet.BubbleMenu") as menu_type:
+            pet.PetWindow.open_bubble_menu(harness)
+
+        old._close.assert_called_once_with()
+        self.assertIs(harness._bubble_menu, menu_type.return_value)
+
+    def test_open_home_scene_is_idempotent_while_already_visible(self):
+        scene = SimpleNamespace(
+            isVisible=lambda: True,
+            raise_=Mock(),
+            show_scene=Mock(),
+        )
+        harness = SimpleNamespace(home_scene_window=scene)
+
+        pet.PetWindow.open_home_scene(harness)
+
+        scene.raise_.assert_called_once_with()
+        scene.show_scene.assert_not_called()
+
+    def test_toggle_sleep_delegates_to_active_home(self):
+        home = SimpleNamespace(toggle_home_sleep=Mock(return_value=True))
+        harness = SimpleNamespace(_active_home_interface=lambda: home)
+
+        pet.PetWindow.toggle_sleep(harness)
+
+        home.toggle_home_sleep.assert_called_once_with()
+
+    def test_bubble_and_stat_menu_place_from_interface_anchor(self):
+        anchor = QRect(1100, 620, 140, 126)
+        screen = QRect(0, 0, 1920, 1080)
+        pet_host = SimpleNamespace(
+            interface_anchor_rect=lambda: anchor,
+            interface_screen_rect=lambda: screen,
+        )
+        menu = SimpleNamespace(pet=pet_host, W=590, H=112, move=Mock())
+
+        pet.BubbleMenu._place(menu)
+
+        menu.move.assert_called_once_with(874, 527)
+
+        stats = SimpleNamespace(
+            pet=pet_host,
+            width=lambda: 620,
+            height=lambda: 416,
+            move=Mock(),
+        )
+
+        pet.StatBubble._place(stats)
+
+        stats.move.assert_called_once_with(859, 92)
+
+    def test_say_uses_visible_home_interface_when_desktop_pet_is_hidden(self):
+        speech = SimpleNamespace(isVisible=lambda: True, show_text=Mock())
+        harness = SimpleNamespace(
+            interface_anchor_visible=lambda: True,
+            isVisible=lambda: False,
+            _speech_bubble=speech,
+        )
+
+        pet.PetWindow.say(harness, "我在小屋里", 2200)
+
+        speech.show_text.assert_called_once_with("我在小屋里", 2200)
+
+    def test_speech_bubble_geometry_uses_interface_anchor(self):
+        anchor = QRect(1100, 620, 140, 126)
+        host = SimpleNamespace(
+            interface_anchor_rect=lambda: anchor,
+            interface_screen_rect=lambda: QRect(0, 0, 1920, 1080),
+        )
+        bubble = SimpleNamespace(pet=host)
+
+        rect = pet.SpeechBubble._bubble_geometry(bubble, 260, 90)
+
+        self.assertEqual(rect, QRect(1039, 589, 260, 90))
+        self.assertLess(rect.bottom(), anchor.bottom())
+
+    def test_interactive_bubble_places_beside_interface_anchor(self):
+        host = SimpleNamespace(
+            interface_anchor_rect=lambda: QRect(100, 200, 120, 100),
+            interface_screen_rect=lambda: QRect(0, 0, 1920, 1080),
+        )
+        bubble = SimpleNamespace(
+            pet=host,
+            width=lambda: 160,
+            height=lambda: 70,
+            move=Mock(),
+        )
+
+        pet.InteractiveBubble._place_above_pet(bubble)
+
+        bubble.move.assert_called_once_with(215, 229)
+        self.assertTrue(bubble._tail_on_left)
+
+    def test_bonus_origin_uses_interface_anchor_in_home(self):
+        harness = SimpleNamespace(
+            interface_anchor_rect=lambda: QRect(1100, 620, 140, 126),
+        )
+
+        self.assertEqual(
+            pet.PetWindow.interface_bonus_origin(harness, -10),
+            (1169, 610),
+        )
+
+    def test_chat_and_settings_use_interface_window_position(self):
+        position = QPoint(880, 240)
+        pet_host = SimpleNamespace(
+            settings=dict(pet.DEFAULT_SETTINGS),
+            interface_screen_rect=lambda: QRect(0, 0, 1920, 1080),
+            interface_window_position=Mock(return_value=position),
+        )
+        chat = SimpleNamespace(
+            pet=pet_host,
+            s=pet_host.settings,
+            width=lambda: 560,
+            height=lambda: 720,
+            size=lambda: QSize(560, 720),
+            setFixedSize=Mock(),
+            move=Mock(),
+            show=Mock(),
+            raise_=Mock(),
+            activateWindow=Mock(),
+            input=SimpleNamespace(setFocus=Mock()),
+        )
+
+        pet.ChatWindow.show_near_pet(chat)
+
+        chat.move.assert_called_once_with(position)
+
+        settings = SimpleNamespace(
+            pet=pet_host,
+            size=lambda: QSize(840, 960),
+            move=Mock(),
+            show=Mock(),
+            raise_=Mock(),
+            activateWindow=Mock(),
+        )
+
+        pet.SettingsWindow.show_near_pet(settings)
+
+        settings.move.assert_called_once_with(position)
+
+    def test_tutorial_uses_interface_window_position(self):
+        position = QPoint(700, 160)
+        pet_host = SimpleNamespace(
+            pet_name=pet.ai.DEFAULT_PET_NAME,
+            state={"tutorial_completed": False},
+            interface_window_position=Mock(return_value=position),
+        )
+        tutorial = pet.TutorialWindow(pet_host, Mock())
+        self.addCleanup(tutorial.close)
+
+        tutorial.start()
+
+        self.assertEqual(tutorial.pos(), position)
+        pet_host.interface_window_position.assert_called_once_with(
+            tutorial.size(),
+            gap=16,
+        )
 
     def test_pet_outside_actual_screens_is_not_visible(self):
         fake_pet = SimpleNamespace(
@@ -115,6 +334,16 @@ class MenuUiTests(unittest.TestCase):
         menu_type.assert_called_once_with(fake_pet, page="more")
         self.assertIs(fake_pet._bubble_menu, menu_type.return_value)
 
+    def test_interaction_replaces_primary_canvas_with_interaction_actions(self):
+        fake_pet = SimpleNamespace(_bubble_menu=None)
+        fake_menu = SimpleNamespace(pet=fake_pet, _close=Mock())
+        run_action = pet.BubbleMenu._run_action
+        with patch("pet.BubbleMenu") as menu_type:
+            run_action(fake_menu, "interaction")
+        fake_menu._close.assert_called_once_with()
+        menu_type.assert_called_once_with(fake_pet, page="interaction")
+        self.assertIs(fake_pet._bubble_menu, menu_type.return_value)
+
     def test_back_restores_primary_canvas(self):
         fake_pet = SimpleNamespace(_bubble_menu=None)
         fake_menu = SimpleNamespace(pet=fake_pet, _close=Mock())
@@ -141,6 +370,90 @@ class MenuUiTests(unittest.TestCase):
 
         fake_pet.open_minigames.assert_called_once_with()
         fake_menu._close.assert_called_once_with()
+
+    def test_primary_canvas_opens_home_scene(self):
+        fake_pet = SimpleNamespace(open_home_scene=Mock())
+        fake_menu = SimpleNamespace(pet=fake_pet, _close=Mock())
+
+        pet.BubbleMenu._run_action(fake_menu, "home")
+
+        fake_pet.open_home_scene.assert_called_once_with()
+        fake_menu._close.assert_called_once_with()
+
+    def test_desktop_auto_sleep_does_not_change_shared_state_in_home_scene(self):
+        wake = Mock()
+        harness = SimpleNamespace(
+            home_scene_window=SimpleNamespace(isVisible=lambda: True),
+            state={"sleeping": True, "sleep_mode": "auto", "energy": 100.0},
+            auto_wake_energy_threshold=80.0,
+            AUTO_WAKE_ENERGY_THRESHOLD=80.0,
+            _auto_sleep_phase="sleeping",
+            _wake_from_auto_sleep=wake,
+        )
+
+        result = pet.PetWindow._update_auto_sleep_state(harness, now=10.0)
+
+        self.assertEqual(result, "home")
+        self.assertTrue(harness.state["sleeping"])
+        wake.assert_not_called()
+
+    def test_desktop_tick_returns_before_screen_physics_in_home_scene(self):
+        screen_lookup = Mock(side_effect=AssertionError("desktop physics ran"))
+        harness = SimpleNamespace(
+            home_scene_window=SimpleNamespace(isVisible=lambda: True),
+            current_screen_rect=screen_lookup,
+        )
+
+        pet.PetWindow.on_tick(harness)
+
+        screen_lookup.assert_not_called()
+
+    def test_open_home_scene_does_not_create_desktop_speech_overlay(self):
+        scene = Mock()
+        harness = SimpleNamespace(
+            state={},
+            home_scene_window=None,
+            vx=5,
+            vy=6,
+            on_ground=False,
+            say=Mock(),
+        )
+        with patch.object(pet, "HomeSceneWindow", return_value=scene):
+            pet.PetWindow.open_home_scene(harness)
+
+        scene.show_scene.assert_called_once_with()
+        harness.say.assert_not_called()
+
+    def test_interaction_canvas_dispatches_petting(self):
+        fake_pet = SimpleNamespace(pet_click=Mock())
+        fake_menu = SimpleNamespace(pet=fake_pet, _close=Mock())
+
+        pet.BubbleMenu._run_action(fake_menu, "pet")
+
+        fake_pet.pet_click.assert_called_once_with()
+        fake_menu._close.assert_called_once_with()
+
+    def test_double_clicking_pet_opens_home_instead_of_chat(self):
+        app = object.__new__(pet.TrayApp)
+        app.pet = SimpleNamespace(
+            open_home_scene=Mock(),
+            chat=Mock(),
+            mouseReleaseEvent_orig=Mock(),
+        )
+        app._press_button = "left"
+        app._press_pos = QPoint(50, 50)
+        app._press_t = time.time() - 0.1
+        app._last_left_click_t = time.time() - 0.1
+        app._pending_single_click = Mock()
+        event = SimpleNamespace(
+            button=lambda: Qt.LeftButton,
+            globalPos=lambda: QPoint(50, 50),
+        )
+
+        app._wrap_release(event)
+
+        app.pet.open_home_scene.assert_called_once_with()
+        app.pet.chat.assert_not_called()
 
     def test_any_non_left_click_closes_bubble_canvas(self):
         fake_menu = SimpleNamespace(_close=Mock())
@@ -398,6 +711,21 @@ class MenuUiTests(unittest.TestCase):
         self.assertIsNone(fake_pet._interactive_bubble)
         self.assertIsNone(fake_pet._bubble_menu)
         self.assertIsNone(fake_pet._last_bonus)
+
+    def test_toggle_visible_hides_active_home_instead_of_showing_desktop_pet(self):
+        home = SimpleNamespace(isVisible=lambda: True, hide_scene=Mock())
+        pet_host = SimpleNamespace(
+            play_scene=None,
+            home_scene_window=home,
+            isVisible=lambda: False,
+            show=Mock(),
+        )
+        tray = SimpleNamespace(pet=pet_host)
+
+        pet.TrayApp.toggle_visible(tray)
+
+        home.hide_scene.assert_called_once_with()
+        pet_host.show.assert_not_called()
 
     def test_tray_omits_status_and_data_folder(self):
         tray = self._tray_harness()

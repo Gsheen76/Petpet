@@ -24,6 +24,7 @@ from PyQt5.QtWidgets import (
 import progression
 import decoration_renderer
 from app_paths import DECORATIONS_DIR, POSES_DIR
+from home_scene import HOME_FURNITURE_PATHS
 
 
 PANEL_STYLE = """
@@ -358,21 +359,7 @@ class CozyProgressWindow(QWidget):
 
     def show_near_pet(self):
         self.refresh()
-        screen = self.pet.current_screen_rect()
-        pet_rect = self.pet.geometry()
-        gap = 20
-        right_x = pet_rect.right() + gap
-        left_x = pet_rect.left() - self.width() - gap
-        if right_x + self.width() <= screen.right():
-            x = right_x
-        elif left_x >= screen.left():
-            x = left_x
-        else:
-            x = screen.center().x() - self.width() // 2
-        y = pet_rect.center().y() - self.height() // 2
-        x = max(screen.left(), min(x, screen.right() - self.width() + 1))
-        y = max(screen.top(), min(y, screen.bottom() - self.height() + 1))
-        self.move(int(x), int(y))
+        self.move(self.pet.interface_window_position(self.size(), gap=20))
         self.show()
         self.raise_()
         self.activateWindow()
@@ -1024,6 +1011,7 @@ class ShopWindow(CozyProgressWindow):
         tab_layout.setSpacing(7)
         for page, text in (
             ("decorations", "🎀 装饰"),
+            ("home", "🏠 家居"),
             ("upgrades", "✨ 强化"),
         ):
             button = QPushButton(text)
@@ -1040,12 +1028,14 @@ class ShopWindow(CozyProgressWindow):
 
         if self.page == "decorations":
             self._build_decorations_page()
+        elif self.page == "home":
+            self._build_home_page()
         else:
             self._build_upgrades_page()
         self.content_layout.addStretch(1)
 
     def _set_page(self, page):
-        if page not in ("decorations", "upgrades") or page == self.page:
+        if page not in ("decorations", "home", "upgrades") or page == self.page:
             return
         self.page = page
         self.status_label.clear()
@@ -1298,6 +1288,87 @@ class ShopWindow(CozyProgressWindow):
     def _adjuster_closed(self, window):
         if self.adjust_window is window:
             self.adjust_window = None
+
+    def _build_home_page(self):
+        title = QLabel("🏠 家居小铺")
+        title.setObjectName("sectionTitle")
+        self.content_layout.addWidget(title)
+        tip = QLabel(
+            "购买后的家具会放入家场景。打开家场景后，可直接拖动家具调整位置。"
+        )
+        tip.setObjectName("muted")
+        tip.setWordWrap(True)
+        self.content_layout.addWidget(tip)
+
+        for decoration_id, definition in progression.HOME_DECORATION_DEFINITIONS.items():
+            self.content_layout.addWidget(
+                self._home_decoration_card(decoration_id, definition)
+            )
+
+    def _home_decoration_card(self, decoration_id, definition):
+        state = self.pet.state
+        owned = decoration_id in state.get("owned_home_decorations", [])
+        card = QFrame()
+        card.setObjectName("decorationCard")
+        layout = QHBoxLayout(card)
+        layout.setContentsMargins(18, 14, 18, 14)
+        layout.setSpacing(18)
+
+        preview = QLabel()
+        preview.setFixedSize(170, 112)
+        preview.setAlignment(Qt.AlignCenter)
+        pixmap = QPixmap(HOME_FURNITURE_PATHS[decoration_id])
+        if not pixmap.isNull():
+            preview.setPixmap(pixmap.scaled(
+                preview.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation
+            ))
+        layout.addWidget(preview)
+
+        info = QVBoxLayout()
+        title_row = QHBoxLayout()
+        title = QLabel(definition["name"])
+        title.setObjectName("cardTitle")
+        badge = QLabel("已拥有" if owned else "家居")
+        badge.setObjectName("levelBadge")
+        title_row.addWidget(title)
+        title_row.addStretch(1)
+        title_row.addWidget(badge)
+        info.addLayout(title_row)
+
+        description = QLabel(definition["description"])
+        description.setObjectName("muted")
+        description.setWordWrap(True)
+        info.addWidget(description)
+
+        action_row = QHBoxLayout()
+        price = int(definition["price"])
+        price_label = QLabel("已拥有" if owned else f"售价：{price} Pet币")
+        price_label.setObjectName("reward")
+        action_row.addWidget(price_label)
+        action_row.addStretch(1)
+        button = QPushButton("已购买" if owned else f"{price} Pet币 · 购买")
+        button.setEnabled(owned or state.get("pet_coins", 0) >= price)
+        if not owned:
+            button.clicked.connect(
+                lambda _checked=False, selected=decoration_id:
+                self._purchase_home_decoration(selected)
+            )
+        action_row.addWidget(button)
+        info.addLayout(action_row)
+        layout.addLayout(info, 1)
+        return card
+
+    def _purchase_home_decoration(self, decoration_id):
+        result = progression.purchase_home_decoration(
+            self.pet.state, decoration_id
+        )
+        message = result.get("message", "家居状态没有改变。")
+        if result.get("ok"):
+            self.save_callback(self.pet.state)
+            self.pet.update()
+        self.pet.say(message, 2100)
+        self.refresh()
+        self.status_label.setText(message)
 
     def closeEvent(self, event):
         if self.adjust_window is not None:

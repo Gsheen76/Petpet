@@ -5,6 +5,12 @@ from __future__ import annotations
 import time
 import random
 
+from scene_system import (
+    clamp_home_furniture_position,
+    normalize_home_decoration_transform,
+    normalize_home_scene,
+)
+
 
 RECORD_DEFAULTS = {
     "app_sessions": 0,
@@ -232,6 +238,45 @@ DECORATION_TRANSFORM_LIMITS = {
     "rotation": (-30.0, 30.0),
 }
 
+HOME_DECORATION_DEFINITIONS = {
+    "home_rug": {
+        "name": "暖绒地毯",
+        "category": "home",
+        "price": 120,
+        "asset": "rug.png",
+        "description": "为小家的地板添上一层柔软暖意。",
+        "default_position": {"x": 620, "y": 430},
+        "size": (440, 270),
+    },
+    "home_sofa": {
+        "name": "舒适沙发",
+        "category": "home",
+        "price": 240,
+        "asset": "sofa.png",
+        "description": "一张适合晒太阳和歇脚的双人沙发。",
+        "default_position": {"x": 210, "y": 360},
+        "size": (360, 225),
+    },
+    "home_plant": {
+        "name": "绿植盆栽",
+        "category": "home",
+        "price": 160,
+        "asset": "plant.png",
+        "description": "让房间多一位安静又有生命力的伙伴。",
+        "default_position": {"x": 1500, "y": 305},
+        "size": (190, 340),
+    },
+    "home_wall_art": {
+        "name": "墙面装饰画",
+        "category": "home",
+        "price": 180,
+        "asset": "wall-art.png",
+        "description": "给墙面挂上一幅温柔的日落风景。",
+        "default_position": {"x": 1110, "y": 95},
+        "size": (220, 285),
+    },
+}
+
 
 def _safe_int(value, default=0, minimum=0):
     try:
@@ -367,6 +412,50 @@ def ensure_progression(state):
             decoration_id, values
         )
     state["decoration_adjustments"] = adjustments
+
+    state["home_scene"] = normalize_home_scene(state.get("home_scene"))
+
+    raw_home_owned = state.get("owned_home_decorations")
+    if not isinstance(raw_home_owned, (list, tuple, set)):
+        raw_home_owned = []
+    state["owned_home_decorations"] = list(dict.fromkeys(
+        str(item)
+        for item in raw_home_owned
+        if str(item) in HOME_DECORATION_DEFINITIONS
+    ))
+
+    raw_home_positions = state.get("home_decoration_positions")
+    if not isinstance(raw_home_positions, dict):
+        raw_home_positions = {}
+    home_positions = {}
+    for decoration_id in state["owned_home_decorations"]:
+        definition = HOME_DECORATION_DEFINITIONS[decoration_id]
+        default = definition["default_position"]
+        saved = raw_home_positions.get(decoration_id)
+        if not isinstance(saved, dict):
+            saved = default
+        home_positions[decoration_id] = clamp_home_furniture_position(
+            decoration_id, saved.get("x", default["x"]), saved.get("y", default["y"])
+        )
+    state["home_decoration_positions"] = home_positions
+
+    raw_stored = state.get("home_stored_decorations")
+    if not isinstance(raw_stored, (list, tuple, set)):
+        raw_stored = []
+    state["home_stored_decorations"] = list(dict.fromkeys(
+        str(item)
+        for item in raw_stored
+        if str(item) in state["owned_home_decorations"]
+    ))
+    raw_transforms = state.get("home_decoration_transforms")
+    if not isinstance(raw_transforms, dict):
+        raw_transforms = {}
+    state["home_decoration_transforms"] = {
+        decoration_id: normalize_home_decoration_transform(
+            raw_transforms.get(decoration_id)
+        )
+        for decoration_id in state["owned_home_decorations"]
+    }
 
     raw_claimed = state.get("claimed_achievements")
     if not isinstance(raw_claimed, (list, tuple, set)):
@@ -804,6 +893,107 @@ def purchase_decoration(state, decoration_id):
             if price == 0
             else f"已购买 {definition['name']}！"
         ),
+    }
+
+
+def home_decoration_position(state, decoration_id):
+    """Return the persisted or authored default position for owned furniture."""
+    ensure_progression(state)
+    definition = HOME_DECORATION_DEFINITIONS.get(decoration_id)
+    if definition is None:
+        raise KeyError(decoration_id)
+    return dict(state["home_decoration_positions"].get(
+        decoration_id, definition["default_position"]
+    ))
+
+
+def set_home_decoration_position(state, decoration_id, x, y):
+    """Persist a clamped top-left position for owned furniture."""
+    ensure_progression(state)
+    if decoration_id not in HOME_DECORATION_DEFINITIONS:
+        raise KeyError(decoration_id)
+    if decoration_id not in state["owned_home_decorations"]:
+        raise ValueError("home decoration is not owned")
+    normalized = clamp_home_furniture_position(decoration_id, x, y)
+    state["home_decoration_positions"][decoration_id] = normalized
+    return dict(normalized)
+
+
+def home_decoration_transform(state, decoration_id):
+    ensure_progression(state)
+    if decoration_id not in HOME_DECORATION_DEFINITIONS:
+        raise KeyError(decoration_id)
+    return dict(state["home_decoration_transforms"].get(
+        decoration_id, {"scale": 1.0, "rotation": 0.0}
+    ))
+
+
+def set_home_decoration_transform(state, decoration_id, scale=None, rotation=None):
+    ensure_progression(state)
+    if decoration_id not in HOME_DECORATION_DEFINITIONS:
+        raise KeyError(decoration_id)
+    current = home_decoration_transform(state, decoration_id)
+    if scale is not None:
+        current["scale"] = scale
+    if rotation is not None:
+        current["rotation"] = rotation
+    normalized = normalize_home_decoration_transform(current)
+    state["home_decoration_transforms"][decoration_id] = normalized
+    return dict(normalized)
+
+
+def store_home_decoration(state, decoration_id):
+    ensure_progression(state)
+    if decoration_id not in state["owned_home_decorations"]:
+        return False
+    if decoration_id not in state["home_stored_decorations"]:
+        state["home_stored_decorations"].append(decoration_id)
+    return True
+
+
+def place_home_decoration(state, decoration_id):
+    ensure_progression(state)
+    if decoration_id not in state["owned_home_decorations"]:
+        return False
+    state["home_stored_decorations"] = [
+        item for item in state["home_stored_decorations"]
+        if item != decoration_id
+    ]
+    return True
+
+
+def purchase_home_decoration(state, decoration_id):
+    """Buy one home furniture item using the shared Pet coin balance."""
+    ensure_progression(state)
+    definition = HOME_DECORATION_DEFINITIONS.get(decoration_id)
+    if definition is None:
+        return {"ok": False, "message": "Home decoration not found."}
+    if decoration_id in state["owned_home_decorations"]:
+        return {"ok": False, "message": "Home decoration already owned."}
+    price = int(definition.get("price", 0))
+    if state["pet_coins"] < price:
+        return {
+            "ok": False,
+            "price": price,
+            "message": f"Need {price - state['pet_coins']} more Pet coins.",
+        }
+    state["pet_coins"] -= price
+    state["records"]["coins_spent"] += price
+    state["owned_home_decorations"].append(decoration_id)
+    state["home_decoration_positions"][decoration_id] = clamp_home_furniture_position(
+        decoration_id,
+        definition["default_position"]["x"],
+        definition["default_position"]["y"],
+    )
+    state["home_decoration_transforms"][decoration_id] = {
+        "scale": 1.0,
+        "rotation": 0.0,
+    }
+    state["records"]["decorations_collected"] += 1
+    return {
+        "ok": True,
+        "price": price,
+        "message": f"Purchased {definition['name']}.",
     }
 
 

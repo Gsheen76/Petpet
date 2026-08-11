@@ -5,7 +5,7 @@ from unittest.mock import Mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt5.QtCore import QEvent, QRect, Qt
+from PyQt5.QtCore import QEvent, QPoint, QRect, Qt
 from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import QApplication, QLabel, QPushButton
 
@@ -36,6 +36,7 @@ class ProgressionWindowUiTests(unittest.TestCase):
             }),
             current_screen_rect=Mock(return_value=QRect(0, 0, 1200, 900)),
             geometry=Mock(return_value=QRect(900, 600, 190, 220)),
+            interface_window_position=Mock(return_value=QPoint(700, 180)),
             say=Mock(),
             update=Mock(),
         )
@@ -66,6 +67,18 @@ class ProgressionWindowUiTests(unittest.TestCase):
             self.assertGreater(base.red(), 240)
             self.assertGreater(base.green(), 220)
 
+    def test_progression_window_uses_active_interface_position(self):
+        records = RecordsWindow(self.pet, Mock())
+        self.windows = [records]
+
+        records.show_near_pet()
+
+        self.assertEqual(records.pos(), QPoint(700, 180))
+        self.pet.interface_window_position.assert_called_once_with(
+            records.size(),
+            gap=20,
+        )
+
     def test_shop_uses_separate_decoration_and_upgrade_pages(self):
         shop = ShopWindow(self.pet, Mock())
         self.windows = [shop]
@@ -78,7 +91,7 @@ class ProgressionWindowUiTests(unittest.TestCase):
             button.text() for button in shop.findChildren(QPushButton)
             if button.objectName() == "tabButton"
         ]
-        self.assertEqual(tab_texts, ["🎀 装饰", "✨ 强化"])
+        self.assertEqual(tab_texts, ["🎀 装饰", "🏠 家居", "✨ 强化"])
         category_texts = [
             button.text() for button in shop.findChildren(QPushButton)
             if button.objectName() == "categoryTabButton"
@@ -123,6 +136,18 @@ class ProgressionWindowUiTests(unittest.TestCase):
         self.assertIn("清醒属性消耗减缓 0%", upgrade_text)
         self.assertIn("清醒属性消耗减缓 10%", upgrade_text)
         self.assertNotIn("装饰小铺", upgrade_text)
+
+    def test_home_shop_page_lists_home_furniture(self):
+        shop = ShopWindow(self.pet, Mock())
+        self.windows = [shop]
+
+        shop._set_page("home")
+        labels = " ".join(label.text() for label in shop.findChildren(QLabel))
+
+        self.assertIn("舒适沙发", labels)
+        self.assertIn("绿植盆栽", labels)
+        self.assertIn("暖绒地毯", labels)
+        self.assertIn("墙面装饰画", labels)
 
     def test_new_panels_use_the_larger_typography(self):
         shop = ShopWindow(self.pet, Mock())

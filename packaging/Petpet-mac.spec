@@ -17,6 +17,7 @@ asset_datas = [
     (str(assets_root / "sounds"), "assets/sounds"),
     (str(assets_root / "props"), "assets/props"),
     (str(assets_root / "decorations"), "assets/decorations"),
+    (str(assets_root / "scenes"), "assets/scenes"),
     (str(animation_root / "manifest.json"), "assets/animations"),
 ]
 asset_datas.extend(pose_datas)

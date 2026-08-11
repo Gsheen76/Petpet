@@ -68,6 +68,7 @@ import decoration_renderer
 import minigames
 from progression_ui import AchievementsWindow, RecordsWindow, ShopWindow
 from minigames import MiniGameHubWindow
+from home_scene import HomeSceneWindow
 
 # Sound (optional — QtMultimedia may not be installed)
 try:
@@ -1128,24 +1129,15 @@ class ChatWindow(QWidget):
             self.move(e.globalPos() - self._drag_off)
 
     def show_near_pet(self):
-        g = self.pet.geometry()
         # clamp window size to screen so it always fits
-        screen = self.pet.current_screen_rect()
+        screen = self.pet.interface_screen_rect()
         max_w = screen.width() - 20
         max_h = screen.height() - 80
         w = min(self.s["chat_width"], max_w)
         h = min(self.s["chat_height"], max_h)
         if (w, h) != (self.width(), self.height()):
             self.setFixedSize(w, h)
-        x = g.right() + 16
-        y = g.top()
-        if x + w > screen.right():
-            x = g.left() - w - 16
-        if y + h > screen.bottom() - 40:
-            y = screen.bottom() - h - 40
-        if x < screen.left(): x = screen.left()
-        if y < screen.top(): y = screen.top()
-        self.move(int(x), int(y))
+        self.move(self.pet.interface_window_position(self.size(), gap=16))
         self.show()
         self.raise_()
         self.activateWindow()
@@ -1564,6 +1556,14 @@ class SettingsWindow(QWidget):
                 min(self.PREFERRED_HEIGHT, screen.height() - 80),
             ),
         )
+
+    def show_near_pet(self):
+        """Show settings beside the active indoor or outdoor pet."""
+
+        self.move(self.pet.interface_window_position(self.size(), gap=16))
+        self.show()
+        self.raise_()
+        self.activateWindow()
 
     def _apply_font(self):
         fs = int(self.s.get("ui_font_size", 24))
@@ -2168,10 +2168,7 @@ class TutorialWindow(QWidget):
             self.name_input.setText(current_name)
         self.name_hint.clear()
         self._refresh_page()
-        screen = self.pet.current_screen_rect()
-        x = screen.center().x() - self.width() // 2
-        y = screen.center().y() - self.height() // 2
-        self.move(int(x), int(y))
+        self.move(self.pet.interface_window_position(self.size(), gap=16))
         self.show()
         self.raise_()
         self.activateWindow()
@@ -2222,6 +2219,46 @@ class TutorialWindow(QWidget):
         self.close()
 
 
+def _pet_interface_anchor_rect(pet):
+    """Return the active pet geometry while preserving legacy hosts."""
+    getter = getattr(pet, "interface_anchor_rect", None)
+    if callable(getter):
+        return getter()
+    return pet.geometry()
+
+
+def _pet_interface_anchor_visible(pet):
+    """Return anchor visibility for PetWindow and lightweight UI hosts."""
+    getter = getattr(pet, "interface_anchor_visible", None)
+    if callable(getter):
+        return bool(getter())
+    visible = getattr(pet, "isVisible", None)
+    return bool(visible()) if callable(visible) else True
+
+
+def _pet_interface_screen_rect(pet):
+    """Return the active anchor's screen with the former host fallback."""
+    getter = getattr(pet, "interface_screen_rect", None)
+    if callable(getter):
+        return getter()
+    current_screen = getattr(pet, "current_screen_rect", None)
+    if callable(current_screen):
+        return current_screen()
+    screen = QApplication.screenAt(_pet_interface_anchor_rect(pet).center())
+    if screen is None:
+        screen = QApplication.primaryScreen()
+    return screen.availableGeometry() if screen is not None else QRect()
+
+
+def _pet_interface_bonus_origin(pet, y_offset=-10):
+    """Return a reward origin for both PetWindow and legacy test hosts."""
+    getter = getattr(pet, "interface_bonus_origin", None)
+    if callable(getter):
+        return getter(y_offset)
+    anchor = _pet_interface_anchor_rect(pet)
+    return anchor.center().x(), anchor.top() + int(y_offset)
+
+
 class StatBubble(QWidget):
     """A warm, readable growth card shown above the right-click actions."""
     def __init__(self, pet):
@@ -2247,8 +2284,8 @@ class StatBubble(QWidget):
 
     def _place(self):
         """Place above the action bubbles, centered on the pet."""
-        g = self.pet.geometry()
-        scr = self.pet.current_screen_rect()
+        g = _pet_interface_anchor_rect(self.pet)
+        scr = _pet_interface_screen_rect(self.pet)
         w, h = self.width(), self.height()
         x = g.center().x() - w // 2
         y = g.top() - h - 112
@@ -2556,15 +2593,20 @@ class BubbleMenu(QWidget):
     """Soft candy-style action buttons with a warm growth card."""
     PRIMARY_ACTIONS = [
         ("💬", "聊天", "chat", "#ef8fa2"),
+        ("🏠", "小屋", "home", "#cf9770"),
+        ("🛍", "商店", "shop", "#e0a85f"),
+        ("🤝", "互动", "interaction", "#72bf9b"),
+        ("⋯", "更多", "more", "#e7ae64"),
+    ]
+    INTERACTION_ACTIONS = [
+        ("🖐", "抚摸", "pet", "#ef8fa2"),
         ("🍖", "喂食", "feed", "#f49a62"),
         ("🎾", "玩耍", "play", "#72bf9b"),
         ("💤", "睡觉", "sleep", "#9b8ade"),
-        ("⋯", "更多", "more", "#e7ae64"),
     ]
     MORE_ACTIONS = [
         ("📒", "记录", "records", "#df9f6f"),
         ("🏅", "成就", "achievements", "#efa47d"),
-        ("🛍", "商店", "shop", "#e0a85f"),
         ("🎮", "小游戏", "minigames", "#72b6b0"),
         ("⚙️", "设置", "settings", "#e7ae64"),
         ("👁", "隐藏", "hide", "#79a9d8"),
@@ -2572,16 +2614,18 @@ class BubbleMenu(QWidget):
         ("↩", "返回", "back", "#79bd9a"),
         ("✕", "退出", "quit", "#df8f91"),
     ]
+    PAGE_COLUMNS = {"primary": 5, "interaction": 4, "more": 5}
 
     def __init__(self, pet, page="primary"):
         super().__init__()
         self.pet = pet
-        self.page = page if page in ("primary", "more") else "primary"
-        self.actions = list(
-            self.PRIMARY_ACTIONS
-            if self.page == "primary"
-            else self.MORE_ACTIONS
-        )
+        self.page = page if page in self.PAGE_COLUMNS else "primary"
+        action_sets = {
+            "primary": self.PRIMARY_ACTIONS,
+            "interaction": self.INTERACTION_ACTIONS,
+            "more": self.MORE_ACTIONS,
+        }
+        self.actions = list(action_sets[self.page])
         self.setWindowFlags(
             Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint |
             Qt.Popup
@@ -2590,8 +2634,8 @@ class BubbleMenu(QWidget):
         self.setAttribute(Qt.WA_DeleteOnClose, True)
 
         # Larger hit targets with room for both icon and label.
-        self.W = 590 if self.page == "primary" else 500
-        self.H = 112 if self.page == "primary" else 292
+        self.W = 590 if self.page in ("primary", "more") else 470
+        self.H = 200 if self.page == "more" else 112
         self.resize(self.W, self.H)
         self._bubble_rects = []
         self._hover = -1
@@ -2643,10 +2687,10 @@ class BubbleMenu(QWidget):
 
     def _place(self):
         """Position the row of bubbles just above the pet's head."""
-        g = self.pet.geometry()
+        g = _pet_interface_anchor_rect(self.pet)
         x = g.center().x() - self.W // 2
         y = g.top() - self.H + 19
-        scr = self.pet.current_screen_rect()
+        scr = _pet_interface_screen_rect(self.pet)
         x = max(scr.left(), min(x, scr.right() - self.W))
         y = max(scr.top(), min(y, scr.bottom() - self.H))
         self.move(int(x), int(y))
@@ -2663,7 +2707,7 @@ class BubbleMenu(QWidget):
         button_w = 102
         button_h = 78
         gap = 10
-        columns = n if self.page == "primary" else 3
+        columns = self.PAGE_COLUMNS[self.page]
         rows = int(math.ceil(n / columns))
         total_w = columns * button_w + (columns - 1) * gap
         total_h = rows * button_h + (rows - 1) * gap
@@ -2771,16 +2815,22 @@ class BubbleMenu(QWidget):
 
     def _run_action(self, action):
         pet = self.pet
-        if action in ("more", "back"):
+        if action in ("more", "interaction", "back"):
             # Switching pages always replaces the complete current canvas.
             # Returning rebuilds the primary growth card and five bubbles.
-            target_page = "more" if action == "more" else "primary"
+            target_page = {
+                "more": "more",
+                "interaction": "interaction",
+                "back": "primary",
+            }[action]
             self._close()
             pet._bubble_menu = BubbleMenu(pet, page=target_page)
             return
 
         if action == "chat":
             pet.chat()
+        elif action == "pet":
+            pet.pet_click()
         elif action == "feed":
             pet.feed()
         elif action == "play":
@@ -2795,6 +2845,8 @@ class BubbleMenu(QWidget):
             pet.open_achievements()
         elif action == "shop":
             pet.open_shop()
+        elif action == "home":
+            pet.open_home_scene()
         elif action == "minigames":
             pet.open_minigames()
         elif action in ("hide", "tutorial", "quit"):
@@ -2982,8 +3034,8 @@ class InteractiveBubble(QWidget):
     def _place_above_pet(self):
         """Place bubble to the side of the pet that has more room.
         If pet is in left half of screen -> bubble goes right; else left."""
-        g = self.pet.geometry()
-        scr = self.pet.current_screen_rect()
+        g = _pet_interface_anchor_rect(self.pet)
+        scr = _pet_interface_screen_rect(self.pet)
         pet_cx = g.center().x()
         screen_cx = scr.center().x()
         toward_pet = 12
@@ -3097,10 +3149,10 @@ class InteractiveBubble(QWidget):
         bonus_text = "  ".join(parts) if parts else "✨"
 
         # ALWAYS pop the floating BonusBubble (guaranteed visible)
-        g = pet.geometry()
+        bonus_x, bonus_y = _pet_interface_bonus_origin(pet, -10)
         color = "#ffcc00" if leveled_up else self.color
         try:
-            bb = BonusBubble(bonus_text, g.center().x(), g.top() - 10, color)
+            bb = BonusBubble(bonus_text, bonus_x, bonus_y, color)
             pet._last_bonus = bb  # keep ref so it isn't GC'd
         except Exception as e:
             print("BonusBubble fail:", e)
@@ -3108,9 +3160,16 @@ class InteractiveBubble(QWidget):
         if leveled_up:
             lvl = pet.state.get("level", 1)
             def _celebrate():
-                gg = pet.geometry()
+                celebrate_x, celebrate_y = _pet_interface_bonus_origin(
+                    pet, -30
+                )
                 try:
-                    BonusBubble(f"🎉 Lv.{lvl}", gg.center().x(), gg.top() - 30, "#ffcc00")
+                    BonusBubble(
+                        f"🎉 Lv.{lvl}",
+                        celebrate_x,
+                        celebrate_y,
+                        "#ffcc00",
+                    )
                 except Exception: pass
                 pet.say(f"升级啦！Lv.{lvl} 🎉", 2500)
             QTimer.singleShot(700, _celebrate)
@@ -3343,7 +3402,7 @@ class SpeechBubble(QWidget):
         self._hide_timer.start(duration)
 
     def _show_next_or_hide(self):
-        if not self.pet.isVisible():
+        if not _pet_interface_anchor_visible(self.pet):
             self.clear_messages()
             return
         if self._pending_messages:
@@ -3368,7 +3427,7 @@ class SpeechBubble(QWidget):
         self.hide()
 
     def follow_pet(self):
-        if not self.pet.isVisible():
+        if not _pet_interface_anchor_visible(self.pet):
             self.clear_messages()
             return
         rect = self._bubble_geometry(self.width(), self.height())
@@ -3376,23 +3435,37 @@ class SpeechBubble(QWidget):
 
     def _bubble_geometry(self, width, height):
         """Return one complete on-screen geometry for an atomic update."""
-        g = self.pet.geometry()
-        screen = self._available_screen_rect()
+        g = _pet_interface_anchor_rect(self.pet)
+        screen = _pet_interface_screen_rect(self.pet)
         x = g.center().x() - width // 2
         # Keep the tail close to the dog's head even when long text wraps.
         y = g.top() + 3 - max(0, height - 56)
+        if SpeechBubble._pet_uses_home_theme(self.pet):
+            y -= 72
         x = max(screen.left() + 4, min(x, screen.right() - width - 4))
         y = max(screen.top() + 4, min(y, screen.bottom() - height - 4))
         return QRect(int(x), int(y), int(width), int(height))
 
+    def _uses_home_theme(self):
+        """Return whether the bubble is anchored to the in-home pet."""
+
+        return self._pet_uses_home_theme(self.pet)
+
+    @staticmethod
+    def _pet_uses_home_theme(pet):
+        """Return whether a pet-like host currently exposes its home scene."""
+
+        active_home = getattr(pet, "_active_home_interface", None)
+        if not callable(active_home):
+            return False
+        try:
+            return active_home() is not None
+        except RuntimeError:
+            return False
+
     def _available_screen_rect(self):
         """Resolve the pet's screen without using its one-second movement cache."""
-        screen_at = getattr(self.pet, "screen_at", None)
-        if callable(screen_at):
-            screen = screen_at(self.pet.geometry().center())
-            if screen is not None:
-                return screen.availableGeometry()
-        return self.pet.current_screen_rect()
+        return _pet_interface_screen_rect(self.pet)
 
     def paintEvent(self, event):
         p = QPainter(self)
@@ -3405,19 +3478,28 @@ class SpeechBubble(QWidget):
         p.setCompositionMode(QPainter.CompositionMode_SourceOver)
         body = QRectF(4, 3, self.width() - 8, self.height() - 12)
 
+        home_theme = self._uses_home_theme()
+        radius = 15 if home_theme else 13
+        shadow = QColor(105, 72, 52, 30) if home_theme else QColor(0, 0, 0, 38)
+        gradient_start = QColor("#fff8ee") if home_theme else QColor(255, 250, 232)
+        gradient_end = QColor("#f8dec5") if home_theme else QColor(255, 236, 180)
+        border = QColor("#d79b7b") if home_theme else QColor(230, 180, 80)
+        tail = QColor("#f9e2cb") if home_theme else QColor(255, 241, 198)
+        text_color = QColor("#694534") if home_theme else QColor(80, 50, 20)
+
         p.setPen(Qt.NoPen)
-        p.setBrush(QColor(0, 0, 0, 38))
-        p.drawRoundedRect(body.adjusted(2, 3, 2, 3), 13, 13)
+        p.setBrush(shadow)
+        p.drawRoundedRect(body.adjusted(2, 3, 2, 3), radius, radius)
 
         grad = QLinearGradient(body.topLeft(), body.bottomRight())
-        grad.setColorAt(0.0, QColor(255, 250, 232))
-        grad.setColorAt(1.0, QColor(255, 236, 180))
+        grad.setColorAt(0.0, gradient_start)
+        grad.setColorAt(1.0, gradient_end)
         p.setBrush(grad)
-        p.setPen(QPen(QColor(230, 180, 80), 1.2))
-        p.drawRoundedRect(body, 13, 13)
+        p.setPen(QPen(border, 1.2))
+        p.drawRoundedRect(body, radius, radius)
 
         tail_x = body.center().x()
-        p.setBrush(QColor(255, 241, 198))
+        p.setBrush(tail)
         p.drawPolygon([
             QPointF(tail_x - 6, body.bottom() - 1),
             QPointF(tail_x + 6, body.bottom() - 1),
@@ -3425,7 +3507,7 @@ class SpeechBubble(QWidget):
         ])
 
         p.setFont(self.font())
-        p.setPen(QColor(80, 50, 20))
+        p.setPen(text_color)
         p.drawText(body.adjusted(18, 0, -18, 0),
                    Qt.AlignCenter | Qt.TextWordWrap,
                    self.text)
@@ -4098,6 +4180,7 @@ class PetWindow(QWidget):
         self.records_win = None
         self.achievements_win = None
         self.shop_win = None
+        self.home_scene_window = None
         self.minigames_win = None
         self.parameter_tuner_win = None
         self.play_scene = None  # zoomed-out interactive fetch scene
@@ -4400,9 +4483,9 @@ class PetWindow(QWidget):
         leveled = self.add_xp(whole_xp, apply_bonus=False)
         if leveled:
             self.say(f"升级啦！Lv.{self.state.get('level',1)} 🎉", 2500)
-            g = self.geometry()
+            bonus_x, bonus_y = self.interface_bonus_origin(-20)
             BonusBubble(f"升级！Lv.{self.state.get('level',1)}",
-                        g.center().x(), g.top() - 20, "#ffcc00")
+                        bonus_x, bonus_y, "#ffcc00")
 
     # ---------- placement ----------
     def place_initial(self):
@@ -4441,6 +4524,74 @@ class PetWindow(QWidget):
         self._cached_screen = scr.availableGeometry()
         self._cached_screen_t = now
         return self._cached_screen
+
+    def _active_home_interface(self):
+        """Return the home scene while its pet is the active UI anchor."""
+
+        home = getattr(self, "home_scene_window", None)
+        if home is None:
+            return None
+        try:
+            if (
+                home.isVisible()
+                and not home.is_decorating()
+                and home.home_pet_visible()
+            ):
+                return home
+        except RuntimeError:
+            return None
+        return None
+
+    def interface_anchor_rect(self):
+        """Return the visible pet body used to place detached UI."""
+
+        home = self._active_home_interface()
+        if home is not None:
+            rect = home.home_pet_global_rect()
+            if not rect.isEmpty():
+                return rect
+        return self.geometry()
+
+    def interface_anchor_visible(self):
+        """Return whether either indoor or outdoor pet can host UI."""
+
+        return self._active_home_interface() is not None or self.isVisible()
+
+    def interface_screen_rect(self):
+        """Return the available screen containing the active UI anchor."""
+
+        anchor = self.interface_anchor_rect()
+        screen = self.screen_at(anchor.center())
+        if screen is not None:
+            return screen.availableGeometry()
+        return self.current_screen_rect()
+
+    def interface_window_position(self, window_size, gap=16):
+        """Return an on-screen point beside the active pet when possible."""
+
+        anchor = self.interface_anchor_rect()
+        screen = self.interface_screen_rect()
+        width = int(window_size.width())
+        height = int(window_size.height())
+        gap = int(gap)
+        right_x = anchor.right() + gap
+        left_x = anchor.left() - width - gap
+        if right_x + width - 1 <= screen.right():
+            x = right_x
+        elif left_x >= screen.left():
+            x = left_x
+        else:
+            x = screen.center().x() - width // 2
+        y = anchor.center().y() - height // 2
+        x = max(screen.left(), min(x, screen.right() - width + 1))
+        y = max(screen.top(), min(y, screen.bottom() - height + 1))
+        return QPoint(int(x), int(y))
+
+    def interface_bonus_origin(self, y_offset=-10):
+        """Return the active pet-centered origin for transient reward bubbles."""
+
+        anchor = self.interface_anchor_rect()
+        return anchor.center().x(), anchor.top() + int(y_offset)
 
     def recall(self):
         """Move pet to a safe, visible position at the bottom-center of the current screen."""
@@ -4852,7 +5003,7 @@ class PetWindow(QWidget):
 
 
     def say(self, text, ms=2200):
-        if not self.isVisible():
+        if not self.interface_anchor_visible():
             return
         speech = self._speech_bubble
         if speech is not None:
@@ -4996,7 +5147,46 @@ class PetWindow(QWidget):
         pass
 
     # ---------- physics tick ----------
+    def _home_scene_active(self):
+        home_scene = getattr(self, "home_scene_window", None)
+        if home_scene is None:
+            return False
+        try:
+            return home_scene.isVisible()
+        except RuntimeError:
+            return False
+
+    def follow_interface_overlays(self):
+        """Keep detached pet UI aligned with the active indoor/outdoor pet."""
+
+        if self._interactive_bubble is not None:
+            try:
+                if self._interactive_bubble.isVisible():
+                    self._interactive_bubble._place_above_pet()
+                else:
+                    self._interactive_bubble = None
+            except RuntimeError:
+                self._interactive_bubble = None
+
+        if self._bubble_menu is not None:
+            try:
+                if self._bubble_menu.isVisible():
+                    self._bubble_menu.follow_pet()
+                else:
+                    self._bubble_menu = None
+            except RuntimeError:
+                self._bubble_menu = None
+
+        if self._speech_bubble is not None:
+            try:
+                if self._speech_bubble.isVisible():
+                    self._speech_bubble.follow_pet()
+            except RuntimeError:
+                self._speech_bubble = None
+
     def on_tick(self):
+        if PetWindow._home_scene_active(self):
+            return
         now = time.time()
         screen = self.current_screen_rect()
         g = self.geometry()
@@ -5118,32 +5308,7 @@ class PetWindow(QWidget):
             if auto_sleep_arrived:
                 self._enter_auto_sleep()
 
-        # keep interactive bubble glued to the pet
-        if self._interactive_bubble is not None:
-            try:
-                if self._interactive_bubble.isVisible():
-                    self._interactive_bubble._place_above_pet()
-                else:
-                    self._interactive_bubble = None
-            except RuntimeError:
-                self._interactive_bubble = None
-
-        # keep bubble menu + stat bubble following the pet
-        if self._bubble_menu is not None:
-            try:
-                if self._bubble_menu.isVisible():
-                    self._bubble_menu.follow_pet()
-                else:
-                    self._bubble_menu = None
-            except RuntimeError:
-                self._bubble_menu = None
-
-        # keep the detached speech bubble following the pet
-        if self._speech_bubble is not None and self._speech_bubble.isVisible():
-            try:
-                self._speech_bubble.follow_pet()
-            except RuntimeError:
-                self._speech_bubble = None
+        self.follow_interface_overlays()
 
         # update blink occasionally
         self.blink_t += 0.033
@@ -5288,6 +5453,8 @@ class PetWindow(QWidget):
         return True
 
     def _update_auto_sleep_state(self, now=None):
+        if PetWindow._home_scene_active(self):
+            return "home"
         now = time.time() if now is None else float(now)
         if self.state.get("sleeping"):
             if self.state.get("sleep_mode") == "auto":
@@ -5505,11 +5672,11 @@ class PetWindow(QWidget):
                 )
                 save_state(self.state)
                 try:
-                    geometry = self.geometry()
+                    bonus_x, bonus_y = self.interface_bonus_origin(-10)
                     self._last_bonus = BonusBubble(
                         f"Pet币 +{pending}",
-                        geometry.center().x(),
-                        geometry.top() - 10,
+                        bonus_x,
+                        bonus_y,
                         "#e3ac36",
                     )
                 except Exception:
@@ -5538,6 +5705,8 @@ class PetWindow(QWidget):
 
     # ---------- autonomous behavior ----------
     def on_autonomy(self):
+        if PetWindow._home_scene_active(self):
+            return
         now = time.time()
         auto_sleep_event = self._update_auto_sleep_state(now)
         if auto_sleep_event in ("walking", "woke"):
@@ -5746,6 +5915,11 @@ class PetWindow(QWidget):
         return True
 
     def toggle_sleep(self):
+        active_home = getattr(self, "_active_home_interface", None)
+        home = active_home() if callable(active_home) else None
+        if home is not None:
+            home.toggle_home_sleep()
+            return
         was_sleeping = bool(self.state.get("sleeping"))
         self.state["sleeping"] = not was_sleeping
         self._auto_sleep_phase = None
@@ -5814,8 +5988,19 @@ class PetWindow(QWidget):
 
     def contextMenuEvent(self, event):
         """Right-click on the pet -> show the radial bubble menu."""
-        self._bubble_menu = BubbleMenu(self)
+        self.open_bubble_menu()
         super().contextMenuEvent(event)
+
+    def open_bubble_menu(self):
+        """Replace any existing shortcut canvas with the shared primary menu."""
+
+        old = getattr(self, "_bubble_menu", None)
+        if old is not None:
+            try:
+                old._close()
+            except RuntimeError:
+                pass
+        self._bubble_menu = BubbleMenu(self)
 
     def chat(self):
         """Open the chat panel beside the pet."""
@@ -5848,6 +6033,21 @@ class PetWindow(QWidget):
             self.shop_win = ShopWindow(self, save_state)
         self.shop_win.show_near_pet()
 
+    def open_home_scene(self):
+        """Show the fixed home board and bring the pet into its viewport."""
+        if (
+            self.home_scene_window is not None
+            and self.home_scene_window.isVisible()
+        ):
+            self.home_scene_window.raise_()
+            return
+        if self.home_scene_window is None:
+            self.home_scene_window = HomeSceneWindow(self, save_state)
+        self.home_scene_window.show_scene()
+        self.vx = 0
+        self.vy = 0
+        self.on_ground = True
+
     def open_minigames(self):
         """Open the expandable mini-game picker."""
         if self.minigames_win is None:
@@ -5860,9 +6060,7 @@ class PetWindow(QWidget):
             self.settings_win = SettingsWindow(self)
         else:
             self.settings_win.s = self.settings
-        self.settings_win.show()
-        self.settings_win.raise_()
-        self.settings_win.activateWindow()
+        self.settings_win.show_near_pet()
 
     def check_ai_nudge(self):
         """Called from autonomy timer; maybe send a proactive AI nudge."""
@@ -6188,12 +6386,12 @@ class TrayApp:
                 # short left click — but wait to see if it's a double click
                 now = time.time()
                 if now - self._last_left_click_t < 0.35:
-                    # double click: cancel pending single click, open chat
+                    # double click: cancel pending single click, open the home scene
                     if self._pending_single_click is not None:
                         self._pending_single_click.stop()
                         self._pending_single_click = None
                     self._last_left_click_t = 0
-                    self.pet.chat()
+                    self.pet.open_home_scene()
                 else:
                     # first click: schedule single-click action after delay
                     self._last_left_click_t = now
@@ -6354,6 +6552,14 @@ class TrayApp:
                     return
             except RuntimeError:
                 self.pet.play_scene = None
+        home = getattr(self.pet, "home_scene_window", None)
+        if home is not None:
+            try:
+                if home.isVisible():
+                    home.hide_scene()
+                    return
+            except RuntimeError:
+                self.pet.home_scene_window = None
         if self.pet.isVisible():
             self.pet.hide_overlays()
             self.pet.hide()

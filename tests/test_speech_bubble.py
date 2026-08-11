@@ -102,6 +102,51 @@ class SpeechBubbleTests(unittest.TestCase):
         )
         self.assertGreater(right_round_edge.alpha(), 0)
 
+    def test_home_bubble_moves_up_without_changing_its_size_or_x_position(self):
+        host = QWidget()
+        host.show()
+        home_active = {"value": False}
+        anchor = QRect(300, 260, 190, 220)
+        screen = QRect(0, 0, 1000, 800)
+        host.interface_anchor_rect = lambda: anchor
+        host.interface_screen_rect = lambda: screen
+        host.interface_anchor_visible = lambda: True
+        host._active_home_interface = (
+            lambda: object() if home_active["value"] else None
+        )
+        bubble = pet.SpeechBubble(host)
+        self.addCleanup(bubble.close)
+        self.addCleanup(host.close)
+
+        outside = bubble._bubble_geometry(180, 70)
+        home_active["value"] = True
+        inside = bubble._bubble_geometry(180, 70)
+
+        self.assertEqual(inside.x(), outside.x())
+        self.assertEqual(inside.size(), outside.size())
+        self.assertEqual(inside.top(), outside.top() - 72)
+
+    def test_home_bubble_uses_a_distinct_warm_room_palette(self):
+        host = QWidget()
+        host.show()
+        home_active = {"value": False}
+        host._active_home_interface = (
+            lambda: object() if home_active["value"] else None
+        )
+        bubble = pet.SpeechBubble(host)
+        bubble.resize(180, 70)
+        bubble.text = ""
+        self.addCleanup(bubble.close)
+        self.addCleanup(host.close)
+
+        outside = bubble.grab().toImage().pixelColor(90, 24)
+        home_active["value"] = True
+        inside = bubble.grab().toImage().pixelColor(90, 24)
+
+        self.assertGreater(outside.alpha(), 0)
+        self.assertGreater(inside.alpha(), 0)
+        self.assertNotEqual(inside, outside)
+
 
 if __name__ == "__main__":
     unittest.main()

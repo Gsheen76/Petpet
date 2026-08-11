@@ -46,6 +46,28 @@ class ProgressionMigrationTests(unittest.TestCase):
         self.assertEqual(state["records"]["autonomous_walks"], 0)
         self.assertEqual(state["decoration_adjustments"], {})
 
+    def test_old_save_receives_home_scene_defaults(self):
+        state = {"level": 3, "pet_coins": 20}
+
+        progression.ensure_progression(state)
+
+        self.assertEqual(
+            state["home_scene"],
+            {
+                "enabled": False,
+                "background_visible": True,
+                "screen_index": 0,
+                "viewport_x": 0,
+                "viewport_y": 0,
+                "viewport_pinned": False,
+                "decorating": False,
+            },
+        )
+        self.assertEqual(state["owned_home_decorations"], [])
+        self.assertEqual(state["home_decoration_positions"], {})
+        self.assertEqual(state["home_stored_decorations"], [])
+        self.assertEqual(state["home_decoration_transforms"], {})
+
     def test_invalid_nested_values_are_safely_normalized(self):
         state = {
             "records": "broken",
@@ -252,6 +274,7 @@ class UpgradeBalanceTests(unittest.TestCase):
         self.assertGreater(effects["play_mood"], 20)
         self.assertGreater(effects["sleep_energy_gain_bonus"], 0)
 
+
     def test_experience_upgrade_is_capped_and_applies_to_all_xp(self):
         state = fresh_state()
         state["upgrades"]["experience"] = 5
@@ -303,6 +326,50 @@ class UpgradeBalanceTests(unittest.TestCase):
 
         self.assertGreater(total_cost, 3500)
         self.assertLess(total_cost, 4000)
+
+
+class HomeDecorationTests(unittest.TestCase):
+    def test_home_decoration_purchase_spends_coins_and_persists_position(self):
+        state = fresh_state(pet_coins=500)
+
+        result = progression.purchase_home_decoration(state, "home_sofa")
+
+        self.assertTrue(result["ok"])
+        self.assertIn("home_sofa", state["owned_home_decorations"])
+        self.assertEqual(state["pet_coins"], 260)
+        self.assertEqual(
+            progression.set_home_decoration_position(state, "home_sofa", -80, 900),
+            {"x": 0, "y": 543},
+        )
+        self.assertEqual(
+            progression.home_decoration_position(state, "home_sofa"),
+            {"x": 0, "y": 543},
+        )
+
+    def test_home_decoration_cannot_be_bought_twice_or_without_funds(self):
+        state = fresh_state(pet_coins=0)
+        denied = progression.purchase_home_decoration(state, "home_plant")
+        self.assertFalse(denied["ok"])
+
+        state["pet_coins"] = 500
+        self.assertTrue(progression.purchase_home_decoration(state, "home_plant")["ok"])
+        duplicate = progression.purchase_home_decoration(state, "home_plant")
+        self.assertFalse(duplicate["ok"])
+
+    def test_home_decoration_storage_and_transform_are_persisted(self):
+        state = fresh_state(pet_coins=500)
+        progression.purchase_home_decoration(state, "home_sofa")
+
+        self.assertTrue(progression.store_home_decoration(state, "home_sofa"))
+        self.assertIn("home_sofa", state["home_stored_decorations"])
+        self.assertTrue(progression.place_home_decoration(state, "home_sofa"))
+        self.assertNotIn("home_sofa", state["home_stored_decorations"])
+        self.assertEqual(
+            progression.set_home_decoration_transform(
+                state, "home_sofa", scale=1.1, rotation=15
+            ),
+            {"scale": 1.1, "rotation": 15.0},
+        )
 
 
 class AffectionExperienceTests(unittest.TestCase):
