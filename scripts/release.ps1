@@ -166,8 +166,8 @@ function Assert-Tool([string]$Name) {
 }
 
 function Ensure-GitHubAuthentication {
-    & $GhCommand auth status *> $null
-    if ($LASTEXITCODE -eq 0) {
+    $login = Get-CommandText $GhCommand @("api", "user", "--jq", ".login")
+    if ($login) {
         return
     }
     $credentialInput = "protocol=https`nhost=github.com`n`n"
@@ -184,8 +184,8 @@ function Ensure-GitHubAuthentication {
             $env:GH_TOKEN = $credentialMap["password"]
         }
     }
-    & $GhCommand auth status *> $null
-    if ($LASTEXITCODE -ne 0) {
+    $login = Get-CommandText $GhCommand @("api", "user", "--jq", ".login")
+    if (-not $login) {
         throw "GitHub authentication is unavailable. Run gh auth login, then retry."
     }
 }
