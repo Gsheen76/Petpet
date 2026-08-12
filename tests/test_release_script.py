@@ -42,6 +42,8 @@ def test_release_script_can_reuse_git_credential_without_persisting_it():
     assert "auth login --with-token" not in script
     assert "GH_TOKEN.txt" not in script
     assert '"api", "user", "--jq", ".login"' in script
+    assert '$previousErrorActionPreference = $ErrorActionPreference' in script
+    assert '$ErrorActionPreference = "Continue"' in script
     assert "$originalGhToken" in script
     assert "Remove-Item Env:GH_TOKEN" in script
     assert script.index('Write-Step "Build Windows with build_windows.ps1"') < script.index(

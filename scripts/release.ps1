@@ -41,11 +41,17 @@ function Invoke-Native([string]$Command, [string[]]$Arguments) {
 }
 
 function Get-CommandText([string]$Command, [string[]]$Arguments) {
-    $output = & $Command @Arguments 2>$null
-    if ($LASTEXITCODE -ne 0) {
-        return $null
+    $previousErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $output = & $Command @Arguments 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            return $null
+        }
+        return ($output -join "`n").Trim()
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
     }
-    return ($output -join "`n").Trim()
 }
 
 function Get-ReleaseInfo {
