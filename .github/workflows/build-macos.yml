@@ -1,5 +1,5 @@
 name: Build macOS app
-run-name: Build macOS ${{ inputs.release_tag || github.ref_name }}
+run-name: Build macOS ${{ inputs.release_tag || github.ref_name }} ${{ inputs.dispatch_id }}
 
 on:
   workflow_dispatch:
@@ -7,6 +7,10 @@ on:
       release_tag:
         description: Optional existing draft release tag to upload the ZIP into
         required: false
+        type: string
+      dispatch_id:
+        description: Unique release-script invocation identifier
+        required: true
         type: string
 
 jobs:

@@ -19,6 +19,9 @@ $windowsZipPath = Join-Path $projectRoot "dist\$windowsZipName"
 $checksumName = "Petpet-v$Version-SHA256SUMS.txt"
 $checksumPath = Join-Path $projectRoot "dist\$checksumName"
 $GhCommand = "gh"
+$originalGhTokenExists = Test-Path Env:GH_TOKEN
+$originalGhToken = $env:GH_TOKEN
+$releaseExitCode = 0
 $requiredAssetNames = @(
     "Petpet.exe",
     "Petpet-v$Version-windows.zip",
@@ -231,8 +234,6 @@ try {
         throw "Release requires a clean worktree."
     }
 
-    Write-Step "gh auth status"
-    Ensure-GitHubAuthentication
     Invoke-Native "git" @("fetch", "origin", "main", "--tags")
     & git merge-base --is-ancestor origin/main HEAD
     if ($LASTEXITCODE -ne 0) {
@@ -294,6 +295,10 @@ try {
     }
     Set-Content -LiteralPath $checksumPath -Value $hashLines -Encoding ASCII
 
+    # Keep GitHub credentials out of pytest/PyInstaller child processes.
+    Write-Step "gh auth status"
+    Ensure-GitHubAuthentication
+
     Write-Step "Verify existing release tag before mutation"
     $existingTagCommit = Get-CommandText "git" @("rev-parse", "refs/tags/$Tag^{}")
     if ($existingTagCommit) {
@@ -306,15 +311,21 @@ try {
         }
     }
 
-    Write-Step "git push origin HEAD:main"
-    Invoke-Native "git" @("push", "origin", "HEAD:main")
-
+    $createdLocalTag = $false
     if (-not $existingTagCommit) {
         Write-Step "git tag -a $Tag"
         Invoke-Native "git" @("tag", "-a", $Tag, "-m", "Petpet $Tag")
+        $createdLocalTag = $true
     }
-
-    Invoke-Native "git" @("push", "origin", $Tag)
+    try {
+        Write-Step "git push --atomic origin HEAD:main refs/tags/$Tag"
+        Invoke-Native "git" @("push", "--atomic", "origin", "HEAD:main", "refs/tags/$Tag")
+    } catch {
+        if ($createdLocalTag) {
+            git tag -d $Tag *> $null
+        }
+        throw
+    }
 
     Verify-RemoteRefs $headCommit
 
@@ -363,10 +374,11 @@ try {
     if ($missingMacAssets.Count -gt 0) {
         Verify-RemoteRefs $headCommit
         $dispatchStartedAt = [DateTime]::UtcNow.AddSeconds(-5)
+        $dispatchId = [guid]::NewGuid().ToString("N")
         Write-Step "gh workflow run build-macos.yml"
         Invoke-Native $GhCommand @(
             "workflow", "run", "build-macos.yml", "--ref", "main",
-            "-f", "release_tag=$Tag"
+            "-f", "release_tag=$Tag", "-f", "dispatch_id=$dispatchId"
         )
         $matchingRun = $null
         for ($attempt = 0; $attempt -lt 30 -and $null -eq $matchingRun; $attempt++) {
@@ -379,7 +391,7 @@ try {
             $runs = @($runJson | ConvertFrom-Json)
             $matchingRun = $runs | Where-Object {
                 $_.event -eq "workflow_dispatch" -and
-                $_.displayTitle -eq "Build macOS $Tag" -and
+                $_.displayTitle -eq "Build macOS $Tag $dispatchId" -and
                 $_.headSha -eq $headCommit -and
                 [DateTime]::Parse($_.createdAt).ToUniversalTime() -ge $dispatchStartedAt
             } | Sort-Object { [DateTime]::Parse($_.createdAt) } -Descending |
@@ -408,5 +420,14 @@ try {
 } catch {
     Write-Error $_ -ErrorAction Continue
     Write-Host "Re-run: .\scripts\release.ps1 -Version $Version" -ForegroundColor Yellow
-    exit 1
+    $releaseExitCode = 1
+} finally {
+    if ($originalGhTokenExists) {
+        $env:GH_TOKEN = $originalGhToken
+    } else {
+        Remove-Item Env:GH_TOKEN -ErrorAction SilentlyContinue
+    }
+}
+if ($releaseExitCode -ne 0) {
+    exit $releaseExitCode
 }

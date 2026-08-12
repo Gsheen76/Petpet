@@ -41,6 +41,11 @@ def test_release_script_can_reuse_git_credential_without_persisting_it():
     assert "gh auth login" in script
     assert "auth login --with-token" not in script
     assert "GH_TOKEN.txt" not in script
+    assert "$originalGhToken" in script
+    assert "Remove-Item Env:GH_TOKEN" in script
+    assert script.index('Write-Step "Build Windows with build_windows.ps1"') < script.index(
+        'Write-Step "gh auth status"'
+    )
 
 
 def test_release_script_runs_fresh_verification_and_windows_build():
@@ -57,7 +62,7 @@ def test_release_script_runs_fresh_verification_and_windows_build():
 def test_release_script_only_uses_non_destructive_git_operations():
     script = _release_script()
     lowered = script.lower()
-    assert "git push origin head:main" in lowered
+    assert "git push --atomic origin head:main refs/tags/$tag" in lowered
     assert "git tag -a" in lowered
     assert "git reset" not in lowered
     assert "git checkout" not in lowered
@@ -97,12 +102,14 @@ def test_release_script_is_resume_safe():
     assert '"release", "download"' in script
 
 
-def test_release_script_pushes_main_before_creating_the_tag():
+def test_release_script_pushes_main_and_tag_atomically():
     script = _release_script()
     verify_index = script.index("Verify existing release tag before mutation")
-    push_index = script.index('git push origin HEAD:main')
     create_index = script.index('git tag -a $Tag')
-    assert verify_index < push_index < create_index
+    push_index = script.index('"push", "--atomic", "origin", "HEAD:main", "refs/tags/$Tag"')
+    assert verify_index < create_index < push_index
+    assert 'git push origin HEAD:main' not in script
+    assert 'git tag -d $Tag' in script
 
 
 def test_release_script_requires_an_annotated_tag():
@@ -114,8 +121,10 @@ def test_release_script_requires_an_annotated_tag():
 def test_release_script_tracks_the_exact_dispatched_macos_run():
     script = _release_script()
     assert "$dispatchStartedAt" in script
+    assert "$dispatchId" in script
+    assert '"-f", "dispatch_id=$dispatchId"' in script
+    assert 'displayTitle -eq "Build macOS $Tag $dispatchId"' in script
     assert "displayTitle,headSha,createdAt,event" in script
-    assert 'displayTitle -eq "Build macOS $Tag"' in script
     assert "headSha -eq $headCommit" in script
     assert '"--limit", "100"' in script
 
@@ -167,6 +176,7 @@ def test_macos_workflow_skips_an_existing_release_asset():
     assert "gh release upload" in workflow
     assert "--clobber" not in workflow
     assert "ref: ${{ inputs.release_tag || github.ref }}" in workflow
-    assert "run-name: Build macOS ${{ inputs.release_tag || github.ref_name }}" in workflow
+    assert "run-name: Build macOS ${{ inputs.release_tag || github.ref_name }} ${{ inputs.dispatch_id }}" in workflow
+    assert "dispatch_id:" in workflow
     assert ".state == \"uploaded\"" in workflow
     assert ".size > 0" in workflow
