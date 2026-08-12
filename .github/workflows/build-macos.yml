@@ -1,4 +1,5 @@
 name: Build macOS app
+run-name: Build macOS ${{ inputs.release_tag || github.ref_name }}
 
 on:
   workflow_dispatch:
@@ -49,10 +50,15 @@ jobs:
           path: dist/Petpet-v*-macOS-${{ matrix.arch }}.zip
           if-no-files-found: error
 
-      - name: Upload portable zip to draft release
+      - name: Upload portable zip to draft release when absent
         if: ${{ inputs.release_tag != '' }}
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >-
-          gh release upload "${{ inputs.release_tag }}"
-          dist/Petpet-v*-macOS-${{ matrix.arch }}.zip
+        run: |
+          asset_path="$(find dist -maxdepth 1 -name 'Petpet-v*-macOS-${{ matrix.arch }}.zip' -print -quit)"
+          asset_name="$(basename "$asset_path")"
+          if gh release view "${{ inputs.release_tag }}" --json assets | jq -e --arg name "$asset_name" '.assets[] | select(.name == $name and .state == "uploaded" and .size > 0)' >/dev/null; then
+            echo "$asset_name already exists on the release; skipping upload."
+          else
+            gh release upload "${{ inputs.release_tag }}" "$asset_path"
+          fi

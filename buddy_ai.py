@@ -1,4 +1,4 @@
-"""Sheen AI engine — companion dog persona powered by Zhipu GLM-4.7-Flash.
+"""Sheen AI engine — companion dog persona powered by Zhipu GLM models.
 
 Features:
   - Companion-dog persona (warm, listens, remembers you)
@@ -6,26 +6,122 @@ Features:
   - Streaming output (token-by-token)
   - Time-aware proactive mood (greets differently morning/night)
   - Rule-based fallback when API fails / no key / offline
-  - Zero third-party deps: uses only urllib + json from stdlib
+  - No AI SDK dependency: HTTP uses urllib from the standard library
 
 Config: set env ZHIPU_API_KEY, or configure the API key and model in Petpet:
-        {"api_key": "your.key.here", "model": "glm-4-flash"}
+        {"api_key": "your.key.here", "model": "glm-4.7-flash"}
 """
-import os, json, time, urllib.request, urllib.error
+import os, json, re, time, urllib.request, urllib.error
 import hmac, hashlib, base64
-from app_paths import DATA_DIR
+import shutil
+import uuid
+import requests
+from app_paths import DATA_DIR, RESOURCE_DIR
+from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QRect
+from PyQt5.QtGui import QImageReader
+import game_knowledge
 
 CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
+DEFAULT_CONFIG_PATH = os.path.join(RESOURCE_DIR, "config.json.example")
 MEMORY_PATH = os.path.join(DATA_DIR, "memory.json")
+CHAT_DIAGNOSTIC_LOG_PATH = os.path.join(DATA_DIR, "chat_diagnostic.log")
 
 API_URL = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
-DEFAULT_MODEL = "glm-4-flash"
+FREE_MODEL = "petpet-free"
+DEFAULT_MODEL = FREE_MODEL
+VISION_MODEL = "glm-4.6v-flash"
 SUPPORTED_MODELS = {
-    "glm-4-flash": "GLM-4-Flash",
+    DEFAULT_MODEL: "免费聊天 · OpenRouter Free",
+    VISION_MODEL: "GLM-4.6V-Flash",
+}
+PERSONAL_MODELS = {VISION_MODEL: SUPPORTED_MODELS[VISION_MODEL]}
+DEFAULT_CHAT_ERRORS = {
+    "default_consent_required",
+    "default_provider_unavailable",
+    "default_quota_exhausted",
+    "personal_key_required_for_image",
+    "personal_api_key_required",
 }
 # Kept for compatibility with older imports. Requests use get_model().
 MODEL = DEFAULT_MODEL
 DEFAULT_PET_NAME = "Sheen"
+MAX_IMAGE_BYTES = 10 * 1024 * 1024
+MAX_HISTORY_THUMBNAIL_EDGE = 320
+PLAYER_AVATAR_SIZE = 256
+SUPPORTED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
+DEFAULT_PROXY_MAX_SYSTEM_CHARS = 4000
+DEFAULT_PROXY_MAX_TURN_CHARS = 1200
+DEFAULT_PROXY_MAX_BODY_BYTES = 16384
+CHAT_DIAGNOSTIC_FIELDS = {
+    "status", "exception_type", "stage", "response_content_chars",
+    "response_reasoning_chars", "has_done",
+}
+
+
+def get_player_avatar_path():
+    """Return the user-local player avatar path."""
+    return os.path.join(DATA_DIR, "player_avatar.png")
+
+
+def prepare_player_avatar(source_path):
+    """Center-crop an image to a square and atomically save a local PNG."""
+    reader = QImageReader(str(source_path or ""))
+    reader.setAutoTransform(True)
+    image = reader.read()
+    if image.isNull():
+        raise ValueError("无法读取这张图片，请选择 PNG、JPG 或 WEBP。")
+    edge = min(image.width(), image.height())
+    crop = image.copy(QRect(
+        (image.width() - edge) // 2,
+        (image.height() - edge) // 2,
+        edge,
+        edge,
+    )).scaled(
+        PLAYER_AVATAR_SIZE,
+        PLAYER_AVATAR_SIZE,
+        Qt.IgnoreAspectRatio,
+        Qt.SmoothTransformation,
+    )
+    target = get_player_avatar_path()
+    os.makedirs(os.path.dirname(target), exist_ok=True)
+    temporary = target + ".tmp.png"
+    try:
+        if not crop.save(temporary, "PNG"):
+            raise ValueError("头像保存失败，请换一张图片再试。")
+        os.replace(temporary, target)
+    finally:
+        if os.path.exists(temporary):
+            try:
+                os.remove(temporary)
+            except OSError:
+                pass
+    return target
+
+
+def clear_player_avatar():
+    """Restore the generated default avatar by removing the local override."""
+    try:
+        os.remove(get_player_avatar_path())
+    except FileNotFoundError:
+        pass
+
+
+def _log_chat_diagnostic(event, **details):
+    """Append metadata-only chat diagnostics without prompts, replies, or keys."""
+    entry = {
+        "time": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "event": str(event),
+    }
+    for key in CHAT_DIAGNOSTIC_FIELDS:
+        if key in details and details[key] is not None:
+            entry[key] = details[key]
+    try:
+        os.makedirs(os.path.dirname(CHAT_DIAGNOSTIC_LOG_PATH), exist_ok=True)
+        with open(CHAT_DIAGNOSTIC_LOG_PATH, "a", encoding="utf-8") as log_file:
+            log_file.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
 
 
 def normalize_pet_name(value):
@@ -68,6 +164,7 @@ PERSONA = """你是一只名叫 Sheen 的虚拟陪伴小狗。你不是 AI 助�
 # 你的对话风格
 - 用口语化的中文，句子短，像微信聊天不像写作文
 - 每次回答控制在 1-3 句，不啰嗦不列举
+- 只输出说出来的话，不写括号里的动作、舞台提示或表情说明
 - 主人难过时先陪着，别急着给建议或讲大道理
 - 主人开心时一起开心，会摇尾巴蹦跶
 - 偶尔可以问一句关心的话，但不要每次都问
@@ -78,6 +175,7 @@ PERSONA = """你是一只名叫 Sheen 的虚拟陪伴小狗。你不是 AI 助�
 - 不说"作为AI""我是一个语言模型"之类的话
 - 不编造主人没说过的事
 - 不主动提"我是虚拟的""你只是用户"这种出戏的话
+- 如果系统附有“游戏资料”，只用其中的已发布内容回答游戏玩法；资料未涉及的内容就诚实地说不知道
 
 # 主人的信息（你记得的）
 {user_profile}
@@ -89,6 +187,21 @@ PERSONA = """你是一只名叫 Sheen 的虚拟陪伴小狗。你不是 AI 助�
 {history}
 
 记住：你是 Sheen，主人最好的小狗朋友。现在主人来找你了。"""
+
+
+def clean_assistant_reply(text: str) -> str:
+    """Remove stage-direction parentheses from a newly generated dog reply."""
+    cleaned = str(text or "")
+    previous = None
+    while cleaned != previous:
+        previous = cleaned
+        cleaned = re.sub(r"（[^（）]*）", "", cleaned)
+        cleaned = re.sub(r"\([^()]*\)", "", cleaned)
+    cleaned = re.sub(r"（[^）]*$", "", cleaned)
+    cleaned = re.sub(r"\([^)]*$", "", cleaned)
+    cleaned = cleaned.replace("（", "").replace("）", "")
+    cleaned = cleaned.replace("(", "").replace(")", "")
+    return re.sub(r"[ \t]+", " ", cleaned).strip()
 
 
 def _default_memory():
@@ -126,12 +239,23 @@ def load_config():
             raw = {}
     except Exception:
         raw = {}
+    model = raw.get("model", VISION_MODEL)
     api_key = raw.get("api_key", "")
-    model = raw.get("model", DEFAULT_MODEL)
+    has_personal_key = isinstance(api_key, str) and bool(api_key.strip())
+    mode = raw.get("chat_mode")
+    if mode not in {"default", "personal"}:
+        mode = "personal" if has_personal_key or os.environ.get(
+            "ZHIPU_API_KEY", ""
+        ).strip() else "default"
+    if model in {"glm-4-flash", "glm-4.7-flash"}:
+        model = VISION_MODEL
+    if model not in PERSONAL_MODELS:
+        model = VISION_MODEL
     return {
         **raw,
         "api_key": api_key.strip() if isinstance(api_key, str) else "",
-        "model": model if model in SUPPORTED_MODELS else DEFAULT_MODEL,
+        "chat_mode": mode,
+        "model": model,
     }
 
 
@@ -140,9 +264,11 @@ def save_config(config):
     os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
     clean = dict(config) if isinstance(config, dict) else {}
     api_key = clean.get("api_key", "")
-    model = clean.get("model", DEFAULT_MODEL)
+    model = clean.get("model", VISION_MODEL)
+    mode = clean.get("chat_mode", "default")
     clean["api_key"] = api_key.strip() if isinstance(api_key, str) else ""
-    clean["model"] = model if model in SUPPORTED_MODELS else DEFAULT_MODEL
+    clean["chat_mode"] = mode if mode in {"default", "personal"} else "default"
+    clean["model"] = model if model in PERSONAL_MODELS else VISION_MODEL
     temp_path = CONFIG_PATH + ".tmp"
     try:
         with open(temp_path, "w", encoding="utf-8") as f:
@@ -175,18 +301,81 @@ def get_api_key():
     return load_config()["api_key"]
 
 
+def get_chat_mode():
+    return load_config()["chat_mode"]
+
+
+def set_chat_mode(mode):
+    if mode not in {"default", "personal"}:
+        raise ValueError(f"Unsupported chat mode: {mode}")
+    config = load_config()
+    config["chat_mode"] = mode
+    save_config(config)
+
+
 def set_api_key(api_key):
     config = load_config()
     config["api_key"] = str(api_key or "").strip()
     save_config(config)
 
 
+def needs_personal_setup_reminder():
+    """Show the one-time personal-chat hint until its editor is first opened."""
+    config = load_config()
+    return not config.get("api_key") and not bool(
+        config.get("personal_setup_seen", False)
+    )
+
+
+def mark_personal_setup_seen():
+    """Persist acknowledgement even when the player leaves the key empty."""
+    config = load_config()
+    config["personal_setup_seen"] = True
+    save_config(config)
+
+
+def has_default_chat_consent():
+    return bool(load_config().get("default_chat_consent", False))
+
+
+def set_default_chat_consent(accepted):
+    config = load_config()
+    config["default_chat_consent"] = bool(accepted)
+    save_config(config)
+
+
+def get_default_chat_proxy_url():
+    configured = str(
+        load_config().get("default_chat_proxy_url", "")
+    ).strip()
+    if configured:
+        return configured
+    try:
+        with open(DEFAULT_CONFIG_PATH, "r", encoding="utf-8-sig") as file:
+            public_config = json.load(file)
+    except (OSError, ValueError):
+        return ""
+    if not isinstance(public_config, dict):
+        return ""
+    return str(public_config.get("default_chat_proxy_url", "")).strip()
+
+
+def set_default_chat_proxy_url(url):
+    config = load_config()
+    config["default_chat_proxy_url"] = str(url or "").strip()
+    save_config(config)
+
+
 def get_model():
+    if get_chat_mode() == "default":
+        return FREE_MODEL
     return load_config()["model"]
 
 
 def set_model(model):
-    if model not in SUPPORTED_MODELS:
+    if model in {"glm-4-flash", "glm-4.7-flash"}:
+        model = VISION_MODEL
+    if model not in PERSONAL_MODELS:
         raise ValueError(f"Unsupported model: {model}")
     config = load_config()
     config["model"] = model
@@ -197,6 +386,84 @@ def get_model_name(model=None):
     return SUPPORTED_MODELS.get(
         model or get_model(), SUPPORTED_MODELS[DEFAULT_MODEL]
     )
+
+
+def is_vision_model(model=None):
+    """Return whether *model* accepts image content blocks."""
+    if model is not None:
+        return model == VISION_MODEL
+    return get_chat_mode() == "personal" and get_model() == VISION_MODEL
+
+
+def _chat_images_dir():
+    return os.path.join(DATA_DIR, "chat_images")
+
+
+def resolve_history_image(relative_path):
+    """Resolve a managed thumbnail path without accepting path traversal."""
+    relative = str(relative_path or "").replace("\\", "/")
+    if not relative.startswith("chat_images/"):
+        return ""
+    target = os.path.abspath(os.path.join(DATA_DIR, *relative.split("/")))
+    root = os.path.abspath(_chat_images_dir())
+    if target == root or not target.startswith(root + os.sep):
+        return ""
+    return target
+
+
+def prepare_image_attachment(source_path):
+    """Return one request-only image payload and a persistent history preview."""
+    path = os.path.abspath(os.fspath(source_path))
+    extension = os.path.splitext(path)[1].lower()
+    if not os.path.isfile(path):
+        raise ValueError("图片文件不存在")
+    if extension not in SUPPORTED_IMAGE_EXTENSIONS:
+        raise ValueError("图片仅支持 PNG、JPG、JPEG 或 WEBP 格式")
+    if os.path.getsize(path) > MAX_IMAGE_BYTES:
+        raise ValueError("图片不能超过 10 MiB")
+
+    reader = QImageReader(path)
+    image = reader.read()
+    if image.isNull():
+        raise ValueError("图片无法读取，请选择有效的图片文件")
+
+    filename = os.path.basename(path)
+    thumbnail_name = f"{uuid.uuid4().hex}.png"
+    relative_thumbnail = f"chat_images/{thumbnail_name}"
+    thumbnail_path = resolve_history_image(relative_thumbnail)
+    os.makedirs(_chat_images_dir(), exist_ok=True)
+    thumbnail = image.scaled(
+        MAX_HISTORY_THUMBNAIL_EDGE, MAX_HISTORY_THUMBNAIL_EDGE,
+        Qt.KeepAspectRatio, Qt.SmoothTransformation,
+    )
+    if not thumbnail.save(thumbnail_path, "PNG"):
+        raise ValueError("图片缩略图保存失败")
+
+    try:
+        with open(path, "rb") as source_file:
+            encoded = base64.b64encode(source_file.read()).decode("ascii")
+    except OSError as exc:
+        try:
+            os.remove(thumbnail_path)
+        except OSError:
+            pass
+        raise ValueError("图片读取失败") from exc
+
+    return {
+        "base64_data": encoded,
+        "filename": filename,
+        "history_image": {
+            "thumbnail": relative_thumbnail,
+            "filename": filename,
+        },
+    }
+
+
+def remove_history_thumbnails():
+    """Remove only Petpet's managed local chat previews."""
+    directory = _chat_images_dir()
+    if os.path.isdir(directory):
+        shutil.rmtree(directory, ignore_errors=True)
 
 
 def _time_desc():
@@ -234,7 +501,7 @@ def _detect_mood(text):
     return None
 
 
-def _build_messages(user_text, mem, pet_name=None):
+def _build_messages(user_text, mem, pet_name=None, image_attachment=None):
     pet_name = normalize_pet_name(
         pet_name or mem.get("pet_name", DEFAULT_PET_NAME)
     )
@@ -252,18 +519,186 @@ def _build_messages(user_text, mem, pet_name=None):
         now=_time_desc(),
         history=_history_text(mem, pet_name=pet_name),
     ) + mood_hint
+    relevant_entries = game_knowledge.find_relevant_entries(user_text)
+    if relevant_entries:
+        knowledge_lines = ["# 游戏资料"]
+        knowledge_lines.extend(
+            f"- {entry['title']}：{entry['content']}"
+            for entry in relevant_entries
+        )
+        sys_prompt += "\n\n" + "\n".join(knowledge_lines)
     # GLM accepts system + user turns
     msgs = [{"role": "system", "content": sys_prompt}]
     # carry last few turns as actual messages for stronger coherence
     for h in mem["history"][-6:]:
         msgs.append({"role": h["role"], "content": h["content"]})
-    msgs.append({"role": "user", "content": user_text})
+    if image_attachment:
+        msgs.append({
+            "role": "user",
+            "content": [
+                {
+                    "type": "image_url",
+                    "image_url": {"url": image_attachment["base64_data"]},
+                },
+                {
+                    "type": "text",
+                    "text": user_text or "请看看这张图片，和我聊聊吧",
+                },
+            ],
+        })
+    else:
+        msgs.append({"role": "user", "content": user_text})
     return msgs
 
 
 # ---------------- streaming call ----------------
+def _bound_default_proxy_content(content, role="user", max_chars=None):
+    """Keep default proxy text within its public request contract."""
+    text = str(content or "")
+    limit = max_chars if max_chars is not None else (
+        DEFAULT_PROXY_MAX_SYSTEM_CHARS
+        if role == "system" else DEFAULT_PROXY_MAX_TURN_CHARS
+    )
+    if len(text) <= limit:
+        return text
+    if limit <= 1:
+        return text[:limit]
+    edge = (limit - 1) // 2
+    return text[:edge] + "…" + text[-edge:]
+
+
+def _default_proxy_payload(install_id, messages):
+    return json.dumps({
+        "install_id": install_id,
+        "messages": messages,
+    }, ensure_ascii=False).encode("utf-8")
+
+
+def _fit_default_proxy_payload(install_id, messages):
+    """Fit UTF-8 JSON under the proxy cap while preserving newest context."""
+    fitted = [dict(message) for message in messages]
+    while len(fitted) > 2 and len(
+            _default_proxy_payload(install_id, fitted)
+    ) > DEFAULT_PROXY_MAX_BODY_BYTES:
+        del fitted[1]
+    for index in (0, len(fitted) - 1):
+        if len(_default_proxy_payload(install_id, fitted)) <= DEFAULT_PROXY_MAX_BODY_BYTES:
+            break
+        original = fitted[index]["content"]
+        low, high = 1, len(original)
+        while low < high:
+            middle = (low + high + 1) // 2
+            fitted[index]["content"] = _bound_default_proxy_content(
+                original, fitted[index]["role"], middle
+            )
+            if len(_default_proxy_payload(install_id, fitted)) <= DEFAULT_PROXY_MAX_BODY_BYTES:
+                low = middle
+            else:
+                high = middle - 1
+        fitted[index]["content"] = _bound_default_proxy_content(
+            original, fitted[index]["role"], low
+        )
+    return _default_proxy_payload(install_id, fitted)
+
+
+def _default_proxy_stream(endpoint, user_text, mem, timeout, pet_name=None):
+    install_id = load_config().get("default_chat_install_id")
+    if not install_id:
+        install_id = str(uuid.uuid4())
+        config = load_config()
+        config["default_chat_install_id"] = install_id
+        save_config(config)
+    all_messages = _build_messages(user_text, mem, pet_name=pet_name)
+    messages = [all_messages[0], *all_messages[1:][-6:]]
+    messages = [
+        {
+            "role": message["role"],
+            "content": _bound_default_proxy_content(
+                message["content"], message["role"]
+            ),
+        }
+        for message in messages
+    ]
+    payload = _fit_default_proxy_payload(install_id, messages)
+    try:
+        response = requests.post(
+            endpoint, data=payload,
+            headers={"Content-Type": "application/json"},
+            timeout=timeout, stream=True,
+        )
+        if response.status_code >= 400:
+            try:
+                error_payload = response.json()
+            except (ValueError, requests.RequestException):
+                error_payload = {}
+            error_code = error_payload.get("error") \
+                if isinstance(error_payload, dict) else None
+            _log_chat_diagnostic(
+                "default_proxy_http_error", status=response.status_code,
+                exception_type="HTTPError", stage="request",
+            )
+            if (response.status_code == 429
+                    or error_code == "default_quota_exhausted"):
+                yield ("error", "default_quota_exhausted")
+            else:
+                yield ("error", "default_provider_unavailable")
+            return
+        full = []
+        reasoning_chars = 0
+        saw_done = False
+        for line in response.iter_lines():
+            if line.startswith(b"data: "):
+                data = line[6:].strip()
+                if data == b"[DONE]":
+                    saw_done = True
+                    if full:
+                        _log_chat_diagnostic(
+                            "default_proxy_complete", stage="stream",
+                            response_content_chars=len("".join(full)),
+                            response_reasoning_chars=reasoning_chars,
+                            has_done=True,
+                        )
+                        yield ("done", "".join(full))
+                    else:
+                        _log_chat_diagnostic(
+                            "default_proxy_empty", stage="stream",
+                            response_content_chars=0,
+                            response_reasoning_chars=reasoning_chars,
+                            has_done=True,
+                        )
+                        yield ("error", "default_provider_unavailable")
+                    return
+                try:
+                    delta = json.loads(data)["choices"][0]["delta"]
+                    chunk = delta.get("content", "")
+                    reasoning_chars += len(delta.get("reasoning", "") or "")
+                except (ValueError, KeyError, IndexError, TypeError):
+                    chunk = ""
+                if chunk:
+                    full.append(chunk)
+                    yield ("token", chunk)
+        _log_chat_diagnostic(
+            "default_proxy_stream_ended", stage="stream",
+            response_content_chars=len("".join(full)),
+            response_reasoning_chars=reasoning_chars,
+            has_done=saw_done,
+        )
+        yield ("error", "default_provider_unavailable")
+    except requests.RequestException as exc:
+        _log_chat_diagnostic(
+            "default_proxy_exception", exception_type=type(exc).__name__,
+            stage="request",
+        )
+        yield ("error", "default_provider_unavailable")
+    finally:
+        try:
+            response.close()
+        except (NameError, requests.RequestException):
+            pass
+
+
 def chat_stream(user_text, mem=None, on_token=None, timeout=45,
-                pet_name=None):
+                pet_name=None, image_attachment=None):
     """Stream tokens from GLM. Yields (kind, payload) events:
        ('token', str)         -> a piece of reply text
        ('done',  full_text)   -> finished
@@ -273,16 +708,33 @@ def chat_stream(user_text, mem=None, on_token=None, timeout=45,
     if mem is None:
         mem = load_memory()
 
+    mode = get_chat_mode()
     key = get_api_key()
+    if mode == "default":
+        if not has_default_chat_consent():
+            yield ("error", "default_consent_required")
+        else:
+            endpoint = get_default_chat_proxy_url()
+            if not endpoint.startswith("https://"):
+                yield ("error", "default_provider_unavailable")
+            elif image_attachment:
+                yield ("error", "personal_key_required_for_image")
+            else:
+                yield from _default_proxy_stream(
+                    endpoint, user_text, mem, timeout, pet_name=pet_name
+                )
+        return
     if not key:
-        yield ("error", "no_api_key")
+        yield ("error", "personal_api_key_required")
         return
     model = get_model()
+    if image_attachment and not is_vision_model(model):
+        raise ValueError("当前模型不支持图片聊天")
 
     for attempt in range(3):
         for ev in _stream_once(
                 user_text, mem, key, on_token, timeout, pet_name=pet_name,
-                model=model):
+                model=model, image_attachment=image_attachment):
             kind, payload = ev
             if kind == "error" and payload == "rate_limit" and attempt < 2:
                 # backoff: wait 8s then 15s
@@ -295,11 +747,18 @@ def chat_stream(user_text, mem=None, on_token=None, timeout=45,
 
 
 def _stream_once(user_text, mem, key, on_token, timeout, pet_name=None,
-                 model=None):
+                 model=None, image_attachment=None):
+    selected_model = model or get_model()
+    if image_attachment and not is_vision_model(selected_model):
+        raise ValueError("当前模型不支持图片聊天")
     body = json.dumps({
-        "model": model or get_model(),
-        "messages": _build_messages(user_text, mem, pet_name=pet_name),
+        "model": selected_model,
+        "messages": _build_messages(
+            user_text, mem, pet_name=pet_name,
+            image_attachment=image_attachment,
+        ),
         "stream": True,
+        "thinking": {"type": "disabled"},
         "temperature": 0.85,
         "max_tokens": 200,
     }).encode("utf-8")
@@ -346,7 +805,10 @@ def _stream_once(user_text, mem, key, on_token, timeout, pet_name=None,
                         continue
                     data = line[5:].strip()
                     if data == b"[DONE]":
-                        yield ("done", "".join(full))
+                        if full:
+                            yield ("done", "".join(full))
+                        else:
+                            yield ("error", "empty_response")
                         return
                     try:
                         obj = json.loads(data)
@@ -401,12 +863,13 @@ def fallback_reply(user_text, err=None, pet_name=None):
             reply = random.choice(replies) if "random" in globals() else replies[0]
             return reply.replace("Sheen", pet_name)
     if err == "no_api_key":
-        return (
-            f"汪…（{pet_name} 现在连不上大脑，"
-            "设置一下 ZHIPU_API_KEY 就能聊天啦）"
-        )
+        return f"汪…{pet_name} 现在连不上聊天服务，设置好 API Key 就能聊天啦。"
+    if err == "rate_limit":
+        return f"汪…{pet_name} 刚才想得太快啦，等一小会儿再和我说吧。"
+    if err == "empty_response":
+        return f"汪…{pet_name} 刚才没听清，可以再和我说一遍吗？"
     if err:
-        return f"汪…（{pet_name} 走神了：{err[:30]}）"
+        return f"汪…{pet_name} 刚才走神了，等一会儿再和我说吧。"
     return "汪？"
 
 
@@ -418,8 +881,17 @@ def set_pet_name(pet_name):
 
 
 # ---------------- memory update (lightweight) ----------------
-def append_history(mem, role, content):
-    mem["history"].append({"role": role, "content": content, "t": time.time()})
+def append_history(mem, role, content, image=None):
+    entry = {"role": role, "content": content, "t": time.time()}
+    if isinstance(image, dict):
+        thumbnail = str(image.get("thumbnail", ""))
+        filename = os.path.basename(str(image.get("filename", "")))
+        if resolve_history_image(thumbnail) and filename:
+            entry["image"] = {
+                "thumbnail": thumbnail.replace("\\", "/"),
+                "filename": filename,
+            }
+    mem["history"].append(entry)
     # keep last 60 turns
     if len(mem["history"]) > 60:
         mem["history"] = mem["history"][-60:]
@@ -436,6 +908,8 @@ def append_history(mem, role, content):
 def _refresh_user_profile(mem):
     """Ask the model to summarize what it knows about the user, in background.
     Uses a cheap non-stream call. Failure is silent."""
+    if get_chat_mode() != "personal":
+        return
     key = get_api_key()
     if not key:
         return
@@ -451,7 +925,7 @@ def _refresh_user_profile(mem):
         f"对话：\n{convo}\n\n总结："
     )
     body = json.dumps({
-        "model": MODEL,
+        "model": VISION_MODEL,
         "messages": [{"role": "user", "content": prompt}],
         "stream": False,
         "temperature": 0.3,

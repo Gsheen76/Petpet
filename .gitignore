@@ -32,3 +32,7 @@ config.json
 *.log
 *.bak
 assets/poses/clean/
+debug-chat-window.png
+debug-pet-menu.png
+cloudflare-worker/.wrangler/
+.tools/

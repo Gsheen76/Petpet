@@ -69,18 +69,26 @@ class MenuUiTests(unittest.TestCase):
         self.assertEqual(pet.BubbleMenu.PAGE_COLUMNS["more"], 5)
         self.assertEqual(pet.BubbleMenu.PAGE_COLUMNS["interaction"], 4)
 
-    def test_settings_entry_requires_badge_without_api_key(self):
-        with patch("pet.ai.get_api_key_source", return_value="none"):
+    def test_chat_entry_requires_badge_until_personal_setup_is_seen(self):
+        with patch("pet.ai.needs_personal_setup_reminder", return_value=True):
             self.assertTrue(pet.BubbleMenu.needs_api_key_configuration())
 
-        with patch("pet.ai.get_api_key_source", return_value="config"):
+        with patch("pet.ai.needs_personal_setup_reminder", return_value=False):
             self.assertFalse(pet.BubbleMenu.needs_api_key_configuration())
 
-    def test_pet_surface_requires_badge_without_api_key(self):
-        with patch("pet.ai.get_api_key_source", return_value="none"):
+    def test_api_reminder_targets_chat_and_never_settings(self):
+        self.assertTrue(pet.BubbleMenu.action_needs_attention(
+            "chat", has_claimable=False, needs_personal_setup=True
+        ))
+        self.assertFalse(pet.BubbleMenu.action_needs_attention(
+            "settings", has_claimable=False, needs_personal_setup=True
+        ))
+
+    def test_pet_surface_requires_badge_until_personal_setup_is_seen(self):
+        with patch("pet.ai.needs_personal_setup_reminder", return_value=True):
             self.assertTrue(pet.PetWindow.needs_api_key_configuration())
 
-        with patch("pet.ai.get_api_key_source", return_value="config"):
+        with patch("pet.ai.needs_personal_setup_reminder", return_value=False):
             self.assertFalse(pet.PetWindow.needs_api_key_configuration())
 
     def test_interface_anchor_uses_home_pet_while_home_is_visible(self):
@@ -239,7 +247,7 @@ class MenuUiTests(unittest.TestCase):
             (1169, 610),
         )
 
-    def test_chat_and_settings_use_interface_window_position(self):
+    def test_chat_uses_interface_window_position_and_settings_is_centered(self):
         position = QPoint(880, 240)
         pet_host = SimpleNamespace(
             settings=dict(pet.DEFAULT_SETTINGS),
@@ -275,25 +283,21 @@ class MenuUiTests(unittest.TestCase):
 
         pet.SettingsWindow.show_near_pet(settings)
 
-        settings.move.assert_called_once_with(position)
+        settings.move.assert_called_once_with(QPoint(540, 60))
 
-    def test_tutorial_uses_interface_window_position(self):
-        position = QPoint(700, 160)
+    def test_tutorial_is_centered_on_the_pet_screen(self):
         pet_host = SimpleNamespace(
             pet_name=pet.ai.DEFAULT_PET_NAME,
             state={"tutorial_completed": False},
-            interface_window_position=Mock(return_value=position),
+            interface_screen_rect=Mock(return_value=QRect(0, 0, 1920, 1080)),
         )
         tutorial = pet.TutorialWindow(pet_host, Mock())
         self.addCleanup(tutorial.close)
 
         tutorial.start()
 
-        self.assertEqual(tutorial.pos(), position)
-        pet_host.interface_window_position.assert_called_once_with(
-            tutorial.size(),
-            gap=16,
-        )
+        self.assertEqual(tutorial.pos(), QPoint(590, 230))
+        pet_host.interface_screen_rect.assert_called_once_with()
 
     def test_pet_outside_actual_screens_is_not_visible(self):
         fake_pet = SimpleNamespace(

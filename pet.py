@@ -46,7 +46,7 @@ from PyQt5.QtWidgets import (
     QSystemTrayIcon, QVBoxLayout, QHBoxLayout, QPushButton, QFrame,
     QGroupBox, QSpinBox, QDoubleSpinBox, QMessageBox, QProgressBar,
     QProgressDialog, QComboBox, QScrollArea, QAbstractSpinBox,
-    QAbstractButton, QDialog, QSizePolicy
+    QAbstractButton, QButtonGroup, QDialog, QSizePolicy, QFileDialog, QSlider
 )
 from PyQt5.QtSvg import QSvgRenderer
 from PyQt5.QtNetwork import QLocalServer, QLocalSocket
@@ -137,6 +137,15 @@ def pixel_font(size, weight=QFont.Normal, family="Microsoft YaHei"):
     """Create a font whose rendered size is independent of monitor DPI."""
     font = QFont(family)
     font.setPixelSize(font_px(size))
+    font.setWeight(weight)
+    return font
+
+
+def independent_pixel_font(size, weight=QFont.Normal,
+                           family="Microsoft YaHei"):
+    """Create crisp full-window typography without compact-surface scaling."""
+    font = QFont(family)
+    font.setPixelSize(independent_font_px(size))
     font.setWeight(weight)
     return font
 
@@ -560,6 +569,133 @@ class _Bridge(QObject):
 bridge = None  # set in main
 
 
+class PetpetConfirmDialog(QDialog):
+    """Warm, frameless confirmation card shared by Petpet surfaces."""
+    def __init__(self, parent=None, *, title, message,
+                 accept_text="确认", reject_text="取消"):
+        super().__init__(parent)
+        self.setObjectName("petpetConfirm")
+        self.setModal(True)
+        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setFixedWidth(430)
+
+        card = QFrame()
+        card.setObjectName("petpetDialogCard")
+        badge = QLabel("?")
+        badge.setObjectName("petpetDialogBadge")
+        badge.setAlignment(Qt.AlignCenter)
+        badge.setFixedSize(44, 44)
+        heading = QLabel(title)
+        heading.setObjectName("petpetDialogTitle")
+        heading.setFont(independent_pixel_font(21, QFont.Bold))
+        body = QLabel(message)
+        body.setObjectName("petpetDialogMessage")
+        body.setFont(independent_pixel_font(18))
+        body.setWordWrap(True)
+
+        self.reject_btn = QPushButton(reject_text)
+        self.reject_btn.setObjectName("petpetSecondary")
+        self.accept_btn = QPushButton(accept_text)
+        self.accept_btn.setObjectName("petpetPrimary")
+        for button in (self.reject_btn, self.accept_btn):
+            button.setFont(independent_pixel_font(17, QFont.Bold))
+            button.setMinimumHeight(40)
+        self.reject_btn.clicked.connect(self.reject)
+        self.accept_btn.clicked.connect(self.accept)
+        self.reject_btn.setDefault(True)
+
+        text_box = QVBoxLayout()
+        text_box.setSpacing(5)
+        text_box.addWidget(heading)
+        text_box.addWidget(body)
+        header = QHBoxLayout()
+        header.setSpacing(13)
+        header.addWidget(badge, 0, Qt.AlignTop)
+        header.addLayout(text_box, 1)
+        actions = QHBoxLayout()
+        actions.addStretch(1)
+        actions.addWidget(self.reject_btn)
+        actions.addWidget(self.accept_btn)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(22, 20, 22, 18)
+        card_layout.setSpacing(16)
+        card_layout.addLayout(header)
+        card_layout.addLayout(actions)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(8, 8, 8, 8)
+        outer.addWidget(card)
+        self.setStyleSheet("""
+            QDialog#petpetConfirm { background:transparent; }
+            QFrame#petpetDialogCard {
+                background:#fff9f4; border:1px solid #edcfc2;
+                border-radius:22px;
+            }
+            QLabel#petpetDialogBadge {
+                background:#fff1cc; color:#c77b67; border:1px solid #f0d59c;
+                border-radius:22px; font-weight:800;
+            }
+            QLabel#petpetDialogTitle { color:#704b3c; font-weight:800; }
+            QLabel#petpetDialogMessage { color:#8e6858; }
+            QPushButton { min-height:40px; padding:0 18px; border-radius:20px; font-weight:700; }
+            QPushButton#petpetSecondary {
+                background:#fffdf9; color:#7d5a4c; border:1px solid #e7cec1;
+            }
+            QPushButton#petpetSecondary:hover { background:#fff1e8; }
+            QPushButton#petpetPrimary {
+                background:#f8dcd7; color:#704b3c; border:1px solid #efc4bb;
+            }
+            QPushButton#petpetPrimary:hover { background:#f3c9c1; }
+        """)
+
+
+class PetpetPopupMenu(QFrame):
+    """Small rounded popup card that closes when focus leaves it."""
+    def __init__(self, parent=None):
+        super().__init__(parent, Qt.Popup | Qt.FramelessWindowHint)
+        self.setObjectName("petpetPopup")
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self._card = QFrame()
+        self._card.setObjectName("petpetPopupCard")
+        self._actions_layout = QVBoxLayout(self._card)
+        self._actions_layout.setContentsMargins(6, 6, 6, 6)
+        self._actions_layout.setSpacing(3)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(3, 3, 3, 3)
+        outer.addWidget(self._card)
+        self.setStyleSheet("""
+            QFrame#petpetPopup { background:transparent; border:0; }
+            QFrame#petpetPopupCard {
+                background:#fff9f4; border:1px solid #edcfc2;
+                border-radius:16px;
+            }
+            QPushButton#petpetPopupAction {
+                min-width:148px; min-height:40px; text-align:left;
+                padding:0 14px; background:transparent; color:#704b3c;
+                border:0; border-radius:11px; font-weight:700;
+            }
+            QPushButton#petpetPopupAction:hover { background:#f8dcd7; }
+        """)
+
+    def add_action(self, text, callback):
+        button = QPushButton(text)
+        button.setObjectName("petpetPopupAction")
+        button.setFont(independent_pixel_font(17, QFont.Bold))
+        button.setMinimumHeight(40)
+        button.setCursor(Qt.PointingHandCursor)
+        button.clicked.connect(callback)
+        button.clicked.connect(self.close)
+        self._actions_layout.addWidget(button)
+        return button
+
+    def popup_below(self, anchor):
+        self.adjustSize()
+        point = anchor.mapToGlobal(QPoint(0, anchor.height() + 6))
+        self.move(point)
+        self.show()
+        self.raise_()
+
+
 class ChatWindow(QWidget):
     """A small chat panel that floats beside the pet.
     Sheen replies stream in token-by-token via the bridge."""
@@ -570,13 +706,14 @@ class ChatWindow(QWidget):
         self.mem = ai.load_memory()
         self.busy = False
         self._pending_user = None
+        self._pending_image = None
         self._streaming = ""
 
         self.setWindowFlags(
             Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint |
             Qt.Tool  # no taskbar button
         )
-        self.setAttribute(Qt.WA_TranslucentBackground, False)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setObjectName("chat")
         self.setFixedSize(self.s["chat_width"], self.s["chat_height"])
         self._apply_style()
@@ -593,14 +730,18 @@ class ChatWindow(QWidget):
         fs = self._chat_font_px()
         self.setStyleSheet(f"""
             QWidget#chat {{
+                background:transparent;
+                border:0;
+            }}
+            QFrame#chatCard {{
                 background:#faf7f3;
                 border:1px solid #e6d8cf;
-                border-radius:18px;
+                border-radius:24px;
             }}
             QScrollArea#chatHistory {{
                 background:#fffdfa;
                 border:1px solid #eee4dd;
-                border-radius:12px;
+                border-radius:18px;
             }}
             QWidget#chatHistoryBody {{
                 background:#fffdfa;
@@ -623,7 +764,7 @@ class ChatWindow(QWidget):
             QLineEdit {{
                 background:#fffefc;
                 border:1px solid #e4d5ca;
-                border-radius:13px;
+                border-radius:15px;
                 padding:10px 14px;
                 font-family:'Microsoft YaHei',sans-serif;
                 font-size:{fs}px;
@@ -635,7 +776,7 @@ class ChatWindow(QWidget):
             }}
             QPushButton#send {{
                 background:#dc806a; color:#fff; border:0;
-                border-radius:13px;
+                border-radius:15px;
                 padding:10px 23px; font-weight:700; font-size:{fs}px;
             }}
             QPushButton#send:hover {{ background:#e19179; }}
@@ -644,13 +785,30 @@ class ChatWindow(QWidget):
             QFrame#chatTools {{
                 background:#f8f2ed;
                 border:1px solid #eaded5;
-                border-radius:12px;
+                border-radius:18px;
             }}
-            QPushButton#chatTool, QPushButton#clearTool {{
+            QFrame#chatModeSegments {{
+                background:#fff1e8;
+                border:1px solid #f1d8cc;
+                border-radius:17px;
+            }}
+            QPushButton#chatModeSegment {{
+                background:transparent; color:#a18070;
+                border:0; border-radius:20px; padding:0;
+                font-weight:600;
+            }}
+            QPushButton#chatModeSegment:checked {{
+                background:#f8dcd7; color:#70483c;
+                border:1px solid #efc4bb;
+            }}
+            QPushButton#chatModeSegment:hover:!checked {{
+                background:#f6e9e1;
+            }}
+            QPushButton#chatTool {{
                 background:#fffdfb; color:#76594b;
-                border:1px solid #e5d5ca; border-radius:9px;
-                padding:7px 12px;
-                font-size:{max(fs-5,12)}px; font-weight:700;
+                border:1px solid #e5d5ca; border-radius:15px;
+                padding:0 12px;
+                font-weight:700;
             }}
             QPushButton#chatTool:hover {{
                 background:#f8e9e1; color:#8f604e; border-color:#ddbaa8;
@@ -658,8 +816,24 @@ class ChatWindow(QWidget):
             QPushButton#chatTool:pressed {{
                 background:#efd9cc;
             }}
+            QPushButton#roundTool {{
+                min-width:40px; max-width:40px;
+                min-height:38px; max-height:38px;
+                padding:0; border-radius:20px;
+                color:#8f695b; background:#fffdfb;
+                border:1px solid #e5d5ca;
+                font-weight:700;
+            }}
+            QPushButton#roundTool:hover {{
+                background:#f8e9e1; color:#8f604e; border-color:#ddbaa8;
+            }}
             QPushButton#clearTool {{
+                min-width:44px; max-width:44px;
+                min-height:38px; max-height:38px;
+                padding:0; border-radius:20px;
+                font-weight:800;
                 color:#9a7067; background:#fffaf8; border-color:#e6d3cc;
+                border:1px solid #e6d3cc;
             }}
             QPushButton#clearTool:hover {{
                 color:#b45d56; background:#f9e8e3; border-color:#dfb2a9;
@@ -675,7 +849,7 @@ class ChatWindow(QWidget):
             return
 
         # title bar (draggable) — title label on the left, close button on the right
-        self.title = QLabel(f"  🐶 {self._pet_name()}")
+        self.title = QLabel(f"  {self._pet_name()}")
         self.title.setObjectName("title")
         self.title.setFixedHeight(38)
         self.title.setStyleSheet(
@@ -700,10 +874,24 @@ class ChatWindow(QWidget):
         )
         self.close_btn.clicked.connect(self.close)
 
+        self.avatar_btn = QPushButton("头像")
+        self.avatar_btn.setObjectName("avatarEdit")
+        self.avatar_btn.setCursor(Qt.PointingHandCursor)
+        self.avatar_btn.setToolTip("编辑我的头像")
+        self.avatar_btn.setStyleSheet(
+            "QPushButton{background:#fffaf6;color:#8c6252;"
+            "border:1px solid #e6cfc2;border-radius:14px;"
+            "padding:5px 11px;font-weight:700;}"
+            "QPushButton:hover{background:#ffe8dc;border-color:#dda993;}"
+        )
+        self.avatar_btn.clicked.connect(self.show_player_avatar_menu)
+
         title_row = QHBoxLayout()
         title_row.setContentsMargins(0, 0, 8, 0)
         title_row.setSpacing(0)
         title_row.addWidget(self.title, 1)
+        title_row.addWidget(self.avatar_btn)
+        title_row.addSpacing(6)
         title_row.addWidget(self.close_btn)
 
         # Real widgets keep each message softly rounded on every platform.
@@ -733,31 +921,118 @@ class ChatWindow(QWidget):
         self.send_btn.setCursor(Qt.PointingHandCursor)
         self.send_btn.clicked.connect(self.send)
 
-        self.api_key_btn = QPushButton()
-        self.api_key_btn.setObjectName("chatTool")
-        self.api_key_btn.setCursor(Qt.PointingHandCursor)
-        self.api_key_btn.clicked.connect(self.configure_api_key)
-        self.api_key_badge = QLabel(self.api_key_btn)
-        self.api_key_badge.setObjectName("apiKeyBadge")
-        self.api_key_badge.setFixedSize(12, 12)
-        self.api_key_badge.setStyleSheet(
-            "background:#e85d62;border:2px solid #fffdfb;border-radius:6px;"
+        self.chat_notice = QLabel()
+        self.chat_notice.setObjectName("chatNotice")
+        self.chat_notice.setWordWrap(True)
+        self.chat_notice.setStyleSheet(
+            "QLabel#chatNotice{background:#fff3dc;color:#8a5b42;"
+            "border:1px solid #efcfaa;border-radius:10px;"
+            "padding:7px 10px;font-size:13px;}"
         )
-        self.api_key_badge.hide()
+        self.chat_notice.hide()
 
-        self.model_btn = QPushButton()
+        self.image_preview = QFrame()
+        self.image_preview.setObjectName("imagePreview")
+        self.image_preview.setStyleSheet(
+            "QFrame#imagePreview{background:#fff8f1;border:1px solid #ead3c5;"
+            "border-radius:10px;}"
+        )
+        preview_row = QHBoxLayout(self.image_preview)
+        preview_row.setContentsMargins(8, 5, 7, 5)
+        preview_row.setSpacing(7)
+        self.image_preview_thumb = QLabel()
+        self.image_preview_thumb.setObjectName("imagePreviewThumb")
+        self.image_preview_thumb.setFixedSize(34, 34)
+        self.image_preview_thumb.setAlignment(Qt.AlignCenter)
+        self.image_preview_name = QLabel()
+        self.image_preview_name.setObjectName("imagePreviewName")
+        self.image_preview_name.setStyleSheet("color:#805e50;font-weight:700;")
+        self.image_remove_btn = QPushButton("×")
+        self.image_remove_btn.setObjectName("imageRemove")
+        self.image_remove_btn.setToolTip("移除这张图片")
+        self.image_remove_btn.setCursor(Qt.PointingHandCursor)
+        self.image_remove_btn.setFixedSize(26, 26)
+        self.image_remove_btn.setStyleSheet(
+            "QPushButton#imageRemove{background:#fffdfb;color:#a47364;"
+            "border:1px solid #e4c9bc;border-radius:13px;font-size:19px;font-weight:700;}"
+            "QPushButton#imageRemove:hover{background:#ffe3d8;color:#bd6658;}"
+        )
+        self.image_remove_btn.clicked.connect(self.clear_pending_image)
+        preview_row.addWidget(self.image_preview_thumb)
+        preview_row.addWidget(self.image_preview_name, 1)
+        preview_row.addWidget(self.image_remove_btn)
+        self.image_preview.hide()
+
+        self.mode_frame = QFrame()
+        self.mode_frame.setObjectName("chatModeSegments")
+        mode_row = QHBoxLayout(self.mode_frame)
+        mode_row.setContentsMargins(3, 3, 3, 3)
+        mode_row.setSpacing(2)
+        self.free_mode_btn = QPushButton("免费")
+        self.personal_mode_btn = QPushButton("自定义")
+        self.mode_group = QButtonGroup(self)
+        self.mode_group.setExclusive(True)
+        segment_font = independent_pixel_font(17, QFont.DemiBold)
+        segment_width = max(
+            QFontMetrics(segment_font).horizontalAdvance(label)
+            for label in ("免费", "自定义")
+        ) + 28
+        for mode_button in (self.free_mode_btn, self.personal_mode_btn):
+            mode_button.setObjectName("chatModeSegment")
+            mode_button.setCheckable(True)
+            mode_button.setCursor(Qt.PointingHandCursor)
+            mode_button.setFont(segment_font)
+            mode_button.setFixedSize(segment_width, 40)
+            self.mode_group.addButton(mode_button)
+            mode_row.addWidget(mode_button)
+        self.free_mode_btn.clicked.connect(
+            lambda: self.select_chat_mode("default")
+        )
+        self.personal_mode_btn.clicked.connect(
+            lambda: self.select_chat_mode("personal")
+        )
+        self.mode_frame.setFixedSize(segment_width * 2 + 8, 46)
+
+        self.personal_setup_dot = QLabel(self.personal_mode_btn)
+        self.personal_setup_dot.setObjectName("personalSetupDot")
+        self.personal_setup_dot.setFixedSize(10, 10)
+        self.personal_setup_dot.setStyleSheet(
+            "background:#ee5e62;border:2px solid #fff9f4;border-radius:5px;"
+        )
+        self.personal_setup_dot.move(segment_width - 13, 4)
+
+        self.model_btn = QPushButton("GLM-4.6V")
         self.model_btn.setObjectName("chatTool")
         self.model_btn.setCursor(Qt.PointingHandCursor)
-        self.model_btn.setToolTip("选择聊天使用的 AI 模型")
-        self.model_btn.clicked.connect(self.show_model_menu)
+        self.model_btn.setToolTip("当前模型：GLM-4.6V-Flash")
+        self.model_btn.clicked.connect(self.configure_api_key)
 
-        self.clear_btn = QPushButton("🧹 清除记忆")
+        self.image_btn = QPushButton("上传")
+        self.image_btn.setObjectName("chatTool")
+        self.image_btn.setCursor(Qt.PointingHandCursor)
+        self.image_btn.setToolTip("上传图片")
+        self.image_btn.clicked.connect(self.select_image)
+
+        self.settings_btn = QPushButton("⚙")
+        self.settings_btn.setObjectName("roundTool")
+        self.settings_btn.setToolTip("API 设置")
+        self.settings_btn.setCursor(Qt.PointingHandCursor)
+        self.settings_btn.clicked.connect(self.configure_api_key)
+
+        self.clear_btn = QPushButton("DEL")
         self.clear_btn.setObjectName("clearTool")
+        self.clear_btn.setMinimumWidth(44)
+        self.clear_btn.setMaximumWidth(44)
         self.clear_btn.setToolTip(
             f"让 {self._pet_name()} 忘记所有对话"
         )
         self.clear_btn.setCursor(Qt.PointingHandCursor)
         self.clear_btn.clicked.connect(self.confirm_clear_memory)
+        for control in (
+                self.model_btn, self.image_btn,
+                self.settings_btn, self.clear_btn):
+            control.setFont(independent_pixel_font(17, QFont.Bold))
+            control.setFixedHeight(40)
         self._refresh_ai_tool_buttons()
 
         row = QHBoxLayout()
@@ -770,133 +1045,239 @@ class ChatWindow(QWidget):
         tools_row = QHBoxLayout(self.tools_frame)
         tools_row.setContentsMargins(7, 5, 7, 5)
         tools_row.setSpacing(7)
-        tools_row.addWidget(self.api_key_btn)
+        tools_row.addWidget(self.mode_frame)
         tools_row.addWidget(self.model_btn)
+        tools_row.addWidget(self.image_btn)
         tools_row.addStretch(1)
+        tools_row.addWidget(self.settings_btn)
         tools_row.addWidget(self.clear_btn)
 
+        self.chat_card = QFrame()
+        self.chat_card.setObjectName("chatCard")
+        card_layout = QVBoxLayout(self.chat_card)
+        card_layout.setContentsMargins(12, 10, 12, 12)
+        card_layout.setSpacing(9)
+        card_layout.addLayout(title_row)
+        card_layout.addWidget(self.log, 1)
+        card_layout.addWidget(self.chat_notice)
+        card_layout.addWidget(self.image_preview)
+        card_layout.addLayout(row)
+        card_layout.addWidget(self.tools_frame)
+
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 10, 12, 12)
-        layout.setSpacing(9)
-        layout.addLayout(title_row)
-        layout.addWidget(self.log, 1)
-        layout.addLayout(row)
-        layout.addWidget(self.tools_frame)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.chat_card)
         self._ui_built = True
 
     def refresh_pet_name(self):
         """Refresh every visible name after onboarding or renaming."""
         name = self._pet_name()
         self.mem["pet_name"] = name
-        self.title.setText(f"  🐶 {name}")
+        self.title.setText(f"  {name}")
         self.clear_btn.setToolTip(f"让 {name} 忘记所有对话")
         if not self.busy:
             self.input.setPlaceholderText(f"跟 {name} 说点什么…")
 
-    def _position_api_key_badge(self):
-        badge = self.api_key_badge
-        badge.move(
-            max(0, self.api_key_btn.width() - badge.width() - 2),
-            2,
-        )
-
-    def _set_api_key_badge(self, visible):
-        self.api_key_badge.setVisible(bool(visible))
-        if visible:
-            QTimer.singleShot(0, self._position_api_key_badge)
-
     def _refresh_ai_tool_buttons(self):
-        source = ai.get_api_key_source()
-        self._set_api_key_badge(source == "none")
-        if source == "environment":
-            self._set_api_key_badge(False)
-            self.api_key_btn.setText("🔑 API Key：环境变量")
-            self.api_key_btn.setToolTip(
-                "当前优先使用系统环境变量 ZHIPU_API_KEY；"
-                "仍可在这里保存本机备用 Key"
+        mode = ai.get_chat_mode()
+        personal = mode == "personal"
+        self.free_mode_btn.setChecked(not personal)
+        self.personal_mode_btn.setChecked(personal)
+        self.model_btn.setVisible(personal)
+        self.settings_btn.setVisible(personal)
+        self.free_mode_btn.setEnabled(not self.busy)
+        self.personal_mode_btn.setEnabled(not self.busy)
+        self.model_btn.setEnabled(not self.busy)
+        self.settings_btn.setEnabled(not self.busy)
+        self.image_btn.setEnabled(not self.busy)
+        self.clear_btn.setEnabled(not self.busy)
+        self.personal_setup_dot.setVisible(ai.needs_personal_setup_reminder())
+        self.personal_setup_dot.raise_()
+        self._refresh_image_upload_state()
+
+    def select_chat_mode(self, mode):
+        if mode == "default":
+            ai.set_chat_mode("default")
+            self._refresh_ai_tool_buttons()
+            return
+        if ai.get_api_key_source() != "none":
+            ai.set_chat_mode("personal")
+            self._refresh_ai_tool_buttons()
+            return
+        self.configure_api_key(activate_personal=True)
+        self._refresh_ai_tool_buttons()
+
+    def _refresh_image_upload_state(self):
+        """Keep the image controls constrained to the visual model."""
+        visual_model = ai.is_vision_model()
+        self.image_btn.setVisible(visual_model)
+        if not visual_model:
+            self.clear_pending_image()
+        elif self._pending_image:
+            self.image_preview.show()
+
+    def select_image(self):
+        """Choose the single local picture for the next visual-model turn."""
+        if not ai.is_vision_model():
+            QMessageBox.information(
+                self, "需要视觉模型",
+                "请先切换到 GLM-4.6V-Flash，再上传图片。",
             )
-        elif source == "config":
-            self._set_api_key_badge(False)
-            self.api_key_btn.setText("🔑 API Key：已配置")
-            self.api_key_btn.setToolTip("修改或移除本机保存的 API Key")
+            return
+        path, _ = QFileDialog.getOpenFileName(
+            self, "选择要和小狗分享的图片", "",
+            "图片文件 (*.png *.jpg *.jpeg *.webp)",
+        )
+        if not path:
+            return
+        try:
+            self._set_pending_image(ai.prepare_image_attachment(path))
+        except ValueError as exc:
+            QMessageBox.warning(self, "图片无法使用", str(exc))
+
+    def _set_pending_image(self, attachment):
+        """Render a selected attachment without persisting its request bytes."""
+        if self._pending_image:
+            self.clear_pending_image()
+        self._pending_image = dict(attachment or {})
+        filename = str(self._pending_image.get("filename", "图片"))
+        self.image_preview_name.setText(f"🖼 已选择：{filename}")
+        self.image_preview_thumb.clear()
+        history_image = self._pending_image.get("history_image", {})
+        preview_path = ai.resolve_history_image(history_image.get("thumbnail"))
+        preview = QPixmap(preview_path) if preview_path else QPixmap()
+        if not preview.isNull():
+            self.image_preview_thumb.setPixmap(preview.scaled(
+                30, 30, Qt.KeepAspectRatio, Qt.SmoothTransformation,
+            ))
         else:
-            self.api_key_btn.setText("🔑 添加 API Key")
-            self.api_key_btn.setToolTip("添加智谱 API Key，开启 AI 聊天")
-        self.model_btn.setText(f"🤖 {ai.get_model_name()} ▾")
+            self.image_preview_thumb.setText("📷")
+        self.image_preview.show()
 
-        if source == "none":
-            self.api_key_btn.setText("🔑 API Key：未配置")
+    def clear_pending_image(self, keep_history=False):
+        """Discard an unsent preview while preserving a sent history image."""
+        attachment = self._pending_image
+        if attachment and not keep_history:
+            image = attachment.get("history_image", {})
+            thumbnail_path = ai.resolve_history_image(image.get("thumbnail"))
+            if thumbnail_path:
+                try:
+                    os.remove(thumbnail_path)
+                except OSError:
+                    pass
+        self._pending_image = None
+        if hasattr(self, "image_preview"):
+            self.image_preview_thumb.clear()
+            self.image_preview_name.clear()
+            self.image_preview.hide()
 
-    def configure_api_key(self):
-        """Open a password-form editor without ever displaying the saved key."""
+    def _build_api_key_dialog(self):
+        """Build the warm frameless personal-API editor."""
         dialog = QDialog(self)
         dialog.setObjectName("apiKeyDialog")
-        dialog.setWindowTitle("配置 API Key")
         dialog.setModal(True)
-        dialog.setFixedWidth(500)
+        dialog.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
+        dialog.setAttribute(Qt.WA_TranslucentBackground, True)
+        dialog.setFixedWidth(510)
         dialog.setStyleSheet("""
-            QDialog#apiKeyDialog {
-                background:#fff8ec;
-                color:#65483b;
+            QDialog#apiKeyDialog { background:transparent; }
+            QFrame#apiKeyCard {
+                background:#fff9f4; color:#704b3c;
+                border:1px solid #edcfc2; border-radius:24px;
                 font-family:'Microsoft YaHei',sans-serif;
                 font-size:16px;
             }
-            QLabel { color:#76584b; }
+            QLabel { color:#704b3c; }
+            QLabel#apiTitle { font-size:21px; font-weight:800; }
+            QLabel#apiStatus {
+                background:#fff1cc; color:#8b684d;
+                border:1px solid #efdba6; border-radius:13px;
+                padding:9px 11px; font-size:13px;
+            }
             QLabel#keyHint {
-                color:#aa8170;
-                font-size:13px;
+                color:#a47b6b; font-size:13px;
+            }
+            QLabel#apiModelCard {
+                background:#f7d7b5; color:#704b3c;
+                border:1px solid #e9c49f; border-radius:14px;
+                padding:10px 12px; font-weight:700;
             }
             QLineEdit {
-                background:#fffdf8;
-                border:1px solid #e9c8ae;
-                border-radius:12px;
+                background:#fffdf9; border:1px solid #e8cabe;
+                border-radius:14px;
                 padding:10px 12px;
                 font-size:16px;
             }
-            QLineEdit:focus { border:2px solid #f19a7e; }
+            QLineEdit:focus { border:2px solid #f3b8ad; }
+            QComboBox {
+                background:#fffdf9; color:#704b3c;
+                border:1px solid #e8cabe; border-radius:14px;
+                padding:9px 12px;
+            }
+            QComboBox QAbstractItemView {
+                background:#fff9f4; color:#704b3c;
+                border:1px solid #edcfc2;
+                selection-background-color:#f8dcd7;
+                selection-color:#704b3c; outline:0;
+            }
             QPushButton {
-                background:#fff4e9;
-                color:#8a6251;
-                border:1px solid #e9c8ae;
-                border-radius:10px;
-                padding:8px 15px;
+                min-height:36px; padding:0 16px;
+                background:#fffdf9; color:#7d5a4c;
+                border:1px solid #e7cec1; border-radius:18px;
                 font-weight:700;
             }
-            QPushButton:hover { background:#ffe4d7; }
+            QPushButton:hover { background:#f8dcd7; }
             QPushButton#saveKey {
-                color:white;
-                background:#f28f76;
-                border-color:#f28f76;
+                color:#704b3c; background:#f8dcd7;
+                border-color:#efc4bb;
             }
-            QPushButton#saveKey:hover { background:#e98169; }
-            QPushButton#removeKey { color:#c56868; }
+            QPushButton#saveKey:hover { background:#f3c9c1; }
+            QPushButton#removeKey { color:#a66c62; background:#fff1e8; }
         """)
 
-        title = QLabel("🔑 让小狗连接 AI")
-        title.setStyleSheet(
-            "font-size:20px;font-weight:800;color:#7a4d3b;"
-        )
+        card = QFrame()
+        card.setObjectName("apiKeyCard")
+        title = QLabel("自定义聊天")
+        title.setObjectName("apiTitle")
+        title.setFont(independent_pixel_font(21, QFont.Bold))
         source = ai.get_api_key_source()
         if source == "environment":
-            status_text = (
-                "已检测到系统环境变量，它会优先于这里保存的 Key。"
-            )
+            status_text = "正在使用系统环境变量中的 Key。"
         elif source == "config":
-            status_text = "本机已经保存了 API Key，输入新 Key 即可替换。"
+            status_text = "本机已保存 Key，输入新内容可替换。"
         else:
-            status_text = "输入你的智谱 API Key，保存后下一次聊天立即生效。"
+            status_text = "填写智谱 API Key 后即可使用图文聊天。"
         status = QLabel(status_text)
+        status.setObjectName("apiStatus")
+        status.setFont(independent_pixel_font(15))
         status.setWordWrap(True)
 
+        model_label = QLabel("聊天模型")
+        model_label.setFont(independent_pixel_font(18, QFont.Bold))
+        model_ids = list(ai.PERSONAL_MODELS)
+        model_selector = None
+        if len(model_ids) == 1:
+            model_id = model_ids[0]
+            model_widget = QLabel(ai.PERSONAL_MODELS[model_id])
+            model_widget.setObjectName("apiModelCard")
+            model_widget.setFont(independent_pixel_font(17, QFont.Bold))
+        else:
+            model_selector = QComboBox()
+            for model_id, display_name in ai.PERSONAL_MODELS.items():
+                model_selector.addItem(display_name, model_id)
+            current_index = model_selector.findData(ai.load_config().get("model"))
+            model_selector.setCurrentIndex(max(0, current_index))
+            model_widget = model_selector
+
         key_edit = QLineEdit()
+        key_edit.setFont(independent_pixel_font(17))
         key_edit.setEchoMode(QLineEdit.Password)
-        key_edit.setPlaceholderText("请输入新的 API Key")
+        key_edit.setPlaceholderText("输入 API Key")
         key_edit.setClearButtonEnabled(True)
 
-        privacy = QLabel(
-            "Key 只保存在当前电脑的用户数据目录中，界面不会回显完整内容。"
-        )
+        privacy = QLabel("Key 只保存在当前电脑，不会显示完整内容。")
         privacy.setObjectName("keyHint")
+        privacy.setFont(independent_pixel_font(15))
         privacy.setWordWrap(True)
 
         show_btn = QPushButton("按住显示")
@@ -916,11 +1297,14 @@ class ChatWindow(QWidget):
         save_btn.setCursor(Qt.PointingHandCursor)
 
         def accept_key():
-            if key_edit.text().strip():
+            if key_edit.text().strip() or ai.get_api_key_source() != "none":
                 dialog.accept()
                 return
-            status.setText("请先输入 API Key，再点击保存。")
-            status.setStyleSheet("color:#cf5f5f;font-weight:700;")
+            status.setText("请先输入 API Key。")
+            status.setStyleSheet(
+                "background:#f8dcd7;color:#965f57;border:1px solid #efc4bb;"
+                "border-radius:13px;padding:9px 11px;font-weight:700;"
+            )
             key_edit.setFocus()
 
         save_btn.clicked.connect(accept_key)
@@ -930,6 +1314,9 @@ class ChatWindow(QWidget):
         remove_btn.setCursor(Qt.PointingHandCursor)
         remove_btn.setVisible(ai.load_config().get("api_key", "") != "")
         remove_btn.clicked.connect(lambda: dialog.done(2))
+        for button in (show_btn, cancel_btn, save_btn, remove_btn):
+            button.setFont(independent_pixel_font(17, QFont.Bold))
+            button.setMinimumHeight(40)
 
         key_row = QHBoxLayout()
         key_row.setSpacing(8)
@@ -943,90 +1330,69 @@ class ChatWindow(QWidget):
         button_row.addWidget(cancel_btn)
         button_row.addWidget(save_btn)
 
-        layout = QVBoxLayout(dialog)
-        layout.setContentsMargins(22, 20, 22, 20)
-        layout.setSpacing(12)
-        layout.addWidget(title)
-        layout.addWidget(status)
-        layout.addLayout(key_row)
-        layout.addWidget(privacy)
-        layout.addLayout(button_row)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(24, 22, 24, 22)
+        card_layout.setSpacing(12)
+        card_layout.addWidget(title)
+        card_layout.addWidget(status)
+        card_layout.addWidget(model_label)
+        card_layout.addWidget(model_widget)
+        card_layout.addLayout(key_row)
+        card_layout.addWidget(privacy)
+        card_layout.addLayout(button_row)
+        outer = QVBoxLayout(dialog)
+        outer.setContentsMargins(8, 8, 8, 8)
+        outer.addWidget(card)
         key_edit.setFocus()
+
+        dialog.key_edit = key_edit
+        dialog.status_label = status
+        dialog.model_selector = model_selector
+        dialog.selected_model_id = (
+            model_ids[0] if len(model_ids) == 1 else None
+        )
+        return dialog
+
+    def configure_api_key(self, activate_personal=False):
+        """Open the warm API editor without displaying the saved key."""
+        ai.mark_personal_setup_seen()
+        self._refresh_ai_tool_buttons()
+        dialog = self._build_api_key_dialog()
 
         result = dialog.exec_()
         if result == QDialog.Accepted:
-            new_key = key_edit.text().strip()
-            if not new_key:
-                QMessageBox.warning(
-                    self, "API Key 未保存", "请输入 API Key 后再保存。"
-                )
+            new_key = dialog.key_edit.text().strip()
+            if not new_key and ai.get_api_key_source() == "none":
                 return
             try:
-                ai.set_api_key(new_key)
-            except Exception as exc:
-                QMessageBox.warning(
-                    self, "保存失败",
-                    f"无法保存 API Key：{exc}"
-                )
+                if new_key:
+                    ai.set_api_key(new_key)
+                model_id = dialog.selected_model_id
+                if dialog.model_selector is not None:
+                    model_id = dialog.model_selector.currentData()
+                ai.set_model(model_id)
+                ai.set_chat_mode("personal")
+            except Exception:
+                self.chat_notice.setText("保存失败，请稍后再试。")
+                self.chat_notice.show()
                 return
             self._refresh_ai_tool_buttons()
-            note = "API Key 已保存，下一次聊天会立即使用。"
-            if ai.get_api_key_source() == "environment":
-                note = (
-                    "本机备用 Key 已保存；当前仍优先使用系统环境变量。"
-                )
-            QMessageBox.information(self, "保存成功", note)
         elif result == 2:
-            choice = QMessageBox.question(
-                self, "移除 API Key",
-                "确定移除保存在这台电脑上的 API Key 吗？",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No,
+            confirm = PetpetConfirmDialog(
+                self,
+                title="移除 API Key",
+                message="要移除保存在这台电脑上的 Key 吗？",
+                accept_text="移除",
+                reject_text="保留",
             )
-            if choice == QMessageBox.Yes:
+            if confirm.exec_() == QDialog.Accepted:
                 try:
                     ai.set_api_key("")
-                except Exception as exc:
-                    QMessageBox.warning(
-                        self, "移除失败",
-                        f"无法移除 API Key：{exc}"
-                    )
+                except Exception:
+                    self.chat_notice.setText("移除失败，请稍后再试。")
+                    self.chat_notice.show()
                     return
                 self._refresh_ai_tool_buttons()
-
-    def show_model_menu(self):
-        menu = QMenu(self)
-        menu.setStyleSheet("""
-            QMenu {
-                background:#fffaf3;
-                color:#76584b;
-                border:1px solid #e9c8ae;
-                border-radius:10px;
-                padding:6px;
-                font-size:15px;
-            }
-            QMenu::item {
-                border-radius:7px;
-                padding:8px 24px 8px 12px;
-            }
-            QMenu::item:selected { background:#ffe2d4; }
-            QMenu::indicator { width:14px; height:14px; }
-        """)
-        current = ai.get_model()
-        for model_id, display_name in ai.SUPPORTED_MODELS.items():
-            action = QAction(display_name, menu)
-            action.setCheckable(True)
-            action.setChecked(model_id == current)
-            action.triggered.connect(
-                lambda checked=False, selected=model_id:
-                self.select_model(selected)
-            )
-            menu.addAction(action)
-        menu.exec_(
-            self.model_btn.mapToGlobal(
-                QPoint(0, self.model_btn.height() + 4)
-            )
-        )
 
     def select_model(self, model_id):
         try:
@@ -1044,7 +1410,11 @@ class ChatWindow(QWidget):
         if exclude_last_assistant and hs and hs[-1]["role"] == "assistant":
             hs = hs[:-1]
         return [
-            (str(item.get("role", "assistant")), str(item.get("content", "")))
+            (
+                str(item.get("role", "assistant")),
+                str(item.get("content", "")),
+                item.get("image"),
+            )
             for item in hs
         ]
 
@@ -1053,6 +1423,101 @@ class ChatWindow(QWidget):
         if viewport_width <= 1:
             viewport_width = self.width() - 32
         return max(240, int(viewport_width * 0.72))
+
+    def _avatar_pixmap(self, role, size=42):
+        """Build a circular desktop-pet or player avatar pixmap."""
+        source = "default"
+        image = QImage()
+        if role == "assistant":
+            source = os.path.join(POSES_DIR, "idle.png")
+            image = QImage(source)
+        else:
+            player_path = ai.get_player_avatar_path()
+            if os.path.isfile(player_path):
+                source = player_path
+                image = QImage(player_path)
+
+        canvas = QPixmap(size, size)
+        canvas.fill(Qt.transparent)
+        painter = QPainter(canvas)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        path = QPainterPath()
+        path.addEllipse(QRectF(0, 0, size, size))
+        painter.setClipPath(path)
+        painter.fillRect(canvas.rect(), QColor("#f3ded0"))
+        if not image.isNull():
+            if role == "assistant":
+                edge = min(image.width(), max(1, int(image.height() * 0.68)))
+                source_rect = QRect(
+                    (image.width() - edge) // 2,
+                    max(0, int(image.height() * 0.04)),
+                    edge,
+                    edge,
+                )
+            else:
+                edge = min(image.width(), image.height())
+                source_rect = QRect(
+                    (image.width() - edge) // 2,
+                    (image.height() - edge) // 2,
+                    edge,
+                    edge,
+                )
+            painter.drawImage(QRect(0, 0, size, size), image, source_rect)
+        else:
+            painter.setBrush(QColor("#d99a7f"))
+            painter.setPen(Qt.NoPen)
+            painter.drawEllipse(QRectF(size * .34, size * .18,
+                                       size * .32, size * .32))
+            painter.drawEllipse(QRectF(size * .19, size * .52,
+                                       size * .62, size * .55))
+        painter.setClipping(False)
+        painter.setBrush(Qt.NoBrush)
+        painter.setPen(QPen(QColor("#e4c5b5"), 2))
+        painter.drawEllipse(QRectF(1, 1, size - 2, size - 2))
+        painter.end()
+        return canvas, source
+
+    def _chat_avatar(self, role):
+        avatar = QLabel()
+        avatar.setObjectName("chatAvatar")
+        avatar.setProperty("avatarRole", role)
+        avatar.setFixedSize(42, 42)
+        pixmap, source = self._avatar_pixmap(role)
+        avatar.setProperty("avatarSource", source)
+        avatar.setPixmap(pixmap)
+        avatar.setAlignment(Qt.AlignCenter)
+        return avatar
+
+    def show_player_avatar_menu(self):
+        """Open the warm player-avatar action card."""
+        self._avatar_popup = PetpetPopupMenu(self)
+        self._avatar_popup.add_action("选择头像", self.select_player_avatar)
+        self._avatar_popup.add_action("恢复默认", self.reset_player_avatar)
+        self._avatar_popup.popup_below(self.avatar_btn)
+
+    def select_player_avatar(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "选择我的头像",
+            "",
+            "图片文件 (*.png *.jpg *.jpeg *.webp)",
+        )
+        if not path:
+            return
+        try:
+            ai.prepare_player_avatar(path)
+        except (OSError, ValueError) as exc:
+            QMessageBox.warning(self, "头像无法使用", str(exc))
+            return
+        self._set_log_messages(self._displayed_messages)
+
+    def reset_player_avatar(self):
+        try:
+            ai.clear_player_avatar()
+        except OSError as exc:
+            QMessageBox.warning(self, "恢复失败", f"无法恢复默认头像：{exc}")
+            return
+        self._set_log_messages(self._displayed_messages)
 
     def _set_log_messages(self, messages):
         """Render actual rounded message widgets instead of rich-text blocks."""
@@ -1076,13 +1541,16 @@ class ChatWindow(QWidget):
             self.log_layout.addWidget(empty)
         else:
             width = self._message_width()
-            for role, text in self._displayed_messages:
+            for message in self._displayed_messages:
+                role, text = message[:2]
+                image = message[2] if len(message) > 2 else None
                 row = QWidget()
                 row_layout = QHBoxLayout(row)
                 row_layout.setContentsMargins(0, 3, 0, 3)
-                row_layout.setSpacing(0)
+                row_layout.setSpacing(8)
 
-                bubble = QLabel(text if role == "user" else f"🐶 {text}")
+                display_text = text if role == "user" else ai.clean_assistant_reply(text)
+                bubble = QLabel(display_text)
                 bubble.setObjectName("chatMessage")
                 bubble.setWordWrap(True)
                 bubble.setTextInteractionFlags(Qt.TextSelectableByMouse)
@@ -1092,17 +1560,50 @@ class ChatWindow(QWidget):
                     bubble.setProperty("messageRole", "user")
                     bubble.setStyleSheet(
                         f"background:#fbf1ec;color:#704f43;font-size:{chat_font_size}px;"
-                        "border:1px solid #ead9d1;border-radius:14px;"
+                        "border:1px solid #ead9d1;border-radius:18px;"
                         "padding:9px 13px;"
                     )
                     row_layout.addStretch(1)
-                    row_layout.addWidget(bubble)
+                    if isinstance(image, dict):
+                        preview_path = ai.resolve_history_image(
+                            image.get("thumbnail")
+                        )
+                        preview = QPixmap(preview_path) if preview_path else QPixmap()
+                        if not preview.isNull():
+                            image_label = QLabel()
+                            image_label.setObjectName("chatImage")
+                            image_label.setPixmap(preview.scaled(
+                                min(width, 190), 150,
+                                Qt.KeepAspectRatio, Qt.SmoothTransformation,
+                            ))
+                            image_label.setStyleSheet(
+                                "background:#fffaf6;border:1px solid #e7cdc0;"
+                                "border-radius:12px;padding:3px;"
+                            )
+                            image_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                            image_box = QWidget()
+                            image_layout = QVBoxLayout(image_box)
+                            image_layout.setContentsMargins(0, 0, 0, 0)
+                            image_layout.setSpacing(4)
+                            image_layout.addWidget(image_label, 0, Qt.AlignRight)
+                            image_layout.addWidget(bubble, 0, Qt.AlignRight)
+                            row_layout.addWidget(image_box)
+                        else:
+                            row_layout.addWidget(bubble)
+                    else:
+                        row_layout.addWidget(bubble)
+                    row_layout.addWidget(
+                        self._chat_avatar("user"), 0, Qt.AlignTop
+                    )
                 else:
                     bubble.setProperty("messageRole", "assistant")
                     bubble.setStyleSheet(
                         f"background:#f5e9df;color:#55433a;font-size:{chat_font_size}px;"
-                        "border:1px solid #dfc9ba;border-radius:14px;"
+                        "border:1px solid #dfc9ba;border-radius:18px;"
                         "padding:9px 13px;"
+                    )
+                    row_layout.addWidget(
+                        self._chat_avatar("assistant"), 0, Qt.AlignTop
                     )
                     row_layout.addWidget(bubble)
                     row_layout.addStretch(1)
@@ -1147,36 +1648,55 @@ class ChatWindow(QWidget):
         if self.busy:
             return
         text = self.input.text().strip()
-        if not text:
+        if not text and not self._pending_image:
             return
+        if ai.get_chat_mode() == "default" and not ai.has_default_chat_consent():
+            choice = QMessageBox.question(
+                self, "免费聊天说明",
+                "默认聊天会将文字发送至限时免费模型，内容可能用于模型改进。是否同意并开始聊天？",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+            )
+            if choice != QMessageBox.Yes:
+                return
+            ai.set_default_chat_consent(True)
+        self.chat_notice.hide()
         # A real sent message counts as a chat interaction. Merely opening
         # and closing the panel no longer grants affection.
         progression.record_action(self.pet.state, "chats_opened")
         save_state(self.pet.state)
         self.input.clear()
         # add user bubble immediately
-        self._pending_user = text
+        attachment = self._pending_image
+        display_text = text
+        if attachment and not display_text:
+            display_text = f"我发送了一张图片：{attachment['filename']}"
+        self._pending_user = display_text
         self._streaming = ""
         self._set_log_messages(
             self._history_messages()
-            + [("user", text), ("assistant", "…")]
+            + [("user", display_text,
+                attachment.get("history_image") if attachment else None),
+               ("assistant", "…")]
         )
         self.busy = True
         self.send_btn.setEnabled(False)
+        self._refresh_ai_tool_buttons()
         self.input.setPlaceholderText(f"{self._pet_name()} 正在思考…")
         # run AI in background thread so GUI doesn't freeze
-        t = threading.Thread(target=self._ai_thread, args=(text,), daemon=True)
+        t = threading.Thread(
+            target=self._ai_thread, args=(text, attachment), daemon=True
+        )
         t.start()
 
-    def _ai_thread(self, user_text):
+    def _ai_thread(self, user_text, image_attachment=None):
         full = []
         err = None
         for kind, payload in ai.chat_stream(
                 user_text, mem=self.mem,
-                on_token=lambda chunk: bridge.token.emit(chunk),
-                pet_name=self._pet_name()):
+                pet_name=self._pet_name(), image_attachment=image_attachment):
             if kind == "token":
                 full.append(payload)
+                bridge.token.emit(payload)
             elif kind == "done":
                 full = [payload]
                 break
@@ -1184,9 +1704,12 @@ class ChatWindow(QWidget):
                 err = payload
                 break
         if err:
-            reply = ai.fallback_reply(
-                user_text, err, pet_name=self._pet_name()
-            )
+            if err in ai.DEFAULT_CHAT_ERRORS:
+                reply = err
+            else:
+                reply = ai.fallback_reply(
+                    user_text, err, pet_name=self._pet_name()
+                )
             bridge.error.emit(reply)
         else:
             bridge.done.emit("".join(full))
@@ -1197,21 +1720,28 @@ class ChatWindow(QWidget):
         # The history has not been saved yet, so render the pending pair.
         self._set_log_messages(
             self._history_messages()
-            + [("user", self._pending_user),
-               ("assistant", self._streaming + "▍")]
+            + [("user", self._pending_user,
+                self._pending_image.get("history_image")
+                if self._pending_image else None),
+               ("assistant", ai.clean_assistant_reply(self._streaming) + "▍")]
         )
 
     def on_done(self, full):
         # commit to memory
-        ai.append_history(self.mem, "user", self._pending_user)
+        full = ai.clean_assistant_reply(full) or "我在呢，你再和我说一点吧。"
+        image = self._pending_image.get("history_image") \
+            if self._pending_image else None
+        ai.append_history(self.mem, "user", self._pending_user, image=image)
         ai.append_history(self.mem, "assistant", full)
         progression.record_action(self.pet.state, "ai_replies")
         save_state(self.pet.state)
         self.mem = ai.load_memory()
         self._pending_user = None
+        self.clear_pending_image(keep_history=True)
         self._streaming = ""
         self.busy = False
         self.send_btn.setEnabled(True)
+        self._refresh_ai_tool_buttons()
         self.input.setPlaceholderText(
             f"跟 {self._pet_name()} 说点什么…"
         )
@@ -1222,42 +1752,92 @@ class ChatWindow(QWidget):
         self.pet.say(short, 3000)
 
     def on_error(self, reply):
+        if reply == "default_quota_exhausted":
+            self.chat_notice.setText("今日免费次数已用完，可切换自定义。")
+            self.chat_notice.show()
+            self._finish_chat_request(keep_history_image=False)
+            self.personal_mode_btn.setFocus()
+            return
+        if reply == "default_consent_required":
+            self.chat_notice.setText("需要先同意免费聊天说明，才能发送消息。")
+            self.chat_notice.show()
+            self._finish_chat_request(keep_history_image=False)
+            return
+        if reply == "personal_key_required_for_image":
+            self.chat_notice.setText(
+                "图片聊天需要配置自己的 API Key，并使用 GLM-4.6V-Flash。"
+            )
+            self.chat_notice.show()
+            self._finish_chat_request(keep_history_image=False)
+            self.personal_mode_btn.setFocus()
+            return
+        if reply == "personal_api_key_required":
+            self.chat_notice.setText(
+                "自己配置 API 模式还没有可用的 Key，请点击聊天模式完成配置。"
+            )
+            self.chat_notice.show()
+            self._finish_chat_request(keep_history_image=False)
+            self.personal_mode_btn.setFocus()
+            return
+        if reply == "default_provider_unavailable":
+            self.chat_notice.setText("免费聊天暂不可用，请稍后再试。")
+            self.chat_notice.show()
+            self._finish_chat_request(keep_history_image=False)
+            return
+        reply = ai.clean_assistant_reply(reply) or "我在呢，你再和我说一点吧。"
         if self._pending_user:
-            ai.append_history(self.mem, "user", self._pending_user)
+            image = self._pending_image.get("history_image") \
+                if self._pending_image else None
+            ai.append_history(self.mem, "user", self._pending_user, image=image)
             ai.append_history(self.mem, "assistant", reply)
             progression.record_action(self.pet.state, "ai_replies")
             save_state(self.pet.state)
         self.mem = ai.load_memory()
         self._pending_user = None
+        self.clear_pending_image(keep_history=True)
         self._streaming = ""
         self.busy = False
         self.send_btn.setEnabled(True)
+        self._refresh_ai_tool_buttons()
         self.input.setPlaceholderText(
             f"跟 {self._pet_name()} 说点什么…"
         )
         self._set_log_messages(self._history_messages())
         self.pet.say(reply[:30], 2000)
 
+    def _finish_chat_request(self, keep_history_image=False):
+        """Return the composer to an interactive state after a terminal event."""
+        self._pending_user = None
+        self.clear_pending_image(keep_history=keep_history_image)
+        self._streaming = ""
+        self.busy = False
+        self.send_btn.setEnabled(True)
+        self._refresh_ai_tool_buttons()
+        self.input.setPlaceholderText(
+            f"跟 {self._pet_name()} 说点什么…"
+        )
+        self._set_log_messages(self._history_messages())
+
     def confirm_clear_memory(self):
         """Ask for confirmation in the pet's voice; on yes, wipe memory."""
         if self.busy:
             return
-        msg = QMessageBox(self)
-        msg.setWindowTitle(f"{self._pet_name()} · 清除记忆")
-        msg.setIcon(QMessageBox.Question)
-        msg.setText("主人，我会忘记你的，还是想要和我重新相识一次？")
-        msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-        msg.button(QMessageBox.Yes).setText("重新相识")
-        msg.button(QMessageBox.No).setText("不要，继续陪着我")
-        msg.setDefaultButton(QMessageBox.No)
-        choice = msg.exec_()
-        if choice == QMessageBox.Yes:
+        dialog = PetpetConfirmDialog(
+            self,
+            title="清除记忆",
+            message="主人，我会忘记你的。要和我重新认识一次吗？",
+            accept_text="重新相识",
+            reject_text="继续陪着我",
+        )
+        if dialog.exec_() == QDialog.Accepted:
             # wipe memory
             try:
                 if os.path.exists(ai.MEMORY_PATH):
                     os.remove(ai.MEMORY_PATH)
             except Exception:
                 pass
+            ai.remove_history_thumbnails()
+            self.clear_pending_image()
             self.mem = ai._default_memory()
             ai.save_memory(self.mem)
             self._set_log_messages([
@@ -1491,6 +2071,54 @@ class StepperControl(QWidget):
         self.plus.setToolTip(text)
 
 
+class ThreeLevelSlider(QWidget):
+    """A friendly slider constrained to exactly three named preferences."""
+
+    def __init__(self, labels, parent=None):
+        super().__init__(parent)
+        if len(labels) != 3:
+            raise ValueError("ThreeLevelSlider requires exactly three labels")
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+        self.slider = QSlider(Qt.Horizontal)
+        self.slider.setObjectName("threeLevelSlider")
+        self.slider.setRange(0, 2)
+        self.slider.setSingleStep(1)
+        self.slider.setPageStep(1)
+        self.slider.setTickInterval(1)
+        self.slider.setCursor(Qt.PointingHandCursor)
+        layout.addWidget(self.slider)
+
+        labels_row = QHBoxLayout()
+        labels_row.setContentsMargins(0, 0, 0, 0)
+        labels_row.setSpacing(4)
+        self.level_buttons = []
+        for index, text in enumerate(labels):
+            button = QPushButton(text)
+            button.setObjectName("threeLevelOption")
+            button.setCheckable(True)
+            button.setCursor(Qt.PointingHandCursor)
+            button.clicked.connect(
+                lambda _checked=False, value=index: self.setValue(value)
+            )
+            labels_row.addWidget(button, 1)
+            self.level_buttons.append(button)
+        layout.addLayout(labels_row)
+        self.slider.valueChanged.connect(self._refresh_selection)
+        self._refresh_selection(self.slider.value())
+
+    def _refresh_selection(self, value):
+        for index, button in enumerate(self.level_buttons):
+            button.setChecked(index == value)
+
+    def value(self):
+        return self.slider.value()
+
+    def setValue(self, value):
+        self.slider.setValue(max(0, min(2, int(value))))
+
+
 class SettingsWindow(QWidget):
     """Tunable settings panel — chat window size, decay rates, chatter frequency, etc."""
     CHANGED = pyqtSignal()
@@ -1498,6 +2126,28 @@ class SettingsWindow(QWidget):
     PREFERRED_HEIGHT = 960
     COMPACT_MIN_WIDTH = 648
     COMPACT_MIN_HEIGHT = 708
+
+    HEALTH_PRESETS = (
+        {"remind_drink_min": 120, "remind_rest_min": 180,
+         "remind_stand_min": 90},
+        {"remind_drink_min": 60, "remind_rest_min": 90,
+         "remind_stand_min": 45},
+        {"remind_drink_min": 40, "remind_rest_min": 60,
+         "remind_stand_min": 30},
+    )
+    PERSONALITY_PRESETS = (
+        {"needy_speak_chance": 0.05, "ask_weight_normal": 0.2,
+         "ask_weight_needy": 0.25, "nudge_idle_min": 3600,
+         "nudge_gap_min": 21600},
+        {"needy_speak_chance": DEFAULT_SETTINGS["needy_speak_chance"],
+         "ask_weight_normal": DEFAULT_SETTINGS["ask_weight_normal"],
+         "ask_weight_needy": DEFAULT_SETTINGS["ask_weight_needy"],
+         "nudge_idle_min": DEFAULT_SETTINGS["nudge_idle_min"],
+         "nudge_gap_min": DEFAULT_SETTINGS["nudge_gap_min"]},
+        {"needy_speak_chance": 0.3, "ask_weight_normal": 1.0,
+         "ask_weight_needy": 1.25, "nudge_idle_min": 900,
+         "nudge_gap_min": 3600},
+    )
 
     FIELDS = [
         # (key, label, min, max, step, hint)
@@ -1541,6 +2191,7 @@ class SettingsWindow(QWidget):
         self.setWindowFlags(
             Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
         )
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setObjectName("settingsWindow")
         self.setWindowTitle("温馨设置")
         self._build_ui()
@@ -1558,32 +2209,38 @@ class SettingsWindow(QWidget):
         )
 
     def show_near_pet(self):
-        """Show settings beside the active indoor or outdoor pet."""
-
-        self.move(self.pet.interface_window_position(self.size(), gap=16))
+        """Show settings centered on the active pet's screen."""
+        screen = self.pet.interface_screen_rect()
+        window_size = self.size()
+        self.move(QPoint(
+            screen.x() + (screen.width() - window_size.width()) // 2,
+            screen.y() + (screen.height() - window_size.height()) // 2,
+        ))
         self.show()
         self.raise_()
         self.activateWindow()
 
     def _apply_font(self):
         fs = int(self.s.get("ui_font_size", 24))
-        body_fs = settings_font_px(fs)
-        title_fs = max(1, int(round(body_fs * 24 / 22)))
-        subtitle_fs = max(1, int(round(body_fs * 14 / 22)))
-        status_fs = max(1, int(round(body_fs * 13 / 22)))
-        detail_fs = max(1, int(round(body_fs * 12 / 22)))
-        step_fs = max(1, int(round(body_fs * 16 / 22)))
+        font_scale = fs / 24.0
+        title_fs = max(1, int(round(31 * font_scale)))
+        group_fs = max(1, int(round(25 * font_scale)))
+        body_fs = max(1, int(round(23 * font_scale)))
+        detail_fs = max(1, int(round(20 * font_scale)))
         self.setStyleSheet(f"""
             QWidget {{
                 background:transparent;
                 font-family:'Microsoft YaHei',sans-serif;
-                font-size:{body_fs}px;
                 color:#65483b;
             }}
             QWidget#settingsWindow {{
+                background:transparent;
+                border:0;
+            }}
+            QFrame#settingsCard {{
                 background:#fff8ec;
                 border:1px solid #e7c4ad;
-                border-radius:18px;
+                border-radius:24px;
             }}
             QScrollArea, QScrollArea > QWidget > QWidget {{
                 background:transparent;
@@ -1591,28 +2248,23 @@ class SettingsWindow(QWidget):
             }}
             QLabel {{ background:transparent; }}
             QLabel#settingsTitle {{
-                font-size:{title_fs}px;
                 font-weight:900;
                 color:#754b3a;
             }}
             QLabel#settingsSubtitle {{
                 color:#a27a68;
-                font-size:{subtitle_fs}px;
             }}
             QLabel#settingsStatus {{
                 color:#cf765e;
-                font-size:{status_fs}px;
                 font-weight:800;
                 padding:0;
             }}
             QLabel#switchState {{
                 color:#a36b58;
-                font-size:{detail_fs}px;
                 font-weight:700;
             }}
             QLabel#settingDescription {{
                 color:#aa8270;
-                font-size:{detail_fs}px;
             }}
             QComboBox, QDoubleSpinBox, QSpinBox {{
                 background:#fffdf9;
@@ -1652,7 +2304,6 @@ class SettingsWindow(QWidget):
                 border:1px solid #efc8b3;
                 border-radius:10px;
                 padding:0;
-                font-size:{step_fs}px;
                 font-weight:900;
             }}
             QPushButton#stepButton:hover {{
@@ -1666,7 +2317,6 @@ class SettingsWindow(QWidget):
                 border:1px solid #efc6b8;
                 border-radius:16px;
                 padding:0;
-                font-size:26px;
                 font-weight:600;
             }}
             QPushButton#closeButton:hover {{
@@ -1681,6 +2331,26 @@ class SettingsWindow(QWidget):
             QPushButton#reset {{ background:#d7b9a6; color:#6d5145; }}
             QPushButton#reset:hover {{ background:#e2c8b8; }}
             QPushButton#reset:pressed {{ background:#c9a892; }}
+            QPushButton#threeLevelOption {{
+                min-height:38px; padding:0; border-radius:16px;
+                color:#9a796b; background:#f8ebe4;
+                border:1px solid transparent;
+            }}
+            QPushButton#threeLevelOption:checked {{
+                color:#70483c; background:#f8dcd7;
+                border-color:#efc4bb;
+            }}
+            QSlider#threeLevelSlider {{ min-height:24px; max-height:24px; }}
+            QSlider#threeLevelSlider::groove:horizontal {{
+                height:8px; background:#efdcd2; border-radius:4px;
+            }}
+            QSlider#threeLevelSlider::sub-page:horizontal {{
+                background:#edb8ae; border-radius:4px;
+            }}
+            QSlider#threeLevelSlider::handle:horizontal {{
+                width:22px; margin:-7px 0; background:#fff9f4;
+                border:2px solid #df998b; border-radius:11px;
+            }}
             QGroupBox {{
                 background:#fffdf8;
                 border:1px solid #edcfb5;
@@ -1710,9 +2380,23 @@ class SettingsWindow(QWidget):
                 height:0;
             }}
         """)
+        self.setFont(independent_pixel_font(body_fs))
+        if hasattr(self, "title_label"):
+            self.title_label.setFont(independent_pixel_font(title_fs, QFont.Bold))
+        if hasattr(self, "subtitle_label"):
+            self.subtitle_label.setFont(independent_pixel_font(detail_fs))
+        for label in self.findChildren(QLabel, "settingsGroupTitle"):
+            label.setFont(independent_pixel_font(group_fs, QFont.Bold))
+        for label in self.findChildren(QLabel, "settingDescription"):
+            label.setFont(independent_pixel_font(detail_fs))
 
     def _build_ui(self):
-        root = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(8, 8, 8, 8)
+        self.settings_card = QFrame()
+        self.settings_card.setObjectName("settingsCard")
+        outer.addWidget(self.settings_card)
+        root = QVBoxLayout(self.settings_card)
         root.setContentsMargins(26, 18, 26, 18)
         root.setSpacing(8)
 
@@ -1722,16 +2406,16 @@ class SettingsWindow(QWidget):
         title_row = QHBoxLayout(title_bar)
         title_row.setContentsMargins(0, 0, 0, 0)
         title_row.setSpacing(10)
-        title = QLabel("🌼 温馨设置")
-        title.setObjectName("settingsTitle")
-        title.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self.title_label = QLabel("🌼 温馨设置")
+        self.title_label.setObjectName("settingsTitle")
+        self.title_label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
         close_button = QPushButton("×")
         close_button.setObjectName("closeButton")
         close_button.setCursor(Qt.PointingHandCursor)
         close_button.setToolTip("关闭温馨设置")
         close_button.setFixedSize(36, 36)
         close_button.clicked.connect(self.close)
-        title_row.addWidget(title)
+        title_row.addWidget(self.title_label)
         title_row.addStretch(1)
         title_row.addWidget(close_button)
         title_bar.mousePressEvent = self._title_bar_press
@@ -1739,9 +2423,9 @@ class SettingsWindow(QWidget):
         title_bar.mouseReleaseEvent = self._title_bar_release
         root.addWidget(title_bar)
 
-        subtitle = QLabel("每一项都会保存并立即应用，按需要慢慢调就好。")
-        subtitle.setObjectName("settingsSubtitle")
-        root.addWidget(subtitle)
+        self.subtitle_label = QLabel("选择适合你和小狗的陪伴方式。")
+        self.subtitle_label.setObjectName("settingsSubtitle")
+        root.addWidget(self.subtitle_label)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -1754,15 +2438,21 @@ class SettingsWindow(QWidget):
         content_layout.setAlignment(Qt.AlignTop)
 
         content_layout.addWidget(self._interface_group())
-        content_layout.addWidget(self._group("🌿 健康提醒", [
-            "remind_drink_min", "remind_rest_min", "remind_stand_min"
-        ]))
-        content_layout.addWidget(self._group("💬 日常互动", [
-            "needy_speak_chance", "ask_weight_normal", "ask_weight_needy"
-        ]))
-        content_layout.addWidget(self._group("✨ AI 主动陪伴", [
-            "nudge_idle_min", "nudge_gap_min"
-        ]))
+        content_layout.addWidget(self._preference_group(
+            "🌿 健康提醒",
+            "喝水、休息眼睛和起身活动都会保留，只调整提醒频率。",
+            "health_level", ("少", "适中", "多"),
+            ("remind_drink_min", "remind_rest_min", "remind_stand_min"),
+            self.HEALTH_PRESETS,
+        ))
+        content_layout.addWidget(self._preference_group(
+            "🐾 性格偏好",
+            "从安静陪伴到爱说话、爱提醒、爱主动找你。",
+            "personality_level", ("文静", "适中", "活泼"),
+            ("needy_speak_chance", "ask_weight_normal", "ask_weight_needy",
+             "nudge_idle_min", "nudge_gap_min"),
+            self.PERSONALITY_PRESETS,
+        ))
         scroll.setWidget(content)
         root.addWidget(scroll, 1)
 
@@ -1802,9 +2492,12 @@ class SettingsWindow(QWidget):
         event.accept()
 
     def _interface_group(self):
-        group = QGroupBox("🍑 界面、声音与更新")
+        group = QGroupBox()
         layout = QVBoxLayout(group)
         layout.setSpacing(9)
+        group_title = QLabel("🍑 界面体验")
+        group_title.setObjectName("settingsGroupTitle")
+        layout.addWidget(group_title)
 
         combo = QComboBox()
         combo.setMinimumWidth(220)
@@ -1844,6 +2537,23 @@ class SettingsWindow(QWidget):
             control_layout.addWidget(state)
             control_layout.addWidget(switch)
             self._add_row(layout, label, hint, control)
+        return group
+
+    def _preference_group(self, title, hint, key, labels, field_keys, presets):
+        group = QGroupBox()
+        layout = QVBoxLayout(group)
+        layout.setSpacing(8)
+        title_label = QLabel(title)
+        title_label.setObjectName("settingsGroupTitle")
+        description = QLabel(hint)
+        description.setObjectName("settingDescription")
+        description.setWordWrap(True)
+        control = ThreeLevelSlider(labels)
+        control.setValue(self._nearest_preset_index(field_keys, presets))
+        self.inputs[key] = control
+        layout.addWidget(title_label)
+        layout.addWidget(description)
+        layout.addWidget(control)
         return group
 
     def _group(self, title, keys):
@@ -1905,12 +2615,33 @@ class SettingsWindow(QWidget):
             if k == key: return label, mn, mx, step, hint
         return key, 0, 100, 1, ""
 
+    def _nearest_preset_index(self, keys, presets):
+        scales = {
+            key: max(
+                max(float(preset[key]) for preset in presets)
+                - min(float(preset[key]) for preset in presets),
+                1.0,
+            )
+            for key in keys
+        }
+
+        def distance(preset):
+            total = 0.0
+            for key in keys:
+                target = float(preset[key])
+                current = float(self.s.get(key, DEFAULT_SETTINGS.get(key, target)))
+                total += abs(current - target) / scales[key]
+            return total
+        return min(range(len(presets)), key=lambda index: distance(presets[index]))
+
     def apply(self):
         previous = dict(self.s)
         width, height = self.chat_size_combo.currentData()
         self.s["chat_width"] = int(width)
         self.s["chat_height"] = int(height)
         for key, control in self.inputs.items():
+            if key in {"health_level", "personality_level"}:
+                continue
             if isinstance(control, ToggleSwitch):
                 value = bool(control.isChecked())
             else:
@@ -1920,6 +2651,12 @@ class SettingsWindow(QWidget):
                     value = int(value)
                 elif isinstance(default, float):
                     value = float(value)
+            self.s[key] = value
+        for key, value in self.HEALTH_PRESETS[
+                self.inputs["health_level"].value()].items():
+            self.s[key] = value
+        for key, value in self.PERSONALITY_PRESETS[
+                self.inputs["personality_level"].value()].items():
             self.s[key] = value
         self.s.pop("chat_bubble_max", None)
         save_settings(self.s)
@@ -1942,6 +2679,12 @@ class SettingsWindow(QWidget):
             DEFAULT_SETTINGS["chat_height"],
         )
         for key, control in self.inputs.items():
+            if key == "health_level":
+                control.setValue(1)
+                continue
+            if key == "personality_level":
+                control.setValue(1)
+                continue
             value = DEFAULT_SETTINGS.get(key, 0)
             if isinstance(control, ToggleSwitch):
                 control.setChecked(bool(value))
@@ -1962,33 +2705,37 @@ class TutorialWindow(QWidget):
         (
             "🐶",
             "欢迎认识你的桌面伙伴",
-            "从今天开始，这只小狗会住在你的桌面上。\n"
-            "它会散步、撒娇、陪你聊天，也会记住你们一起度过的时间。",
+            "小狗会住在桌面上，拥有自己的状态和成长记录。\n"
+            "它会散步、撒娇、陪你聊天，也会记住一起度过的时间。",
         ),
         (
             "🖱️",
             "摸摸它，也可以带它走",
-            "单击小狗可以抚摸它，双击会打开聊天窗口。\n"
-            "按住左键拖动可以移动小狗，快速甩出去时它还会弹跳。\n"
-            "睡着后，按住左键左右晃几下，就能温柔地把它摇醒。",
+            "单击小狗可以抚摸，双击进入小屋，按住左键可以拖动。\n"
+            "睡着后按住左键左右晃几下，就能温柔地把它摇醒。",
         ),
         (
             "🌷",
-            "右键打开治愈互动",
-            "点击右键会显示状态卡和互动气泡，可以聊天、喂食、玩耍或睡觉。\n"
-            "点击“更多”可以进入设置、隐藏、教程等功能。",
+            "右键打开快捷菜单",
+            "右键会显示状态卡和快捷菜单：聊天、小屋、商店、互动和更多。\n"
+            "记录、成就、小游戏、设置和教程都在“更多”里。",
+        ),
+        (
+            "🏠",
+            "在小屋里自由生活",
+            "左键地面可以指定移动位置，右键小狗可以和它互动。\n"
+            "精力不足时，小狗会走到垫子旁边睡觉。",
         ),
         (
             "💬",
-            "聊天、设置与托盘",
-            "配置智谱 API Key 后，小狗就能在线陪你聊天；没有 Key 时也会使用本地话术。\n"
-            "托盘图标可以显示或隐藏小狗、检查更新、设置开机自启和退出。",
+            "聊天与陪伴偏好",
+            "聊天可以选择免费或自定义模式；自定义模式还能上传图片交流。\n"
+            "设置里可以选择健康提醒和性格偏好，不需要调整复杂数值。",
         ),
         (
             "🏷️",
             "最后，给小狗取个名字吧",
-            "这是它以后陪伴你时使用的名字，也会显示在聊天、状态档案和托盘中。\n"
-            "名字可以使用中文、英文、数字、空格、“-”、“_”或“·”，最多 12 个字符。",
+            "名字会显示在聊天和档案中，最多 12 个字符。",
         ),
     ]
 
@@ -2000,12 +2747,17 @@ class TutorialWindow(QWidget):
         self.setWindowFlags(
             Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
         )
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WA_DeleteOnClose, False)
         self.setObjectName("tutorialWindow")
         self.setWindowTitle("初次见面 · 新手教程")
-        self.setFixedSize(800, 680)
+        self.setFixedSize(740, 620)
         self.setStyleSheet("""
             QWidget#tutorialWindow {
+                background:transparent;
+                border:0;
+            }
+            QFrame#tutorialCard {
                 background:#fff8ec;
                 border:1px solid #e7c4ad;
                 border-radius:24px;
@@ -2013,25 +2765,21 @@ class TutorialWindow(QWidget):
                 font-family:'Microsoft YaHei',sans-serif;
             }
             QLabel { background:transparent; }
-            QLabel#tutorialIcon { font-size:%dpx; }
+            QLabel#tutorialIcon { }
             QLabel#tutorialTitle {
                 color:#754b3a;
-                font-size:%dpx;
                 font-weight:900;
             }
             QLabel#tutorialBody {
                 color:#8e6959;
-                font-size:%dpx;
                 line-height:1.6;
             }
             QLabel#tutorialProgress {
                 color:#e18d76;
-                font-size:%dpx;
                 letter-spacing:5px;
             }
             QLabel#nameHint {
                 color:#b36f5b;
-                font-size:%dpx;
                 font-weight:700;
             }
             QFrame#nameCard {
@@ -2045,7 +2793,6 @@ class TutorialWindow(QWidget):
                 border-radius:14px;
                 padding:12px 16px;
                 color:#65483b;
-                font-size:%dpx;
                 selection-background-color:#ffc9b8;
             }
             QLineEdit:focus { border-color:#f19a7f; }
@@ -2056,7 +2803,6 @@ class TutorialWindow(QWidget):
                 border-radius:17px;
                 background:#f28f76;
                 color:#ffffff;
-                font-size:%dpx;
                 font-weight:800;
             }
             QPushButton:hover { background:#f5a08a; }
@@ -2076,25 +2822,21 @@ class TutorialWindow(QWidget):
                 background:#ffebe3;
                 color:#a45d4e;
             }
-        """ % (
-            tutorial_font_px(88),
-            tutorial_font_px(38),
-            tutorial_font_px(28),
-            tutorial_font_px(23),
-            tutorial_font_px(20),
-            tutorial_font_px(28),
-            tutorial_font_px(22),
-        ))
+        """)
 
-        root = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(8, 8, 8, 8)
+        self.tutorial_card = QFrame()
+        self.tutorial_card.setObjectName("tutorialCard")
+        outer.addWidget(self.tutorial_card)
+        root = QVBoxLayout(self.tutorial_card)
         root.setContentsMargins(38, 28, 38, 30)
         root.setSpacing(14)
 
         top = QHBoxLayout()
         brand = QLabel("🌼 Pet陪它 · 新手教程")
-        brand.setStyleSheet(
-            "font-size:23px; font-weight:900; color:#93624f;"
-        )
+        brand.setFont(independent_pixel_font(18, QFont.Bold))
+        brand.setStyleSheet("font-weight:900; color:#93624f;")
         self.later_button = QPushButton("稍后再说")
         self.later_button.setObjectName("later")
         self.later_button.clicked.connect(self.close)
@@ -2117,14 +2859,15 @@ class TutorialWindow(QWidget):
         self.body_label.setObjectName("tutorialBody")
         self.body_label.setAlignment(Qt.AlignCenter)
         self.body_label.setWordWrap(True)
-        self.body_label.setMinimumHeight(132)
+        self.body_label.setMinimumHeight(58)
+        self.body_label.setMaximumHeight(92)
         root.addWidget(self.body_label)
 
         self.name_card = QFrame()
         self.name_card.setObjectName("nameCard")
         name_layout = QVBoxLayout(self.name_card)
-        name_layout.setContentsMargins(20, 15, 20, 15)
-        name_layout.setSpacing(7)
+        name_layout.setContentsMargins(20, 10, 20, 10)
+        name_layout.setSpacing(4)
         self.name_input = QLineEdit()
         self.name_input.setObjectName("petNameInput")
         self.name_input.setMaxLength(12)
@@ -2155,10 +2898,19 @@ class TutorialWindow(QWidget):
         controls.addWidget(self.next_button)
         root.addLayout(controls)
 
+        self.icon_label.setFont(independent_pixel_font(80))
+        self.title_label.setFont(independent_pixel_font(31, QFont.Bold))
+        self.body_label.setFont(independent_pixel_font(23))
+        self.progress_label.setFont(independent_pixel_font(20, QFont.Bold))
+        self.name_input.setFont(independent_pixel_font(23))
+        self.name_hint.setFont(independent_pixel_font(20, QFont.Bold))
+        for button in (self.later_button, self.back_button, self.next_button):
+            button.setFont(independent_pixel_font(22, QFont.Bold))
+
         self._refresh_page()
 
     def start(self):
-        """Restart the guide from page one and place it near the pet."""
+        """Restart the guide from page one and center it on the pet's screen."""
         self.page_index = 0
         current_name = self.pet.pet_name
         if (not self.pet.state.get("tutorial_completed", False)
@@ -2168,7 +2920,11 @@ class TutorialWindow(QWidget):
             self.name_input.setText(current_name)
         self.name_hint.clear()
         self._refresh_page()
-        self.move(self.pet.interface_window_position(self.size(), gap=16))
+        screen = self.pet.interface_screen_rect()
+        self.move(QPoint(
+            screen.x() + (screen.width() - self.width()) // 2,
+            screen.y() + (screen.height() - self.height()) // 2,
+        ))
         self.show()
         self.raise_()
         self.activateWindow()
@@ -2180,6 +2936,7 @@ class TutorialWindow(QWidget):
         self.title_label.setText(title)
         self.body_label.setText(body)
         self.name_card.setVisible(is_last)
+        self.body_label.setMaximumHeight(58 if is_last else 92)
         self.back_button.setVisible(self.page_index > 0)
         self.next_button.setText(
             "完成相遇" if is_last else "下一步"
@@ -2616,6 +3373,14 @@ class BubbleMenu(QWidget):
     ]
     PAGE_COLUMNS = {"primary": 5, "interaction": 4, "more": 5}
 
+    @staticmethod
+    def action_needs_attention(action, *, has_claimable,
+                               needs_personal_setup):
+        return (
+            (action in ("more", "achievements") and has_claimable)
+            or (action == "chat" and needs_personal_setup)
+        )
+
     def __init__(self, pet, page="primary"):
         super().__init__()
         self.pet = pet
@@ -2697,7 +3462,7 @@ class BubbleMenu(QWidget):
 
     @staticmethod
     def needs_api_key_configuration():
-        return ai.get_api_key_source() == "none"
+        return ai.needs_personal_setup_reminder()
 
     def paintEvent(self, e):
         p = QPainter(self)
@@ -2769,10 +3534,10 @@ class BubbleMenu(QWidget):
 
             # Claimable achievements place a clear red reminder on both the
             # primary "更多" entry and the secondary "成就" entry.
-            if (
-                (action in ("more", "achievements") and has_claimable)
-                or (action == "settings" and needs_api_key)
-            ):
+            if self.action_needs_attention(
+                    action,
+                    has_claimable=has_claimable,
+                    needs_personal_setup=needs_api_key):
                 dot_center = QPointF(rect.right() - 10, rect.top() + 10)
                 p.setBrush(QColor(255, 255, 255))
                 p.setPen(Qt.NoPen)
@@ -4043,7 +4808,7 @@ class PetWindow(QWidget):
 
     @staticmethod
     def needs_api_key_configuration():
-        return ai.get_api_key_source() == "none"
+        return ai.needs_personal_setup_reminder()
 
     def __init__(self, state):
         super().__init__()

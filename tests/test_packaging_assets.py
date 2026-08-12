@@ -1,10 +1,23 @@
 from pathlib import Path
+import json
 import unittest
 
 from PyQt5.QtGui import QImage
 
 
 class PackagingAssetTests(unittest.TestCase):
+    def test_release_config_points_to_the_deployed_default_chat_proxy(self):
+        root = Path(__file__).resolve().parents[1]
+        config = json.loads(
+            (root / "config.json.example").read_text(encoding="utf-8")
+        )
+
+        self.assertEqual(
+            config["default_chat_proxy_url"],
+            "https://petpet-default-chat.gsheen-petpet.workers.dev/v1/chat",
+        )
+        self.assertEqual(config["api_key"], "")
+
     def test_home_scene_assets_are_packaged_for_windows_and_macos(self):
         root = Path(__file__).resolve().parents[1]
         for filename in ("Petpet-windows.spec", "Petpet-mac.spec"):
@@ -12,6 +25,17 @@ class PackagingAssetTests(unittest.TestCase):
                 encoding="utf-8"
             )
             self.assertIn('(str(assets_root / "scenes"), "assets/scenes")', contents)
+
+    def test_game_knowledge_is_packaged_for_windows_and_macos(self):
+        root = Path(__file__).resolve().parents[1]
+        for filename in ("Petpet-windows.spec", "Petpet-mac.spec"):
+            contents = (root / "packaging" / filename).read_text(
+                encoding="utf-8"
+            )
+            self.assertIn(
+                '(str(assets_root / "knowledge"), "assets/knowledge")',
+                contents,
+            )
 
     def test_home_pet_idle_and_navigation_assets_are_transparent_pngs(self):
         asset_dir = (
