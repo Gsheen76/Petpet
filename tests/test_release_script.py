@@ -127,6 +127,9 @@ def test_release_script_tracks_the_exact_dispatched_macos_run():
     assert "$dispatchId" in script
     assert '"-f", "dispatch_id=$dispatchId"' in script
     assert 'displayTitle -eq "Build macOS $Tag $dispatchId"' in script
+    assert "[DateTimeOffset]::Parse" in script
+    assert "[Globalization.CultureInfo]::InvariantCulture" in script
+    assert "[Globalization.DateTimeStyles]::AssumeUniversal" in script
     assert "displayTitle,headSha,createdAt,event" in script
     assert "headSha -eq $headCommit" in script
     assert '"--limit", "100"' in script

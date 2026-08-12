@@ -399,8 +399,18 @@ try {
                 $_.event -eq "workflow_dispatch" -and
                 $_.displayTitle -eq "Build macOS $Tag $dispatchId" -and
                 $_.headSha -eq $headCommit -and
-                [DateTime]::Parse($_.createdAt).ToUniversalTime() -ge $dispatchStartedAt
-            } | Sort-Object { [DateTime]::Parse($_.createdAt) } -Descending |
+                [DateTimeOffset]::Parse(
+                    $_.createdAt,
+                    [Globalization.CultureInfo]::InvariantCulture,
+                    [Globalization.DateTimeStyles]::AssumeUniversal
+                ).UtcDateTime -ge $dispatchStartedAt
+            } | Sort-Object {
+                [DateTimeOffset]::Parse(
+                    $_.createdAt,
+                    [Globalization.CultureInfo]::InvariantCulture,
+                    [Globalization.DateTimeStyles]::AssumeUniversal
+                ).UtcDateTime
+            } -Descending |
                 Select-Object -First 1
         }
         if ($null -eq $matchingRun) {
