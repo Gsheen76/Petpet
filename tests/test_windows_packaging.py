@@ -9,6 +9,17 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class WindowsPackagingTests(unittest.TestCase):
+    def test_build_reuses_complete_local_dependencies_before_pip(self):
+        script = (
+            ROOT / "scripts" / "build_windows.ps1"
+        ).read_text(encoding="utf-8")
+        probe = "import PyQt5, PyInstaller, requests, PIL, numpy"
+        install = "python -m pip install --upgrade --target"
+
+        self.assertIn(probe, script)
+        self.assertIn("if (-not $dependenciesReady)", script)
+        self.assertLess(script.index(probe), script.index(install))
+
     def test_manifest_declares_per_monitor_v2_dpi_awareness(self):
         manifest_path = ROOT / "packaging" / "Petpet-windows.manifest"
         root = ET.parse(manifest_path).getroot()

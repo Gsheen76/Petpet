@@ -8,9 +8,13 @@ New-Item -ItemType Directory -Force -Path $buildDeps | Out-Null
 
 $env:PYTHONNOUSERSITE = "1"
 $env:PYTHONPATH = $buildDeps
-python -m pip install --upgrade --target $buildDeps -r requirements\build.txt
-if ($LASTEXITCODE -ne 0) {
-    throw "Failed to install build dependencies (exit code $LASTEXITCODE)."
+python -c "import PyQt5, PyInstaller, requests, PIL, numpy" 2>$null
+$dependenciesReady = $LASTEXITCODE -eq 0
+if (-not $dependenciesReady) {
+    python -m pip install --upgrade --target $buildDeps -r requirements\build.txt
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to install build dependencies (exit code $LASTEXITCODE)."
+    }
 }
 
 python tools\make_icons.py
