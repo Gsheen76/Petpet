@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import random
 from typing import Any, Mapping
 
 
@@ -197,6 +198,32 @@ class HomePetController:
         self.arrival_radius = max(0.0, float(arrival_radius))
         self.sleep_retry_seconds = max(0.0, float(sleep_retry_seconds))
         self.sleep_retry_until = 0.0
+        self.next_roam_at: float | None = None
+
+    def maybe_start_autonomous_walk(self, now: float, rng=None) -> bool:
+        """Start a frequent home-only wander after an idle 12–25s delay."""
+        if self.state != "idle" or self.target is not None:
+            return False
+        current = float(now)
+        rng = rng or random
+        if self.next_roam_at is None:
+            self.next_roam_at = current + float(rng.uniform(12.0, 25.0))
+            return False
+        if current < self.next_roam_at:
+            return False
+        x_values = [point[0] for point in HOME_WALKABLE_POLYGON]
+        y_values = [point[1] for point in HOME_WALKABLE_POLYGON]
+        target = clamp_to_walkable((
+            float(rng.uniform(min(x_values), max(x_values))),
+            float(rng.uniform(min(y_values), max(y_values))),
+        ))
+        dx = target[0] - self.position[0]
+        dy = target[1] - self.position[1]
+        self.target = target
+        self.direction = direction_for_delta(dx, dy, self.direction)
+        self.state = "auto_walk"
+        self.next_roam_at = None
+        return True
 
     def command_move(self, target: Point, now: float) -> bool:
         """Replace the current destination with a user-selected target."""
@@ -247,6 +274,7 @@ class HomePetController:
 
         if self.target is None or self.state not in {
             "manual_walk",
+            "auto_walk",
             "manual_sleep_walk",
             "auto_sleep_walk",
         }:
@@ -282,6 +310,7 @@ class HomePetController:
         self.target = None
         if self.state in {
             "manual_walk",
+            "auto_walk",
             "manual_sleep_walk",
             "auto_sleep_walk",
         }:

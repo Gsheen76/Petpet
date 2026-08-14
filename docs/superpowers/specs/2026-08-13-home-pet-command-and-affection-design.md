@@ -1,7 +1,7 @@
 # Home Pet Commands and Affection Growth Design
 
 Date: 2026-08-13
-Status: approved
+Status: implemented
 
 ## Goal
 

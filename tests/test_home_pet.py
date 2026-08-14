@@ -63,6 +63,34 @@ class HomePetGeometryTests(unittest.TestCase):
 
 
 class HomePetMovementTests(unittest.TestCase):
+    class FixedRng:
+        def __init__(self, values):
+            self.values = iter(values)
+
+        def uniform(self, minimum, maximum):
+            value = next(self.values)
+            return max(minimum, min(maximum, value))
+
+    def test_home_autonomy_waits_12_to_25_seconds_then_walks(self):
+        pet = home_pet.HomePetController((500.0, 600.0))
+        rng = self.FixedRng([12.0, 900.0, 560.0])
+
+        self.assertFalse(pet.maybe_start_autonomous_walk(100.0, rng))
+        self.assertEqual(pet.next_roam_at, 112.0)
+        self.assertFalse(pet.maybe_start_autonomous_walk(111.9, rng))
+        self.assertTrue(pet.maybe_start_autonomous_walk(112.0, rng))
+        self.assertEqual(pet.state, "auto_walk")
+        self.assertEqual(pet.target, (900.0, 560.0))
+
+    def test_manual_command_replaces_an_autonomous_home_walk(self):
+        pet = home_pet.HomePetController((500.0, 600.0))
+        pet.state = "auto_walk"
+        pet.target = (900.0, 560.0)
+
+        self.assertFalse(pet.command_move((400.0, 650.0), now=20.0))
+        self.assertEqual(pet.state, "manual_walk")
+        self.assertEqual(pet.target, (400.0, 650.0))
+
     def test_manual_move_advances_by_elapsed_time_without_overshooting(self):
         pet = home_pet.HomePetController(
             (500.0, 600.0),

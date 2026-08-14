@@ -39,6 +39,7 @@ class ProgressionMigrationTests(unittest.TestCase):
         self.assertEqual(state["affection_level"], 1)
         self.assertEqual(state["affection_points"], 0)
         self.assertEqual(state["passive_xp_buffer"], 0.0)
+        self.assertEqual(state["passive_affection_buffer"], 0.0)
         self.assertIn("pettings", state["affection_last_gains"])
         self.assertEqual(state["owned_decorations"], [])
         self.assertIsNone(state["equipped_decorations"]["neck"])
@@ -97,7 +98,7 @@ class RecordTests(unittest.TestCase):
         self.assertEqual(state["records"]["sleep_sessions"], 1)
         self.assertEqual(state["records"]["auto_sleeps"], 1)
         self.assertEqual(state["records"]["interactions_total"], 4)
-        self.assertEqual(state["affection_points"], 8)
+        self.assertEqual(state["affection_points"], 9)
 
     def test_every_user_interaction_adds_balanced_affection(self):
         state = fresh_state()
@@ -110,8 +111,8 @@ class RecordTests(unittest.TestCase):
         progression.record_action(state, "wake_shakes")
         progression.record_sleep(state, "manual")
 
-        self.assertEqual(state["affection_points"], 15)
-        self.assertEqual(state["records"]["affection_earned"], 15)
+        self.assertEqual(state["affection_points"], 16)
+        self.assertEqual(state["records"]["affection_earned"], 16)
 
     def test_auto_sleep_does_not_count_as_user_affection(self):
         state = fresh_state()
@@ -131,7 +132,7 @@ class RecordTests(unittest.TestCase):
             state, "pettings", now=1005
         )
         ready = progression.record_action(
-            state, "pettings", now=1020
+            state, "pettings", now=1060
         )
 
         self.assertTrue(first["eligible"])
@@ -139,7 +140,7 @@ class RecordTests(unittest.TestCase):
         self.assertGreater(blocked["cooldown_remaining"], 0)
         self.assertTrue(ready["eligible"])
         self.assertEqual(state["records"]["pettings"], 3)
-        self.assertEqual(state["affection_points"], 4)
+        self.assertEqual(state["affection_points"], 2)
 
     def test_different_actions_have_independent_cooldowns(self):
         state = fresh_state()
@@ -149,15 +150,20 @@ class RecordTests(unittest.TestCase):
 
         self.assertEqual(state["affection_points"], 5)
 
-    def test_chat_affection_has_no_cooldown(self):
+    def test_only_successful_ai_reply_grants_chat_affection_with_cooldown(self):
         state = fresh_state()
 
         progression.record_action(state, "chats_opened", now=1000)
-        progression.record_action(state, "chats_opened", now=1000)
-        progression.record_action(state, "chats_opened", now=1000)
+        first = progression.record_action(state, "ai_replies", now=1000)
+        blocked = progression.record_action(state, "ai_replies", now=1100)
+        ready = progression.record_action(state, "ai_replies", now=1180)
 
-        self.assertEqual(state["records"]["chats_opened"], 3)
-        self.assertEqual(state["affection_points"], 3)
+        self.assertTrue(first["eligible"])
+        self.assertFalse(blocked["eligible"])
+        self.assertTrue(ready["eligible"])
+        self.assertEqual(state["records"]["chats_opened"], 1)
+        self.assertEqual(state["records"]["ai_replies"], 3)
+        self.assertEqual(state["affection_points"], 2)
 
     def test_active_time_and_coin_totals_are_lifetime_values(self):
         state = fresh_state()
@@ -329,6 +335,24 @@ class UpgradeBalanceTests(unittest.TestCase):
 
 
 class HomeDecorationTests(unittest.TestCase):
+    def test_status_card_is_a_free_wall_furniture_claim(self):
+        state = fresh_state(pet_coins=0)
+
+        result = progression.purchase_home_decoration(
+            state, "home_status_card"
+        )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["price"], 0)
+        self.assertEqual(state["pet_coins"], 0)
+        self.assertIn("home_status_card", state["owned_home_decorations"])
+        self.assertLessEqual(
+            progression.home_decoration_position(
+                state, "home_status_card"
+            )["y"],
+            220,
+        )
+
     def test_home_decoration_purchase_spends_coins_and_persists_position(self):
         state = fresh_state(pet_coins=500)
 
@@ -373,6 +397,12 @@ class HomeDecorationTests(unittest.TestCase):
 
 
 class AffectionExperienceTests(unittest.TestCase):
+    def test_affection_threshold_starts_small_and_caps_at_200(self):
+        self.assertEqual(progression.affection_to_next(1), 30)
+        self.assertEqual(progression.affection_to_next(2), 40)
+        self.assertEqual(progression.affection_to_next(18), 200)
+        self.assertEqual(progression.affection_to_next(99), 200)
+
     def test_affection_levels_keep_remainder_and_raise_rate(self):
         state = fresh_state()
         low_rate = progression.passive_xp_per_second(state)
@@ -416,6 +446,69 @@ class AffectionExperienceTests(unittest.TestCase):
 
         self.assertAlmostEqual(
             progression.passive_xp_per_minute(state), 3.0
+        )
+
+    def test_passive_affection_halves_for_each_zero_attribute(self):
+        healthy = fresh_state(hunger=100, mood=100, energy=100)
+        one_zero = fresh_state(hunger=0, mood=100, energy=100)
+        two_zero = fresh_state(hunger=0, mood=0, energy=100)
+        three_zero = fresh_state(hunger=0, mood=0, energy=0)
+
+        self.assertAlmostEqual(
+            progression.passive_affection_per_minute(healthy), 0.60
+        )
+        self.assertAlmostEqual(
+            progression.passive_affection_per_minute(one_zero), 0.30
+        )
+        self.assertAlmostEqual(
+            progression.passive_affection_per_minute(two_zero), 0.15
+        )
+        self.assertAlmostEqual(
+            progression.passive_affection_per_minute(three_zero), 0.075
+        )
+
+    def test_zero_attributes_map_to_restoring_interactions(self):
+        healthy = fresh_state(hunger=10, mood=10, energy=10)
+        hungry = fresh_state(hunger=0, mood=10, energy=10)
+        unhappy = fresh_state(hunger=10, mood=0, energy=10)
+        tired = fresh_state(hunger=10, mood=10, energy=0)
+
+        self.assertEqual(progression.zero_stat_interaction_actions(healthy), set())
+        self.assertEqual(
+            progression.zero_stat_interaction_actions(hungry), {"feedings"}
+        )
+        self.assertEqual(
+            progression.zero_stat_interaction_actions(unhappy),
+            {"pettings", "feedings", "play_sessions"},
+        )
+        self.assertEqual(
+            progression.zero_stat_interaction_actions(tired), {"manual_sleeps"}
+        )
+
+    def test_interaction_affection_balance_matches_design(self):
+        self.assertEqual(
+            progression.AFFECTION_ACTION_GAINS,
+            {
+                "pettings": 1,
+                "feedings": 4,
+                "play_sessions": 5,
+                "fetch_catches": 2,
+                "ai_replies": 1,
+                "wake_shakes": 1,
+                "manual_sleeps": 3,
+            },
+        )
+        self.assertEqual(
+            progression.AFFECTION_ACTION_COOLDOWNS,
+            {
+                "pettings": 60,
+                "feedings": 8 * 60,
+                "play_sessions": 6 * 60,
+                "fetch_catches": 5 * 60,
+                "ai_replies": 3 * 60,
+                "wake_shakes": 5 * 60,
+                "manual_sleeps": 15 * 60,
+            },
         )
 
 
@@ -475,8 +568,8 @@ class DecorationTests(unittest.TestCase):
 
         common = progression.roll_dig_reward(FixedRng([0.0]))
         jackpot = progression.roll_dig_reward(FixedRng([0.999]))
-        self.assertEqual(common["amount"], 10)
-        self.assertEqual(jackpot["amount"], 100)
+        self.assertEqual(common["amount"], 20)
+        self.assertEqual(jackpot["amount"], 200)
 
         state = fresh_state(last_dig_discovery_at=100.0)
         self.assertEqual(

@@ -3,7 +3,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from PyQt5.QtCore import QPoint, QPointF, QRect, QRectF, Qt
+from PyQt5.QtCore import QPoint, QPointF, QRect, QRectF, QSize, Qt
 from PyQt5.QtGui import QImage, QPainter, QPixmap
 from PyQt5.QtWidgets import QApplication
 
@@ -287,6 +287,39 @@ class HomeSceneAssetTests(unittest.TestCase):
         self.assertEqual(scene.scene_button_label("right"), "右移")
         self.assertEqual(scene.scene_button_label("decorate"), "装修")
         self.assertEqual(scene.scene_button_label("exit"), "退出")
+        self.assertEqual(scene.scene_button_label("shop"), "商店")
+        self.assertEqual(scene.scene_button_label("interaction"), "互动⌄")
+
+        actions = scene.home_action_button_rects()
+        self.assertNotIn("status", actions)
+        ordered = [
+            actions[name].left()
+            for name in ("shop", "interaction", "decorate", "exit")
+        ]
+        self.assertEqual(ordered, sorted(ordered))
+
+    def test_status_card_uses_a_large_live_three_stat_layout(self):
+        state = progression.ensure_progression({
+            "pet_name": "团子",
+            "level": 2,
+            "affection_level": 3,
+            "hunger": 80,
+            "mood": 70,
+            "energy": 60,
+        })
+
+        before = home_scene.render_home_status_card(state).toImage()
+        state["hunger"] = 0
+        state["pet_name"] = "糯米"
+        after = home_scene.render_home_status_card(state).toImage()
+
+        self.assertFalse(before.isNull())
+        self.assertEqual(before.size(), QSize(840, 540))
+        self.assertEqual(before.size(), after.size())
+        self.assertNotEqual(before, after)
+        self.assertEqual(home_scene.HOME_STATUS_CARD_SIZE, (420, 270))
+        for rect in home_scene.home_status_card_value_rects():
+            self.assertGreaterEqual(rect.width(), 64)
 
     def test_home_action_buttons_are_compact_text_controls_with_a_shared_height(self):
         state = progression.ensure_progression({})
@@ -703,7 +736,7 @@ class HomeSceneAssetTests(unittest.TestCase):
         self.assertEqual(scene.home_pet.target, (400.0, 600.0))
         event.accept.assert_called_once_with()
 
-    def test_right_click_opens_shared_menu_only_inside_home_pet_body(self):
+    def test_right_click_never_opens_the_desktop_menu_inside_home(self):
         state = progression.ensure_progression({})
         pet = SimpleNamespace(
             state=state,
@@ -722,16 +755,60 @@ class HomeSceneAssetTests(unittest.TestCase):
         inside = scene.home_pet_draw_rect().center().toPoint()
         outside = scene.scene_canvas_rect().topLeft() + QPoint(30, 100)
 
-        self.assertTrue(scene.open_home_pet_menu(inside))
-        pet.open_bubble_menu.assert_called_once_with()
-
-        pet.open_bubble_menu.reset_mock()
+        self.assertFalse(scene.open_home_pet_menu(inside))
+        pet.open_bubble_menu.assert_not_called()
         self.assertFalse(scene.open_home_pet_menu(outside))
         pet.open_bubble_menu.assert_not_called()
 
         scene.toggle_decoration_mode()
         self.assertFalse(scene.open_home_pet_menu(inside))
         pet.open_bubble_menu.assert_not_called()
+
+    def test_zero_stat_attention_marks_header_pet_and_restoring_actions(self):
+        state = progression.ensure_progression({
+            "hunger": 0,
+            "mood": 0,
+            "energy": 0,
+        })
+        pet = SimpleNamespace(
+            state=state,
+            width=lambda: 190,
+            height=lambda: 220,
+            current_screen_rect=lambda: QRect(0, 0, 1920, 1080),
+        )
+        scene = home_scene.HomeSceneWindow(pet, Mock())
+        self.addCleanup(scene.close)
+
+        self.assertTrue(scene.home_pet_needs_attention())
+        self.assertTrue(scene.interaction_header_needs_attention())
+        self.assertEqual(
+            scene.interaction_actions_needing_attention(),
+            {"pet", "feed", "play", "sleep"},
+        )
+
+    def test_home_interaction_button_dispatches_existing_pet_actions(self):
+        state = progression.ensure_progression({})
+        pet = SimpleNamespace(
+            state=state,
+            width=lambda: 190,
+            height=lambda: 220,
+            current_screen_rect=lambda: QRect(0, 0, 1920, 1080),
+            pet_click=Mock(),
+            feed=Mock(),
+            play=Mock(),
+            toggle_sleep=Mock(),
+        )
+        scene = home_scene.HomeSceneWindow(pet, Mock())
+        self.addCleanup(scene.close)
+
+        for action, method in (
+            ("pet", pet.pet_click),
+            ("feed", pet.feed),
+            ("play", pet.play),
+            ("sleep", pet.toggle_sleep),
+        ):
+            self.assertTrue(scene.trigger_home_interaction(action))
+            method.assert_called_once_with()
 
     def test_home_pet_global_rect_maps_the_rendered_body_from_scene_window(self):
         state = progression.ensure_progression({})

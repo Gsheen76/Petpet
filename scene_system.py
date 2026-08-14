@@ -30,6 +30,7 @@ HOME_FURNITURE_SIZES = {
     "home_sofa": (360, 225),
     "home_plant": (190, 340),
     "home_wall_art": (220, 285),
+    "home_status_card": (420, 270),
 }
 
 

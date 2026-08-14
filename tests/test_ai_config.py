@@ -45,7 +45,8 @@ class FakeRequestsStreamResponse:
         self.status_code = status_code
         self._payload = payload or {}
 
-    def iter_lines(self):
+    def iter_lines(self, chunk_size=None):
+        self.iter_lines_chunk_size = chunk_size
         return iter(self._lines)
 
     def json(self):
@@ -70,6 +71,16 @@ class AiConfigTests(unittest.TestCase):
         self.path_patch = patch.object(ai, "CONFIG_PATH", self.config_path)
         self.path_patch.start()
         self.addCleanup(self.path_patch.stop)
+        self.public_config_path = os.path.join(
+            self.temp_dir.name, "config.json.example"
+        )
+        with open(self.public_config_path, "w", encoding="utf-8") as file:
+            json.dump({}, file)
+        self.public_path_patch = patch.object(
+            ai, "DEFAULT_CONFIG_PATH", self.public_config_path
+        )
+        self.public_path_patch.start()
+        self.addCleanup(self.public_path_patch.stop)
         self.data_path_patch = patch.object(ai, "DATA_DIR", self.temp_dir.name)
         self.data_path_patch.start()
         self.addCleanup(self.data_path_patch.stop)
@@ -78,6 +89,12 @@ class AiConfigTests(unittest.TestCase):
         )
         self.memory_path_patch.start()
         self.addCleanup(self.memory_path_patch.stop)
+        self.quota_path_patch = patch.object(
+            ai, "CHAT_QUOTA_STATE_PATH",
+            os.path.join(self.temp_dir.name, "chat_quota_state.json"),
+        )
+        self.quota_path_patch.start()
+        self.addCleanup(self.quota_path_patch.stop)
         self.env_patch = patch.dict(os.environ, {}, clear=False)
         self.env_patch.start()
         self.addCleanup(self.env_patch.stop)
@@ -86,6 +103,34 @@ class AiConfigTests(unittest.TestCase):
         image = QImage(2, 2, QImage.Format_ARGB32)
         image.fill(qRgb(255, 210, 160))
         self.assertTrue(image.save(self.image_path, "PNG"))
+
+    def test_aliyun_local_quota_recovers_from_invalid_file_and_resets_next_day(self):
+        with open(ai.CHAT_QUOTA_STATE_PATH, "w", encoding="utf-8") as file:
+            file.write("not json")
+
+        self.assertTrue(ai._aliyun_quota_available("2026-08-14"))
+        for index in range(20):
+            self.assertTrue(ai._record_aliyun_quota_success(
+                f"00000000-0000-4000-8000-{index:012d}", "2026-08-14"
+            ))
+
+        self.assertFalse(ai._aliyun_quota_available("2026-08-14"))
+        self.assertTrue(ai._aliyun_quota_available("2026-08-15"))
+
+    def test_aliyun_local_quota_counts_each_request_once(self):
+        request_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+
+        self.assertTrue(ai._record_aliyun_quota_success(
+            request_id, "2026-08-14"
+        ))
+        self.assertFalse(ai._record_aliyun_quota_success(
+            request_id, "2026-08-14"
+        ))
+
+        with open(ai.CHAT_QUOTA_STATE_PATH, encoding="utf-8") as file:
+            state = json.load(file)
+        self.assertEqual(state["aliyun"]["count"], 1)
+        self.assertEqual(state["aliyun"]["request_ids"], [request_id])
 
     def test_api_key_and_model_are_persisted_without_overwriting_each_other(self):
         ai.set_api_key("  id.secret  ")
@@ -99,6 +144,9 @@ class AiConfigTests(unittest.TestCase):
             saved = json.load(config_file)
         self.assertEqual(saved["api_key"], "id.secret")
         self.assertEqual(saved["model"], "glm-4.6v-flash")
+
+    def test_pet_name_is_limited_to_six_characters(self):
+        self.assertEqual(ai.normalize_pet_name("十二个字的小狗名字"), "十二个字的小")
 
     def test_personal_setup_reminder_is_cleared_after_first_open_even_without_key(self):
         self.assertTrue(ai.needs_personal_setup_reminder())
@@ -260,9 +308,23 @@ class AiConfigTests(unittest.TestCase):
                 "怎么装修家具", ai._default_memory()
             )[0]["content"]
 
-        find_entries.assert_called_once_with("怎么装修家具")
+        find_entries.assert_called_once_with("怎么装修家具", limit=5)
         self.assertIn("# 游戏资料", system)
         self.assertIn("进入小屋后可以装修家具。", system)
+
+    def test_daily_chat_does_not_inject_game_knowledge(self):
+        messages = ai._build_messages("今天有点累", ai._default_memory())
+
+        self.assertNotIn("# 游戏资料", messages[0]["content"])
+
+    def test_game_overview_injects_current_overview(self):
+        messages = ai._build_messages(
+            "介绍一下 Petpet 游戏怎么玩", ai._default_memory()
+        )
+
+        system = messages[0]["content"]
+        self.assertIn("# 游戏资料", system)
+        self.assertIn("Petpet 游戏概览", system)
 
     def test_no_key_requires_default_chat_consent(self):
         ai.set_default_chat_consent(False)
@@ -357,6 +419,157 @@ class AiConfigTests(unittest.TestCase):
                 "https://release.example/v1/chat",
             )
 
+    def test_free_chat_prefers_direct_aliyun_and_sends_one_request_id(self):
+        ai.set_default_chat_consent(True)
+        config = ai.load_config()
+        config["default_chat_primary_url"] = "https://aliyun.example/v1/chat"
+        config["default_chat_fallback_url"] = "https://cloudflare.example/v1/chat"
+        ai.save_config(config)
+        response = FakeRequestsStreamResponse([
+            b'data: {"choices":[{"delta":{"content":"hi"}}]}',
+            b'data: [DONE]',
+        ])
+
+        with patch("buddy_ai.requests.Session") as session_type, patch(
+                "buddy_ai.requests.post") as fallback_post:
+            session = session_type.return_value
+            session.post.return_value = response
+            events = list(ai.chat_stream("hello", ai._default_memory(), timeout=5))
+
+        self.assertFalse(session.trust_env)
+        body = json.loads(session.post.call_args.kwargs["data"].decode("utf-8"))
+        self.assertRegex(
+            body["request_id"],
+            r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+        )
+        fallback_post.assert_not_called()
+        self.assertEqual(events, [("token", "hi"), ("done", "hi")])
+
+    def test_aliyun_http_200_records_one_local_use(self):
+        ai.set_default_chat_consent(True)
+        config = ai.load_config()
+        config.update({
+            "default_chat_primary_url": "https://aliyun.example/v1/chat",
+            "default_chat_fallback_url": "https://cloudflare.example/v1/chat",
+        })
+        ai.save_config(config)
+        response = FakeRequestsStreamResponse([
+            b'data: {"choices":[{"delta":{"content":"hi"}}]}',
+            b'data: [DONE]',
+        ])
+
+        with patch("buddy_ai.requests.Session") as session_type, patch.object(
+                ai, "_record_aliyun_quota_success") as record:
+            session_type.return_value.post.return_value = response
+            events = list(ai.chat_stream(
+                "hello", ai._default_memory(), timeout=5
+            ))
+
+        body = json.loads(
+            session_type.return_value.post.call_args.kwargs["data"].decode(
+                "utf-8"
+            )
+        )
+        record.assert_called_once_with(body["request_id"])
+        self.assertEqual(events[-1], ("done", "hi"))
+
+    def test_aliyun_connection_failure_does_not_record_local_use(self):
+        ai.set_default_chat_consent(True)
+        config = ai.load_config()
+        config.update({
+            "default_chat_primary_url": "https://aliyun.example/v1/chat",
+            "default_chat_fallback_url": "https://cloudflare.example/v1/chat",
+        })
+        ai.save_config(config)
+        fallback = FakeRequestsStreamResponse([b'data: [DONE]'])
+
+        with patch("buddy_ai.requests.Session") as session_type, patch(
+                "buddy_ai.requests.post", return_value=fallback), patch.object(
+                ai, "_record_aliyun_quota_success") as record:
+            session_type.return_value.post.side_effect = \
+                ai.requests.ConnectTimeout("offline")
+            list(ai.chat_stream("hello", ai._default_memory(), timeout=5))
+
+        record.assert_not_called()
+
+    def test_exhausted_aliyun_local_quota_skips_primary_and_uses_cloudflare(self):
+        ai.set_default_chat_consent(True)
+        config = ai.load_config()
+        config.update({
+            "default_chat_primary_url": "https://aliyun.example/v1/chat",
+            "default_chat_fallback_url": "https://cloudflare.example/v1/chat",
+        })
+        ai.save_config(config)
+        fallback = FakeRequestsStreamResponse([b'data: [DONE]'])
+
+        with patch.object(
+                ai, "_aliyun_quota_available", return_value=False), patch(
+                "buddy_ai.requests.Session") as session_type, patch(
+                "buddy_ai.requests.post", return_value=fallback
+        ) as fallback_post:
+            list(ai.chat_stream("hello", ai._default_memory(), timeout=5))
+
+        session_type.assert_not_called()
+        self.assertEqual(
+            fallback_post.call_args.args[0],
+            "https://cloudflare.example/v1/chat",
+        )
+
+    def test_aliyun_connect_failure_falls_back_with_identical_payload(self):
+        ai.set_default_chat_consent(True)
+        config = ai.load_config()
+        config["default_chat_primary_url"] = "https://aliyun.example/v1/chat"
+        config["default_chat_fallback_url"] = "https://cloudflare.example/v1/chat"
+        ai.save_config(config)
+        response = FakeRequestsStreamResponse([
+            b'data: {"choices":[{"delta":{"content":"hi"}}]}',
+            b'data: [DONE]',
+        ])
+
+        with patch("buddy_ai.requests.Session") as session_type, patch(
+                "buddy_ai.requests.post", return_value=response) as fallback_post, patch(
+                "buddy_ai.urllib.request.getproxies", return_value={}):
+            session_type.return_value.post.side_effect = \
+                ai.requests.ConnectTimeout("direct unavailable")
+            events = list(ai.chat_stream("hello", ai._default_memory(), timeout=5))
+
+        primary_data = session_type.return_value.post.call_args.kwargs["data"]
+        fallback_data = fallback_post.call_args.kwargs["data"]
+        self.assertEqual(primary_data, fallback_data)
+        self.assertEqual(events, [("token", "hi"), ("done", "hi")])
+
+    def test_aliyun_read_timeout_does_not_fall_back(self):
+        ai.set_default_chat_consent(True)
+        config = ai.load_config()
+        config["default_chat_primary_url"] = "https://aliyun.example/v1/chat"
+        config["default_chat_fallback_url"] = "https://cloudflare.example/v1/chat"
+        ai.save_config(config)
+
+        with patch("buddy_ai.requests.Session") as session_type, patch(
+                "buddy_ai.requests.post") as fallback_post:
+            session_type.return_value.post.side_effect = \
+                ai.requests.ReadTimeout("response may have started")
+            events = list(ai.chat_stream("hello", ai._default_memory(), timeout=5))
+
+        fallback_post.assert_not_called()
+        self.assertEqual(events, [("error", "default_provider_unavailable")])
+
+    def test_aliyun_http_error_does_not_fall_back(self):
+        ai.set_default_chat_consent(True)
+        config = ai.load_config()
+        config["default_chat_primary_url"] = "https://aliyun.example/v1/chat"
+        config["default_chat_fallback_url"] = "https://cloudflare.example/v1/chat"
+        ai.save_config(config)
+        response = FakeRequestsStreamResponse([], status_code=503)
+
+        with patch("buddy_ai.requests.Session") as session_type, patch(
+                "buddy_ai.requests.post") as fallback_post:
+            session_type.return_value.post.return_value = response
+            events = list(ai.chat_stream("hello", ai._default_memory(), timeout=5))
+
+        fallback_post.assert_not_called()
+        self.assertEqual(events, [("error", "default_provider_unavailable")])
+
     def test_profile_refresh_uses_personal_visual_model_not_free_placeholder(self):
         ai.set_api_key("id.secret")
         ai.set_chat_mode("personal")
@@ -387,7 +600,7 @@ class AiConfigTests(unittest.TestCase):
         memory["history"] = [
             {"role": "user" if index % 2 == 0 else "assistant",
              "content": f"turn-{index}"}
-            for index in range(10)
+            for index in range(14)
         ]
         response = FakeRequestsStreamResponse([
             b'data: {"choices":[{"delta":{"content":"hi"}}]}\n',
@@ -398,8 +611,9 @@ class AiConfigTests(unittest.TestCase):
             events = list(ai.chat_stream("hello", memory, timeout=5))
 
         body = json.loads(post.call_args.kwargs["data"].decode("utf-8"))
-        self.assertLessEqual(len(body["messages"]), 7)
+        self.assertEqual(len(body["messages"]), 12)
         self.assertEqual(body["messages"][0]["role"], "system")
+        self.assertEqual(body["messages"][1]["content"], "turn-4")
         self.assertEqual(body["messages"][-1], {
             "role": "user", "content": "hello",
         })
@@ -422,6 +636,90 @@ class AiConfigTests(unittest.TestCase):
         self.assertTrue(post.call_args.kwargs["stream"])
         urlopen.assert_not_called()
 
+    def test_default_proxy_uses_windows_proxy_with_short_connect_timeout(self):
+        ai.set_default_chat_consent(True)
+        ai.set_default_chat_proxy_url("https://chat.example/v1/chat")
+        response = FakeRequestsStreamResponse([
+            b'data: {"choices":[{"delta":{"content":"hi"}}]}',
+            b'data: [DONE]',
+        ])
+
+        with patch(
+                "buddy_ai.urllib.request.getproxies",
+                return_value={"https": "http://127.0.0.1:7890"},
+        ), patch(
+                "buddy_ai.requests.post",
+                return_value=response,
+        ) as post:
+            events = list(ai.chat_stream(
+                "hello", ai._default_memory(), timeout=20
+            ))
+
+        self.assertEqual(post.call_count, 1)
+        self.assertEqual(
+            post.call_args.kwargs["proxies"],
+            {"https": "http://127.0.0.1:7890"},
+        )
+        self.assertEqual(post.call_args.kwargs["timeout"], (6, 20))
+        self.assertEqual(events, [("token", "hi"), ("done", "hi")])
+
+    def test_default_proxy_does_not_double_wait_without_system_proxy(self):
+        ai.set_default_chat_consent(True)
+        ai.set_default_chat_proxy_url("https://chat.example/v1/chat")
+
+        with patch(
+                "buddy_ai.urllib.request.getproxies", return_value={}
+        ), patch(
+                "buddy_ai.requests.post",
+                side_effect=ai.requests.ConnectTimeout("offline"),
+        ) as post:
+            events = list(ai.chat_stream(
+                "hello", ai._default_memory(), timeout=20
+            ))
+
+        self.assertEqual(post.call_count, 1)
+        self.assertEqual(events, [("error", "default_provider_unavailable")])
+
+    def test_default_proxy_retries_one_proxy_connect_timeout(self):
+        ai.set_default_chat_consent(True)
+        ai.set_default_chat_proxy_url("https://chat.example/v1/chat")
+        response = FakeRequestsStreamResponse([
+            b'data: {"choices":[{"delta":{"content":"hi"}}]}',
+            b'data: [DONE]',
+        ])
+
+        with patch(
+                "buddy_ai.urllib.request.getproxies",
+                return_value={"https": "http://127.0.0.1:7897"},
+        ), patch(
+                "buddy_ai.requests.post",
+                side_effect=[ai.requests.ConnectTimeout("proxy hiccup"), response],
+        ) as post:
+            events = list(ai.chat_stream(
+                "hello", ai._default_memory(), timeout=20
+            ))
+
+        self.assertEqual(post.call_count, 2)
+        self.assertEqual(events, [("token", "hi"), ("done", "hi")])
+
+    def test_default_proxy_does_not_retry_read_timeout(self):
+        ai.set_default_chat_consent(True)
+        ai.set_default_chat_proxy_url("https://chat.example/v1/chat")
+
+        with patch(
+                "buddy_ai.urllib.request.getproxies",
+                return_value={"https": "http://127.0.0.1:7897"},
+        ), patch(
+                "buddy_ai.requests.post",
+                side_effect=ai.requests.ReadTimeout("upstream may have request"),
+        ) as post:
+            events = list(ai.chat_stream(
+                "hello", ai._default_memory(), timeout=20
+            ))
+
+        self.assertEqual(post.call_count, 1)
+        self.assertEqual(events, [("error", "default_provider_unavailable")])
+
     def test_default_proxy_does_not_duplicate_system_prompt_with_short_history(self):
         ai.set_default_chat_consent(True)
         ai.set_default_chat_proxy_url("https://chat.example/v1/chat")
@@ -438,7 +736,24 @@ class AiConfigTests(unittest.TestCase):
         ]
         self.assertEqual(len(system_contents), len(set(system_contents)))
 
+    def test_persona_does_not_duplicate_recent_history(self):
+        memory = ai._default_memory()
+        memory["history"] = [
+            {"role": "user", "content": "唯一历史问题"},
+            {"role": "assistant", "content": "唯一历史回答"},
+        ]
+
+        messages = ai._build_messages("继续聊", memory)
+
+        self.assertNotIn("唯一历史问题", messages[0]["content"])
+        self.assertEqual(messages[-3]["content"], "唯一历史问题")
+        self.assertEqual(messages[-2]["content"], "唯一历史回答")
+
     def test_default_proxy_uses_role_limits_without_losing_system_ends(self):
+        self.assertEqual(ai.DEFAULT_PROXY_MAX_SYSTEM_CHARS, 8000)
+        self.assertEqual(ai.DEFAULT_PROXY_MAX_TURN_CHARS, 1600)
+        self.assertEqual(ai.DEFAULT_PROXY_MAX_BODY_BYTES, 32768)
+        self.assertEqual(ai.DEFAULT_PROXY_MAX_MESSAGES, 12)
         ai.set_default_chat_consent(True)
         ai.set_default_chat_proxy_url("https://chat.example/v1/chat")
         memory = ai._default_memory()
@@ -446,8 +761,8 @@ class AiConfigTests(unittest.TestCase):
 
         def long_messages(*args, **kwargs):
             messages = original_build(*args, **kwargs)
-            messages[0]["content"] = "persona-start " + ("中" * 5000) + " knowledge-end"
-            messages[-1]["content"] = "turn-start " + ("问" * 1600) + " turn-end"
+            messages[0]["content"] = "persona-start " + ("中" * 9000) + " knowledge-end"
+            messages[-1]["content"] = "turn-start " + ("问" * 2000) + " turn-end"
             return messages
 
         response = FakeRequestsStreamResponse([b'data: [DONE]'])
@@ -458,14 +773,14 @@ class AiConfigTests(unittest.TestCase):
 
         body = json.loads(post.call_args.kwargs["data"].decode("utf-8"))
         system = body["messages"][0]["content"]
-        self.assertLessEqual(len(system), 4000)
+        self.assertLessEqual(len(system), 8000)
         self.assertTrue(system.startswith("persona-start"))
         self.assertTrue(system.endswith("knowledge-end"))
         turn = body["messages"][-1]["content"]
-        self.assertLessEqual(len(turn), 1200)
+        self.assertLessEqual(len(turn), 1600)
         self.assertTrue(turn.startswith("turn-start"))
         self.assertTrue(turn.endswith("turn-end"))
-        self.assertLessEqual(len(post.call_args.kwargs["data"]), 16384)
+        self.assertLessEqual(len(post.call_args.kwargs["data"]), 32768)
 
     def test_default_proxy_maps_http_quota_error(self):
         ai.set_default_chat_consent(True)
@@ -496,6 +811,29 @@ class AiConfigTests(unittest.TestCase):
         self.assertEqual(entry["exception_type"], "HTTPError")
         self.assertNotIn("secret", entry)
         self.assertNotIn("message", entry)
+
+    def test_default_proxy_logs_model_provider_and_stream_timing(self):
+        ai.set_default_chat_consent(True)
+        ai.set_default_chat_proxy_url("https://chat.example/v1/chat")
+        response = FakeRequestsStreamResponse([
+            b'data: {"model":"glm-4.7-flash","provider":"Zhipu","choices":[{"delta":{"content":"hi"}}]}',
+            b'data: [DONE]',
+        ])
+        log_path = os.path.join(self.temp_dir.name, "chat_diagnostic.log")
+
+        with patch.object(ai, "CHAT_DIAGNOSTIC_LOG_PATH", log_path), patch(
+                "buddy_ai.requests.post", return_value=response), patch(
+                "buddy_ai.time.perf_counter", side_effect=[10.0, 10.25, 10.5]):
+            events = list(ai.chat_stream("hello", ai._default_memory(), timeout=5))
+
+        self.assertEqual(events, [("token", "hi"), ("done", "hi")])
+        with open(log_path, encoding="utf-8") as log_file:
+            entry = json.loads(log_file.readline())
+        self.assertEqual(entry["model"], "glm-4.7-flash")
+        self.assertEqual(entry["provider"], "Zhipu")
+        self.assertEqual(entry["first_content_ms"], 250)
+        self.assertEqual(entry["total_ms"], 500)
+        self.assertEqual(response.iter_lines_chunk_size, 1)
 
     def test_prepare_player_avatar_center_crops_and_saves_png(self):
         source_path = os.path.join(self.temp_dir.name, "wide.png")

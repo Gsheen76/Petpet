@@ -1,0 +1,20 @@
+edition: 3.0.0
+name: petpet-aliyun-chat
+access: default
+resources:
+  petpetChat:
+    component: fc3
+    props:
+      region: cn-hangzhou
+      functionName: petpet-aliyun-chat
+      runtime: custom.debian10
+      timeout: 60
+      memorySize: 512
+      diskSize: 512
+      code: ./
+      customRuntimeConfig:
+        command: ["node"]
+        args: ["src/server.js"]
+        port: 9000
+      environmentVariables:
+        ZHIPU_MODEL: glm-4.7-flashx

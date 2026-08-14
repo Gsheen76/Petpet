@@ -68,8 +68,9 @@ class OnboardingTests(unittest.TestCase):
 
         self.assertEqual(
             window.body_label.text(),
-            "名字会显示在聊天和档案中，最多 12 个字符。",
+            "名字会显示在聊天和档案中，最多 6 个字符。",
         )
+        self.assertEqual(window.name_input.maxLength(), 6)
         self.assertLessEqual(window.body_label.height(), 58)
         self.assertLessEqual(
             window.body_label.geometry().bottom(),
@@ -84,7 +85,7 @@ class OnboardingTests(unittest.TestCase):
         self.assertEqual(ai.normalize_pet_name("  小 团子  "), "小 团子")
         self.assertEqual(ai.normalize_pet_name("团子\n坏指令!"), "团子 坏指令")
         self.assertEqual(ai.normalize_pet_name("!@#"), "Sheen")
-        self.assertEqual(ai.normalize_pet_name("abcdefghijklmnop"), "abcdefghijkl")
+        self.assertEqual(ai.normalize_pet_name("abcdefghijklmnop"), "abcdef")
 
     def test_ai_persona_uses_custom_pet_name(self):
         memory = ai._default_memory()

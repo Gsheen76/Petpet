@@ -1,5 +1,10 @@
 # Home Pet Commands and Affection Growth Implementation Plan
 
+> **Execution status (2026-08-13):** Implemented and verified with 251 focused
+> tests and 424 full-suite tests. Syntax compilation and `git diff --check`
+> also passed. Implementation changes remain uncommitted because this feature
+> request did not authorize a commit or release.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Move home commands into the header, separate desktop/home autonomy, add passive affection and zero-stat warnings, and improve treasure, speech, and reward behavior.

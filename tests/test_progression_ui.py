@@ -7,7 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt5.QtCore import QEvent, QPoint, QRect, Qt
 from PyQt5.QtGui import QColor
-from PyQt5.QtWidgets import QApplication, QLabel, QPushButton
+from PyQt5.QtWidgets import QApplication, QGridLayout, QLabel, QPushButton
 
 import progression
 from progression_ui import (
@@ -133,8 +133,9 @@ class ProgressionWindowUiTests(unittest.TestCase):
         self.assertIn("成长强化", upgrade_text)
         self.assertIn("温柔抚摸", upgrade_text)
         self.assertIn("持久活力", upgrade_text)
-        self.assertIn("清醒属性消耗减缓 0%", upgrade_text)
-        self.assertIn("清醒属性消耗减缓 10%", upgrade_text)
+        self.assertIn("提高每次抚摸恢复的心情值", upgrade_text)
+        self.assertIn("减缓清醒状态下的属性自然消耗", upgrade_text)
+        self.assertNotIn("清醒属性消耗减缓", upgrade_text)
         self.assertNotIn("装饰小铺", upgrade_text)
 
     def test_home_shop_page_lists_home_furniture(self):
@@ -148,6 +149,28 @@ class ProgressionWindowUiTests(unittest.TestCase):
         self.assertIn("绿植盆栽", labels)
         self.assertIn("暖绒地毯", labels)
         self.assertIn("墙面装饰画", labels)
+        self.assertIn("小狗状态卡", labels)
+        self.assertIn(
+            "免费领取",
+            [button.text() for button in shop.findChildren(QPushButton)],
+        )
+
+    def test_upgrade_shop_uses_two_compact_columns(self):
+        shop = ShopWindow(self.pet, Mock())
+        self.windows = [shop]
+
+        shop._set_page("upgrades")
+        QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+        QApplication.processEvents()
+
+        grid = shop.findChild(QGridLayout, "upgradeGrid")
+        self.assertIsNotNone(grid)
+        self.assertEqual(grid.count(), len(progression.UPGRADE_DEFINITIONS))
+        positions = [grid.getItemPosition(index)[:2] for index in range(grid.count())]
+        self.assertEqual(positions[:4], [(0, 0), (0, 1), (1, 0), (1, 1)])
+        labels = " ".join(label.text() for label in shop.findChildren(QLabel))
+        self.assertNotIn("升级后效果", labels)
+        self.assertNotIn("本次强化费用", labels)
 
     def test_new_panels_use_the_larger_typography(self):
         shop = ShopWindow(self.pet, Mock())

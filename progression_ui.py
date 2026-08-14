@@ -24,7 +24,7 @@ from PyQt5.QtWidgets import (
 import progression
 import decoration_renderer
 from app_paths import DECORATIONS_DIR, POSES_DIR
-from home_scene import HOME_FURNITURE_PATHS
+from home_scene import HOME_FURNITURE_PATHS, render_home_status_card
 
 
 PANEL_STYLE = """
@@ -1317,7 +1317,10 @@ class ShopWindow(CozyProgressWindow):
         preview = QLabel()
         preview.setFixedSize(170, 112)
         preview.setAlignment(Qt.AlignCenter)
-        pixmap = QPixmap(HOME_FURNITURE_PATHS[decoration_id])
+        if decoration_id == "home_status_card":
+            pixmap = render_home_status_card(state)
+        else:
+            pixmap = QPixmap(HOME_FURNITURE_PATHS[decoration_id])
         if not pixmap.isNull():
             preview.setPixmap(pixmap.scaled(
                 preview.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation
@@ -1342,11 +1345,23 @@ class ShopWindow(CozyProgressWindow):
 
         action_row = QHBoxLayout()
         price = int(definition["price"])
-        price_label = QLabel("已拥有" if owned else f"售价：{price} Pet币")
+        price_label = QLabel(
+            "已拥有"
+            if owned
+            else ("免费领取" if price == 0 else f"售价：{price} Pet币")
+        )
         price_label.setObjectName("reward")
         action_row.addWidget(price_label)
         action_row.addStretch(1)
-        button = QPushButton("已购买" if owned else f"{price} Pet币 · 购买")
+        button = QPushButton(
+            "已领取"
+            if owned and price == 0
+            else (
+                "已购买"
+                if owned
+                else ("免费领取" if price == 0 else f"{price} Pet币 · 购买")
+            )
+        )
         button.setEnabled(owned or state.get("pet_coins", 0) >= price)
         if not owned:
             button.clicked.connect(
@@ -1389,17 +1404,27 @@ class ShopWindow(CozyProgressWindow):
         upgrades_title = QLabel("✨ 成长强化")
         upgrades_title.setObjectName("sectionTitle")
         self.content_layout.addWidget(upgrades_title)
-        tip = QLabel(
-            "每项最多强化 5 次。价格逐级提高，效果会立即作用于真实互动。"
-        )
+        tip = QLabel("每项最多 5 级，强化后立即生效。")
         tip.setObjectName("muted")
         tip.setWordWrap(True)
         self.content_layout.addWidget(tip)
 
-        for upgrade_id, definition in progression.UPGRADE_DEFINITIONS.items():
-            self.content_layout.addWidget(
-                self._upgrade_card(upgrade_id, definition)
+        grid_host = QWidget()
+        grid = QGridLayout(grid_host)
+        grid.setObjectName("upgradeGrid")
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(12)
+        grid.setVerticalSpacing(12)
+        for index, (upgrade_id, definition) in enumerate(
+                progression.UPGRADE_DEFINITIONS.items()):
+            grid.addWidget(
+                self._upgrade_card(upgrade_id, definition),
+                index // 2,
+                index % 2,
             )
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
+        self.content_layout.addWidget(grid_host)
 
     def _upgrade_card(self, upgrade_id, definition):
         state = self.pet.state
@@ -1407,6 +1432,7 @@ class ShopWindow(CozyProgressWindow):
         maximum = definition["max_level"]
         card = QFrame()
         card.setObjectName("upgradeCard")
+        card.setMinimumHeight(165)
         layout = QVBoxLayout(card)
         layout.setContentsMargins(18, 14, 18, 14)
         layout.setSpacing(10)
@@ -1426,34 +1452,10 @@ class ShopWindow(CozyProgressWindow):
         summary.setWordWrap(True)
         layout.addWidget(summary)
 
-        current = QLabel(
-            "当前效果\n" + progression.upgrade_description(
-                state,
-                upgrade_id,
-                next_level=False,
-                decay_rates=getattr(self.pet, "settings", None),
-            )
-        )
-        current.setObjectName("effectCurrent")
-        current.setWordWrap(True)
-        layout.addWidget(current)
-
         if level >= maximum:
-            next_text = QLabel("已达到满级，以上效果已经全部生效。")
-            next_text.setObjectName("reward")
             button = QPushButton("已满级")
             button.setEnabled(False)
         else:
-            next_text = QLabel(
-                "升级后效果\n" + progression.upgrade_description(
-                    state,
-                    upgrade_id,
-                    next_level=True,
-                    decay_rates=getattr(self.pet, "settings", None),
-                )
-            )
-            next_text.setObjectName("effectNext")
-            next_text.setWordWrap(True)
             price = definition["prices"][level]
             button = QPushButton(f"{price} Pet币 · 强化")
             button.setEnabled(state.get("pet_coins", 0) >= price)
@@ -1461,15 +1463,7 @@ class ShopWindow(CozyProgressWindow):
                 lambda _checked=False, selected=upgrade_id:
                 self._purchase(selected)
             )
-        layout.addWidget(next_text)
-
         bottom = QHBoxLayout()
-        if level < maximum:
-            price_label = QLabel(
-                f"本次强化费用：{definition['prices'][level]} Pet币"
-            )
-            price_label.setObjectName("reward")
-            bottom.addWidget(price_label)
         bottom.addStretch(1)
         bottom.addWidget(button)
         layout.addLayout(bottom)

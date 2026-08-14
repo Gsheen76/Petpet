@@ -6,15 +6,19 @@ from PyQt5.QtGui import QImage
 
 
 class PackagingAssetTests(unittest.TestCase):
-    def test_release_config_points_to_the_deployed_default_chat_proxy(self):
+    def test_release_config_points_to_the_free_chat_routes(self):
         root = Path(__file__).resolve().parents[1]
         config = json.loads(
             (root / "config.json.example").read_text(encoding="utf-8")
         )
 
         self.assertEqual(
-            config["default_chat_proxy_url"],
+            config["default_chat_fallback_url"],
             "https://petpet-default-chat.gsheen-petpet.workers.dev/v1/chat",
+        )
+        self.assertEqual(
+            config["default_chat_primary_url"],
+            "https://petpet-yun-chat-zqblnbrnfs.cn-hangzhou.fcapp.run/v1/chat",
         )
         self.assertEqual(config["api_key"], "")
 

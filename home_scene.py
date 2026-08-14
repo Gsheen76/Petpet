@@ -8,7 +8,7 @@ import time
 from dataclasses import dataclass
 
 from PyQt5.QtCore import QPoint, QPointF, QRect, QRectF, Qt, QTimer
-from PyQt5.QtGui import QColor, QPainter, QPainterPath, QPen, QPixmap
+from PyQt5.QtGui import QColor, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap
 from PyQt5.QtWidgets import QWidget
 
 from app_paths import ASSETS_DIR
@@ -61,6 +61,8 @@ HOME_PET_SLEEP_CONTENT_RECT = QRect(24, 176, 592, 288)
 HOME_NAV_PAW_CONTENT_RECT = QRect(118, 166, 1019, 943)
 HOME_NAV_TARGET_CONTENT_RECT = QRect(218, 113, 1379, 636)
 HOME_NAV_ARROW_CONTENT_RECT = QRect(178, 169, 668, 1144)
+HOME_STATUS_CARD_SIZE = (420, 270)
+HOME_STATUS_CARD_RENDER_SCALE = 2
 HOME_PET_BACK_WALK_FRAME_TOPS = (68, 73, 79, 73, 57, 47, 47, 61)
 HOME_PET_FRONT_CONTACTS = (
     (0.5547, 0.1523, 0.9784),
@@ -110,7 +112,103 @@ HOME_DECORATION_CATEGORY_BY_ID = {
     "home_sofa": "sofa",
     "home_plant": "plant",
     "home_wall_art": "wall_art",
+    "home_status_card": "wall_art",
 }
+
+
+def home_status_card_value_rects(size=HOME_STATUS_CARD_SIZE):
+    """Return logical value columns wide enough for a full 100% label."""
+
+    width = int(size[0])
+    return tuple(
+        QRectF(width - 98, 80 + index * 57, 68, 45)
+        for index in range(3)
+    )
+
+
+def render_home_status_card(state, size=HOME_STATUS_CARD_SIZE):
+    """Render a crisp, live wall card with only the pet name and three stats."""
+
+    width, height = (int(size[0]), int(size[1]))
+    pixmap = QPixmap(
+        width * HOME_STATUS_CARD_RENDER_SCALE,
+        height * HOME_STATUS_CARD_RENDER_SCALE,
+    )
+    pixmap.fill(Qt.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.Antialiasing)
+    painter.setRenderHint(QPainter.TextAntialiasing)
+    painter.scale(HOME_STATUS_CARD_RENDER_SCALE, HOME_STATUS_CARD_RENDER_SCALE)
+
+    shadow = QRectF(7, 9, width - 14, height - 15)
+    painter.setPen(Qt.NoPen)
+    painter.setBrush(QColor(105, 67, 48, 42))
+    painter.drawRoundedRect(shadow, 24, 24)
+
+    card = QRectF(4, 4, width - 14, height - 15)
+    background = QLinearGradient(card.topLeft(), card.bottomRight())
+    background.setColorAt(0.0, QColor("#fffdf6"))
+    background.setColorAt(1.0, QColor("#fff1df"))
+    painter.setBrush(background)
+    painter.setPen(QPen(QColor("#edc4aa"), 2.5))
+    painter.drawRoundedRect(card, 24, 24)
+
+    font = painter.font()
+    font.setFamily("Microsoft YaHei")
+    font.setPixelSize(26)
+    font.setBold(True)
+    painter.setFont(font)
+    painter.setPen(QColor("#7b4d3a"))
+    name = str(state.get("pet_name", "小狗")).strip() or "小狗"
+    painter.drawText(QRectF(28, 18, width - 56, 38), Qt.AlignVCenter, name)
+    painter.setPen(QPen(QColor("#f4ba95"), 1.5))
+    painter.drawLine(QPointF(28, 65), QPointF(width - 30, 65))
+
+    stats = (
+        ("饱腹", state.get("hunger", 0), QColor("#f2a166")),
+        ("心情", state.get("mood", 0), QColor("#ef91a2")),
+        ("精力", state.get("energy", 0), QColor("#9a8bd5")),
+    )
+    font.setPixelSize(18)
+    font.setBold(True)
+    painter.setFont(font)
+    value_rects = home_status_card_value_rects(size)
+    for index, (label, raw_value, color) in enumerate(stats):
+        try:
+            value = max(0.0, min(100.0, float(raw_value)))
+        except (TypeError, ValueError, OverflowError):
+            value = 0.0
+        top = 80 + index * 57
+        row = QRectF(22, top, width - 44, 45)
+        tint = QColor(color)
+        tint.setAlpha(32)
+        painter.setBrush(tint)
+        painter.setPen(QPen(QColor(color).lighter(125), 1.2))
+        painter.drawRoundedRect(row, 15, 15)
+        icon = QRectF(32, top + 7, 31, 31)
+        painter.setBrush(QColor(255, 255, 255, 210))
+        painter.setPen(Qt.NoPen)
+        painter.drawEllipse(icon)
+        painter.setBrush(color)
+        painter.drawEllipse(QRectF(icon.center().x() - 7, icon.center().y() - 7, 14, 14))
+        painter.setPen(QColor("#79584a"))
+        painter.drawText(QRectF(75, top, 54, 45), Qt.AlignVCenter, label)
+        value_rect = value_rects[index]
+        track = QRectF(134, top + 18, value_rect.left() - 148, 11)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor("#f4e4d9"))
+        painter.drawRoundedRect(track, 5.5, 5.5)
+        fill = QRectF(track.left(), track.top(), track.width() * value / 100.0, track.height())
+        painter.setBrush(color)
+        painter.drawRoundedRect(fill, 5.5, 5.5)
+        painter.setPen(QColor("#8f6857"))
+        painter.drawText(
+            value_rect,
+            Qt.AlignRight | Qt.AlignVCenter,
+            f"{int(round(value))}%",
+        )
+    painter.end()
+    return pixmap
 
 
 @dataclass(frozen=True)
@@ -257,6 +355,7 @@ class HomeSceneWindow(QWidget):
             item_id: QPixmap(path)
             for item_id, path in HOME_FURNITURE_PATHS.items()
         }
+        self.furniture["home_status_card"] = render_home_status_card(self.state)
         self._manual_destination = None
         self._manual_route = None
         self._destination_fade_started_at = None
@@ -269,6 +368,7 @@ class HomeSceneWindow(QWidget):
         self._selected_furniture = None
         self._editing_gesture = None
         self._decoration_category = "all"
+        self._interaction_menu_open = False
         self._last_pet_tick = time.monotonic()
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._sync_scene)
@@ -460,6 +560,11 @@ class HomeSceneWindow(QWidget):
             self.home_pet.request_auto_sleep(
                 self.home_sleep_target(), current
             )
+        elif self.home_pet.state == "idle":
+            if self.home_pet.maybe_start_autonomous_walk(current):
+                progression.record_action(
+                    self.state, "autonomous_walks"
+                )
 
         events = self.home_pet.advance(elapsed)
         if "manual_sleep_started" in events:
@@ -546,8 +651,24 @@ class HomeSceneWindow(QWidget):
         if self.view_pan_enabled():
             self._draw_scene_button(painter, self.left_view_button_rect(), "左移")
             self._draw_scene_button(painter, self.right_view_button_rect(), "右移")
-        self._draw_scene_button(painter, self.decoration_button_rect(), "装修")
-        self._draw_scene_button(painter, self.exit_button_rect(), "退出")
+        for name, rect in self.home_action_button_rects().items():
+            self._draw_scene_button(
+                painter, rect, self.scene_button_label(name)
+            )
+        if self.interaction_header_needs_attention():
+            self._draw_attention_dot(
+                painter, self.interaction_button_rect().topRight()
+            )
+        if self._interaction_menu_open:
+            attention = self.interaction_actions_needing_attention()
+            for action, rect in self.home_interaction_action_rects().items():
+                self._draw_scene_button(
+                    painter,
+                    rect,
+                    {"pet": "抚摸", "feed": "喂食", "play": "玩耍", "sleep": "睡觉"}[action],
+                )
+                if action in attention:
+                    self._draw_attention_dot(painter, rect.topRight())
         painter.restore()
         if self.is_decorating():
             self._draw_decoration_panel(painter)
@@ -555,6 +676,7 @@ class HomeSceneWindow(QWidget):
 
     def show_scene(self):
         progression.ensure_progression(self.state)
+        self._interaction_menu_open = False
         self._clear_manual_destination()
         self._reset_home_pet_controller()
         self.state.setdefault("home_scene", {})["enabled"] = True
@@ -573,6 +695,7 @@ class HomeSceneWindow(QWidget):
         self.save_state(self.state)
 
     def hide_scene(self):
+        self._interaction_menu_open = False
         self.state.setdefault("home_scene", {})["enabled"] = False
         hide_overlays = getattr(self.pet, "hide_overlays", None)
         if callable(hide_overlays):
@@ -585,34 +708,54 @@ class HomeSceneWindow(QWidget):
         self._save_home_pet_position()
         self.hide()
         self._set_pet_visible(True)
+        show_treasure = getattr(self.pet, "_show_pending_dig_bubble", None)
+        if callable(show_treasure):
+            show_treasure()
         raise_pet = getattr(self.pet, "raise_", None)
         if callable(raise_pet):
             raise_pet()
 
-    def exit_button_rect(self):
-        width = 58
-        height = 38
-        margin = 14
+    def home_action_button_rects(self):
+        """Return the fixed, aligned home header controls from left to right."""
         canvas = self.scene_canvas_rect()
-        return QRect(
-            canvas.right() - margin - width + 1,
-            margin,
-            width,
-            height,
-        )
+        widths = {
+            "shop": 66,
+            "interaction": 82,
+            "decorate": 66,
+            "exit": 58,
+        }
+        gap = 8
+        right = canvas.right() - 14 + 1
+        rects = {}
+        for name in reversed(tuple(widths)):
+            width = widths[name]
+            rects[name] = QRect(right - width, 14, width, 38)
+            right = rects[name].left() - gap
+        return {name: rects[name] for name in widths}
+
+    def exit_button_rect(self):
+        return self.home_action_button_rects()["exit"]
 
     def decoration_button_rect(self):
+        return self.home_action_button_rects()["decorate"]
+
+    def shop_button_rect(self):
+        return self.home_action_button_rects()["shop"]
+
+    def interaction_button_rect(self):
+        return self.home_action_button_rects()["interaction"]
+
+    def home_interaction_action_rects(self):
+        header = self.interaction_button_rect()
         width = 66
-        height = 38
-        gap = 8
-        margin = 14
-        canvas = self.scene_canvas_rect()
-        return QRect(
-            canvas.right() - margin - 58 - gap - width + 1,
-            margin,
-            width,
-            height,
-        )
+        gap = 6
+        names = ("pet", "feed", "play", "sleep")
+        total = width * len(names) + gap * (len(names) - 1)
+        start_x = header.right() - total + 1
+        return {
+            name: QRect(start_x + index * (width + gap), 60, width, 36)
+            for index, name in enumerate(names)
+        }
 
     def left_view_button_rect(self):
         return QRect(
@@ -647,6 +790,8 @@ class HomeSceneWindow(QWidget):
         return {
             "left": "左移",
             "right": "右移",
+            "shop": "商店",
+            "interaction": "互动⌄",
             "decorate": "装修",
             "exit": "退出",
         }.get(button, "")
@@ -662,6 +807,47 @@ class HomeSceneWindow(QWidget):
         painter.setPen(QColor("#fff8ed"))
         painter.drawText(rect, Qt.AlignCenter, label)
 
+    @staticmethod
+    def _draw_attention_dot(painter, anchor):
+        painter.save()
+        painter.setPen(QPen(QColor("#fff7ef"), 2))
+        painter.setBrush(QColor("#f05f62"))
+        painter.drawEllipse(QPointF(anchor.x() - 3, anchor.y() + 4), 6, 6)
+        painter.restore()
+
+    def interaction_actions_needing_attention(self):
+        record_actions = progression.zero_stat_interaction_actions(self.state)
+        return {
+            {
+                "pettings": "pet",
+                "feedings": "feed",
+                "play_sessions": "play",
+                "manual_sleeps": "sleep",
+            }[action]
+            for action in record_actions
+        }
+
+    def home_pet_needs_attention(self):
+        return bool(self.interaction_actions_needing_attention())
+
+    def interaction_header_needs_attention(self):
+        return self.home_pet_needs_attention()
+
+    def trigger_home_interaction(self, action):
+        method_name = {
+            "pet": "pet_click",
+            "feed": "feed",
+            "play": "play",
+            "sleep": "toggle_sleep",
+        }.get(action)
+        method = getattr(self.pet, method_name, None) if method_name else None
+        if not callable(method):
+            return False
+        method()
+        self._interaction_menu_open = False
+        self.update()
+        return True
+
     def is_decorating(self):
         return bool(self.state.get("home_scene", {}).get("decorating", False))
 
@@ -671,6 +857,7 @@ class HomeSceneWindow(QWidget):
 
     def toggle_decoration_mode(self):
         decorating = not self.is_decorating()
+        self._interaction_menu_open = False
         home_scene = self.state.setdefault("home_scene", {})
         home_scene["decorating"] = decorating
         if decorating:
@@ -739,21 +926,37 @@ class HomeSceneWindow(QWidget):
         return result
 
     def _draw_furniture(self, painter, decoration_id, position):
-        pixmap = self.furniture.get(decoration_id)
+        pixmap = (
+            render_home_status_card(self.state)
+            if decoration_id == "home_status_card"
+            else self.furniture.get(decoration_id)
+        )
         if pixmap is None or pixmap.isNull():
             return
         transform = progression.home_decoration_transform(self.state, decoration_id)
+        logical_width, logical_height = progression.HOME_DECORATION_DEFINITIONS[
+            decoration_id
+        ]["size"]
         painter.save()
         painter.translate(
             self._scene_content_offset()
             + int(position.get("x", 0))
             - self._camera_x
-            + pixmap.width() / 2,
-            int(position.get("y", 0)) + pixmap.height() / 2,
+            + logical_width / 2,
+            int(position.get("y", 0)) + logical_height / 2,
         )
         painter.rotate(transform["rotation"])
         painter.scale(transform["scale"], transform["scale"])
-        painter.drawPixmap(-pixmap.width() // 2, -pixmap.height() // 2, pixmap)
+        painter.drawPixmap(
+            QRectF(
+                -logical_width / 2,
+                -logical_height / 2,
+                logical_width,
+                logical_height,
+            ),
+            pixmap,
+            QRectF(0, 0, pixmap.width(), pixmap.height()),
+        )
         painter.restore()
 
     def home_pet_draw_rect(
@@ -796,26 +999,15 @@ class HomeSceneWindow(QWidget):
         return QRect(self.mapToGlobal(local.topLeft()), local.size())
 
     def open_home_pet_menu(self, point):
-        """Open the shared pet menu only when a right-click hits the home pet."""
-
-        if (
-            not self.home_pet_visible()
-            or self.is_decorating()
-            or not self.scene_canvas_rect().contains(point)
-            or not self.home_pet_hit_rect().contains(QPointF(point))
-        ):
-            return False
-        opener = getattr(self.pet, "open_bubble_menu", None)
-        if not callable(opener):
-            return False
-        opener()
-        return True
+        """The home scene deliberately owns no right-click shortcut menu."""
+        return False
 
     def home_pet_walk_frame(self, now=None):
         """Return the current authored frame, holding frame zero while idle."""
 
         if self.home_pet.state not in {
             "manual_walk",
+            "auto_walk",
             "manual_sleep_walk",
             "auto_sleep_walk",
         }:
@@ -1092,44 +1284,46 @@ class HomeSceneWindow(QWidget):
                 painter.restore()
             else:
                 painter.drawPixmap(body, render_spec.pixmap, source)
-            painter.restore()
-            return
+        else:
+            draw_body = QRectF(body)
+            if self.home_pet.state in {
+                "manual_walk", "auto_walk", "auto_sleep_walk"
+            }:
+                bob = 3.0 * math.sin(time.monotonic() * 12.0)
+                draw_body.translate(0.0, -abs(bob))
+            elif self.home_pet.state == "sleeping":
+                sleep_height = draw_body.height() * 0.62
+                draw_body.setTop(draw_body.bottom() - sleep_height)
 
-        draw_body = QRectF(body)
-        if self.home_pet.state in {"manual_walk", "auto_sleep_walk"}:
-            bob = 3.0 * math.sin(time.monotonic() * 12.0)
-            draw_body.translate(0.0, -abs(bob))
-        elif self.home_pet.state == "sleeping":
-            sleep_height = draw_body.height() * 0.62
-            draw_body.setTop(draw_body.bottom() - sleep_height)
-
-        colors = {
-            "front_left": QColor("#d88974"),
-            "front_right": QColor("#e4a06f"),
-            "back_left": QColor("#8aa890"),
-            "back_right": QColor("#79a3ad"),
-        }
-        painter.setBrush(colors.get(self.home_pet.direction, QColor("#d88974")))
-        painter.setPen(QPen(QColor("#754b3a"), 2))
-        painter.drawRoundedRect(draw_body, 14, 14)
-        labels = {
-            "front_left": "↙",
-            "front_right": "↘",
-            "back_left": "↖",
-            "back_right": "↗",
-        }
-        painter.setPen(QColor("#fff8ed"))
-        painter.drawText(
-            draw_body,
-            Qt.AlignCenter,
-            "Z  Z" if self.home_pet.state == "sleeping" else labels.get(
-                self.home_pet.direction, "•"
-            ),
-        )
+            colors = {
+                "front_left": QColor("#d88974"),
+                "front_right": QColor("#e4a06f"),
+                "back_left": QColor("#8aa890"),
+                "back_right": QColor("#79a3ad"),
+            }
+            painter.setBrush(colors.get(self.home_pet.direction, QColor("#d88974")))
+            painter.setPen(QPen(QColor("#754b3a"), 2))
+            painter.drawRoundedRect(draw_body, 14, 14)
+            labels = {
+                "front_left": "↙",
+                "front_right": "↘",
+                "back_left": "↖",
+                "back_right": "↗",
+            }
+            painter.setPen(QColor("#fff8ed"))
+            painter.drawText(
+                draw_body,
+                Qt.AlignCenter,
+                "Z  Z" if self.home_pet.state == "sleeping" else labels.get(
+                    self.home_pet.direction, "•"
+                ),
+            )
+        if self.home_pet_needs_attention():
+            self._draw_attention_dot(painter, body.topRight())
         painter.restore()
 
     def _furniture_depth_key(self, decoration_id):
-        if decoration_id == "home_wall_art":
+        if decoration_id in {"home_wall_art", "home_status_card"}:
             return (0, 0.0)
         if decoration_id == "home_rug":
             return (1, 0.0)
@@ -1142,7 +1336,11 @@ class HomeSceneWindow(QWidget):
         for item_id in self.state.get("owned_home_decorations", []):
             if item_id in self.state.get("home_stored_decorations", []):
                 continue
-            pixmap = self.furniture.get(item_id)
+            pixmap = (
+                render_home_status_card(self.state)
+                if item_id == "home_status_card"
+                else self.furniture.get(item_id)
+            )
             if pixmap is None or pixmap.isNull():
                 continue
             entries.append((self._furniture_depth_key(item_id), "furniture", item_id))
@@ -1161,9 +1359,10 @@ class HomeSceneWindow(QWidget):
             return QRectF()
         position = self.state.get("home_decoration_positions", {}).get(decoration_id, {})
         transform = progression.home_decoration_transform(self.state, decoration_id)
+        logical_size = progression.HOME_DECORATION_DEFINITIONS[decoration_id]["size"]
         bounds = home_decoration_bounds(
             position,
-            (pixmap.width(), pixmap.height()),
+            logical_size,
             transform,
             self._camera_x,
         )
@@ -1288,7 +1487,11 @@ class HomeSceneWindow(QWidget):
             painter.setBrush(QColor("#fffaf1"))
             painter.drawRoundedRect(card, 9, 9)
             thumbnail = self._item_thumbnail_rect(card)
-            pixmap = self.furniture.get(item_id)
+            pixmap = (
+                render_home_status_card(self.state)
+                if item_id == "home_status_card"
+                else self.furniture.get(item_id)
+            )
             if pixmap is not None and not pixmap.isNull():
                 preview = self.furniture_preview_rect(item_id, card)
                 painter.drawPixmap(
@@ -1310,11 +1513,25 @@ class HomeSceneWindow(QWidget):
 
     def handle_scene_click(self, point):
         """Handle non-furniture clicks without allowing the board above pet."""
+        if self._interaction_menu_open:
+            for action, rect in self.home_interaction_action_rects().items():
+                if rect.contains(point):
+                    return self.trigger_home_interaction(action)
         if self.exit_button_rect().contains(point):
             self.hide_scene()
             return True
         if self.decoration_button_rect().contains(point):
             self.toggle_decoration_mode()
+            return True
+        if self.shop_button_rect().contains(point):
+            opener = getattr(self.pet, "open_shop", None)
+            if callable(opener):
+                opener()
+            self._interaction_menu_open = False
+            return True
+        if self.interaction_button_rect().contains(point):
+            self._interaction_menu_open = not self._interaction_menu_open
+            self.update()
             return True
         if self.view_pan_enabled() and self.left_view_button_rect().contains(point):
             self.begin_pan("left")
@@ -1333,6 +1550,19 @@ class HomeSceneWindow(QWidget):
         if self.exit_button_rect().contains(point):
             return True
         if self.decoration_button_rect().contains(point):
+            return True
+        if any(
+            rect.contains(point)
+            for rect in (
+                self.shop_button_rect(),
+                self.interaction_button_rect(),
+            )
+        ):
+            return True
+        if self._interaction_menu_open and any(
+            rect.contains(point)
+            for rect in self.home_interaction_action_rects().values()
+        ):
             return True
         if self.view_pan_enabled() and (
             self.left_view_button_rect().contains(point)
@@ -1365,6 +1595,7 @@ class HomeSceneWindow(QWidget):
             self.canvas_to_world(point),
             time.monotonic() if now is None else float(now),
         )
+        self._interaction_menu_open = False
         self._set_manual_destination(self.home_pet.target)
         if interrupted_sleep:
             self.state["sleeping"] = False
@@ -1477,9 +1708,12 @@ class HomeSceneWindow(QWidget):
         pixmap = self.furniture[decoration_id]
         transform = gesture["transform"]
         if gesture["kind"] == "scale":
+            logical_size = progression.HOME_DECORATION_DEFINITIONS[
+                decoration_id
+            ]["size"]
             scale = scale_from_handle(
                 bounds.center(), point, gesture["handle"],
-                (pixmap.width(), pixmap.height()), transform["rotation"], transform["scale"],
+                logical_size, transform["rotation"], transform["scale"],
             )
             progression.set_home_decoration_transform(
                 self.state, decoration_id, scale=scale, rotation=transform["rotation"]
@@ -1503,8 +1737,7 @@ class HomeSceneWindow(QWidget):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.RightButton:
-            if self.open_home_pet_menu(event.pos()):
-                event.accept()
+            event.accept()
             return
         if event.button() != Qt.LeftButton:
             return

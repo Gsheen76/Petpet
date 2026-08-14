@@ -45,39 +45,36 @@ RECORD_DEFAULTS = {
 
 # Digging is an occasional bonus, not a replacement for achievements.
 # A check runs once per minute; after a discovery there is a 20-minute
-# cooldown.  The weighted average discovery is about 12 Pet coins.
+# cooldown. The doubled weighted average is about 24 Pet coins.
 DIG_COOLDOWN_SECONDS = 20 * 60
 DIG_DISCOVERY_CHANCE = 0.10
 DIG_REWARD_TIERS = (
-    (0.65, 5, 10, "小钱袋"),
-    (0.27, 12, 20, "闪亮钱袋"),
-    (0.07, 25, 40, "稀有宝藏"),
-    (0.01, 60, 100, "大宝藏"),
+    (0.65, 10, 20, "小钱袋"),
+    (0.27, 24, 40, "闪亮钱袋"),
+    (0.07, 50, 80, "稀有宝藏"),
+    (0.01, 120, 200, "大宝藏"),
 )
 
 MINIGAME_IDS = ("coin_catch", "lucky_paws")
 
 AFFECTION_ACTION_GAINS = {
-    "pettings": 2,
-    "feedings": 3,
-    "play_sessions": 4,
+    "pettings": 1,
+    "feedings": 4,
+    "play_sessions": 5,
     "fetch_catches": 2,
-    "chats_opened": 1,
+    "ai_replies": 1,
     "wake_shakes": 1,
-    "manual_sleeps": 2,
-    "rest_bubble": 2,
+    "manual_sleeps": 3,
 }
 
 AFFECTION_ACTION_COOLDOWNS = {
-    "pettings": 20,
-    "feedings": 5 * 60,
-    "play_sessions": 3 * 60,
-    "fetch_catches": 3 * 60,
-    # Chat is intentionally unlimited: every valid sent message counts.
-    "chats_opened": 0,
-    "wake_shakes": 2 * 60,
-    "manual_sleeps": 10 * 60,
-    "rest_bubble": 5 * 60,
+    "pettings": 60,
+    "feedings": 8 * 60,
+    "play_sessions": 6 * 60,
+    "fetch_catches": 5 * 60,
+    "ai_replies": 3 * 60,
+    "wake_shakes": 5 * 60,
+    "manual_sleeps": 15 * 60,
 }
 
 
@@ -275,6 +272,15 @@ HOME_DECORATION_DEFINITIONS = {
         "default_position": {"x": 1110, "y": 95},
         "size": (220, 285),
     },
+    "home_status_card": {
+        "name": "小狗状态卡",
+        "category": "home",
+        "price": 0,
+        "asset": None,
+        "description": "挂在墙上，随时看看小狗的成长与状态。",
+        "default_position": {"x": 760, "y": 105},
+        "size": (420, 270),
+    },
 }
 
 
@@ -345,6 +351,15 @@ def ensure_progression(state):
     except (TypeError, ValueError):
         buffer_value = 0.0
     state["passive_xp_buffer"] = max(0.0, min(buffer_value, 0.999999))
+    try:
+        affection_buffer = float(
+            state.get("passive_affection_buffer", 0.0)
+        )
+    except (TypeError, ValueError):
+        affection_buffer = 0.0
+    state["passive_affection_buffer"] = max(
+        0.0, min(affection_buffer, 0.999999)
+    )
 
     raw_cooldowns = state.get("affection_last_gains")
     if not isinstance(raw_cooldowns, dict):
@@ -496,7 +511,7 @@ def affection_to_next(level):
     Early levels arrive quickly, while long-term levels still feel meaningful.
     """
     level = _safe_int(level, default=1, minimum=1)
-    return 20 + level * 10
+    return min(200, 20 + level * 10)
 
 
 def add_affection(state, amount):
@@ -737,6 +752,49 @@ def passive_xp_per_second(state):
 def passive_xp_per_minute(state):
     """User-facing passive XP rate in the more readable per-minute unit."""
     return passive_xp_per_second(state) * 60.0
+
+
+def passive_affection_per_second(state):
+    """Return passive affection growth with multiplicative zero-stat penalties."""
+    ensure_progression(state)
+    zero_count = 0
+    for key in ("hunger", "mood", "energy"):
+        try:
+            value = float(state.get(key, 0))
+        except (TypeError, ValueError):
+            value = 0.0
+        if value <= 0:
+            zero_count += 1
+    return 0.01 * (0.5 ** zero_count)
+
+
+def passive_affection_per_minute(state):
+    """User-facing passive affection rate in points per minute."""
+    return passive_affection_per_second(state) * 60.0
+
+
+def zero_stat_interaction_actions(state):
+    """Return interaction record keys that restore at least one zero stat."""
+    ensure_progression(state)
+    zero_stats = set()
+    for key in ("hunger", "mood", "energy"):
+        if key not in state:
+            continue
+        try:
+            value = float(state.get(key, 0))
+        except (TypeError, ValueError):
+            value = 0.0
+        if value <= 0:
+            zero_stats.add(key)
+
+    actions = set()
+    if "hunger" in zero_stats:
+        actions.add("feedings")
+    if "mood" in zero_stats:
+        actions.update(("pettings", "feedings", "play_sessions"))
+    if "energy" in zero_stats:
+        actions.add("manual_sleeps")
+    return actions
 
 
 def upgrade_description(
@@ -993,7 +1051,11 @@ def purchase_home_decoration(state, decoration_id):
     return {
         "ok": True,
         "price": price,
-        "message": f"Purchased {definition['name']}.",
+        "message": (
+            f"已领取 {definition['name']}。"
+            if price == 0
+            else f"已购买 {definition['name']}。"
+        ),
     }
 
 

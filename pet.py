@@ -517,6 +517,7 @@ DEFAULT_STATE = {
     "level": 1, "xp": 0,
     "affection_level": 1, "affection_points": 0,
     "passive_xp_buffer": 0.0,
+    "passive_affection_buffer": 0.0,
     "pet_coins": 0,
     "pending_dig_reward": 0,
     "last_dig_discovery_at": 0.0,
@@ -649,6 +650,102 @@ class PetpetConfirmDialog(QDialog):
         """)
 
 
+class PetNameEditDialog(QDialog):
+    """Small warm name editor used by the desktop attribute card."""
+    def __init__(self, current_name, on_apply, parent=None):
+        super().__init__(parent)
+        self.on_apply = on_apply
+        self.setWindowTitle("给小狗改名")
+        self.setModal(True)
+        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setFixedWidth(360)
+
+        card = QFrame()
+        card.setObjectName("petNameEditCard")
+        title = QLabel("给小狗改个名字")
+        title.setObjectName("petNameEditTitle")
+        title.setFont(independent_pixel_font(21, QFont.Bold))
+        hint = QLabel("最多 6 个字符")
+        hint.setObjectName("petNameEditHint")
+        hint.setFont(independent_pixel_font(16))
+        self.name_input = QLineEdit(str(current_name))
+        self.name_input.setMaxLength(6)
+        self.name_input.setFont(independent_pixel_font(20))
+        self.name_input.returnPressed.connect(self._apply)
+        self.error_label = QLabel("")
+        self.error_label.setObjectName("petNameEditError")
+        self.error_label.setFont(independent_pixel_font(15, QFont.Bold))
+        cancel = QPushButton("取消")
+        cancel.setObjectName("petNameEditSecondary")
+        apply_button = QPushButton("保存")
+        apply_button.setObjectName("petNameEditPrimary")
+        for button in (cancel, apply_button):
+            button.setFont(independent_pixel_font(17, QFont.Bold))
+            button.setMinimumHeight(40)
+        cancel.clicked.connect(self.reject)
+        apply_button.clicked.connect(self._apply)
+
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(24, 22, 24, 20)
+        layout.setSpacing(10)
+        layout.addWidget(title)
+        layout.addWidget(hint)
+        layout.addWidget(self.name_input)
+        layout.addWidget(self.error_label)
+        actions = QHBoxLayout()
+        actions.addStretch(1)
+        actions.addWidget(cancel)
+        actions.addWidget(apply_button)
+        layout.addLayout(actions)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(8, 8, 8, 8)
+        outer.addWidget(card)
+        self.setStyleSheet("""
+            QDialog { background:transparent; }
+            QFrame#petNameEditCard {
+                background:#fff9f4; border:1px solid #edcfc2; border-radius:22px;
+            }
+            QLabel#petNameEditTitle { color:#704b3c; }
+            QLabel#petNameEditHint { color:#a77b69; }
+            QLabel#petNameEditError { color:#c66d5a; }
+            QLineEdit {
+                min-height:42px; padding:0 14px; background:#fffdf9;
+                color:#65483b; border:2px solid #edcdb3; border-radius:15px;
+                selection-background-color:#ffc9b8;
+            }
+            QPushButton { min-height:40px; padding:0 18px; border-radius:20px; }
+            QPushButton#petNameEditSecondary {
+                background:#fffdf9; color:#7d5a4c; border:1px solid #e7cec1;
+            }
+            QPushButton#petNameEditPrimary {
+                background:#f8dcd7; color:#704b3c; border:1px solid #efc4bb;
+            }
+        """)
+
+    def center_on_screen(self, screen_rect=None):
+        """Center the editor on the active pet screen."""
+        if screen_rect is None:
+            screen = QApplication.screenAt(self.parentWidget().frameGeometry().center()) \
+                if self.parentWidget() is not None else QApplication.primaryScreen()
+            screen_rect = screen.availableGeometry() if screen is not None else QRect()
+        self.adjustSize()
+        self.move(
+            screen_rect.x() + (screen_rect.width() - self.width()) // 2,
+            screen_rect.y() + (screen_rect.height() - self.height()) // 2,
+        )
+
+    def _apply(self):
+        raw_name = " ".join(self.name_input.text().split())
+        if not any(char.isalnum() for char in raw_name):
+            self.error_label.setText("请输入一个名字哦")
+            self.name_input.setFocus()
+            return False
+        self.on_apply(ai.normalize_pet_name(raw_name))
+        self.accept()
+        return True
+
+
 class PetpetPopupMenu(QFrame):
     """Small rounded popup card that closes when focus leaves it."""
     def __init__(self, parent=None):
@@ -708,6 +805,7 @@ class ChatWindow(QWidget):
         self._pending_user = None
         self._pending_image = None
         self._streaming = ""
+        self._last_assistant_bubble = None
 
         self.setWindowFlags(
             Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint |
@@ -1522,6 +1620,7 @@ class ChatWindow(QWidget):
     def _set_log_messages(self, messages):
         """Render actual rounded message widgets instead of rich-text blocks."""
         self._displayed_messages = list(messages)
+        self._last_assistant_bubble = None
         chat_font_size = self._chat_font_px()
         while self.log_layout.count():
             item = self.log_layout.takeAt(0)
@@ -1607,6 +1706,7 @@ class ChatWindow(QWidget):
                     )
                     row_layout.addWidget(bubble)
                     row_layout.addStretch(1)
+                    self._last_assistant_bubble = bubble
                 self.log_layout.addWidget(row)
         self.log_layout.addStretch(1)
         self._scroll_log_to_bottom()
@@ -1717,14 +1817,24 @@ class ChatWindow(QWidget):
     # slots (connected in main)
     def on_token(self, chunk):
         self._streaming += chunk
-        # The history has not been saved yet, so render the pending pair.
-        self._set_log_messages(
-            self._history_messages()
-            + [("user", self._pending_user,
-                self._pending_image.get("history_image")
-                if self._pending_image else None),
-               ("assistant", ai.clean_assistant_reply(self._streaming) + "▍")]
-        )
+        # Updating the pending bubble in place keeps the history and scrollbar
+        # stable. Rebuilding every row for every token caused blank flashes.
+        text = ai.clean_assistant_reply(self._streaming) + "▍"
+        try:
+            if self._last_assistant_bubble is None:
+                raise RuntimeError
+            self._last_assistant_bubble.setText(text)
+            self._last_assistant_bubble.adjustSize()
+            self._scroll_log_to_bottom()
+        except RuntimeError:
+            # The window may have been rebuilt between queued token signals.
+            self._set_log_messages(
+                self._history_messages()
+                + [("user", self._pending_user,
+                    self._pending_image.get("history_image")
+                    if self._pending_image else None),
+                   ("assistant", text)]
+            )
 
     def on_done(self, full):
         # commit to memory
@@ -2735,7 +2845,7 @@ class TutorialWindow(QWidget):
         (
             "🏷️",
             "最后，给小狗取个名字吧",
-            "名字会显示在聊天和档案中，最多 12 个字符。",
+            "名字会显示在聊天和档案中，最多 6 个字符。",
         ),
     ]
 
@@ -2870,7 +2980,7 @@ class TutorialWindow(QWidget):
         name_layout.setSpacing(4)
         self.name_input = QLineEdit()
         self.name_input.setObjectName("petNameInput")
-        self.name_input.setMaxLength(12)
+        self.name_input.setMaxLength(6)
         self.name_input.setPlaceholderText("例如：团子、旺财、Sheen")
         self.name_input.returnPressed.connect(self._next)
         self.name_hint = QLabel("")
@@ -3039,6 +3149,47 @@ class StatBubble(QWidget):
     def _tick(self):
         self.update()
 
+    @staticmethod
+    def companionship_text(days):
+        return f"♡ 陪伴 {max(1, int(days))} 天"
+
+    @staticmethod
+    def header_badge_font():
+        """Use one crisp font for both compact header badges."""
+        return pixel_font(9, QFont.Bold)
+
+    def header_rects(self):
+        """Keep the title, rename control and badges in separate columns."""
+        width = self.width()
+        return {
+            "title": QRectF(27, 15, 248, 40),
+            "edit": QRectF(282, 17, 36, 36),
+            "coin": QRectF(width - 294, 18, 112, 33),
+            "days": QRectF(width - 174, 18, 148, 33),
+        }
+
+    def name_edit_rect(self):
+        return self.header_rects()["edit"]
+
+    def mousePressEvent(self, event):
+        if (event.button() == Qt.LeftButton
+                and self.name_edit_rect().contains(QPointF(event.pos()))):
+            dialog = PetNameEditDialog(
+                self.pet.pet_name,
+                self.pet.set_pet_name,
+                self.pet if isinstance(self.pet, QWidget) else None,
+            )
+            self._name_dialog = dialog
+            dialog.center_on_screen(_pet_interface_screen_rect(self.pet))
+            dialog.exec_()
+            self._name_dialog = None
+            try:
+                self.update()
+            except RuntimeError:
+                pass
+            return
+        super().mousePressEvent(event)
+
     def _place(self):
         """Place above the action bubbles, centered on the pet."""
         g = _pet_interface_anchor_rect(self.pet)
@@ -3129,37 +3280,42 @@ class StatBubble(QWidget):
 
         # ---- Header: title and companionship badge never share a text rect. ----
         title_text = f"🐾 {self.pet.pet_name} 的小屋"
-        title_rect = QRectF(27, 15, 300, 40)
+        header_rects = self.header_rects()
+        title_rect = header_rects["title"]
         p.setPen(QColor("#7b4d3a"))
         p.setFont(self._fit_font(
             title_text, 16, title_rect.width(), QFont.Bold, 7
         ))
         p.drawText(title_rect, Qt.AlignLeft | Qt.AlignVCenter,
                    title_text)
+        edit_rect = self.name_edit_rect()
+        p.setBrush(QColor("#fff1e5"))
+        p.setPen(QPen(QColor("#eab59f"), 1))
+        p.drawEllipse(edit_rect)
+        p.setPen(QColor("#c2735d"))
+        p.setFont(pixel_font(15, QFont.Bold))
+        p.drawText(edit_rect, Qt.AlignCenter, "✎")
 
         coin_text = f"Pet币 {st.get('pet_coins', 0)}"
-        coin_rect = QRectF(W - 278, 18, 90, 33)
+        coin_rect = header_rects["coin"]
         p.setBrush(QColor(255, 241, 198, 240))
         p.setPen(QPen(QColor("#e8be68"), 1))
         p.drawRoundedRect(coin_rect, 16, 16)
         p.setPen(QColor("#a66a26"))
-        p.setFont(self._fit_font(
-            coin_text, 9, coin_rect.width() - 12, QFont.Bold, 6
-        ))
+        p.setFont(self.header_badge_font())
         p.drawText(
             coin_rect.adjusted(6, 0, -6, 0),
             Qt.AlignCenter | Qt.TextSingleLine,
             coin_text,
         )
 
-        days_text = f"♡ 陪伴第 {days} 天"
-        days_rect = QRectF(W - 179, 18, 153, 33)
+        days_text = self.companionship_text(days)
+        days_rect = header_rects["days"]
         p.setBrush(QColor(255, 224, 214, 235))
         p.setPen(QPen(QColor("#e9a494"), 1))
         p.drawRoundedRect(days_rect, 16, 16)
         p.setPen(QColor("#a95f55"))
-        p.setFont(self._fit_font(days_text, 11, days_rect.width() - 18,
-                                 QFont.Bold, 6))
+        p.setFont(self.header_badge_font())
         p.drawText(days_rect.adjusted(9, 0, -9, 0),
                    Qt.AlignCenter | Qt.TextSingleLine, days_text)
 
@@ -3260,6 +3416,17 @@ class StatBubble(QWidget):
             QRectF(210, 159, 94, 29),
             Qt.AlignRight | Qt.AlignVCenter | Qt.TextSingleLine,
             affection_value,
+        )
+        affection_rate = progression.passive_affection_per_minute(st)
+        affection_rate_text = f"陪伴 +{affection_rate:.3f}/min"
+        p.setPen(QColor("#a86d61"))
+        p.setFont(self._fit_font(
+            affection_rate_text, 9, W - 344, QFont.Bold, 7
+        ))
+        p.drawText(
+            QRectF(320, 159, W - 354, 29),
+            Qt.AlignRight | Qt.AlignVCenter | Qt.TextSingleLine,
+            affection_rate_text,
         )
 
         affection_bar = QRectF(91, 196, W - 126, 10)
@@ -3375,10 +3542,13 @@ class BubbleMenu(QWidget):
 
     @staticmethod
     def action_needs_attention(action, *, has_claimable,
-                               needs_personal_setup):
+                               needs_personal_setup, zero_actions=()):
+        zero_actions = set(zero_actions)
         return (
             (action in ("more", "achievements") and has_claimable)
             or (action == "chat" and needs_personal_setup)
+            or action in zero_actions
+            or (action == "interaction" and bool(zero_actions))
         )
 
     def __init__(self, pet, page="primary"):
@@ -3393,7 +3563,7 @@ class BubbleMenu(QWidget):
         self.actions = list(action_sets[self.page])
         self.setWindowFlags(
             Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint |
-            Qt.Popup
+            Qt.Tool
         )
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WA_DeleteOnClose, True)
@@ -3482,6 +3652,18 @@ class BubbleMenu(QWidget):
             self.pet.state
         )
         needs_api_key = self.needs_api_key_configuration()
+        zero_record_actions = progression.zero_stat_interaction_actions(
+            self.pet.state
+        )
+        zero_actions = {
+            {
+                "pettings": "pet",
+                "feedings": "feed",
+                "play_sessions": "play",
+                "manual_sleeps": "sleep",
+            }[action]
+            for action in zero_record_actions
+        }
         for i, (emoji, label, action, color) in enumerate(self.actions):
             row = i // columns
             column = i % columns
@@ -3537,7 +3719,8 @@ class BubbleMenu(QWidget):
             if self.action_needs_attention(
                     action,
                     has_claimable=has_claimable,
-                    needs_personal_setup=needs_api_key):
+                    needs_personal_setup=needs_api_key,
+                    zero_actions=zero_actions):
                 dot_center = QPointF(rect.right() - 10, rect.top() + 10)
                 p.setBrush(QColor(255, 255, 255))
                 p.setPen(Qt.NoPen)
@@ -3649,6 +3832,9 @@ class BubbleMenu(QWidget):
         self.close()
         if getattr(self.pet, "_bubble_menu", None) is self:
             self.pet._bubble_menu = None
+        restore = getattr(self.pet, "restore_treasure_after_menu", None)
+        if callable(restore):
+            QTimer.singleShot(0, restore)
 
     def _on_application_state_changed(self, state):
         if state == Qt.ApplicationInactive and self.isVisible():
@@ -3665,6 +3851,14 @@ class BubbleMenu(QWidget):
                     inside = inside or (
                         self.stat_bubble.isVisible()
                         and self.stat_bubble.frameGeometry().contains(point)
+                    )
+                    name_dialog = getattr(
+                        self.stat_bubble, "_name_dialog", None
+                    )
+                    inside = inside or (
+                        name_dialog is not None
+                        and name_dialog.isVisible()
+                        and name_dialog.frameGeometry().contains(point)
                     )
                 except RuntimeError:
                     pass
@@ -3779,9 +3973,12 @@ class InteractiveBubble(QWidget):
         self.setAttribute(Qt.WA_DeleteOnClose, True)
         self.setCursor(Qt.PointingHandCursor)
         self.setFont(pixel_font(12, QFont.Bold))
-        fm = self.fontMetrics()
-        w = max(148, fm.horizontalAdvance(label) + 64)
-        self.resize(w + 16, 64)
+        if action_name == "dig_reward":
+            self.resize(80, 80)
+        else:
+            fm = self.fontMetrics()
+            w = max(148, fm.horizontalAdvance(label) + 64)
+            self.resize(w + 16, 64)
         self.label = label
         self._pulse = 0.0
         self._hovered = False
@@ -3803,6 +4000,15 @@ class InteractiveBubble(QWidget):
         scr = _pet_interface_screen_rect(self.pet)
         pet_cx = g.center().x()
         screen_cx = scr.center().x()
+        if getattr(self, "action_name", None) == "dig_reward":
+            x = pet_cx - self.width() // 2
+            # Keep the treasure badge clear of the pet's head: this places
+            # its bottom edge 22px above the pet's top edge.
+            y = g.top() - 21
+            x = max(scr.left(), min(x, scr.right() - self.width()))
+            y = max(scr.top(), min(y, scr.bottom() - self.height()))
+            self.move(int(x), int(y))
+            return
         toward_pet = 12
         if pet_cx < screen_cx:
             # Bubble is on the right, so shift it left toward the pet.
@@ -3959,6 +4165,36 @@ class InteractiveBubble(QWidget):
         r = self._ellipse_rect()
         c = QColor(self.color)
 
+        if self.action_name == "dig_reward":
+            glow = QColor(c)
+            glow.setAlpha(int(30 + math.sin(self._pulse) * 8))
+            p.setPen(Qt.NoPen)
+            p.setBrush(glow)
+            p.drawEllipse(r.adjusted(-2, -2, 2, 2))
+            p.setBrush(QColor(111, 66, 48, 32))
+            p.drawEllipse(r.translated(1.5, 3))
+            grad = QLinearGradient(r.topLeft(), r.bottomRight())
+            grad.setColorAt(0.0, QColor("#fffaf0"))
+            grad.setColorAt(0.55, QColor("#ffe6bd"))
+            grad.setColorAt(1.0, QColor("#f6bd8d"))
+            p.setBrush(grad)
+            p.setPen(QPen(QColor("#e59b73"), 1.5))
+            p.drawEllipse(r)
+            # A tiny cream highlight keeps the badge soft instead of metallic.
+            p.setBrush(QColor(255, 255, 255, 105))
+            p.setPen(Qt.NoPen)
+            p.drawEllipse(QRectF(r.left() + 12, r.top() + 8, 24, 10))
+            icon_center = QPointF(r.center().x(), r.top() + 27)
+            self._draw_action_icon(p, icon_center, QColor("#a65f43"))
+            p.setFont(pixel_font(9, QFont.Bold))
+            p.setPen(QColor("#844e3b"))
+            p.drawText(
+                QRectF(r.left() + 7, r.center().y() + 4, r.width() - 14, 22),
+                Qt.AlignCenter | Qt.TextSingleLine,
+                "宝藏",
+            )
+            return
+
         glow = QColor(c)
         glow.setAlpha(int(28 + math.sin(self._pulse) * 8))
         p.setBrush(glow)
@@ -4056,19 +4292,36 @@ class InteractiveBubble(QWidget):
             painter.drawArc(ball.adjusted(4, -1, 4, 1), 80 * 16, 95 * 16)
             painter.drawArc(ball.adjusted(-4, -1, -4, 1), 260 * 16, 95 * 16)
         elif self.action_name == "dig_reward":
-            painter.setBrush(QColor("#f7bd35"))
-            painter.setPen(QPen(color, 1.8))
-            painter.drawEllipse(center, 9, 9)
-            painter.setBrush(Qt.NoBrush)
-            painter.drawEllipse(center, 5.5, 5.5)
+            # Rounded toy treasure chest with a heart-shaped latch.
+            lid = QRectF(center.x() - 11, center.y() - 8, 22, 9)
+            body = QRectF(center.x() - 12, center.y() - 1, 24, 13)
+            painter.setPen(QPen(color, 1.6, Qt.SolidLine, Qt.RoundCap))
+            painter.setBrush(QColor("#f6a96f"))
+            painter.drawRoundedRect(lid, 5, 5)
+            painter.setBrush(QColor("#ef8d64"))
+            painter.drawRoundedRect(body, 4, 4)
+            painter.setPen(QPen(QColor("#ffe6a8"), 2.2))
             painter.drawLine(
-                QPointF(center.x() - 3, center.y()),
-                QPointF(center.x() + 3, center.y()),
+                QPointF(body.left() + 2, body.top() + 4),
+                QPointF(body.right() - 2, body.top() + 4),
             )
-            painter.drawLine(
-                QPointF(center.x(), center.y() - 3),
-                QPointF(center.x(), center.y() + 3),
-            )
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor("#fff0a9"))
+            painter.drawEllipse(QPointF(center.x(), center.y() + 4), 3, 3)
+            # Two asymmetric sparkles make the icon feel lively and handmade.
+            painter.setPen(QPen(QColor("#e59b73"), 1.5, Qt.SolidLine, Qt.RoundCap))
+            for sparkle, radius in (
+                (QPointF(center.x() - 16, center.y() - 8), 3.0),
+                (QPointF(center.x() + 16, center.y() - 4), 2.4),
+            ):
+                painter.drawLine(
+                    QPointF(sparkle.x() - radius, sparkle.y()),
+                    QPointF(sparkle.x() + radius, sparkle.y()),
+                )
+                painter.drawLine(
+                    QPointF(sparkle.x(), sparkle.y() - radius),
+                    QPointF(sparkle.x(), sparkle.y() + radius),
+                )
         else:
             painter.setFont(pixel_font(14, QFont.Bold))
             painter.drawText(
@@ -4211,6 +4464,11 @@ class SpeechBubble(QWidget):
         y = max(screen.top() + 4, min(y, screen.bottom() - height - 4))
         return QRect(int(x), int(y), int(width), int(height))
 
+    def _tail_x(self):
+        """Return a local tail position that follows the current pet head."""
+        anchor_x = _pet_interface_anchor_rect(self.pet).center().x()
+        return max(16.0, min(self.width() - 16.0, anchor_x - self.x()))
+
     def _uses_home_theme(self):
         """Return whether the bubble is anchored to the in-home pet."""
 
@@ -4263,7 +4521,7 @@ class SpeechBubble(QWidget):
         p.setPen(QPen(border, 1.2))
         p.drawRoundedRect(body, radius, radius)
 
-        tail_x = body.center().x()
+        tail_x = self._tail_x()
         p.setBrush(tail)
         p.drawPolygon([
             QPointF(tail_x - 6, body.bottom() - 1),
@@ -4805,10 +5063,26 @@ class PetWindow(QWidget):
     AUTONOMY_IDLE_WEIGHT = 9.0
     AUTONOMY_WALK_WEIGHT = 1.0
     AUTONOMY_SIT_WEIGHT = 2.0
+    STAT_REMINDER_COOLDOWN_SECONDS = 10 * 60
 
     @staticmethod
     def needs_api_key_configuration():
         return ai.needs_personal_setup_reminder()
+
+    def pet_needs_stat_attention(self):
+        return bool(progression.zero_stat_interaction_actions(self.state))
+
+    def treasure_notice_active(self):
+        """Return whether the treasure notice is visible or menu-hidden."""
+        if getattr(self, "_hidden_treasure_bubble", None) is not None:
+            return True
+        bubble = getattr(self, "_interactive_bubble", None)
+        if bubble is None or getattr(bubble, "action_name", None) != "dig_reward":
+            return False
+        try:
+            return bool(bubble.isVisible())
+        except RuntimeError:
+            return False
 
     def __init__(self, state):
         super().__init__()
@@ -4951,9 +5225,16 @@ class PetWindow(QWidget):
         self.play_scene = None  # zoomed-out interactive fetch scene
         self._play_return_pos = None
         self._interactive_bubble = None  # current floating action bubble
+        self._hidden_treasure_bubble = None
         self._dig_reward_claiming = False
         self._bubble_menu = None         # radial bubble menu (right-click)
+        self._status_bubble = None
         self._last_interactive_t = 0.0   # throttle: don't spam
+        self._last_stat_reminder_t = {
+            "energy": 0.0,
+            "hunger": 0.0,
+            "mood": 0.0,
+        }
         self._ctx_menu_cb = None  # set by TrayApp to provide a right-click menu
         self._settings_applied_cb = None
         self._app_action_cb = None
@@ -5236,21 +5517,45 @@ class PetWindow(QWidget):
         return leveled
 
     def on_passive_xp(self):
-        """Accumulate affection-driven passive XP once per second."""
+        """Accumulate passive XP and companionship affection once per second."""
         progression.record_active_time(self.state, 1)
         rate = progression.passive_xp_per_second(self.state)
         buffer_value = float(self.state.get("passive_xp_buffer", 0.0))
         buffer_value += rate
         whole_xp = int(buffer_value)
         self.state["passive_xp_buffer"] = buffer_value - whole_xp
-        if whole_xp <= 0:
-            return
-        leveled = self.add_xp(whole_xp, apply_bonus=False)
+
+        affection_buffer = float(
+            self.state.get("passive_affection_buffer", 0.0)
+        )
+        affection_buffer += progression.passive_affection_per_second(
+            self.state
+        )
+        whole_affection = int(affection_buffer)
+        self.state["passive_affection_buffer"] = (
+            affection_buffer - whole_affection
+        )
+        affection_result = progression.add_affection(
+            self.state, whole_affection
+        )
+
+        leveled = False
+        if whole_xp > 0:
+            leveled = self.add_xp(whole_xp, apply_bonus=False)
         if leveled:
             self.say(f"升级啦！Lv.{self.state.get('level',1)} 🎉", 2500)
             bonus_x, bonus_y = self.interface_bonus_origin(-20)
             BonusBubble(f"升级！Lv.{self.state.get('level',1)}",
                         bonus_x, bonus_y, "#ffcc00")
+        if affection_result["leveled"]:
+            bonus_x, bonus_y = self.interface_bonus_origin(-48)
+            BonusBubble(
+                f"好感 Lv.{self.state.get('affection_level', 1)}",
+                bonus_x,
+                bonus_y,
+                "#ef8f8a",
+            )
+        save_state(self.state)
 
     # ---------- placement ----------
     def place_initial(self):
@@ -5674,7 +5979,10 @@ class PetWindow(QWidget):
         if self.facing < 0:
             p.restore()
 
-        if self.needs_api_key_configuration():
+        if (
+            self.needs_api_key_configuration()
+            or self.pet_needs_stat_attention()
+        ):
             badge_center = QPointF(self.PET_W - 13, dog_y + 13)
             p.setPen(Qt.NoPen)
             p.setBrush(QColor(255, 255, 255))
@@ -5770,6 +6078,8 @@ class PetWindow(QWidget):
     def say(self, text, ms=2200):
         if not self.interface_anchor_visible():
             return
+        if PetWindow.treasure_notice_active(self):
+            return
         speech = self._speech_bubble
         if speech is not None:
             try:
@@ -5801,11 +6111,27 @@ class PetWindow(QWidget):
             except RuntimeError:
                 pass
 
+        hidden_treasure = getattr(self, "_hidden_treasure_bubble", None)
+        self._hidden_treasure_bubble = None
+        if hidden_treasure is not None:
+            try:
+                hidden_treasure.close()
+            except RuntimeError:
+                pass
+
         menu = self._bubble_menu
         self._bubble_menu = None
         if menu is not None:
             try:
                 menu._close()
+            except RuntimeError:
+                pass
+
+        status = getattr(self, "_status_bubble", None)
+        self._status_bubble = None
+        if status is not None:
+            try:
+                status.close()
             except RuntimeError:
                 pass
 
@@ -6288,38 +6614,47 @@ class PetWindow(QWidget):
                 self.state["mood"]
                 - s["decay_mood"] * awake_decay_multiplier,
             )
-        auto_sleep_event = self._update_auto_sleep_state()
         save_state(self.state)
         self.refresh_pose_from_state()
-        if auto_sleep_event in ("walking", "woke"):
-            return
-        # occasional needy remarks (rate-controlled by settings)
-        if not self.state["sleeping"]:
-            boost = s.get("chatter_frequency_boost", 1.2)
-            chance = min(1.0, s["needy_speak_chance"] * boost)
-            if self.state["hunger"] < 20 and random.random() < chance:
-                self.say(random.choice([
-                    "好饿啊…🍗", "给我点吃的嘛", "肚子咕咕叫了…",
-                    "闻到好吃的味道了吗？", "想啃一块小肉干", "饭饭什么时候来呀",
-                    "我的小肚子空空的", "主人，投喂时间到啦",
-                ]))
-            elif self.state["mood"] < 20 and random.random() < chance:
-                self.say(random.choice([
-                    "呜呜…陪我玩嘛🥺", "好无聊呀…", "我想贴贴…",
-                    "小球是不是藏起来了？", "陪我闹一会儿嘛", "尾巴都无聊得不摇了",
-                    "主人看看我嘛", "摸摸头就会开心一点",
-                ]))
-            elif self.state["energy"] < 20 and random.random() < chance:
-                self.say(random.choice([
-                    "困死了…💤", "想睡觉了…", "眼皮开始打架了…",
-                    "我的小窝在叫我", "要变成一只瞌睡狗了", "打个哈欠先…哈呜",
-                    "可以陪我眯一会儿吗", "电量快要见底啦",
-                ]))
-        # Hunger and mood may ask for help. Low energy is handled by the
-        # autonomous walk-to-corner sleep flow instead of a random bubble.
-        if (not self.state["sleeping"]
-                and self._auto_sleep_phase != "walking"):
-            self.maybe_show_interactive_bubble()
+        reminder = PetWindow.next_stat_reminder(self)
+        if reminder is not None:
+            _stat, line = reminder
+            self.say(line, 3200)
+
+    def next_stat_reminder(self, now=None):
+        """Return the next low-stat line using priority and separate cooldowns."""
+        if self.state.get("sleeping"):
+            return None
+        if PetWindow.treasure_notice_active(self):
+            return None
+        now = time.time() if now is None else float(now)
+        lines = {
+            "energy": [
+                "主人，我有点困啦，想休息一会儿。",
+                "我的精力快见底啦，可以让我睡一觉吗？",
+            ],
+            "hunger": [
+                "主人，我的小肚子空空啦。",
+                "到饭饭时间了吗？我有点饿啦。",
+            ],
+            "mood": [
+                "主人，陪我玩一会儿好吗？",
+                "我想和你贴贴，摸摸我吧。",
+            ],
+        }
+        last_times = getattr(self, "_last_stat_reminder_t", None)
+        if not isinstance(last_times, dict):
+            last_times = {key: 0.0 for key in lines}
+            self._last_stat_reminder_t = last_times
+        for stat in ("energy", "hunger", "mood"):
+            if float(self.state.get(stat, 0)) >= 20:
+                continue
+            last = float(last_times.get(stat, 0.0))
+            if now - last < PetWindow.STAT_REMINDER_COOLDOWN_SECONDS:
+                continue
+            last_times[stat] = now
+            return stat, random.choice(lines[stat])
+        return None
 
     def maybe_show_interactive_bubble(self):
         """Occasionally offer a warm action bubble for hunger or low mood."""
@@ -6374,6 +6709,15 @@ class PetWindow(QWidget):
     def _show_pending_dig_bubble(self):
         if int(self.state.get("pending_dig_reward", 0)) <= 0:
             return False
+        menu = getattr(self, "_bubble_menu", None)
+        if menu is not None:
+            try:
+                if menu.isVisible():
+                    return False
+            except RuntimeError:
+                self._bubble_menu = None
+        if getattr(self, "_hidden_treasure_bubble", None) is not None:
+            return self.restore_treasure_after_menu()
         if self._interactive_bubble is not None:
             try:
                 if self._interactive_bubble.isVisible():
@@ -6469,13 +6813,27 @@ class PetWindow(QWidget):
         self.pose = POSE["idle"]
 
     # ---------- autonomous behavior ----------
+    def desktop_autonomy_choices(self):
+        """Desktop autonomy can idle, sit, or speak, but never self-walk."""
+        s = self.settings
+        boost = s.get("chatter_frequency_boost", 1.2)
+        ask_weight = (
+            s["ask_weight_needy"] if self.needy()
+            else s["ask_weight_normal"]
+        ) * boost
+        return (
+            ["idle", "sit", "ask"],
+            [
+                self.AUTONOMY_IDLE_WEIGHT,
+                self.AUTONOMY_SIT_WEIGHT,
+                ask_weight,
+            ],
+        )
+
     def on_autonomy(self):
         if PetWindow._home_scene_active(self):
             return
         now = time.time()
-        auto_sleep_event = self._update_auto_sleep_state(now)
-        if auto_sleep_event in ("walking", "woke"):
-            return
         # AI proactive nudge check (runs even if sleeping? no—sleeping skip)
         if not self.state["sleeping"]:
             self.check_ai_nudge()
@@ -6486,32 +6844,13 @@ class PetWindow(QWidget):
             return
         # pick a new behavior
         if now >= self.next_behavior_at:
-            s = self.settings
-            boost = s.get("chatter_frequency_boost", 1.2)
-            ask_w = (s["ask_weight_needy"] if self.needy()
-                     else s["ask_weight_normal"]) * boost
+            choices, weights = self.desktop_autonomy_choices()
             choice = random.choices(
-                ["idle","walk","sit","ask"],
-                weights=[
-                    self.AUTONOMY_IDLE_WEIGHT,
-                    self.AUTONOMY_WALK_WEIGHT,
-                    self.AUTONOMY_SIT_WEIGHT,
-                    ask_w,
-                ],
+                choices,
+                weights=weights,
                 k=1
             )[0]
-            if choice == "walk":
-                self.behavior = "walk"
-                progression.record_action(
-                    self.state, "autonomous_walks"
-                )
-                self.target_vx = random.choice([-1,1]) * random.uniform(
-                    min(self.walk_speed_min, self.walk_speed_max),
-                    max(self.walk_speed_min, self.walk_speed_max),
-                )
-                self.behavior_until = now + random.uniform(2, 5)
-                self.facing = 1 if self.target_vx > 0 else -1
-            elif choice == "sit":
+            if choice == "sit":
                 self.behavior = "sit"
                 self.target_vx = 0
                 self.vx = 0
@@ -6765,7 +7104,58 @@ class PetWindow(QWidget):
                 old._close()
             except RuntimeError:
                 pass
+
+        status = getattr(self, "_status_bubble", None)
+        self._status_bubble = None
+        if status is not None:
+            try:
+                status.close()
+            except RuntimeError:
+                pass
+
+        PetWindow.hide_treasure_for_menu(self)
         self._bubble_menu = BubbleMenu(self)
+
+    def hide_treasure_for_menu(self):
+        """Temporarily hide a pending treasure while the desktop menu is open."""
+        bubble = getattr(self, "_interactive_bubble", None)
+        if bubble is None or getattr(bubble, "action_name", None) != "dig_reward":
+            return False
+        try:
+            if not bubble.isVisible():
+                return False
+            bubble.hide()
+        except RuntimeError:
+            self._interactive_bubble = None
+            return False
+        self._interactive_bubble = None
+        self._hidden_treasure_bubble = bubble
+        return True
+
+    def restore_treasure_after_menu(self):
+        """Restore the same treasure bubble after all shortcut pages close."""
+        if int(self.state.get("pending_dig_reward", 0)) <= 0:
+            return False
+        menu = getattr(self, "_bubble_menu", None)
+        if menu is not None:
+            try:
+                if menu.isVisible():
+                    return False
+            except RuntimeError:
+                self._bubble_menu = None
+        bubble = getattr(self, "_hidden_treasure_bubble", None)
+        if bubble is None:
+            return False
+        self._hidden_treasure_bubble = None
+        self._interactive_bubble = bubble
+        try:
+            bubble._place_above_pet()
+            bubble.show()
+            bubble.raise_()
+        except RuntimeError:
+            self._interactive_bubble = None
+            return False
+        return True
 
     def chat(self):
         """Open the chat panel beside the pet."""
@@ -6785,6 +7175,16 @@ class PetWindow(QWidget):
         if self.records_win is None:
             self.records_win = RecordsWindow(self, save_state)
         self.records_win.show_near_pet()
+
+    def open_status(self):
+        """Open the shared warm attribute card beside the active pet."""
+        old = getattr(self, "_status_bubble", None)
+        if old is not None:
+            try:
+                old.close()
+            except RuntimeError:
+                pass
+        self._status_bubble = StatBubble(self)
 
     def open_achievements(self):
         """Open claimable and upcoming Pet-coin achievements."""

@@ -14,7 +14,9 @@ Config: set env ZHIPU_API_KEY, or configure the API key and model in Petpet:
 import os, json, re, time, urllib.request, urllib.error
 import hmac, hashlib, base64
 import shutil
+import tempfile
 import uuid
+from datetime import datetime, timedelta, timezone
 import requests
 from app_paths import DATA_DIR, RESOURCE_DIR
 from PyQt5.QtCore import Qt
@@ -26,6 +28,7 @@ CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
 DEFAULT_CONFIG_PATH = os.path.join(RESOURCE_DIR, "config.json.example")
 MEMORY_PATH = os.path.join(DATA_DIR, "memory.json")
 CHAT_DIAGNOSTIC_LOG_PATH = os.path.join(DATA_DIR, "chat_diagnostic.log")
+CHAT_QUOTA_STATE_PATH = os.path.join(DATA_DIR, "chat_quota_state.json")
 
 API_URL = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
 FREE_MODEL = "petpet-free"
@@ -50,12 +53,16 @@ MAX_IMAGE_BYTES = 10 * 1024 * 1024
 MAX_HISTORY_THUMBNAIL_EDGE = 320
 PLAYER_AVATAR_SIZE = 256
 SUPPORTED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
-DEFAULT_PROXY_MAX_SYSTEM_CHARS = 4000
-DEFAULT_PROXY_MAX_TURN_CHARS = 1200
-DEFAULT_PROXY_MAX_BODY_BYTES = 16384
+DEFAULT_PROXY_MAX_SYSTEM_CHARS = 8000
+DEFAULT_PROXY_MAX_TURN_CHARS = 1600
+DEFAULT_PROXY_MAX_BODY_BYTES = 32768
+DEFAULT_PROXY_MAX_MESSAGES = 12
+DEFAULT_PROXY_HISTORY_MESSAGES = 10
+ALIYUN_LOCAL_DAILY_LIMIT = 20
 CHAT_DIAGNOSTIC_FIELDS = {
     "status", "exception_type", "stage", "response_content_chars",
-    "response_reasoning_chars", "has_done",
+    "response_reasoning_chars", "has_done", "model", "provider",
+    "first_content_ms", "total_ms", "route",
 }
 
 
@@ -131,7 +138,7 @@ def normalize_pet_name(value):
         char for char in text
         if char.isalnum() or char in (" ", "-", "_", "·")
     )
-    return allowed[:12].strip() or DEFAULT_PET_NAME
+    return allowed[:6].strip() or DEFAULT_PET_NAME
 
 
 def _b64url(data: bytes) -> str:
@@ -182,9 +189,6 @@ PERSONA = """你是一只名叫 Sheen 的虚拟陪伴小狗。你不是 AI 助�
 
 # 当前时间
 {now}
-
-# 最近的对话（最近 8 轮）
-{history}
 
 记住：你是 Sheen，主人最好的小狗朋友。现在主人来找你了。"""
 
@@ -285,6 +289,87 @@ def save_config(config):
         raise
 
 
+def _aliyun_quota_today(now=None):
+    current = now or datetime.now(timezone(timedelta(hours=8)))
+    return current.date().isoformat()
+
+
+def _valid_uuid4(value):
+    if not isinstance(value, str):
+        return False
+    try:
+        parsed = uuid.UUID(value)
+    except (ValueError, AttributeError, TypeError):
+        return False
+    return parsed.version == 4 and str(parsed) == value.lower()
+
+
+def _fresh_aliyun_quota_state(today):
+    return {
+        "aliyun": {
+            "date": today,
+            "count": 0,
+            "request_ids": [],
+        }
+    }
+
+
+def _load_aliyun_quota_state(today=None):
+    today = today or _aliyun_quota_today()
+    try:
+        with open(CHAT_QUOTA_STATE_PATH, "r", encoding="utf-8-sig") as file:
+            state = json.load(file)
+        aliyun = state["aliyun"]
+        count = aliyun["count"]
+        request_ids = aliyun["request_ids"]
+        if (aliyun["date"] != today or not isinstance(count, int)
+                or isinstance(count, bool) or not 0 <= count <= ALIYUN_LOCAL_DAILY_LIMIT
+                or not isinstance(request_ids, list)
+                or count != len(request_ids)
+                or not all(_valid_uuid4(item) for item in request_ids)):
+            raise ValueError("invalid local quota state")
+        return state
+    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+        return _fresh_aliyun_quota_state(today)
+
+
+def _save_aliyun_quota_state(state):
+    directory = os.path.dirname(CHAT_QUOTA_STATE_PATH)
+    os.makedirs(directory, exist_ok=True)
+    descriptor, temp_path = tempfile.mkstemp(
+        prefix="chat_quota_state-", suffix=".tmp", dir=directory
+    )
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as file:
+            json.dump(state, file, ensure_ascii=False, indent=2)
+            file.flush()
+            os.fsync(file.fileno())
+        os.replace(temp_path, CHAT_QUOTA_STATE_PATH)
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+
+def _aliyun_quota_available(today=None):
+    state = _load_aliyun_quota_state(today)
+    return state["aliyun"]["count"] < ALIYUN_LOCAL_DAILY_LIMIT
+
+
+def _record_aliyun_quota_success(request_id, today=None):
+    today = today or _aliyun_quota_today()
+    if not _valid_uuid4(request_id):
+        return False
+    state = _load_aliyun_quota_state(today)
+    aliyun = state["aliyun"]
+    if (request_id in aliyun["request_ids"]
+            or aliyun["count"] >= ALIYUN_LOCAL_DAILY_LIMIT):
+        return False
+    aliyun["request_ids"].append(request_id)
+    aliyun["count"] += 1
+    _save_aliyun_quota_state(state)
+    return True
+
+
 def get_api_key_source():
     """Return the active key source without exposing the key itself."""
     if os.environ.get("ZHIPU_API_KEY", "").strip():
@@ -345,19 +430,39 @@ def set_default_chat_consent(accepted):
 
 
 def get_default_chat_proxy_url():
-    configured = str(
-        load_config().get("default_chat_proxy_url", "")
-    ).strip()
-    if configured:
-        return configured
+    """Compatibility alias for the Cloudflare fallback endpoint."""
+    return get_default_chat_fallback_url()
+
+
+def _public_chat_config():
     try:
         with open(DEFAULT_CONFIG_PATH, "r", encoding="utf-8-sig") as file:
             public_config = json.load(file)
     except (OSError, ValueError):
-        return ""
-    if not isinstance(public_config, dict):
-        return ""
-    return str(public_config.get("default_chat_proxy_url", "")).strip()
+        return {}
+    return public_config if isinstance(public_config, dict) else {}
+
+
+def get_default_chat_primary_url():
+    configured = str(load_config().get("default_chat_primary_url", "")).strip()
+    if configured:
+        return configured
+    return str(_public_chat_config().get("default_chat_primary_url", "")).strip()
+
+
+def get_default_chat_fallback_url():
+    config = load_config()
+    configured = str(
+        config.get("default_chat_fallback_url", "")
+        or config.get("default_chat_proxy_url", "")
+    ).strip()
+    if configured:
+        return configured
+    public_config = _public_chat_config()
+    return str(
+        public_config.get("default_chat_fallback_url", "")
+        or public_config.get("default_chat_proxy_url", "")
+    ).strip()
 
 
 def set_default_chat_proxy_url(url):
@@ -517,9 +622,8 @@ def _build_messages(user_text, mem, pet_name=None, image_attachment=None):
     sys_prompt = PERSONA.replace("Sheen", pet_name).format(
         user_profile=mem.get("user_profile", "（还没了解主人）"),
         now=_time_desc(),
-        history=_history_text(mem, pet_name=pet_name),
     ) + mood_hint
-    relevant_entries = game_knowledge.find_relevant_entries(user_text)
+    relevant_entries = game_knowledge.find_relevant_entries(user_text, limit=5)
     if relevant_entries:
         knowledge_lines = ["# 游戏资料"]
         knowledge_lines.extend(
@@ -530,7 +634,7 @@ def _build_messages(user_text, mem, pet_name=None, image_attachment=None):
     # GLM accepts system + user turns
     msgs = [{"role": "system", "content": sys_prompt}]
     # carry last few turns as actual messages for stronger coherence
-    for h in mem["history"][-6:]:
+    for h in mem["history"][-DEFAULT_PROXY_HISTORY_MESSAGES:]:
         msgs.append({"role": h["role"], "content": h["content"]})
     if image_attachment:
         msgs.append({
@@ -567,22 +671,23 @@ def _bound_default_proxy_content(content, role="user", max_chars=None):
     return text[:edge] + "…" + text[-edge:]
 
 
-def _default_proxy_payload(install_id, messages):
+def _default_proxy_payload(request_id, install_id, messages):
     return json.dumps({
+        "request_id": request_id,
         "install_id": install_id,
         "messages": messages,
     }, ensure_ascii=False).encode("utf-8")
 
 
-def _fit_default_proxy_payload(install_id, messages):
+def _fit_default_proxy_payload(request_id, install_id, messages):
     """Fit UTF-8 JSON under the proxy cap while preserving newest context."""
     fitted = [dict(message) for message in messages]
     while len(fitted) > 2 and len(
-            _default_proxy_payload(install_id, fitted)
+            _default_proxy_payload(request_id, install_id, fitted)
     ) > DEFAULT_PROXY_MAX_BODY_BYTES:
         del fitted[1]
     for index in (0, len(fitted) - 1):
-        if len(_default_proxy_payload(install_id, fitted)) <= DEFAULT_PROXY_MAX_BODY_BYTES:
+        if len(_default_proxy_payload(request_id, install_id, fitted)) <= DEFAULT_PROXY_MAX_BODY_BYTES:
             break
         original = fitted[index]["content"]
         low, high = 1, len(original)
@@ -591,17 +696,19 @@ def _fit_default_proxy_payload(install_id, messages):
             fitted[index]["content"] = _bound_default_proxy_content(
                 original, fitted[index]["role"], middle
             )
-            if len(_default_proxy_payload(install_id, fitted)) <= DEFAULT_PROXY_MAX_BODY_BYTES:
+            if len(_default_proxy_payload(request_id, install_id, fitted)) <= DEFAULT_PROXY_MAX_BODY_BYTES:
                 low = middle
             else:
                 high = middle - 1
         fitted[index]["content"] = _bound_default_proxy_content(
             original, fitted[index]["role"], low
         )
-    return _default_proxy_payload(install_id, fitted)
+    return _default_proxy_payload(request_id, install_id, fitted)
 
 
-def _default_proxy_stream(endpoint, user_text, mem, timeout, pet_name=None):
+def _default_proxy_stream(primary_endpoint, fallback_endpoint, user_text, mem,
+                          timeout, pet_name=None):
+    started_at = time.perf_counter()
     install_id = load_config().get("default_chat_install_id")
     if not install_id:
         install_id = str(uuid.uuid4())
@@ -609,7 +716,10 @@ def _default_proxy_stream(endpoint, user_text, mem, timeout, pet_name=None):
         config["default_chat_install_id"] = install_id
         save_config(config)
     all_messages = _build_messages(user_text, mem, pet_name=pet_name)
-    messages = [all_messages[0], *all_messages[1:][-6:]]
+    messages = [
+        all_messages[0],
+        *all_messages[1:][-(DEFAULT_PROXY_MAX_MESSAGES - 1):],
+    ]
     messages = [
         {
             "role": message["role"],
@@ -619,13 +729,58 @@ def _default_proxy_stream(endpoint, user_text, mem, timeout, pet_name=None):
         }
         for message in messages
     ]
-    payload = _fit_default_proxy_payload(install_id, messages)
+    request_id = str(uuid.uuid4())
+    payload = _fit_default_proxy_payload(request_id, install_id, messages)
     try:
-        response = requests.post(
-            endpoint, data=payload,
-            headers={"Content-Type": "application/json"},
-            timeout=timeout, stream=True,
+        response = None
+        primary_allowed = bool(
+            primary_endpoint and _aliyun_quota_available()
         )
+        route = "aliyun" if primary_allowed else "cloudflare"
+        system_proxies = {
+            scheme: value
+            for scheme, value in urllib.request.getproxies().items()
+            if scheme in {"http", "https"} and value
+        }
+        shared_request_kwargs = {
+            "data": payload,
+            "headers": {"Content-Type": "application/json"},
+            "timeout": (min(6, timeout), timeout),
+            "stream": True,
+        }
+        direct_session = None
+        if primary_allowed:
+            direct_session = requests.Session()
+            direct_session.trust_env = False
+            try:
+                response = direct_session.post(
+                    primary_endpoint, **shared_request_kwargs
+                )
+                if response.status_code == 200:
+                    _record_aliyun_quota_success(request_id)
+            except (requests.ConnectTimeout, requests.ConnectionError) as exc:
+                if not fallback_endpoint:
+                    raise
+                route = "cloudflare"
+                _log_chat_diagnostic(
+                    "default_route_fallback", route="aliyun",
+                    exception_type=type(exc).__name__, stage="connect",
+                )
+        if response is None:
+            fallback_kwargs = {
+                **shared_request_kwargs,
+                "proxies": system_proxies or None,
+            }
+            try:
+                response = requests.post(fallback_endpoint, **fallback_kwargs)
+            except requests.ConnectTimeout:
+                if not system_proxies:
+                    raise
+                _log_chat_diagnostic(
+                    "default_proxy_retry", route="cloudflare",
+                    exception_type="ConnectTimeout", stage="request",
+                )
+                response = requests.post(fallback_endpoint, **fallback_kwargs)
         if response.status_code >= 400:
             try:
                 error_payload = response.json()
@@ -635,7 +790,7 @@ def _default_proxy_stream(endpoint, user_text, mem, timeout, pet_name=None):
                 if isinstance(error_payload, dict) else None
             _log_chat_diagnostic(
                 "default_proxy_http_error", status=response.status_code,
-                exception_type="HTTPError", stage="request",
+                exception_type="HTTPError", stage="request", route=route,
             )
             if (response.status_code == 429
                     or error_code == "default_quota_exhausted"):
@@ -646,7 +801,11 @@ def _default_proxy_stream(endpoint, user_text, mem, timeout, pet_name=None):
         full = []
         reasoning_chars = 0
         saw_done = False
-        for line in response.iter_lines():
+        model = None
+        provider = None
+        first_content_ms = None
+        # Avoid requests' default 512-byte buffer delaying short SSE replies.
+        for line in response.iter_lines(chunk_size=1):
             if line.startswith(b"data: "):
                 data = line[6:].strip()
                 if data == b"[DONE]":
@@ -656,7 +815,12 @@ def _default_proxy_stream(endpoint, user_text, mem, timeout, pet_name=None):
                             "default_proxy_complete", stage="stream",
                             response_content_chars=len("".join(full)),
                             response_reasoning_chars=reasoning_chars,
-                            has_done=True,
+                            has_done=True, model=model, provider=provider,
+                            route=route,
+                            first_content_ms=first_content_ms,
+                            total_ms=round(
+                                (time.perf_counter() - started_at) * 1000
+                            ),
                         )
                         yield ("done", "".join(full))
                     else:
@@ -669,12 +833,19 @@ def _default_proxy_stream(endpoint, user_text, mem, timeout, pet_name=None):
                         yield ("error", "default_provider_unavailable")
                     return
                 try:
-                    delta = json.loads(data)["choices"][0]["delta"]
+                    event = json.loads(data)
+                    model = model or event.get("model")
+                    provider = provider or event.get("provider")
+                    delta = event["choices"][0]["delta"]
                     chunk = delta.get("content", "")
                     reasoning_chars += len(delta.get("reasoning", "") or "")
                 except (ValueError, KeyError, IndexError, TypeError):
                     chunk = ""
                 if chunk:
+                    if first_content_ms is None:
+                        first_content_ms = round(
+                            (time.perf_counter() - started_at) * 1000
+                        )
                     full.append(chunk)
                     yield ("token", chunk)
         _log_chat_diagnostic(
@@ -687,13 +858,16 @@ def _default_proxy_stream(endpoint, user_text, mem, timeout, pet_name=None):
     except requests.RequestException as exc:
         _log_chat_diagnostic(
             "default_proxy_exception", exception_type=type(exc).__name__,
-            stage="request",
+            stage="request", route=locals().get("route"),
         )
         yield ("error", "default_provider_unavailable")
     finally:
         try:
-            response.close()
-        except (NameError, requests.RequestException):
+            if response is not None:
+                response.close()
+            if locals().get("direct_session") is not None:
+                direct_session.close()
+        except requests.RequestException:
             pass
 
 
@@ -714,14 +888,18 @@ def chat_stream(user_text, mem=None, on_token=None, timeout=45,
         if not has_default_chat_consent():
             yield ("error", "default_consent_required")
         else:
-            endpoint = get_default_chat_proxy_url()
-            if not endpoint.startswith("https://"):
+            primary_endpoint = get_default_chat_primary_url()
+            fallback_endpoint = get_default_chat_fallback_url()
+            if ((primary_endpoint and not primary_endpoint.startswith("https://"))
+                    or (fallback_endpoint and not fallback_endpoint.startswith("https://"))
+                    or not (primary_endpoint or fallback_endpoint)):
                 yield ("error", "default_provider_unavailable")
             elif image_attachment:
                 yield ("error", "personal_key_required_for_image")
             else:
                 yield from _default_proxy_stream(
-                    endpoint, user_text, mem, timeout, pet_name=pet_name
+                    primary_endpoint, fallback_endpoint, user_text, mem,
+                    timeout, pet_name=pet_name
                 )
         return
     if not key:

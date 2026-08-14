@@ -102,6 +102,23 @@ class SpeechBubbleTests(unittest.TestCase):
         )
         self.assertGreater(right_round_edge.alpha(), 0)
 
+    def test_tail_tracks_pet_head_when_bubble_body_is_screen_clamped(self):
+        host = QWidget()
+        host.show()
+        anchor = QRect(760, 330, 40, 120)
+        host.interface_anchor_rect = lambda: anchor
+        host.interface_screen_rect = lambda: QRect(0, 0, 800, 600)
+        host.interface_anchor_visible = lambda: True
+        bubble = pet.SpeechBubble(host)
+        self.addCleanup(bubble.close)
+        self.addCleanup(host.close)
+        bubble.setGeometry(bubble._bubble_geometry(300, 70))
+
+        expected = anchor.center().x() - bubble.x()
+
+        self.assertEqual(bubble._tail_x(), expected)
+        self.assertGreater(bubble._tail_x(), bubble.width() / 2)
+
     def test_home_bubble_moves_up_without_changing_its_size_or_x_position(self):
         host = QWidget()
         host.show()

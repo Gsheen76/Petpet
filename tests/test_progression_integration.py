@@ -35,7 +35,7 @@ class InteractionUpgradeIntegrationTests(unittest.TestCase):
         self.assertEqual(state["mood"], 51)
         self.assertEqual(state["records"]["feedings"], 1)
         self.assertEqual(state["records"]["interactions_total"], 1)
-        self.assertEqual(state["affection_points"], 3)
+        self.assertEqual(state["affection_points"], 4)
         fake.add_xp.assert_called_once_with(8)
 
     def test_max_play_upgrade_allows_play_without_attribute_cost(self):
@@ -72,7 +72,7 @@ class InteractionUpgradeIntegrationTests(unittest.TestCase):
         self.assertEqual(state["hunger"], 50)
         self.assertEqual(state["mood"], 75)
         self.assertEqual(state["records"]["play_sessions"], 1)
-        self.assertEqual(state["affection_points"], 4)
+        self.assertEqual(state["affection_points"], 5)
         fake.add_xp.assert_called_once_with(22)
         scene.start.assert_called_once_with()
 
@@ -225,6 +225,32 @@ class InteractionUpgradeIntegrationTests(unittest.TestCase):
         fake.add_xp.assert_called_once_with(1, apply_bonus=False)
         self.assertEqual(state["records"]["active_seconds"], 1)
         self.assertAlmostEqual(state["passive_xp_buffer"], 0.035)
+
+    def test_passive_tick_accumulates_and_persists_fractional_affection(self):
+        state = progression.ensure_progression({
+            "level": 1,
+            "xp": 0,
+            "hunger": 100,
+            "mood": 100,
+            "energy": 100,
+            "affection_level": 1,
+            "affection_points": 0,
+            "passive_xp_buffer": 0.0,
+            "passive_affection_buffer": 0.995,
+        })
+        fake = SimpleNamespace(
+            state=state,
+            add_xp=Mock(return_value=False),
+            say=Mock(),
+            interface_bonus_origin=Mock(return_value=(10, 10)),
+        )
+
+        with patch("pet.save_state") as save, patch("pet.BonusBubble"):
+            pet.PetWindow.on_passive_xp(fake)
+
+        self.assertEqual(state["affection_points"], 1)
+        self.assertAlmostEqual(state["passive_affection_buffer"], 0.005)
+        save.assert_called_once_with(state)
 
 
 if __name__ == "__main__":

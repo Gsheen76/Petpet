@@ -138,7 +138,7 @@ class CoinCatchCanvas(QWidget):
 
     @staticmethod
     def coin_value_for_remaining(remaining):
-        return 2 if 0.0 < float(remaining) <= 5.0 else 1
+        return 4 if 0.0 < float(remaining) <= 5.0 else 2
 
     def mousePressEvent(self, event):
         if not self.running or event.button() != Qt.LeftButton:
@@ -151,7 +151,7 @@ class CoinCatchCanvas(QWidget):
             self.earned_coins += value
             self.combo += 1
             self.best_combo = max(self.best_combo, self.combo)
-            if value == 2:
+            if value == 4:
                 self._floating_rewards.append((
                     reward_center.x(), reward_center.y(), value,
                     time.monotonic(),
@@ -222,7 +222,7 @@ class CoinCatchCanvas(QWidget):
                 # A real scrolling danmaku makes the double phase impossible
                 # to miss without covering the clickable target area.
                 progress = (5.0 - remaining) / 5.0
-                message = "最后 5 秒  ·  Pet币奖励 ×2！"
+                message = "最后 5 秒  ·  Pet币奖励 ×4！"
                 font = painter.font()
                 font.setPixelSize(24)
                 font.setBold(True)
@@ -303,7 +303,7 @@ class CoinCatchGameWindow(CozyProgressWindow):
         )
 
     def _finish_round(self, hits, best_combo, earned_coins=None):
-        requested = hits if earned_coins is None else earned_coins
+        requested = hits * 2 if earned_coins is None else earned_coins
         result = progression.award_minigame_coins(
             self.pet.state, "coin_catch", requested, score=hits
         )
@@ -659,11 +659,11 @@ class ShellShuffleCanvas(QWidget):
 class LuckyPawsGameWindow(CozyProgressWindow):
     TOTAL_ROUNDS = 3
     ROUND_CONFIG = {
-        1: {"reward": 5, "swap_count": 5, "swap_duration": 0.58,
+        1: {"reward": 10, "swap_count": 5, "swap_duration": 0.58,
             "difficulty": "入门速度"},
-        2: {"reward": 10, "swap_count": 7, "swap_duration": 0.32,
+        2: {"reward": 20, "swap_count": 7, "swap_duration": 0.32,
             "difficulty": "快速移动"},
-        3: {"reward": 15, "swap_count": 11, "swap_duration": 0.13,
+        3: {"reward": 30, "swap_count": 11, "swap_duration": 0.13,
             "difficulty": "极速挑战"},
     }
 

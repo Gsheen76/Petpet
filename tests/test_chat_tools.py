@@ -351,7 +351,7 @@ class ChatToolsTests(unittest.TestCase):
         self.assertEqual(len(thumbnails), 1)
         self.assertFalse(thumbnails[0].pixmap().isNull())
 
-    def test_sending_a_real_message_adds_chat_affection(self):
+    def test_only_successful_reply_adds_chat_affection(self):
         progression.ensure_progression(self.window.pet.state)
         ai.set_default_chat_consent(True)
         self.window.input.setText("今天过得怎么样？")
@@ -364,9 +364,37 @@ class ChatToolsTests(unittest.TestCase):
             self.window.pet.state["records"]["chats_opened"], 1
         )
         self.assertEqual(
-            self.window.pet.state["affection_points"], 1
+            self.window.pet.state["affection_points"], 0
         )
         thread_cls.return_value.start.assert_called_once_with()
+
+        with patch("pet.save_state"):
+            self.window.on_done("今天也过得很好呀！")
+
+        self.assertEqual(
+            self.window.pet.state["records"]["ai_replies"], 1
+        )
+        self.assertEqual(
+            self.window.pet.state["affection_points"], 1
+        )
+
+    def test_streaming_token_updates_last_bubble_without_rebuilding_history(self):
+        self.window._pending_user = "hello"
+        self.window._streaming = ""
+        self.window._set_log_messages([
+            ("user", "hello", None),
+            ("assistant", "鈥?", None),
+        ])
+        pending_bubble = self.window._last_assistant_bubble
+
+        with patch.object(
+                self.window, "_set_log_messages",
+                wraps=self.window._set_log_messages) as rebuild:
+            self.window.on_token("world")
+
+        rebuild.assert_not_called()
+        self.assertIs(self.window._last_assistant_bubble, pending_bubble)
+        self.assertIn("world", pending_bubble.text())
 
     def test_first_free_chat_decline_does_not_send_or_record_progress(self):
         progression.ensure_progression(self.window.pet.state)

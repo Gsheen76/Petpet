@@ -23,8 +23,21 @@ class GameKnowledgeTests(unittest.TestCase):
         matches = knowledge.find_relevant_entries("小屋里怎么装修家具？")
 
         self.assertEqual(matches[0]["id"], "home_and_decoration")
-        self.assertLessEqual(len(matches), 3)
+        self.assertLessEqual(len(matches), 5)
         self.assertEqual(knowledge.find_relevant_entries("今天有点累"), [])
+
+    def test_broad_game_question_selects_current_overview(self):
+        entries = knowledge.find_relevant_entries("Petpet 是什么游戏，怎么玩？")
+
+        self.assertEqual(entries[0]["id"], "game_overview")
+        self.assertIn("桌面", entries[0]["content"])
+        self.assertIn("小屋", entries[0]["content"])
+        self.assertIn("Pet币", entries[0]["content"])
+
+    def test_daily_companion_chat_does_not_select_game_knowledge(self):
+        self.assertEqual(
+            knowledge.find_relevant_entries("今天上班有点累，陪我聊聊"), []
+        )
 
     def test_current_knowledge_describes_v141_chat_and_preferences(self):
         combined = "\n".join(

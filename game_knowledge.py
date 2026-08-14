@@ -48,7 +48,7 @@ def load_game_knowledge() -> list[dict]:
     return _load_payload().get("entries", [])
 
 
-def find_relevant_entries(user_text: str, limit: int = 3) -> list[dict]:
+def find_relevant_entries(user_text: str, limit: int = 5) -> list[dict]:
     """Rank entries by distinct matching keywords, preserving source order ties."""
     try:
         limit = max(0, int(limit))

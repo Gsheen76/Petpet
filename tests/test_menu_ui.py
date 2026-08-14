@@ -7,8 +7,8 @@ from unittest.mock import Mock, patch
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt5.QtCore import QEvent, QPoint, QRect, QRectF, QSize, Qt, QTimer
-from PyQt5.QtGui import QColor, QImage, QPainter
-from PyQt5.QtWidgets import QApplication, QMenu
+from PyQt5.QtGui import QColor, QFont, QImage, QPainter
+from PyQt5.QtWidgets import QApplication, QLabel, QMenu
 
 import pet
 import progression
@@ -83,6 +83,28 @@ class MenuUiTests(unittest.TestCase):
         self.assertFalse(pet.BubbleMenu.action_needs_attention(
             "settings", has_claimable=False, needs_personal_setup=True
         ))
+
+    def test_zero_stat_attention_marks_interaction_and_restoring_actions(self):
+        zero_actions = {"pet", "feed", "play", "sleep"}
+        for action in zero_actions | {"interaction"}:
+            self.assertTrue(pet.BubbleMenu.action_needs_attention(
+                action,
+                has_claimable=False,
+                needs_personal_setup=False,
+                zero_actions=zero_actions,
+            ))
+        self.assertFalse(pet.BubbleMenu.action_needs_attention(
+            "chat",
+            has_claimable=False,
+            needs_personal_setup=False,
+            zero_actions=zero_actions,
+        ))
+
+    def test_desktop_pet_attention_uses_zero_attributes(self):
+        host = SimpleNamespace(state={"hunger": 10, "mood": 0, "energy": 10})
+        self.assertTrue(pet.PetWindow.pet_needs_stat_attention(host))
+        host.state["mood"] = 1
+        self.assertFalse(pet.PetWindow.pet_needs_stat_attention(host))
 
     def test_pet_surface_requires_badge_until_personal_setup_is_seen(self):
         with patch("pet.ai.needs_personal_setup_reminder", return_value=True):
@@ -497,6 +519,39 @@ class MenuUiTests(unittest.TestCase):
 
         fake_menu._close.assert_called_once_with()
 
+    def test_clicking_attribute_card_does_not_close_bubble_canvas(self):
+        fake_menu = SimpleNamespace(
+            _closing=False,
+            isVisible=Mock(return_value=True),
+            frameGeometry=Mock(return_value=QRect(20, 500, 100, 80)),
+            stat_bubble=SimpleNamespace(
+                isVisible=Mock(return_value=True),
+                frameGeometry=Mock(return_value=QRect(20, 20, 620, 416)),
+            ),
+            _close=Mock(),
+        )
+        event = SimpleNamespace(
+            type=lambda: QEvent.MouseButtonPress,
+            globalPos=lambda: QPoint(340, 45),
+        )
+
+        pet.BubbleMenu.eventFilter(fake_menu, None, event)
+
+        fake_menu._close.assert_not_called()
+
+    def test_primary_bubble_uses_custom_outside_click_handling(self):
+        host = SimpleNamespace(
+            state=progression.ensure_progression({}),
+            pet_name="烟花",
+            interface_anchor_rect=lambda: QRect(900, 700, 190, 220),
+            interface_screen_rect=lambda: QRect(0, 0, 1920, 1080),
+            set_pet_name=Mock(),
+        )
+        menu = pet.BubbleMenu(host)
+        self.addCleanup(menu._close)
+
+        self.assertNotEqual(menu.windowType(), Qt.Popup)
+
     def test_stat_icons_are_drawn_without_emoji_fonts(self):
         image = QImage(132, 44, QImage.Format_ARGB32)
         image.fill(Qt.transparent)
@@ -515,6 +570,81 @@ class MenuUiTests(unittest.TestCase):
             if QColor.fromRgba(image.pixel(x, y)).alpha() > 0
         )
         self.assertGreater(colored, 180)
+
+    def test_status_card_companionship_copy_omits_ordinal_marker(self):
+        self.assertEqual(
+            pet.StatBubble.companionship_text(18),
+            "♡ 陪伴 18 天",
+        )
+
+    def test_name_editor_applies_a_new_pet_name(self):
+        saved_names = []
+        dialog = pet.PetNameEditDialog("烟花", saved_names.append)
+        self.addCleanup(dialog.close)
+        dialog.name_input.setText("团子")
+
+        dialog._apply()
+
+        self.assertEqual(saved_names, ["团子"])
+
+    def test_name_editor_limits_input_to_six_characters(self):
+        dialog = pet.PetNameEditDialog("烟花", Mock())
+        self.addCleanup(dialog.close)
+
+        self.assertEqual(dialog.name_input.maxLength(), 6)
+        hints = [
+            label.text() for label in dialog.findChildren(QLabel)
+        ]
+        self.assertIn("最多 6 个字符", hints)
+
+    def test_status_header_keeps_title_edit_and_badges_separate(self):
+        bubble = SimpleNamespace(
+            width=lambda: 620,
+            pet=SimpleNamespace(pet_name="十二个字的小狗名字"),
+        )
+
+        rects = pet.StatBubble.header_rects(bubble)
+
+        self.assertLess(rects["title"].right(), rects["edit"].left())
+        self.assertLess(rects["edit"].right(), rects["coin"].left())
+        self.assertLess(rects["coin"].right(), rects["days"].left())
+        expected_font = pet.pixel_font(9, QFont.Bold)
+        self.assertEqual(
+            pet.StatBubble.header_badge_font().pixelSize(),
+            expected_font.pixelSize(),
+        )
+
+    def test_name_editor_centers_on_requested_screen(self):
+        dialog = pet.PetNameEditDialog("烟花", Mock())
+        self.addCleanup(dialog.close)
+        screen = QRect(100, 50, 1200, 800)
+
+        dialog.center_on_screen(screen)
+
+        self.assertEqual(dialog.frameGeometry().center(), screen.center())
+
+    def test_name_editor_clicks_are_inside_primary_bubble_canvas(self):
+        host = SimpleNamespace(
+            state=progression.ensure_progression({}),
+            pet_name="烟花",
+            interface_anchor_rect=lambda: QRect(900, 700, 190, 220),
+            interface_screen_rect=lambda: QRect(0, 0, 1920, 1080),
+            set_pet_name=Mock(),
+        )
+        menu = pet.BubbleMenu(host)
+        self.addCleanup(menu._close)
+        dialog = pet.PetNameEditDialog("烟花", Mock())
+        self.addCleanup(dialog.close)
+        dialog.move(500, 300)
+        dialog.show()
+        menu.stat_bubble._name_dialog = dialog
+        event = Mock()
+        event.type.return_value = QEvent.MouseButtonPress
+        event.globalPos.return_value = dialog.frameGeometry().center()
+
+        menu.eventFilter(dialog, event)
+
+        self.assertFalse(menu._closing)
 
     def test_equipped_collar_uses_its_own_adjustable_transform(self):
         state = progression.ensure_progression({})
@@ -668,6 +798,73 @@ class MenuUiTests(unittest.TestCase):
             pet.PetWindow.AUTONOMY_WALK_WEIGHT,
             pet.PetWindow.AUTONOMY_IDLE_WEIGHT / 8,
         )
+
+    def test_desktop_autonomy_choices_never_include_walking(self):
+        host = SimpleNamespace(
+            settings={
+                "ask_weight_needy": 0.6,
+                "ask_weight_normal": 0.2,
+                "chatter_frequency_boost": 1.0,
+            },
+            needy=Mock(return_value=False),
+            AUTONOMY_IDLE_WEIGHT=1.0,
+            AUTONOMY_SIT_WEIGHT=0.4,
+        )
+
+        choices, weights = pet.PetWindow.desktop_autonomy_choices(host)
+
+        self.assertEqual(choices, ["idle", "sit", "ask"])
+        self.assertEqual(len(choices), len(weights))
+        self.assertNotIn("walk", choices)
+
+    def test_zero_stat_reminders_use_priority_and_independent_cooldowns(self):
+        host = SimpleNamespace(
+            state={
+                "sleeping": False,
+                "energy": 0,
+                "hunger": 0,
+                "mood": 0,
+                "pending_dig_reward": 0,
+            },
+            _last_stat_reminder_t={
+                "energy": 0.0,
+                "hunger": 0.0,
+                "mood": 0.0,
+            },
+        )
+
+        first = pet.PetWindow.next_stat_reminder(host, now=1000)
+        second = pet.PetWindow.next_stat_reminder(host, now=1000)
+        third = pet.PetWindow.next_stat_reminder(host, now=1000)
+        blocked = pet.PetWindow.next_stat_reminder(host, now=1000)
+
+        self.assertEqual(first[0], "energy")
+        self.assertEqual(second[0], "hunger")
+        self.assertEqual(third[0], "mood")
+        self.assertIsNone(blocked)
+
+    def test_pending_treasure_suppresses_normal_stat_reminders(self):
+        host = SimpleNamespace(
+            state={
+                "sleeping": False,
+                "energy": 0,
+                "hunger": 0,
+                "mood": 0,
+                "pending_dig_reward": 12,
+            },
+            _last_stat_reminder_t={
+                "energy": 0.0,
+                "hunger": 0.0,
+                "mood": 0.0,
+            },
+            _interactive_bubble=SimpleNamespace(
+                action_name="dig_reward",
+                isVisible=lambda: True,
+            ),
+            _hidden_treasure_bubble=None,
+        )
+
+        self.assertIsNone(pet.PetWindow.next_stat_reminder(host, now=1000))
 
     def test_blink_never_replaces_an_active_walk_frame(self):
         walk_frame = object()
