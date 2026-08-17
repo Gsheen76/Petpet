@@ -3,10 +3,10 @@
 一只住在桌面上的治愈系陪伴小狗。它会走动、弹跳、撒娇、提醒你休息，也能通过默认免费文字服务或个人智谱 GLM Key 陪你聊天并记住近期对话。
 
 <p align="center">
-  <img src="assets/poses/idle.png" width="280" alt="Pet陪它桌面小狗">
+  <img src="assets/runtime/pets/desktop/poses/idle.png" width="280" alt="Pet陪它桌面小狗">
 </p>
 
-当前版本：`v1.5.0`
+当前版本：`v1.5.1`
 
 支持平台：Windows 10/11、macOS Intel、macOS Apple 芯片
 
@@ -32,6 +32,14 @@
 - Windows 系统托盘与 macOS 菜单栏入口
 - 本地保存配置、记忆和养成状态
 - 启动自动检查更新，也可从右键菜单或托盘主动检查并安装新版
+
+## v1.5.1 更新亮点
+
+- 完成业务代码包化，按 `app`、`chat`、`home`、`progression`、`minigames` 和 `ui` 组织实现，根目录旧模块继续提供兼容入口
+- 桌面宠物与家园宠物资源独立，运行资源与制作源图分别进入 `assets/runtime` 和 `assets/source`
+- Windows 与 macOS 打包配置只收集运行资源，制作源图不会进入安装包
+- 修复重构后桌面宠物首次绘制引用缺失姿势名称映射导致的启动崩溃
+- 增加包内兼容层边界和桌面宠物首绘回归测试
 
 ## v1.5.0 更新亮点
 
@@ -155,7 +163,7 @@ macOS 包由 [GitHub Actions](https://github.com/Gsheen76/Petpet/actions/workflo
 
 项目维护者的默认聊天代理部署步骤见 [cloudflare-worker/README.md](cloudflare-worker/README.md)。仓库、安装包、示例配置和项目笔记都不得包含供应商真实密钥；代理必须通过 Cloudflare Worker Secret 注入一枚重新生成的 Key。
 
-小狗会用自然的对话内容回复，不显示自动狗狗图标或括号动作说明。你也可以直接询问当前版本的玩法，例如小屋、家具装修、互动、成长、商店、小游戏或图片聊天。相关资料随应用版本本地打包，不需要联网读取项目笔记；每次新增或调整玩家可见功能时，会同步更新 `assets/knowledge/game_knowledge.json` 及其版本号。
+小狗会用自然的对话内容回复，不显示自动狗狗图标或括号动作说明。你也可以直接询问当前版本的玩法，例如小屋、家具装修、互动、成长、商店、小游戏或图片聊天。相关资料随应用版本本地打包，不需要联网读取项目笔记；每次新增或调整玩家可见功能时，会同步更新 `assets/runtime/knowledge/game_knowledge.json` 及其版本号。
 
 配置文件位置：
 
@@ -235,7 +243,7 @@ dist/Petpet.app
 干净工作树中运行：
 
 ```powershell
-.\scripts\release.ps1 -Version 1.5.0
+.\scripts\release.ps1 -Version 1.5.1
 ```
 
 脚本会重新运行测试、构建并冒烟验证 Windows、生成校验和、安全同步 `main`、
@@ -243,9 +251,9 @@ dist/Petpet.app
 非空时才会公开版本：
 
 - `Petpet.exe`
-- `Petpet-v1.5.0-windows.zip`
-- `Petpet-v1.5.0-macOS-arm64.zip`
-- `Petpet-v1.5.0-macOS-intel.zip`
+- `Petpet-v1.5.1-windows.zip`
+- `Petpet-v1.5.1-macOS-arm64.zip`
+- `Petpet-v1.5.1-macOS-intel.zip`
 
 中途失败时 Release 保持草稿；修复问题后可重复运行同一命令继续。脚本不会
 强推、覆盖标签或删除 worktree。完整约束见
@@ -268,27 +276,26 @@ Petpet 只在本地保存以下文件：
 
 ```text
 Petpet/
-├── pet.py                       桌宠主程序
+├── pet.py                       稳定的源码与打包启动入口
 ├── version.py                   唯一版本号来源
-├── buddy_ai.py                  AI 对话、记忆与离线回复
-├── game_knowledge.py            本地版本化的玩家玩法知识库
-├── home_pet.py                  小屋宠物状态、2.5D 移动与睡眠目标
-├── home_scene.py                家场景、家具装修、导航反馈与宠物渲染
-├── scene_system.py              场景坐标、视口与家具几何
-├── progression.py               记录、成就、Pet币经济与强化结算
-├── progression_ui.py            记录、成就和商店的治愈系界面
-├── decoration_renderer.py       待机装饰贴图定位、裁切与分层绘制
-├── app_paths.py                 跨平台资源和数据目录
+├── petpet/
+│   ├── app/                     路径、存档、设置与桌面宠物控制器
+│   ├── chat/                    双宠物记忆、知识、提示词、配置与传输
+│   ├── home/                    家园宠物、几何、渲染与窗口控制器
+│   ├── progression/             成长规则、记录、成就与商店窗口
+│   ├── minigames/               金币雨、幸运爪爪与游戏入口
+│   └── ui/                      聊天、设置、教程、气泡与公共控件
+├── app_paths.py 等              旧导入兼容转发层
 ├── updater.py                   跨平台检查、下载和应用更新
 ├── config.json.example          安全配置模板
 ├── assets/
-│   ├── poses/                   七种小狗静态姿势
-│   ├── icons/                   应用图标
-│   ├── sounds/                  五种互动音效
-│   ├── props/                   接球等玩法使用的运行时道具
-│   ├── decorations/             商店预览及待机装饰透明贴图
-│   ├── scenes/home/             家背景、家具、小屋宠物与导航反馈素材
-│   └── animations/              动作清单、制作规范和连续帧
+│   ├── runtime/                 唯一进入安装包的运行素材
+│   │   ├── pets/desktop/        桌面宠物姿势与动画
+│   │   ├── pets/home/           家园宠物姿势与动画
+│   │   ├── scenes/home/         家背景与导航反馈
+│   │   ├── furniture/home/      家园家具
+│   │   └── icons、sounds 等     图标、音效、道具、装饰与知识库
+│   └── source/                  不进入安装包的精灵表与参考图
 ├── data/                        本地配置、记忆和状态（不进入 Git）
 ├── docs/
 │   ├── TODO.md                  路线图和待办事项
@@ -320,7 +327,7 @@ Petpet/
 ```
 
 动画素材的画布、命名、AI 提示词和切帧方法见
-[assets/animations/README.md](assets/animations/README.md)。
+[assets/source/spritesheets/README.md](assets/source/spritesheets/README.md)。
 
 ## 常见问题
 

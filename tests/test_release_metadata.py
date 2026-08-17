@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_public_version_has_one_source_of_truth():
-    assert VERSION == "1.5.0"
+    assert VERSION == "1.5.1"
     assert pet.VERSION == VERSION
 
 
@@ -32,7 +32,7 @@ def test_macos_build_uses_lightweight_version_module():
     ).read_text(encoding="utf-8")
     assert "from version import VERSION" in workflow
     assert 'project_root / "version.py"' in mac_spec
-    assert re.search(r'^VERSION = "1\.5\.0"$', (
+    assert re.search(r'^VERSION = "1\.5\.1"$', (
         ROOT / "version.py"
     ).read_text(encoding="utf-8"), re.MULTILINE)
 
@@ -50,14 +50,14 @@ def test_release_ignores_local_debug_and_wrangler_cache():
     assert ".tools/" in ignored_paths
 
 
-def test_readme_documents_one_click_release_and_v150_assets():
+def test_readme_documents_one_click_release_and_v151_assets():
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    assert ".\\scripts\\release.ps1 -Version 1.5.0" in readme
+    assert ".\\scripts\\release.ps1 -Version 1.5.1" in readme
     for asset in (
         "Petpet.exe",
-        "Petpet-v1.5.0-windows.zip",
-        "Petpet-v1.5.0-macOS-arm64.zip",
-        "Petpet-v1.5.0-macOS-intel.zip",
+        "Petpet-v1.5.1-windows.zip",
+        "Petpet-v1.5.1-macOS-arm64.zip",
+        "Petpet-v1.5.1-macOS-intel.zip",
     ):
         assert asset in readme
     assert "默认免费文字聊天" in readme
@@ -69,8 +69,10 @@ def test_runtime_props_are_packaged_on_both_platforms():
         spec = (
             ROOT / "packaging" / filename
         ).read_text(encoding="utf-8")
-        assert '(str(assets_root / "props"), "assets/props")' in spec
-    assert (ROOT / "assets" / "props" / "fetch_ball.png").is_file()
+        assert '(str(runtime_assets_root), "assets/runtime")' in spec
+    assert (
+        ROOT / "assets" / "runtime" / "props" / "fetch_ball.png"
+    ).is_file()
 
 
 def test_packaging_uses_independent_decorations_not_outfit_combinations():
@@ -78,6 +80,6 @@ def test_packaging_uses_independent_decorations_not_outfit_combinations():
         spec = (
             ROOT / "packaging" / filename
         ).read_text(encoding="utf-8")
-        assert '(str(assets_root / "decorations"), "assets/decorations")' in spec
-        assert '(assets_root / "poses").glob("*.png")' in spec
+        assert '(str(runtime_assets_root), "assets/runtime")' in spec
+        assert "source_assets_root" not in spec
         assert "poses/outfits" not in spec

@@ -8,6 +8,14 @@ import game_knowledge as knowledge
 from version import VERSION
 
 
+def test_root_module_reexports_package_knowledge_api():
+    from petpet.chat import knowledge as package_knowledge
+
+    assert knowledge.load_game_knowledge is package_knowledge.load_game_knowledge
+    assert knowledge.find_relevant_entries is package_knowledge.find_relevant_entries
+    assert knowledge.knowledge_version is package_knowledge.knowledge_version
+
+
 class GameKnowledgeTests(unittest.TestCase):
     def test_knowledge_file_is_current_and_player_facing(self):
         entries = knowledge.load_game_knowledge()
@@ -63,7 +71,7 @@ class GameKnowledgeTests(unittest.TestCase):
             with open(bad_path, "w", encoding="utf-8") as knowledge_file:
                 json.dump({"version": "0.0.0", "entries": []}, knowledge_file)
 
-            with patch.object(knowledge, "KNOWLEDGE_PATH", bad_path):
+            with patch("petpet.chat.knowledge.KNOWLEDGE_PATH", bad_path):
                 self.assertEqual(knowledge.load_game_knowledge(), [])
                 self.assertEqual(knowledge.find_relevant_entries("小屋"), [])
 

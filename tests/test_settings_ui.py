@@ -171,7 +171,7 @@ class SettingsWindowTests(unittest.TestCase):
         self.window.inputs["always_on_top"].setChecked(False)
         self.window.inputs["health_level"].setValue(2)
         self.window.inputs["personality_level"].setValue(2)
-        with patch("pet.save_settings"):
+        with patch("petpet.ui.settings.save_settings"):
             self.window.apply()
         self.assertEqual(self.pet.settings["chat_width"], 480)
         self.assertEqual(self.pet.settings["chat_height"], 620)
@@ -189,7 +189,7 @@ class SettingsWindowTests(unittest.TestCase):
         self.window.inputs["sound_enabled"].setChecked(False)
         self.window.inputs["health_level"].setValue(0)
         self.window.inputs["personality_level"].setValue(2)
-        with patch("pet.save_settings"):
+        with patch("petpet.ui.settings.save_settings"):
             self.window.reset_defaults()
         self.assertEqual(self.pet.settings, pet.DEFAULT_SETTINGS)
         self.assertEqual(self.window.chat_size_combo.currentData(), (640, 820))
@@ -228,7 +228,7 @@ class SettingsWindowTests(unittest.TestCase):
 
     def test_settings_font_control_scales_the_whole_pixel_hierarchy(self):
         self.window.inputs["ui_font_size"].setValue(30)
-        with patch("pet.save_settings"):
+        with patch("petpet.ui.settings.save_settings"):
             self.window.apply()
 
         title = self.window.findChild(QLabel, "settingsTitle")

@@ -536,7 +536,9 @@ class ChatToolsTests(unittest.TestCase):
         self.assertEqual(set(by_role), {"assistant", "user"})
         self.assertTrue(
             by_role["assistant"].property("avatarSource").endswith(
-                os.path.join("assets", "poses", "idle.png")
+                os.path.join(
+                    "assets", "runtime", "pets", "desktop", "poses", "idle.png"
+                )
             )
         )
         self.assertEqual(by_role["user"].property("avatarSource"), "default")
