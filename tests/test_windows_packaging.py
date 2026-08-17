@@ -9,6 +9,22 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class WindowsPackagingTests(unittest.TestCase):
+    def test_icon_generation_uses_runtime_asset_paths(self):
+        icon_tool = (ROOT / "tools" / "make_icons.py").read_text(
+            encoding="utf-8"
+        )
+        mac_build = (ROOT / "scripts" / "build_macos.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn(
+            '"assets", "runtime", "pets", "desktop", "poses"',
+            icon_tool,
+        )
+        self.assertIn('"assets", "runtime", "icons"', icon_tool)
+        self.assertIn("assets/runtime/icons/", mac_build)
+        self.assertNotIn("cp assets/icons/", mac_build)
+
     def test_build_reuses_complete_local_dependencies_before_pip(self):
         script = (
             ROOT / "scripts" / "build_windows.ps1"

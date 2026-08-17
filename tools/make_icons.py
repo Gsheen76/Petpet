@@ -1,10 +1,12 @@
-"""Regenerate app icons from assets/poses/idle.png."""
+"""Regenerate app icons from the bundled desktop pet pose."""
 import os
 from PIL import Image, ImageDraw
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-POSES_DIR = os.path.join(PROJECT_DIR, "assets", "poses")
-ICON_DIR = os.path.join(PROJECT_DIR, "assets", "icons")
+POSES_DIR = os.path.join(
+    PROJECT_DIR, "assets", "runtime", "pets", "desktop", "poses"
+)
+ICON_DIR = os.path.join(PROJECT_DIR, "assets", "runtime", "icons")
 os.makedirs(ICON_DIR, exist_ok=True)
 
 src = os.path.join(POSES_DIR, "idle.png")
