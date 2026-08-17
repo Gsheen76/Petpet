@@ -10,4 +10,3 @@ Move progression, affection, coins, upgrades, furniture ownership, and achieveme
 2. Move the complete pure state/rules module into the package.
 3. Re-export its public API and constants from the root facade.
 4. Run progression/home/minigame focused tests, full tests, source smoke, and Obsidian sync.
-

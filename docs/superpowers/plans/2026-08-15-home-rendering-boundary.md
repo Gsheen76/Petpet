@@ -10,4 +10,3 @@ Move home visual constants and pure rendering helpers into `petpet.home.renderin
 2. Move paths, dimensions, card rendering, sprite source rectangles, contacts, shadow, fade, and board geometry.
 3. Import the package contract into the legacy controller module.
 4. Run focused/full tests, source smoke, and Obsidian sync.
-

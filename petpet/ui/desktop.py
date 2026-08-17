@@ -1483,5 +1483,3 @@ class SpeechBubble(QWidget):
         p.drawText(body.adjusted(18, 0, -18, 0),
                    Qt.AlignCenter | Qt.TextWordWrap,
                    self.text)
-
-

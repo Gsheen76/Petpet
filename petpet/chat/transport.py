@@ -321,4 +321,3 @@ def personal_stream(
         yield ("done", "".join(full)) if full else ("error", "empty_response")
     except Exception as error:
         yield ("error", str(error))
-

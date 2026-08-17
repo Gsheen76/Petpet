@@ -58,4 +58,3 @@ def save_settings(settings, path=SETTINGS_PATH):
             json.dump(settings, stream, ensure_ascii=False, indent=2)
     except Exception:
         pass
-

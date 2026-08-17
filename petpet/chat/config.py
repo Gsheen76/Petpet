@@ -181,4 +181,3 @@ def record_quota_success(
     aliyun["count"] += 1
     save_quota_state(path, state)
     return True
-

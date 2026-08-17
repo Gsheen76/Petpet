@@ -10,4 +10,3 @@ Move provider-neutral payload fitting plus Cloudflare/Aliyun and personal GLM st
 2. Implement transport functions with explicit injected I/O dependencies so existing patches and diagnostics remain valid.
 3. Replace the legacy transport implementations with thin adapters.
 4. Run focused/full verification, source smoke, and update Obsidian.
-

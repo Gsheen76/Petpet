@@ -1231,4 +1231,3 @@ class ChatWindow(QWidget):
                 ("assistant", "汪？你是…我们重新认识一下吧。")
             ])
             self.pet.say("汪？我们重新认识一下吧 🐶", 2500)
-

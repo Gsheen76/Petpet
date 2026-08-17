@@ -10,4 +10,3 @@ Move the complete home scene window into `petpet.home.window`, turning `home_sce
 2. Move the current controller module unchanged into the home package.
 3. Re-export rendering and window contracts from the root facade, retaining the shared `time` module patch seam.
 4. Run focused/full tests, source smoke, and Obsidian sync.
-

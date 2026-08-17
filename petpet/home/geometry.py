@@ -242,4 +242,3 @@ def clamp_home_furniture_position(decoration_id: str, x: Any, y: Any) -> dict[st
         "x": max(0, min(max_x, _finite_int(x, 0))),
         "y": max(0, min(max_y, _finite_int(y, 0))),
     }
-

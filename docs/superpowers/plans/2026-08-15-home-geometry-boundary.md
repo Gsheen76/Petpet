@@ -10,4 +10,3 @@ Move the pure home viewport, furniture transform, and scene geometry API into `p
 2. Move the complete dependency-free geometry module.
 3. Re-export its public contract from the root module.
 4. Run scene/home focused tests, full tests, source smoke, and Obsidian sync.
-

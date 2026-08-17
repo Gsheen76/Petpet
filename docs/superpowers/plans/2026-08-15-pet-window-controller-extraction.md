@@ -10,4 +10,3 @@ Move the desktop pet runtime controller into `petpet.app.pet_window` while retai
 2. Extract the complete controller with explicit stable imports and a lazy compatibility resolver for entry-owned state, windows, flags, and signals.
 3. Replace the root class with an exact package alias.
 4. Run desktop behavior focused tests, full tests, source smoke, and Obsidian sync.
-

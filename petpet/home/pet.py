@@ -331,4 +331,3 @@ class HomePetController:
             return False
         self.state = "idle"
         return True
-

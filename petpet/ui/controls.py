@@ -141,4 +141,3 @@ class ThreeLevelSlider(QWidget):
 
     def setValue(self, value):
         self.slider.setValue(max(0, min(2, int(value))))
-

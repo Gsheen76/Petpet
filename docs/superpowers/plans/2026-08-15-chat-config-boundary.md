@@ -10,4 +10,3 @@ Move chat configuration validation, persistence, model rules, public endpoint lo
 2. Implement the package module with path-explicit functions so tests and packaged runtime can select their own storage paths.
 3. Replace implementations in `buddy_ai.py` with thin adapters that continue honoring its patchable compatibility constants.
 4. Run focused and full tests, source GUI smoke, then synchronize the Obsidian implementation record.
-
