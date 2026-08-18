@@ -1,5 +1,48 @@
 {
-  "idle":  {"folder": "idle",  "fps": 5,  "loop": true,  "fallback": "idle"},
+  "idle": {
+    "folder": "idle",
+    "fps": 8,
+    "loop": true,
+    "fallback": "idle",
+    "frame_durations_ms": [
+      139.423076923, 139.423076923, 139.423076923, 139.423076923,
+      139.423076923, 139.423076923, 62.5, 62.5,
+      62.5, 139.423076923, 139.423076923, 139.423076923,
+      139.423076923, 139.423076923, 139.423076923, 139.423076923
+    ]
+  },
+  "idle_dinosaur": {
+    "folder": "outfits/dinosaur/idle",
+    "fps": 8,
+    "loop": true,
+    "fallback": "idle",
+    "frame_sequence": [
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
+      12, 13, 14, 15, 16, 7, 8, 9, 10, 11
+    ],
+    "frame_durations_ms": [
+      160.0, 160.0, 40.0, 40.0,
+      40.0, 160.0, 160.0, 160.0,
+      160.0, 160.0, 160.0, 160.0,
+      160.0, 160.0, 160.0, 160.0
+    ]
+  },
+  "idle_strawberry": {
+    "folder": "outfits/strawberry/idle",
+    "fps": 8,
+    "loop": true,
+    "fallback": "idle",
+    "frame_sequence": [
+      5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+      8, 9, 10, 11, 12, 13
+    ],
+    "frame_durations_ms": [
+      160.0, 160.0, 160.0, 160.0,
+      160.0, 60.0, 60.0, 160.0,
+      160.0, 160.0, 160.0, 160.0,
+      160.0, 160.0, 160.0, 160.0
+    ]
+  },
   "walk":  {
     "folder": "walk",
     "fps": 6,
@@ -13,7 +56,7 @@
     "fps": 20,
     "loop": true,
     "fallback": "eat",
-    "scale": 1.2,
+    "scale": 1.0,
     "anchor_bottom": true,
     "saturation": 0.9,
     "brightness": 0.97
@@ -32,7 +75,7 @@
     "fps": 20,
     "loop": false,
     "fallback": "happy",
-    "scale": 1.2,
+    "scale": 1.0,
     "anchor_bottom": true,
     "saturation": 0.9,
     "brightness": 0.97
@@ -42,7 +85,7 @@
     "fps": 20,
     "loop": false,
     "fallback": "happy",
-    "scale": 1.2,
+    "scale": 1.0,
     "anchor_bottom": true
   },
   "sleep": {
@@ -50,7 +93,7 @@
     "fps": 2.4,
     "loop": true,
     "fallback": "sleep",
-    "scale": 0.8,
+    "scale": 0.7,
     "anchor_bottom": true
   },
   "drag":  {"folder": "drag",  "fps": 6,  "loop": true,  "fallback": "drag"},

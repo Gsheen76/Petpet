@@ -95,6 +95,15 @@ class FetchPlaySceneTests(unittest.TestCase):
         self.assertEqual(self.scene.countdown_value(now=101.1), 2)
         self.assertEqual(self.scene.countdown_value(now=102.1), 1)
 
+    def test_scene_loads_play_frames_before_reading_the_animation_cache(self):
+        pet_host = FakeScenePet()
+        pet_host.animation_frames = {}
+        pet_host._ensure_animation_loaded = Mock()
+
+        pet.FetchPlayScene(pet_host, Mock())
+
+        pet_host._ensure_animation_loaded.assert_called_once_with("play")
+
     def test_click_target_starts_manual_throw(self):
         target = QPointF(self.scene.target_rect.center())
         self.scene._phase = "aim"

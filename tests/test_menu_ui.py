@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import QApplication, QLabel, QMenu
 import pet
 import progression
 import decoration_renderer
+from petpet.ui import desktop as desktop_ui
 
 
 class FakePet:
@@ -45,6 +46,16 @@ class MenuUiTests(unittest.TestCase):
         tray.state = {"autostart": False}
         tray.pet = FakePet()
         return tray
+
+    def test_overlay_position_helper_skips_unchanged_native_moves(self):
+        widget = Mock()
+        widget.pos.return_value = QPoint(120, 240)
+
+        desktop_ui.move_window_if_needed(widget, 120, 240)
+        widget.move.assert_not_called()
+
+        desktop_ui.move_window_if_needed(widget, 121, 240)
+        widget.move.assert_called_once_with(121, 240)
 
     def test_primary_and_more_bubble_actions(self):
         self.assertEqual(

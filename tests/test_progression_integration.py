@@ -123,9 +123,9 @@ class InteractionUpgradeIntegrationTests(unittest.TestCase):
         with patch("pet.save_state"):
             pet.PetWindow.on_decay(fake)
 
-        self.assertAlmostEqual(state["hunger"], 99.93)
-        self.assertAlmostEqual(state["energy"], 99.95)
-        self.assertAlmostEqual(state["mood"], 99.96)
+        self.assertAlmostEqual(state["hunger"], 99.965)
+        self.assertAlmostEqual(state["energy"], 99.975)
+        self.assertAlmostEqual(state["mood"], 99.98)
 
     def test_endurance_does_not_change_sleeping_hunger_cost(self):
         state = progression.ensure_progression({
@@ -149,7 +149,7 @@ class InteractionUpgradeIntegrationTests(unittest.TestCase):
         with patch("pet.save_state"):
             pet.PetWindow.on_decay(fake)
 
-        self.assertAlmostEqual(state["hunger"], 49.92)
+        self.assertAlmostEqual(state["hunger"], 49.96)
 
     def test_experience_upgrade_is_used_by_pet_leveling(self):
         state = progression.ensure_progression({

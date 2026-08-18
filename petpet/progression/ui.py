@@ -23,7 +23,7 @@ from PyQt5.QtWidgets import (
 
 from petpet.progression import core as progression
 from petpet.ui import decorations as decoration_renderer
-from petpet.app.paths import DECORATIONS_DIR, POSES_DIR
+from petpet.app.paths import DECORATIONS_DIR, OUTFITS_DIR, POSES_DIR
 from petpet.home.rendering import HOME_FURNITURE_PATHS, render_home_status_card
 
 
@@ -1010,7 +1010,7 @@ class ShopWindow(CozyProgressWindow):
         tab_layout.setContentsMargins(5, 5, 5, 5)
         tab_layout.setSpacing(7)
         for page, text in (
-            ("decorations", "🎀 装饰"),
+            ("decorations", "🎁 套装"),
             ("home", "🏠 家居"),
             ("upgrades", "✨ 强化"),
         ):
@@ -1027,7 +1027,7 @@ class ShopWindow(CozyProgressWindow):
         self.content_layout.addWidget(tab_bar)
 
         if self.page == "decorations":
-            self._build_decorations_page()
+            self._build_outfits_page()
         elif self.page == "home":
             self._build_home_page()
         else:
@@ -1042,64 +1042,106 @@ class ShopWindow(CozyProgressWindow):
         self.scroll.verticalScrollBar().setValue(0)
         self.refresh()
 
-    def _build_decorations_page(self):
-        products_title = QLabel("🎁 装饰小铺")
+    def _build_outfits_page(self):
+        products_title = QLabel("🎁 套装商店")
         products_title.setObjectName("sectionTitle")
         self.content_layout.addWidget(products_title)
         tip = QLabel(
-            "同一分类同时只能装备一件。领取后可以随时装备或卸下，"
-            "装饰只显示在待机姿势，并且可以自由微调位置、大小和角度。"
+            "购买完整套装后直接装备，待机时会替换为套装专属动画。"
         )
         tip.setObjectName("muted")
         tip.setWordWrap(True)
         self.content_layout.addWidget(tip)
 
-        category_bar = QFrame()
-        category_bar.setObjectName("categoryTabBar")
-        category_layout = QHBoxLayout(category_bar)
-        category_layout.setContentsMargins(5, 5, 5, 5)
-        category_layout.setSpacing(7)
-        for category, label in self.DECORATION_TABS:
-            button = QPushButton(label)
-            button.setObjectName("categoryTabButton")
-            button.setCheckable(True)
-            button.setChecked(self.decoration_category == category)
-            button.clicked.connect(
-                lambda _checked=False, selected=category:
-                self._set_decoration_category(selected)
-            )
-            category_layout.addWidget(button)
-        self.content_layout.addWidget(category_bar)
-
-        category_label = dict(self.DECORATION_TABS)[
-            self.decoration_category
-        ]
-        category_title = QLabel(f"当前分类 · {category_label}")
-        category_title.setObjectName("sectionTitle")
-        self.content_layout.addWidget(category_title)
-
-        for decoration_id, definition in (
-            progression.DECORATION_DEFINITIONS.items()
-        ):
-            if definition["category"] != self.decoration_category:
-                continue
+        for outfit_id, definition in progression.OUTFIT_DEFINITIONS.items():
             self.content_layout.addWidget(
-                self._decoration_card(decoration_id, definition)
+                self._outfit_card(outfit_id, definition)
             )
 
         upcoming = QFrame()
         upcoming.setObjectName("placeholderCard")
         upcoming_layout = QVBoxLayout(upcoming)
         upcoming_layout.setContentsMargins(18, 14, 18, 14)
-        upcoming_title = QLabel(f"🌷 更多{category_label}正在准备")
+        upcoming_title = QLabel("🌷 更多套装正在准备")
         upcoming_title.setObjectName("cardTitle")
         upcoming_note = QLabel(
-            f"后续会继续补充新的{category_label}，已购买的装饰可以随时更换。"
+            "后续会继续补充新的完整套装，已购买的套装可以随时切换。"
         )
         upcoming_note.setObjectName("muted")
         upcoming_layout.addWidget(upcoming_title)
         upcoming_layout.addWidget(upcoming_note)
         self.content_layout.addWidget(upcoming)
+
+    def _outfit_card(self, outfit_id, definition):
+        state = self.pet.state
+        owned = progression.outfit_owned(state, outfit_id)
+        equipped = progression.equipped_outfit(state) == outfit_id
+        card = QFrame()
+        card.setObjectName("decorationCard")
+        layout = QHBoxLayout(card)
+        layout.setContentsMargins(18, 14, 18, 14)
+        layout.setSpacing(18)
+
+        preview = QLabel()
+        preview.setObjectName(f"outfitPreview_{outfit_id}")
+        preview.setFixedSize(210, 150)
+        preview.setAlignment(Qt.AlignCenter)
+        asset_folder = definition.get("asset_folder", outfit_id)
+        pixmap = QPixmap(os.path.join(
+            OUTFITS_DIR, asset_folder, definition["preview_asset"]
+        ))
+        if not pixmap.isNull():
+            preview.setPixmap(pixmap.scaled(
+                preview.size(), Qt.KeepAspectRatio,
+                Qt.SmoothTransformation,
+            ))
+        layout.addWidget(preview)
+
+        info = QVBoxLayout()
+        info.setSpacing(7)
+        title_row = QHBoxLayout()
+        title = QLabel(f"{definition['icon']} {definition['name']}")
+        title.setObjectName("cardTitle")
+        badge_text = "装备中" if equipped else ("已拥有" if owned else "完整套装")
+        badge = QLabel(badge_text)
+        badge.setObjectName("levelBadge")
+        title_row.addWidget(title)
+        title_row.addStretch(1)
+        title_row.addWidget(badge)
+        info.addLayout(title_row)
+
+        description = QLabel(definition["description"])
+        description.setObjectName("muted")
+        description.setWordWrap(True)
+        info.addWidget(description)
+
+        action_row = QHBoxLayout()
+        price = int(definition.get("price", 0))
+        price_text = QLabel(f"售价：{price} Pet币")
+        price_text.setObjectName("reward")
+        if not owned:
+            button = QPushButton(f"{price} Pet币 · 购买")
+            button.setEnabled(state.get("pet_coins", 0) >= price)
+            button.clicked.connect(
+                lambda _checked=False, selected=outfit_id:
+                self._purchase_outfit(selected)
+            )
+        elif equipped:
+            button = QPushButton("卸下套装")
+            button.setObjectName("softButton")
+            button.clicked.connect(self._unequip_outfit)
+        else:
+            button = QPushButton("装备套装")
+            button.clicked.connect(
+                lambda _checked=False, selected=outfit_id:
+                self._equip_outfit(selected)
+            )
+        action_row.addWidget(price_text)
+        action_row.addStretch(1)
+        action_row.addWidget(button)
+        info.addLayout(action_row)
+        layout.addLayout(info, 1)
+        return card
 
     def _set_decoration_category(self, category):
         valid = {item[0] for item in self.DECORATION_TABS}
@@ -1226,6 +1268,21 @@ class ShopWindow(CozyProgressWindow):
             progression.purchase_decoration(
                 self.pet.state, decoration_id
             )
+        )
+
+    def _purchase_outfit(self, outfit_id):
+        self._finish_decoration_action(
+            progression.purchase_outfit(self.pet.state, outfit_id)
+        )
+
+    def _equip_outfit(self, outfit_id):
+        self._finish_decoration_action(
+            progression.equip_outfit(self.pet.state, outfit_id)
+        )
+
+    def _unequip_outfit(self):
+        self._finish_decoration_action(
+            progression.unequip_outfit(self.pet.state)
         )
 
     def _equip_decoration(self, decoration_id):

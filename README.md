@@ -6,7 +6,7 @@
   <img src="assets/runtime/pets/desktop/poses/idle.png" width="280" alt="Pet陪它桌面小狗">
 </p>
 
-当前版本：`v1.5.1`
+当前版本：`v1.5.2`
 
 支持平台：Windows 10/11、macOS Intel、macOS Apple 芯片
 
@@ -32,6 +32,16 @@
 - Windows 系统托盘与 macOS 菜单栏入口
 - 本地保存配置、记忆和养成状态
 - 启动自动检查更新，也可从右键菜单或托盘主动检查并安装新版
+
+## v1.5.2 更新亮点
+
+- 新增桌面宠物 16 帧待机动画，并支持恐龙、草莓套装的独立待机动画
+- 商店装扮调整为套装售卖，装备套装后使用对应待机动画和拖拽预览图
+- 统一缩小互动动画，限制动画解码尺寸并按需加载，降低内存占用
+- 降低三项属性自然消耗速度，优化睡觉动画尺寸
+- 预热右键菜单和属性卡，修复首次交互鼠标卡顿及菜单预热生命周期竞态
+- 增强宠物意外隐藏后的桌面显示恢复和置顶保持逻辑
+- 增加待机动画、套装预览、菜单预热和窗口生命周期回归测试
 
 ## v1.5.1 更新亮点
 
@@ -243,7 +253,7 @@ dist/Petpet.app
 干净工作树中运行：
 
 ```powershell
-.\scripts\release.ps1 -Version 1.5.1
+    .\scripts\release.ps1 -Version 1.5.2
 ```
 
 脚本会重新运行测试、构建并冒烟验证 Windows、生成校验和、安全同步 `main`、
@@ -251,9 +261,9 @@ dist/Petpet.app
 非空时才会公开版本：
 
 - `Petpet.exe`
-- `Petpet-v1.5.1-windows.zip`
-- `Petpet-v1.5.1-macOS-arm64.zip`
-- `Petpet-v1.5.1-macOS-intel.zip`
+- `Petpet-v1.5.2-windows.zip`
+- `Petpet-v1.5.2-macOS-arm64.zip`
+- `Petpet-v1.5.2-macOS-intel.zip`
 
 中途失败时 Release 保持草稿；修复问题后可重复运行同一命令继续。脚本不会
 强推、覆盖标签或删除 worktree。完整约束见

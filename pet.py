@@ -149,22 +149,23 @@ POSE = {name: i for i, name in enumerate(POSE_NAMES)}
 CELL = 200  # each pose is 200x200; spritesheet is 1200x200
 
 DEFAULT_ANIMATIONS = {
-    "idle":  {"fps": 5,  "loop": True,  "fallback": "idle"},
+    "idle":  {"fps": 8,  "loop": True,  "fallback": "idle"},
+    "idle_dinosaur": {"fps": 8, "loop": True, "fallback": "idle"},
     "walk":  {"fps": 6,  "loop": True,  "fallback": "idle",
               "scale": 1.56, "anchor_bottom": True},
     "eat":   {"fps": 20, "loop": True,  "fallback": "eat",
-              "scale": 1.2, "anchor_bottom": True,
+              "scale": 1.0, "anchor_bottom": True,
               "saturation": 0.9, "brightness": 0.97},
     "play":  {"fps": 24, "loop": False, "fallback": "happy",
               "scale": 1.3, "anchor_bottom": True},
     "happy": {"fps": 8,  "loop": True,  "fallback": "happy"},
     "pet":   {"fps": 20, "loop": False, "fallback": "happy",
-              "scale": 1.2, "anchor_bottom": True,
+              "scale": 1.0, "anchor_bottom": True,
               "saturation": 0.9, "brightness": 0.97},
     "dig_reward": {"fps": 20, "loop": False, "fallback": "happy",
-                   "scale": 1.2, "anchor_bottom": True},
+                   "scale": 1.0, "anchor_bottom": True},
     "sleep": {"fps": 2.4, "loop": True,  "fallback": "sleep",
-              "scale": 0.8, "anchor_bottom": True},
+              "scale": 0.6, "anchor_bottom": True},
     "drag":  {"fps": 6,  "loop": True,  "fallback": "drag"},
     "sad":   {"fps": 5,  "loop": True,  "fallback": "sad"},
     "sit":   {"fps": 6,  "loop": True,  "fallback": "idle"},
@@ -185,7 +186,7 @@ DEFAULT_DEBUG_PARAMETERS = {
     "walk_speed_min": 60.0,
     "walk_speed_max": 180.0,
     "auto_sleep_walk_speed": 118.0,
-    "animation_idle_fps": 5.0,
+    "animation_idle_fps": 8.0,
     "animation_walk_fps": 6.0,
     "animation_eat_fps": 20.0,
     "animation_pet_fps": 20.0,
@@ -985,6 +986,11 @@ class FetchPlayScene(QWidget):
             self._dog_start.y() - 122.0 * self.CATCH_BASELINE_RATIO,
         )
 
+        ensure_animation_loaded = getattr(
+            self.pet, "_ensure_animation_loaded", None
+        )
+        if callable(ensure_animation_loaded):
+            ensure_animation_loaded("play")
         self.frames = list(self.pet.animation_frames.get("play", ()))
         if not self.frames:
             fallback = (
@@ -1759,7 +1765,6 @@ class TrayApp:
             self._press_button = None
             self._press_pos = None
         elif e.button() == Qt.RightButton and self._press_button == "right":
-            self._show_pet_menu(e.globalPos())
             self._press_button = None
             self._press_pos = None
         self.pet.mouseReleaseEvent_orig(e)
@@ -1918,10 +1923,9 @@ class TrayApp:
             except RuntimeError:
                 self.pet.home_scene_window = None
         if self.pet.isVisible():
-            self.pet.hide_overlays()
-            self.pet.hide()
+            self.pet.set_user_visible(False)
         else:
-            self.pet.show()
+            self.pet.set_user_visible(True)
 
     def open_data_folder(self):
         QDesktopServices.openUrl(QUrl.fromLocalFile(DATA_DIR))

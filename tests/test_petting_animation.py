@@ -9,6 +9,68 @@ import pet
 
 
 class PettingAnimationAssetTests(unittest.TestCase):
+    def test_dinosaur_outfit_has_a_sixteen_frame_idle_sequence(self):
+        animation_dir = Path(pet.ANIMATIONS_DIR)
+        manifest = json.loads(
+            (animation_dir / "manifest.json").read_text(encoding="utf-8")
+        )
+        frames = sorted((animation_dir / "outfits" / "dinosaur" / "idle").glob("*.png"))
+
+        self.assertEqual(len(frames), 16)
+        self.assertEqual(manifest["idle_dinosaur"]["fps"], 8)
+        self.assertEqual(
+            manifest["idle_dinosaur"]["frame_sequence"],
+            list(range(1, 17)) + list(range(7, 12)),
+        )
+        self.assertEqual(
+            manifest["idle_dinosaur"]["frame_durations_ms"],
+            [160.0, 160.0, 40.0, 40.0, 40.0]
+            + [160.0] * 11,
+        )
+        self.assertAlmostEqual(
+            sum(manifest["idle_dinosaur"]["frame_durations_ms"]),
+            2200.0,
+            places=3,
+        )
+
+        for frame_path in frames:
+            with Image.open(frame_path) as frame:
+                self.assertEqual(frame.size, (640, 640))
+                self.assertEqual(frame.mode, "RGBA")
+
+    def test_strawberry_outfit_has_a_sixteen_frame_idle_sequence(self):
+        animation_dir = Path(pet.ANIMATIONS_DIR)
+        manifest = json.loads(
+            (animation_dir / "manifest.json").read_text(encoding="utf-8")
+        )
+        frames = sorted(
+            (animation_dir / "outfits" / "strawberry" / "idle").glob("*.png")
+        )
+
+        self.assertEqual(len(frames), 16)
+        self.assertEqual(manifest["idle_strawberry"]["fps"], 8)
+        self.assertEqual(
+            manifest["idle_strawberry"]["frame_sequence"],
+            list(range(5, 17)) + list(range(8, 14)),
+        )
+        self.assertEqual(
+            manifest["idle_strawberry"]["frame_durations_ms"],
+            [160.0] * 5 + [60.0, 60.0] + [160.0] * 9,
+        )
+        self.assertAlmostEqual(
+            sum(
+                manifest["idle_strawberry"]["frame_durations_ms"][index - 1]
+                for index in manifest["idle_strawberry"]["frame_sequence"]
+            ),
+            2680.0,
+            places=3,
+        )
+
+        for frame_path in frames:
+            with Image.open(frame_path) as frame:
+                self.assertEqual(frame.size, (640, 640))
+                self.assertEqual(frame.mode, "RGBA")
+
     def test_petting_animation_is_a_non_looping_24_frame_20_fps_sequence(self):
         animation_dir = Path(pet.ANIMATIONS_DIR)
         manifest = json.loads(
@@ -48,6 +110,19 @@ class PettingAnimationAssetTests(unittest.TestCase):
                     between_paws.getbbox(),
                     f"food fragment remains in {frame_path.name}",
                 )
+
+    def test_interaction_animation_scales_use_the_idle_size_baseline(self):
+        animation_dir = Path(pet.ANIMATIONS_DIR)
+        manifest = json.loads(
+            (animation_dir / "manifest.json").read_text(encoding="utf-8")
+        )
+
+        self.assertEqual(
+            {name: manifest[name]["scale"] for name in (
+                "pet", "eat", "dig_reward", "sleep"
+            )},
+            {"pet": 1.0, "eat": 1.0, "dig_reward": 1.0, "sleep": 0.7},
+        )
 
 
 class PetClickAnimationTests(unittest.TestCase):

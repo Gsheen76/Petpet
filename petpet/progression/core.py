@@ -228,6 +228,29 @@ DECORATION_DEFINITIONS = {
     },
 }
 
+# Complete pet outfits replace the legacy slot-based decorations in the shop.
+# Each outfit owns one authored idle animation instead of being composited.
+OUTFIT_DEFINITIONS = {
+    "dinosaur_suit": {
+        "name": "小恐龙套装",
+        "icon": "🦖",
+        "price": 680,
+        "asset_folder": "dinosaur",
+        "preview_asset": "preview.png",
+        "animation": "idle_dinosaur",
+        "description": "绿色小恐龙连体套装，装备后直接替换小狗的待机动画。",
+    },
+    "strawberry_suit": {
+        "name": "草莓小子套装",
+        "icon": "🍓",
+        "price": 760,
+        "asset_folder": "strawberry",
+        "preview_asset": "preview.png",
+        "animation": "idle_strawberry",
+        "description": "草莓连帽与叶子领结套装，装备后播放专属待机动画。",
+    },
+}
+
 DECORATION_TRANSFORM_LIMITS = {
     "x": (-0.15, 1.15),
     "y": (-0.15, 1.15),
@@ -415,6 +438,21 @@ def ensure_progression(state):
         else:
             equipped[category] = None
     state["equipped_decorations"] = equipped
+
+    raw_owned_outfits = state.get("owned_outfits")
+    if not isinstance(raw_owned_outfits, (list, tuple, set)):
+        raw_owned_outfits = []
+    state["owned_outfits"] = list(dict.fromkeys(
+        str(item)
+        for item in raw_owned_outfits
+        if str(item) in OUTFIT_DEFINITIONS
+    ))
+    equipped_outfit = state.get("equipped_outfit")
+    state["equipped_outfit"] = (
+        equipped_outfit
+        if equipped_outfit in state["owned_outfits"]
+        else None
+    )
 
     raw_adjustments = state.get("decoration_adjustments")
     if not isinstance(raw_adjustments, dict):
@@ -878,6 +916,80 @@ def purchase_upgrade(state, upgrade_id):
         "message": (
             f"{definition['name']} 升到 Lv.{current + 1} 啦！"
         ),
+    }
+
+
+def outfit_owned(state, outfit_id):
+    ensure_progression(state)
+    return outfit_id in state["owned_outfits"]
+
+
+def equipped_outfit(state):
+    ensure_progression(state)
+    return state["equipped_outfit"]
+
+
+def equipped_outfit_animation(state):
+    outfit_id = equipped_outfit(state)
+    definition = OUTFIT_DEFINITIONS.get(outfit_id)
+    return definition.get("animation") if definition else None
+
+
+def purchase_outfit(state, outfit_id):
+    """Purchase one complete outfit without automatically equipping it."""
+    ensure_progression(state)
+    definition = OUTFIT_DEFINITIONS.get(outfit_id)
+    if definition is None:
+        return {"ok": False, "message": "没有找到这套装扮。"}
+    if outfit_owned(state, outfit_id):
+        return {"ok": False, "message": "这套装扮已经拥有啦。"}
+    price = int(definition.get("price", 0))
+    if state["pet_coins"] < price:
+        return {
+            "ok": False,
+            "price": price,
+            "message": f"还差 {price - state['pet_coins']} 枚 Pet币。",
+        }
+    state["pet_coins"] -= price
+    state["records"]["coins_spent"] += price
+    state["owned_outfits"].append(outfit_id)
+    state["records"]["decorations_collected"] += 1
+    return {
+        "ok": True,
+        "price": price,
+        "message": f"已购买 {definition['name']}！",
+    }
+
+
+def equip_outfit(state, outfit_id):
+    """Equip one owned outfit, replacing the previous complete outfit."""
+    ensure_progression(state)
+    definition = OUTFIT_DEFINITIONS.get(outfit_id)
+    if definition is None:
+        return {"ok": False, "message": "没有找到这套装扮。"}
+    if not outfit_owned(state, outfit_id):
+        return {"ok": False, "message": "需要先购买这套装扮。"}
+    if state["equipped_outfit"] != outfit_id:
+        state["records"]["outfit_changes"] += 1
+    state["equipped_outfit"] = outfit_id
+    return {
+        "ok": True,
+        "message": f"已经换上 {definition['name']} 啦～",
+    }
+
+
+def unequip_outfit(state):
+    """Remove the active complete outfit and restore the default idle pet."""
+    ensure_progression(state)
+    outfit_id = state.get("equipped_outfit")
+    if not outfit_id:
+        return {"ok": False, "message": "现在还没有装备套装。"}
+    state["equipped_outfit"] = None
+    state["records"]["outfit_changes"] += 1
+    definition = OUTFIT_DEFINITIONS.get(outfit_id, {})
+    return {
+        "ok": True,
+        "message": f"已收好 {definition.get('name', '套装')}。",
     }
 
 

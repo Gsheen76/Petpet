@@ -4,7 +4,7 @@ import math
 import time
 
 from petpet.chat import api as ai
-from PyQt5.QtCore import QEvent, QPointF, QRect, QRectF, Qt, QTimer
+from PyQt5.QtCore import QEvent, QPoint, QPointF, QRect, QRectF, Qt, QTimer
 from PyQt5.QtGui import (
     QColor,
     QFont,
@@ -43,6 +43,14 @@ def pet_interface_anchor_rect(pet):
     return pet.geometry()
 
 
+def move_window_if_needed(widget, x, y):
+    """Avoid issuing native window moves when an overlay is already aligned."""
+    target = QPoint(int(x), int(y))
+    position = getattr(widget, "pos", None)
+    if not callable(position) or position() != target:
+        widget.move(int(x), int(y))
+
+
 def pet_interface_anchor_visible(pet):
     """Return anchor visibility for PetWindow and lightweight UI hosts."""
     getter = getattr(pet, "interface_anchor_visible", None)
@@ -77,7 +85,7 @@ def pet_interface_bonus_origin(pet, y_offset=-10):
 
 class StatBubble(QWidget):
     """A warm, readable growth card shown above the right-click actions."""
-    def __init__(self, pet):
+    def __init__(self, pet, show_window=True):
         super().__init__()
         self.pet = pet
         self.setWindowFlags(
@@ -92,8 +100,9 @@ class StatBubble(QWidget):
         self._timer.timeout.connect(self._tick)
         self._timer.start(500)  # refresh stats 2x/sec
         self._place()
-        self.show()
-        self.raise_()
+        if show_window:
+            self.show()
+            self.raise_()
 
     def _tick(self):
         self.update()
@@ -148,7 +157,7 @@ class StatBubble(QWidget):
         y = g.top() - h - 112
         x = max(scr.left(), min(x, scr.right() - w))
         y = max(scr.top(), min(y, scr.bottom() - h))
-        self.move(int(x), int(y))
+        move_window_if_needed(self, x, y)
 
     @staticmethod
     def _fit_font(text, preferred_size, max_width, weight=QFont.Normal,
@@ -500,7 +509,7 @@ class BubbleMenu(QWidget):
             or (action == "interaction" and bool(zero_actions))
         )
 
-    def __init__(self, pet, page="primary"):
+    def __init__(self, pet, page="primary", show_window=True):
         super().__init__()
         self.pet = pet
         self.page = page if page in self.PAGE_COLUMNS else "primary"
@@ -525,6 +534,7 @@ class BubbleMenu(QWidget):
         self._hover = -1
         self._press = -1
         self._closing = False
+        self._prewarming = False
         self._hover_scales = [0.0] * len(self.actions)
         self._anim = QTimer(self)
         self._anim.timeout.connect(self._tick)
@@ -539,13 +549,15 @@ class BubbleMenu(QWidget):
         # The growth card belongs only to the primary interaction canvas.
         # Opening "更多" replaces the whole first canvas.
         self.stat_bubble = (
-            _dependency("StatBubble")(pet) if self.page == "primary" else None
+            _dependency("StatBubble")(pet, show_window=show_window)
+            if self.page == "primary" else None
         )
 
         self._place()
-        self.show()
-        self.raise_()
-        self.activateWindow()
+        if show_window:
+            self.show()
+            self.raise_()
+            self.activateWindow()
         self.setMouseTracking(True)
 
     def _tick(self):
@@ -721,7 +733,12 @@ class BubbleMenu(QWidget):
                 "back": "primary",
             }[action]
             self._close()
-            pet._bubble_menu = _dependency("BubbleMenu")(pet, page=target_page)
+            factory = getattr(pet, "_create_bubble_menu", None)
+            pet._bubble_menu = (
+                factory(target_page)
+                if callable(factory)
+                else _dependency("BubbleMenu")(pet, page=target_page)
+            )
             return
 
         if action == "chat":
@@ -786,11 +803,14 @@ class BubbleMenu(QWidget):
             QTimer.singleShot(0, restore)
 
     def _on_application_state_changed(self, state):
-        if state == Qt.ApplicationInactive and self.isVisible():
+        if (state == Qt.ApplicationInactive and self.isVisible()
+                and not getattr(self, "_prewarming", False)):
             self._close()
 
     def eventFilter(self, watched, event):
-        if (not self._closing and self.isVisible()
+        if (not self._closing
+                and not getattr(self, "_prewarming", False)
+                and self.isVisible()
                 and event.type() == QEvent.MouseButtonPress
                 and hasattr(event, "globalPos")):
             point = event.globalPos()
@@ -820,6 +840,7 @@ class BubbleMenu(QWidget):
             event.type() == QEvent.UngrabMouse
             and self.isVisible()
             and not self._closing
+            and not getattr(self, "_prewarming", False)
         ):
             QTimer.singleShot(0, self._close)
         return super().event(event)
@@ -956,7 +977,7 @@ class InteractiveBubble(QWidget):
             y = g.top() - 21
             x = max(scr.left(), min(x, scr.right() - self.width()))
             y = max(scr.top(), min(y, scr.bottom() - self.height()))
-            self.move(int(x), int(y))
+            move_window_if_needed(self, x, y)
             return
         toward_pet = 12
         if pet_cx < screen_cx:
@@ -971,7 +992,7 @@ class InteractiveBubble(QWidget):
         # clamp to screen
         x = max(scr.left(), min(x, scr.right() - self.width()))
         y = max(scr.top(), min(y, scr.bottom() - self.height()))
-        self.move(int(x), int(y))
+        move_window_if_needed(self, x, y)
 
     def mousePressEvent(self, e):
         if (e.button() == Qt.LeftButton and
@@ -1398,7 +1419,7 @@ class SpeechBubble(QWidget):
             self.clear_messages()
             return
         rect = self._bubble_geometry(self.width(), self.height())
-        self.move(rect.topLeft())
+        move_window_if_needed(self, rect.x(), rect.y())
 
     def _bubble_geometry(self, width, height):
         """Return one complete on-screen geometry for an atomic update."""

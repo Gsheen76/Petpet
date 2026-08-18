@@ -24,6 +24,7 @@ memory.json
 config.json
 
 # Editor and temporary files
+tmp/
 .DS_Store
 .idea/
 .vscode/

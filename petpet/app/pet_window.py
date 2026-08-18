@@ -11,7 +11,7 @@ from petpet.chat import api as ai
 from petpet.ui import decorations as decoration_renderer
 from petpet.minigames import ui as minigames
 from petpet.progression import core as progression
-from petpet.app.paths import ANIMATIONS_DIR, POSES_DIR, SOUNDS_DIR
+from petpet.app.paths import ANIMATIONS_DIR, OUTFITS_DIR, POSES_DIR, SOUNDS_DIR
 from petpet.app.settings import load_settings
 from petpet.ui.common import pixel_font
 from PyQt5.QtCore import (
@@ -54,6 +54,13 @@ def _dependency(name):
 
 
 class PetWindow(QWidget):
+    # Runtime frames are displayed at roughly half this size on desktop.
+    # Keeping a 2x-ish buffer preserves crispness while bounding Qt memory.
+    ANIMATION_MAX_SIZE = 384
+    PRELOADED_ANIMATIONS = (
+        "idle", "pet", "eat", "play", "sleep", "dig_reward"
+    )
+    STAT_DECAY_RATE_MULTIPLIER = 0.5
     flung = pyqtSignal()
     AUTO_SLEEP_ENERGY_THRESHOLD = 30.0
     AUTO_WAKE_ENERGY_THRESHOLD = 80.0
@@ -157,6 +164,8 @@ class PetWindow(QWidget):
         # the static pose above.
         self.animation_specs = {}
         self.animation_frames = {}
+        self._animation_frame_paths = {}
+        self._persistent_animation_names = set(self.PRELOADED_ANIMATIONS)
         self._active_animation = None
         self._animation_started_at = time.monotonic()
         self._animation_override = None
@@ -228,6 +237,7 @@ class PetWindow(QWidget):
         self._hidden_treasure_bubble = None
         self._dig_reward_claiming = False
         self._bubble_menu = None         # radial bubble menu (right-click)
+        self._last_bubble_menu_t = 0.0
         self._status_bubble = None
         self._last_interactive_t = 0.0   # throttle: don't spam
         self._last_stat_reminder_t = {
@@ -238,6 +248,8 @@ class PetWindow(QWidget):
         self._ctx_menu_cb = None  # set by TrayApp to provide a right-click menu
         self._settings_applied_cb = None
         self._app_action_cb = None
+        self._user_hidden = False
+        self._presence_guard_t = 0.0
 
         # Speech uses a detached top-level window so it can wrap outside the
         # pet widget without being clipped by the pet's own bounds.
@@ -254,6 +266,10 @@ class PetWindow(QWidget):
         self.tick = QTimer(self)
         self.tick.timeout.connect(self.on_tick)
         self.tick.start(33)  # ~30fps
+
+        self.presence_guard = QTimer(self)
+        self.presence_guard.timeout.connect(self._maintain_desktop_presence)
+        self.presence_guard.start(5000)
 
         self.decay = QTimer(self)
         self.decay.timeout.connect(self.on_decay)
@@ -283,6 +299,13 @@ class PetWindow(QWidget):
         self._health_timer = QTimer(self)
         self._health_timer.timeout.connect(self.on_health_check)
         self._health_timer.start(30000)  # check every 30s
+
+        # Prime the first-use menu paints away from the user's click path.
+        self._prewarmed_bubble_menus = {}
+        self._ui_warmup_timer = QTimer(self)
+        self._ui_warmup_timer.setSingleShot(True)
+        self._ui_warmup_timer.timeout.connect(self._warm_up_interaction_surfaces)
+        self._ui_warmup_timer.start(1200)
 
         # multi-sample drag velocity: track mouse move events
         # (handled in mouseMoveEvent)
@@ -697,6 +720,43 @@ class PetWindow(QWidget):
         if was_visible:
             self.show()
 
+    def set_user_visible(self, visible):
+        """Change desktop visibility while preserving the user's intent."""
+        self._user_hidden = not bool(visible)
+        if visible:
+            self.show()
+            self.raise_()
+        else:
+            self.hide_overlays()
+            self.hide()
+
+    def _maintain_desktop_presence(self, now=None):
+        """Recover accidental hides and periodically reassert topmost order."""
+        if self.__dict__.get("_user_hidden", False):
+            return False
+        if self.play_scene is not None or self._home_scene_active():
+            return False
+
+        restored = False
+        try:
+            visible = self.isVisible()
+        except RuntimeError:
+            visible = False
+        if not visible:
+            self.show()
+            restored = True
+
+        if not self.settings.get("always_on_top", True):
+            return restored
+        now = time.monotonic() if now is None else float(now)
+        if now - self.__dict__.get("_presence_guard_t", 0.0) < 5.0:
+            return restored
+        self._presence_guard_t = now
+        if not bool(self.windowFlags() & Qt.WindowStaysOnTopHint):
+            self.apply_window_flags(show=True)
+        self.raise_()
+        return True
+
     def apply_runtime_settings(self, previous=None):
         """Apply every user-facing setting immediately after save/reset."""
         previous = previous or {}
@@ -779,25 +839,82 @@ class PetWindow(QWidget):
                  if filename.lower().endswith(".png")),
                 key=lambda path: os.path.basename(path).lower(),
             )
-            frames = []
-            for frame_path in frame_paths:
-                pixmap = QPixmap(frame_path)
-                if pixmap.isNull():
-                    continue
-                # AI source frames can be large. Retaining a 2x render size
-                # keeps Retina output sharp without consuming hundreds of MB.
-                if pixmap.width() > 512 or pixmap.height() > 512:
-                    pixmap = pixmap.scaled(
-                        512, 512, Qt.KeepAspectRatio,
-                        Qt.SmoothTransformation)
-                pixmap = _dependency("adjust_animation_colors")(
-                    pixmap,
-                    saturation=spec.get("saturation", 1.0),
-                    brightness=spec.get("brightness", 1.0),
-                )
-                frames.append(pixmap)
-            if frames:
-                self.animation_frames[name] = frames
+            if frame_paths:
+                self._animation_frame_paths[name] = frame_paths
+
+        # Preload frequent interactions so the first click never blocks the
+        # event loop on PNG decoding. Rare sequences remain on demand.
+        equipped_animation = progression.equipped_outfit_animation(self.state)
+        if equipped_animation in self._animation_frame_paths:
+            self._persistent_animation_names.add(equipped_animation)
+        for animation_name in self._persistent_animation_names:
+            self._ensure_animation_loaded(animation_name)
+
+    def _load_animation(self, name):
+        """Decode one animation sequence from its paths into the Qt cache."""
+        if name in self.animation_frames:
+            return
+        frame_paths = self._animation_frame_paths.get(name, ())
+        if not frame_paths:
+            return
+        spec = self.animation_specs.get(name, {})
+        frames = []
+        for frame_path in frame_paths:
+            pixmap = QPixmap(frame_path)
+            if pixmap.isNull():
+                continue
+            if (pixmap.width() > self.ANIMATION_MAX_SIZE or
+                    pixmap.height() > self.ANIMATION_MAX_SIZE):
+                pixmap = pixmap.scaled(
+                    self.ANIMATION_MAX_SIZE, self.ANIMATION_MAX_SIZE,
+                    Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            pixmap = _dependency("adjust_animation_colors")(
+                pixmap,
+                saturation=spec.get("saturation", 1.0),
+                brightness=spec.get("brightness", 1.0),
+            )
+            frames.append(pixmap)
+        sequence = spec.get("frame_sequence")
+        if isinstance(sequence, list):
+            try:
+                indices = [int(frame_number) - 1 for frame_number in sequence]
+            except (TypeError, ValueError):
+                indices = []
+            if indices and all(0 <= index < len(frames) for index in indices):
+                authored_durations = spec.get("frame_durations_ms")
+                if (
+                    isinstance(authored_durations, list)
+                    and len(authored_durations) == len(frames)
+                ):
+                    spec["frame_durations_ms"] = [
+                        authored_durations[index] for index in indices
+                    ]
+                frames = [frames[index] for index in indices]
+        if frames:
+            self.animation_frames[name] = frames
+
+    def _ensure_animation_loaded(self, name):
+        """Load a known animation only when a caller needs its frames."""
+        if name not in self.animation_frames:
+            self._load_animation(name)
+
+    @staticmethod
+    def _retained_animation_names(loaded, persistent, active):
+        """Return cache keys that must survive an animation switch."""
+        retained = set(loaded) & set(persistent)
+        if active in loaded:
+            retained.add(active)
+        return retained
+
+    def _release_inactive_animation_frames(self, active):
+        retained = self._retained_animation_names(
+            self.animation_frames,
+            getattr(self, "_persistent_animation_names", {"idle"}),
+            active,
+        )
+        for name in list(self.animation_frames):
+            if name not in retained:
+                del self.animation_frames[name]
 
     @staticmethod
     def _show_idle_decorations(
@@ -813,16 +930,34 @@ class PetWindow(QWidget):
 
     def _animation_duration_ms(self, name, cycles=1):
         """Return the exact time needed to show an animation for N cycles."""
+        ensure_loaded = getattr(self, "_ensure_animation_loaded", None)
+        if callable(ensure_loaded):
+            ensure_loaded(name)
         frames = self.animation_frames.get(name, ())
-        spec = self.animation_specs.get(name, {})
+        if not frames:
+            return 1
+        cycles = max(1, int(cycles))
+        return max(1, int(math.ceil(
+            sum(PetWindow._frame_durations_ms(
+                self.animation_specs.get(name, {}), len(frames)
+            )) * cycles)))
+
+    @staticmethod
+    def _frame_durations_ms(spec, frame_count):
+        """Return authored frame durations, or the legacy fixed FPS timing."""
+        durations = spec.get("frame_durations_ms")
+        if isinstance(durations, (list, tuple)) and len(durations) == frame_count:
+            try:
+                durations = [float(duration) for duration in durations]
+            except (TypeError, ValueError):
+                durations = ()
+            if all(math.isfinite(duration) and duration > 0 for duration in durations):
+                return durations
         try:
             fps = max(1.0, float(spec.get("fps", 8)))
         except (TypeError, ValueError):
             fps = 8.0
-        if not frames:
-            return 1
-        cycles = max(1, int(cycles))
-        return max(1, int(math.ceil(len(frames) * cycles * 1000.0 / fps)))
+        return [1000.0 / fps] * frame_count
 
     def trigger_animation(
         self, name, duration_ms=None, finished_callback=None
@@ -859,31 +994,58 @@ class PetWindow(QWidget):
             return "eat"
         if self.behavior in ("walk", "auto_sleep_walk"):
             return "walk"
-        if self.behavior in ("sit", "ask"):
-            return self.behavior
-        return next(
-            name for name, index in _dependency("POSE").items()
-            if index == self.pose
-        )
+        outfit_animation = progression.equipped_outfit_animation(self.state)
+        if outfit_animation in self.__dict__.get("animation_frames", {}) or (
+                outfit_animation in self.__dict__.get("_animation_frame_paths", {})):
+            return outfit_animation
+        return "idle"
+
+    def _equipped_outfit_preview(self):
+        outfit_id = progression.equipped_outfit(self.state)
+        cache = self.__dict__.get("_outfit_preview_cache")
+        if cache is None:
+            cache = self._outfit_preview_cache = {}
+        if outfit_id in cache:
+            return cache[outfit_id]
+        definition = progression.OUTFIT_DEFINITIONS.get(outfit_id)
+        if not definition:
+            return None
+        asset_name = definition.get("preview_asset")
+        if not asset_name:
+            return None
+        asset_folder = definition.get("asset_folder", outfit_id)
+        path = os.path.join(OUTFITS_DIR, asset_folder, asset_name)
+        if not os.path.exists(path):
+            return None
+        pixmap = QPixmap(path)
+        preview = None if pixmap.isNull() else pixmap
+        cache[outfit_id] = preview
+        return preview
 
     def _animation_frame(self, name):
+        self._ensure_animation_loaded(name)
         frames = self.animation_frames.get(name)
         if not frames:
             self._animation_frame_index = None
             return None
         if self._active_animation != name:
+            self._release_inactive_animation_frames(name)
             self._active_animation = name
             self._animation_started_at = time.monotonic()
         spec = self.animation_specs.get(name, {})
-        try:
-            fps = max(1.0, float(spec.get("fps", 8)))
-        except (TypeError, ValueError):
-            fps = 8.0
-        index = int((time.monotonic() - self._animation_started_at) * fps)
+        durations = self._frame_durations_ms(spec, len(frames))
+        duration_ms = sum(durations)
+        elapsed_ms = max(0.0, (time.monotonic() - self._animation_started_at) * 1000.0)
         if bool(spec.get("loop", True)):
-            index %= len(frames)
-        else:
-            index = min(index, len(frames) - 1)
+            elapsed_ms %= duration_ms
+        elif elapsed_ms >= duration_ms:
+            self._animation_frame_index = len(frames) - 1
+            return frames[-1]
+        index = 0
+        for index, frame_duration_ms in enumerate(durations):
+            if elapsed_ms < frame_duration_ms:
+                break
+            elapsed_ms -= frame_duration_ms
         self._animation_frame_index = index
         return frames[index]
 
@@ -913,6 +1075,15 @@ class PetWindow(QWidget):
         animation_name = self._current_animation_name()
         pose = self._fallback_pose(animation_name)
         animation_pixmap = self._animation_frame(animation_name)
+        render_spec_name = animation_name
+        if self.dragging:
+            outfit_preview = self._equipped_outfit_preview()
+            if outfit_preview is not None:
+                animation_pixmap = outfit_preview
+                render_spec_name = (
+                    progression.equipped_outfit_animation(self.state)
+                    or animation_name
+                )
         # Passive sit/ask behavior changes dialogue timing, not appearance.
         # Keep the authored idle model so equipped decorations never vanish.
         if (
@@ -942,7 +1113,7 @@ class PetWindow(QWidget):
                 # scale pixmap to fit dst, keep aspect ratio (fit inside)
                 pw, ph = pm.width(), pm.height()
                 scale = min(self.PET_W / pw, self.DOG_H / ph)
-                spec = self.animation_specs.get(animation_name, {})
+                spec = self.animation_specs.get(render_spec_name, {})
                 if animation_pixmap is not None:
                     try:
                         scale *= max(0.1, float(spec.get("scale", 1.0)))
@@ -1114,6 +1285,13 @@ class PetWindow(QWidget):
             except RuntimeError:
                 pass
 
+        for menu in getattr(self, "_prewarmed_bubble_menus", {}).values():
+            try:
+                menu._close()
+            except RuntimeError:
+                pass
+        self._prewarmed_bubble_menus = {}
+
         hidden_treasure = getattr(self, "_hidden_treasure_bubble", None)
         self._hidden_treasure_bubble = None
         if hidden_treasure is not None:
@@ -1196,6 +1374,10 @@ class PetWindow(QWidget):
             self.last_drag_t = now
 
     def mouseReleaseEvent(self, e):
+        if e.button() == Qt.RightButton:
+            self.open_bubble_menu()
+            e.accept()
+            return
         if e.button() == Qt.LeftButton and self.dragging:
             self.dragging = False
             self.setCursor(Qt.ArrowCursor)
@@ -1582,10 +1764,57 @@ class PetWindow(QWidget):
         return None
 
     # ---------- decay ----------
+    def _warm_up_interaction_surfaces(self):
+        """Create reusable offscreen menu windows before the first click."""
+        if (not self.isVisible() or self._bubble_menu is not None or
+                self._prewarmed_bubble_menus):
+            return
+        for page in ("primary", "interaction", "more"):
+            menu = _dependency("BubbleMenu")(
+                self, page=page, show_window=False
+            )
+            menu._prewarming = True
+            menu.move(-10000, -10000)
+            if menu.stat_bubble is not None:
+                menu.stat_bubble.move(-10000, -10000)
+                menu.stat_bubble.show()
+            menu.show()
+            menu.repaint()
+            if menu.stat_bubble is not None:
+                menu.stat_bubble.repaint()
+            menu._anim.stop()
+            if menu.stat_bubble is not None:
+                menu.stat_bubble._timer.stop()
+            self._prewarmed_bubble_menus[page] = menu
+
+    def _create_bubble_menu(self, page="primary"):
+        menu = self._prewarmed_bubble_menus.pop(page, None)
+        if menu is None:
+            return _dependency("BubbleMenu")(self, page=page)
+        try:
+            menu._prewarming = False
+            menu._closing = False
+            menu._anim.start(16)
+            if menu.stat_bubble is not None:
+                menu.stat_bubble._timer.start(500)
+                menu.stat_bubble._place()
+                menu.stat_bubble.show()
+                menu.stat_bubble.raise_()
+            menu._place()
+            menu.show()
+            menu.raise_()
+            menu.activateWindow()
+            return menu
+        except RuntimeError:
+            return _dependency("BubbleMenu")(self, page=page)
+
     def on_decay(self):
         s = self.settings
         effects = progression.upgrade_effects(self.state)
         awake_decay_multiplier = effects["awake_decay_multiplier"]
+        decay_rate_multiplier = getattr(
+            self, "STAT_DECAY_RATE_MULTIPLIER", 0.5
+        )
         if self.state["sleeping"]:
             energy_gain = (
                 s["decay_energy_sleeping_gain"]
@@ -1594,6 +1823,7 @@ class PetWindow(QWidget):
             hunger_cost = (
                 s["decay_hunger_sleeping"]
                 * effects["sleep_hunger_multiplier"]
+                * decay_rate_multiplier
             )
             self.state["energy"] = min(
                 100, self.state["energy"] + energy_gain
@@ -1605,17 +1835,20 @@ class PetWindow(QWidget):
             self.state["hunger"] = max(
                 0,
                 self.state["hunger"]
-                - s["decay_hunger"] * awake_decay_multiplier,
+                - s["decay_hunger"] * awake_decay_multiplier
+                * decay_rate_multiplier,
             )
             self.state["energy"] = max(
                 0,
                 self.state["energy"]
-                - s["decay_energy"] * awake_decay_multiplier,
+                - s["decay_energy"] * awake_decay_multiplier
+                * decay_rate_multiplier,
             )
             self.state["mood"] = max(
                 0,
                 self.state["mood"]
-                - s["decay_mood"] * awake_decay_multiplier,
+                - s["decay_mood"] * awake_decay_multiplier
+                * decay_rate_multiplier,
             )
         _dependency("save_state")(self.state)
         self.refresh_pose_from_state()
@@ -2096,12 +2329,24 @@ class PetWindow(QWidget):
     def contextMenuEvent(self, event):
         """Right-click on the pet -> show the radial bubble menu."""
         self.open_bubble_menu()
-        super().contextMenuEvent(event)
+        event.accept()
 
     def open_bubble_menu(self):
         """Replace any existing shortcut canvas with the shared primary menu."""
 
+        now = time.monotonic()
         old = getattr(self, "_bubble_menu", None)
+        if (
+            old is not None
+            and now - self.__dict__.get("_last_bubble_menu_t", 0.0) < 0.25
+        ):
+            try:
+                if old.isVisible():
+                    return
+            except RuntimeError:
+                pass
+        self._last_bubble_menu_t = now
+
         if old is not None:
             try:
                 old._close()
@@ -2117,7 +2362,12 @@ class PetWindow(QWidget):
                 pass
 
         PetWindow.hide_treasure_for_menu(self)
-        self._bubble_menu = _dependency("BubbleMenu")(self)
+        factory = getattr(self, "_create_bubble_menu", None)
+        self._bubble_menu = (
+            factory()
+            if callable(factory)
+            else _dependency("BubbleMenu")(self)
+        )
 
     def hide_treasure_for_menu(self):
         """Temporarily hide a pending treasure while the desktop menu is open."""

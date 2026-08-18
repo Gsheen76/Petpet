@@ -47,6 +47,45 @@ class ProgressionMigrationTests(unittest.TestCase):
         self.assertEqual(state["records"]["autonomous_walks"], 0)
         self.assertEqual(state["decoration_adjustments"], {})
 
+    def test_outfit_state_is_initialized_without_legacy_decorations(self):
+        state = fresh_state()
+
+        self.assertEqual(list(progression.OUTFIT_DEFINITIONS), [
+            "dinosaur_suit",
+            "strawberry_suit",
+        ])
+        self.assertEqual(state["owned_outfits"], [])
+        self.assertIsNone(state["equipped_outfit"])
+
+    def test_dinosaur_outfit_can_be_purchased_and_equipped(self):
+        state = fresh_state(pet_coins=680)
+
+        purchased = progression.purchase_outfit(state, "dinosaur_suit")
+        equipped = progression.equip_outfit(state, "dinosaur_suit")
+
+        self.assertTrue(purchased["ok"])
+        self.assertTrue(equipped["ok"])
+        self.assertEqual(state["pet_coins"], 0)
+        self.assertEqual(state["owned_outfits"], ["dinosaur_suit"])
+        self.assertEqual(state["equipped_outfit"], "dinosaur_suit")
+        self.assertEqual(
+            progression.equipped_outfit_animation(state), "idle_dinosaur"
+        )
+
+    def test_strawberry_outfit_can_be_purchased_and_equipped(self):
+        state = fresh_state(pet_coins=760)
+
+        purchased = progression.purchase_outfit(state, "strawberry_suit")
+        equipped = progression.equip_outfit(state, "strawberry_suit")
+
+        self.assertTrue(purchased["ok"])
+        self.assertTrue(equipped["ok"])
+        self.assertEqual(state["pet_coins"], 0)
+        self.assertEqual(state["equipped_outfit"], "strawberry_suit")
+        self.assertEqual(
+            progression.equipped_outfit_animation(state), "idle_strawberry"
+        )
+
     def test_old_save_receives_home_scene_defaults(self):
         state = {"level": 3, "pet_coins": 20}
 
