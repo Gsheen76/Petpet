@@ -1,7 +1,7 @@
 # 商店价格标签与强化数值优化设计
 
 **日期**：2026-08-20
-**状态**：已确认，待实现
+**状态**：已实现，待发布
 
 ## 目标
 
@@ -35,3 +35,17 @@
 - 商店展示集中在 `petpet/progression/ui.py`，图片资源放在 `assets/runtime/ui/`。
 - 先用核心和 UI 边界测试固定公式、满级零消耗、精力满值不扣饱腹、价格组件文本及宠物介绍单行；再实现最小改动。
 - 不改变强化价格、宠物与家具的购买资格、存档字段或素材展示比例。
+
+## 实施记录
+
+- 四张无文字透明价格标签资源已加入运行时目录：`assets/runtime/ui/shop-price-normal-v1.png`、`assets/runtime/ui/shop-price-sale-v1.png`、`assets/runtime/ui/shop-price-discount-v1.png`、`assets/runtime/ui/shop-price-gift-v1.png`。
+- 图片标签只承载视觉背景；`_price_tag()` 叠加动态价格文字。普通商品显示“售价：X Pet币”，免费商品显示“免费赠送”；首购折扣依次显示删除线“原价：X Pet币”、强调“现价：Y Pet币”与按 `round((1 - price / original_price) * 100)` 计算的“-Z%”。
+- 玩耍公式为：心情 `20 + 3 * level`、精力消耗 `max(0, 10 - 2 * level)`、饱腹消耗 `max(0, 5 - level)`；睡眠每 2 秒结算精力 `+4`、饱腹消耗 `max(0, 2 - 0.4 * level)`。
+- 睡眠仅在该次结算前精力小于 100 时恢复精力并扣除饱腹；全部消耗均以 `max(0, ...)` 夹紧，满级不会产生负消耗。
+- 最终全量测试、编译检查和空白检查结果见本设计的“验证”更新及实施计划。
+
+## 验证
+
+- `python -m pytest -q`：`609 passed in 56.21s`。
+- `python -m compileall -q petpet pet.py tests`：无输出，退出码 0。
+- `git diff --check`：退出码 0；仅输出本工作副本两份项目文档的 LF/CRLF 转换警告，无空白错误。

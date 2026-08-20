@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**状态：** 已实现，待发布。
+
 **Goal:** 用生成的图片资源统一商店价格，并落实确认的强化和睡眠数值。
 
 **Architecture:** `core.py` 是全部强化公式的唯一来源；`pet_window.py` 只消费其返回值。`ui.py` 用一个价格标签工厂把动态文字叠加到透明 PNG 背景上。
@@ -30,7 +32,7 @@
 - Produces: `upgrade_effects()` 中的 `pet_mood`、`play_energy_cost`、`play_hunger_cost`、`sleep_energy_gain`、`sleep_hunger_cost`。
 - Consumes: `PetWindow.on_decay()` 读取这些值，并在本次结算前精力小于 100 时才扣睡眠饱腹。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 def test_confirmed_upgrade_values_and_descriptions():
@@ -48,11 +50,11 @@ def test_sleeping_at_full_energy_does_not_consume_hunger(window):
     assert window.state["hunger"] == 50.0
 ```
 
-- [ ] **Step 2: 验证失败**
+- [x] **Step 2: 验证失败**
 
 Run: `python -m pytest -q tests/test_progression.py tests/test_pet_window_boundary.py`
 
-- [ ] **Step 3: 最小实现**
+- [x] **Step 3: 最小实现**
 
 ```python
 "pet_mood": 10 + 2 * pet_level,
@@ -64,7 +66,7 @@ Run: `python -m pytest -q tests/test_progression.py tests/test_pet_window_bounda
 
 将文案改为 `心情+X点`、`精力-Y点`、`饱腹-Y点`；移除旧的睡眠倍率和精力额外增益。
 
-- [ ] **Step 4: 验证并提交**
+- [x] **Step 4: 验证并提交**
 
 Run: `python -m pytest -q tests/test_progression.py tests/test_pet_window_boundary.py`
 
@@ -87,7 +89,7 @@ git commit -m "feat: rebalance care upgrades"
 - Produces: `_price_tag(text, role, object_name)` 和带“原价/现价/-Z%”的 `_price_labels()`。
 - Consumes: `first_purchase_price()` 的 `original_price`、`price` 与 `discount`。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 def test_discount_prices_show_original_current_and_actual_percentage(shop_window):
@@ -97,15 +99,15 @@ def test_discount_prices_show_original_current_and_actual_percentage(shop_window
     assert shop_window.findChild(QLabel, "discountBadge_ice_cream").text() == "-24%"
 ```
 
-- [ ] **Step 2: 验证失败**
+- [x] **Step 2: 验证失败**
 
 Run: `python -m pytest -q tests/test_progression_ui_boundary.py`
 
-- [ ] **Step 3: 生成并保存四张资源**
+- [x] **Step 3: 生成并保存四张资源**
 
 用内置图片工具为普通售价、现价、折扣、免费赠送分别生成透明 PNG：暖珊瑚、奶油纸张、缝线、爪印、高光与蝴蝶结；中心留白、无文字、无数字、无水印。把已选文件复制到本任务列出的四个运行时路径。
 
-- [ ] **Step 4: 实现图片标签工厂**
+- [x] **Step 4: 实现图片标签工厂**
 
 ```python
 def _price_tag(text, role, object_name):
@@ -118,7 +120,7 @@ def _price_tag(text, role, object_name):
 
 在 `PANEL_STYLE` 按 `priceTagRole` 绑定图片与文字颜色；原价保留删除线，折扣使用 `round((1 - price / original_price) * 100)`。
 
-- [ ] **Step 5: 验证并提交**
+- [x] **Step 5: 验证并提交**
 
 Run: `python -m pytest -q tests/test_progression_ui_boundary.py`
 
@@ -136,7 +138,7 @@ git commit -m "feat: add illustrated shop price tags"
 - Modify: `tests/test_progression_ui.py:82-180`
 - Modify: `tests/test_progression_ui_boundary.py:53-180`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 def test_pet_description_is_single_line_and_upgrade_effect_has_no_prefix(shop_window):
@@ -148,11 +150,11 @@ def test_pet_description_is_single_line_and_upgrade_effect_has_no_prefix(shop_wi
     assert "当前加成" not in effect.text()
 ```
 
-- [ ] **Step 2: 验证失败**
+- [x] **Step 2: 验证失败**
 
 Run: `python -m pytest -q tests/test_progression_ui.py tests/test_progression_ui_boundary.py`
 
-- [ ] **Step 3: 最小实现**
+- [x] **Step 3: 最小实现**
 
 ```python
 description.setWordWrap(False)
@@ -163,7 +165,7 @@ card.setFixedHeight(220)
 
 让 `upgrade_description()` 统一输出已确认的 `心情+X点`、`精力-Y点` 和 `饱腹-Y点` 文案，UI 不得复制公式。宠物、套装、家具都调用价格标签工厂；免费商品使用 gift 标签。家具继续等比缩放，固定高度必须容纳现有标题、简介、价格与按钮，不省略信息。
 
-- [ ] **Step 4: 验证并提交**
+- [x] **Step 4: 验证并提交**
 
 Run: `python -m pytest -q tests/test_progression_ui.py tests/test_progression_ui_boundary.py`
 
@@ -180,15 +182,15 @@ git commit -m "feat: unify shop card presentation"
 - Modify: `D:/Github Desktop/My-Obsidian/项目/Petpet/开发记录/商店信息与双列布局设计.md`
 - Modify: `D:/Github Desktop/My-Obsidian/项目/Petpet/开发记录/商店信息与双列布局实施计划.md`
 
-- [ ] **Step 1: 将设计和计划更新为“已实现，待发布”**
+- [x] **Step 1: 将设计和计划更新为“已实现，待发布”**
 
 记录四张资源路径、强化公式、满精力睡眠规则及实际测试计数；不修改版本号。
 
-- [ ] **Step 2: 同步 Obsidian**
+- [x] **Step 2: 同步 Obsidian**
 
 在既有商店设计和计划笔记追加“价格标签与强化平衡”章节，包含资源路径、价格规则、玩耍/睡眠公式与验证结果。
 
-- [ ] **Step 3: 运行最终验证**
+- [x] **Step 3: 运行最终验证**：`python -m pytest -q` 为 `609 passed in 56.21s`；`python -m compileall -q petpet pet.py tests` 无输出且退出码 0；`git diff --check` 退出码 0（仅 LF/CRLF 转换警告）。
 
 Run: `python -m pytest -q`
 Expected: 全部测试通过。
@@ -199,7 +201,7 @@ Expected: 无输出、退出码 0。
 Run: `git diff --check`
 Expected: 无输出、退出码 0。
 
-- [ ] **Step 4: 提交文档**
+- [x] **Step 4: 提交文档**
 
 ```bash
 git add docs/superpowers
