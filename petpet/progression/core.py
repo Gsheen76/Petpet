@@ -978,26 +978,22 @@ def upgrade_description(
     awake_energy_decay = float(decay_rates.get("decay_energy", 0.10))
     awake_mood_decay = float(decay_rates.get("decay_mood", 0.08))
     if upgrade_id == "petting":
-        return f"每次抚摸：心情恢复 {effects['pet_mood']} 点"
+        return f"每次抚摸：心情+{effects['pet_mood']}点"
     if upgrade_id == "feeding":
         return (
-            f"每次喂食：饱腹恢复 {effects['feed_hunger']} 点，"
-            f"心情恢复 {effects['feed_mood']} 点"
+            f"每次喂食：饱腹+{effects['feed_hunger']}点，"
+            f"心情+{effects['feed_mood']}点"
         )
     if upgrade_id == "playing":
-        suffix = "（满级无消耗）" if level >= definition["max_level"] else ""
         return (
-            f"每次玩耍：心情恢复 {effects['play_mood']} 点；"
-            f"消耗精力 {effects['play_energy_cost']} 点、饱腹 "
-            f"{effects['play_hunger_cost']} 点{suffix}"
+            f"每次玩耍：心情+{effects['play_mood']}点，"
+            f"精力-{effects['play_energy_cost']}点，"
+            f"饱腹-{effects['play_hunger_cost']}点"
         )
     if upgrade_id == "sleeping":
-        suffix = "（满级不消耗饱腹）" if level >= definition["max_level"] else ""
         return (
-            f"每 2 秒睡眠结算：精力恢复 "
-            f"{effects['sleep_energy_gain']} 点；"
-            f"饱腹消耗 {effects['sleep_hunger_cost']:g} 点"
-            f"{suffix}"
+            f"每2秒睡眠结算：精力+{effects['sleep_energy_gain']}点，"
+            f"饱腹-{effects['sleep_hunger_cost']:g}点"
         )
     if upgrade_id == "endurance":
         reduction = int(round(

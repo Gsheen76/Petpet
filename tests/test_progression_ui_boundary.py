@@ -61,8 +61,10 @@ def test_shop_defaults_to_pets_and_keeps_owned_pet_price_and_description(
     )
 
     assert card is not None
-    assert price.text() == "售价：0 Pet币"
+    assert price.text() == "免费赠送"
+    assert price.property("priceTagRole") == "gift"
     assert description.text() == "元气满满的陪伴小狗，喜欢在桌面上撒娇。"
+    assert description.wordWrap() is False
 
 
 def test_shop_sorts_free_items_first_and_preserves_furniture_information(
@@ -82,7 +84,8 @@ def test_shop_sorts_free_items_first_and_preserves_furniture_information(
     labels = " ".join(
         label.text() for label in free_card.findChildren(ui.QLabel)
     )
-    assert all(text in labels for text in ("成长", "免费领取", "家居"))
+    assert all(text in labels for text in ("成长", "免费赠送", "家居"))
+    assert free_card.height() == paid_card.height() == 310
 
 
 def test_upgrade_card_shows_the_current_effect(shop_window):
@@ -90,11 +93,10 @@ def test_upgrade_card_shows_the_current_effect(shop_window):
     shop_window._set_page("upgrades")
     effect = shop_window.findChild(ui.QLabel, "upgradeEffect_petting")
 
-    assert effect.text() == (
-        "当前加成：" + progression.upgrade_description(
-            shop_window.pet.state, "petting"
-        )
+    assert effect.text() == progression.upgrade_description(
+        shop_window.pet.state, "petting"
     )
+    assert "当前加成" not in effect.text()
 
 
 def test_pets_page_shows_preview_nickname_status_and_one_action(shop_window):

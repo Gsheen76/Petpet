@@ -1194,7 +1194,7 @@ class ShopWindow(CozyProgressWindow):
         description = QLabel(definition.get("description", ""))
         description.setObjectName(f"petDescription_{pet_id}")
         description.setProperty("mutedText", True)
-        description.setWordWrap(True)
+        description.setWordWrap(False)
         info.addWidget(description)
 
         price_row = QHBoxLayout()
@@ -1202,9 +1202,12 @@ class ShopWindow(CozyProgressWindow):
         pricing = progression.first_purchase_price(
             state, "pets", definition.get("original_price", price)
         )
-        price_label = QLabel(f"售价：{price if owned else pricing['price']} Pet币")
-        price_label.setObjectName(f"petPrice_{pet_id}")
-        price_label.setProperty("rewardLabel", True)
+        displayed_price = price if owned else pricing["price"]
+        price_label = self._price_tag(
+            "免费赠送" if displayed_price == 0 else f"售价：{displayed_price} Pet币",
+            "gift" if displayed_price == 0 else "normal",
+            f"petPrice_{pet_id}",
+        )
         if not owned:
             button = QPushButton("免费领取" if pricing["price"] == 0 else f"{pricing['price']} Pet币 · 购买")
             button.setEnabled(_coin_balance(state) >= pricing["price"])
@@ -1463,8 +1466,11 @@ class ShopWindow(CozyProgressWindow):
 
         action_row = QHBoxLayout()
         price = int(definition.get("price", 0))
-        price_text = QLabel(f"售价：{price} Pet币")
-        price_text.setObjectName("reward")
+        price_text = self._price_tag(
+            "免费赠送" if price == 0 else f"售价：{price} Pet币",
+            "gift" if price == 0 else "normal",
+            f"outfitPrice_{outfit_id}",
+        )
         if not owned:
             button = QPushButton(f"{price} Pet币 · 购买")
             button.setEnabled(_coin_balance(state) >= price)
@@ -1729,7 +1735,7 @@ class ShopWindow(CozyProgressWindow):
         card = QFrame()
         card.setObjectName(f"homeDecorationCard_{decoration_id}")
         card.setProperty("shopCard", True)
-        card.setMinimumHeight(290)
+        card.setFixedHeight(310)
         layout = QVBoxLayout(card)
         layout.setContentsMargins(18, 14, 18, 14)
         layout.setSpacing(18)
@@ -1766,11 +1772,11 @@ class ShopWindow(CozyProgressWindow):
 
         action_row = QHBoxLayout()
         price = int(definition["price"])
-        price_label = QLabel(
-            "已拥有"
-            if owned else ("免费领取" if price == 0 else f"售价：{price} Pet币")
+        price_label = self._price_tag(
+            "免费赠送" if price == 0 else f"售价：{price} Pet币",
+            "gift" if price == 0 else "normal",
+            f"homePrice_{decoration_id}",
         )
-        price_label.setObjectName("reward")
         action_row.addWidget(price_label)
         action_row.addStretch(1)
         button = QPushButton(
@@ -1852,7 +1858,7 @@ class ShopWindow(CozyProgressWindow):
         maximum = definition["max_level"]
         card = QFrame()
         card.setObjectName("upgradeCard")
-        card.setMinimumHeight(165)
+        card.setFixedHeight(230)
         layout = QVBoxLayout(card)
         layout.setContentsMargins(18, 14, 18, 14)
         layout.setSpacing(10)
@@ -1872,11 +1878,7 @@ class ShopWindow(CozyProgressWindow):
         summary.setWordWrap(True)
         layout.addWidget(summary)
 
-        effect = QLabel(
-            "当前加成：" + progression.upgrade_description(
-                state, upgrade_id
-            )
-        )
+        effect = QLabel(progression.upgrade_description(state, upgrade_id))
         effect.setObjectName(f"upgradeEffect_{upgrade_id}")
         effect.setProperty("effectCurrent", True)
         effect.setWordWrap(True)

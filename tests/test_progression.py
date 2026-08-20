@@ -397,6 +397,12 @@ class UpgradeBalanceTests(unittest.TestCase):
 
         self.assertEqual(effects["pet_mood"], 10)
 
+    def test_petting_description_uses_the_shop_effect_format(self):
+        description = progression.upgrade_description(fresh_state(), "petting")
+
+        self.assertEqual(description, "每次抚摸：心情+10点")
+        self.assertNotIn("当前加成", description)
+
     def test_level_one_playing_uses_rebalanced_costs(self):
         state = fresh_state(upgrades={"playing": 1})
 
@@ -478,8 +484,8 @@ class UpgradeBalanceTests(unittest.TestCase):
             "sleeping",
         )
 
-        self.assertIn("精力恢复 4 点", description)
-        self.assertIn("饱腹消耗 1.2 点", description)
+        self.assertIn("精力+4点", description)
+        self.assertIn("饱腹-1.2点", description)
         self.assertNotIn("%", description)
 
     def test_full_upgrade_cost_stays_long_term_but_not_unreachable(self):
