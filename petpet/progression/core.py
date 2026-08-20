@@ -10,6 +10,7 @@ from petpet.home.geometry import (
     normalize_home_decoration_transform,
     normalize_home_scene,
 )
+from petpet.app.pets import load_pet_registry as _load_pet_registry
 
 
 RECORD_DEFAULTS = {
@@ -239,6 +240,7 @@ OUTFIT_DEFINITIONS = {
         "preview_asset": "preview.png",
         "animation": "idle_dinosaur",
         "description": "绿色小恐龙连体套装，装备后直接替换小狗的待机动画。",
+        "pet_id": "lunch_meat",
     },
     "strawberry_suit": {
         "name": "草莓小子套装",
@@ -248,6 +250,7 @@ OUTFIT_DEFINITIONS = {
         "preview_asset": "preview.png",
         "animation": "idle_strawberry",
         "description": "草莓连帽与叶子领结套装，装备后播放专属待机动画。",
+        "pet_id": "lunch_meat",
     },
 }
 
@@ -306,6 +309,9 @@ HOME_DECORATION_DEFINITIONS = {
     },
 }
 
+FIRST_PURCHASE_DISCOUNT = 0.76
+FIRST_PURCHASE_CATEGORIES = ("pets",)
+
 
 def _safe_int(value, default=0, minimum=0):
     try:
@@ -320,6 +326,128 @@ def _safe_float(value, default, minimum, maximum):
     except (TypeError, ValueError):
         value = float(default)
     return max(float(minimum), min(float(maximum), value))
+
+
+def _shared_pet_coins(state):
+    player = state.get("player")
+    if isinstance(player, dict):
+        player["pet_coins"] = _safe_int(
+            player.get("pet_coins", state.get("pet_coins", 0))
+        )
+        if "pet_coins" in state:
+            state["pet_coins"] = player["pet_coins"]
+        return player
+    state["pet_coins"] = _safe_int(state.get("pet_coins", 0))
+    return state
+
+
+def _shared_owned_pet_ids(state):
+    owned = state.get("owned_pet_ids")
+    if not isinstance(owned, (list, tuple, set)):
+        player = state.get("player")
+        owned = player.get("owned_pet_ids", []) if isinstance(player, dict) else []
+    state["owned_pet_ids"] = list(dict.fromkeys(
+        item for item in owned if isinstance(item, str)
+    ))
+    return state["owned_pet_ids"]
+
+
+def _first_purchase_flags(state):
+    raw = state.get("shop_first_purchase_discounts")
+    if not isinstance(raw, dict):
+        raw = {}
+    flags = dict(raw)
+    flags.update({
+        category: bool(raw.get(category, True))
+        for category in FIRST_PURCHASE_CATEGORIES
+    })
+    state["shop_first_purchase_discounts"] = flags
+    return flags
+
+
+def first_purchase_price(state, category, original_price):
+    """Return the current price and discount metadata for one shop category."""
+    original = _safe_int(original_price)
+    eligible = (
+        category in FIRST_PURCHASE_CATEGORIES
+        and _first_purchase_flags(state).get(category, False)
+    )
+    price = (
+        round(original * FIRST_PURCHASE_DISCOUNT)
+        if eligible and original
+        else original
+    )
+    return {
+        "original_price": original,
+        "price": price,
+        "discount": FIRST_PURCHASE_DISCOUNT if eligible and original else None,
+        "eligible": eligible and original > 0,
+    }
+
+
+def _consume_first_purchase_discount(state, category, price):
+    if price > 0:
+        flags = _first_purchase_flags(state)
+        if flags.get(category):
+            flags[category] = False
+
+
+def available_pet_ids():
+    """Return purchasable pet IDs in their registry order."""
+    return tuple(_load_pet_registry())
+
+
+def pet_owned(state, pet_id):
+    """Return whether a pet ID is in the shared stable ownership list."""
+    owned = state.get("owned_pet_ids")
+    return isinstance(owned, (list, tuple, set)) and pet_id in owned
+
+
+def purchase_pet(state, pet_id):
+    """Purchase a registry pet without changing the active pet."""
+    definition = _load_pet_registry().get(pet_id)
+    if definition is None:
+        return {
+            "ok": False,
+            "pet_id": pet_id,
+            "message": "没有找到这只宠物。",
+        }
+    owned_pet_ids = _shared_owned_pet_ids(state)
+    if pet_id in owned_pet_ids:
+        return {
+            "ok": False,
+            "pet_id": pet_id,
+            "message": "这只宠物已经拥有啦。",
+        }
+
+    original_price = _safe_int(definition.get("original_price", definition.get("price", 0)))
+    pricing = first_purchase_price(state, "pets", original_price)
+    price = pricing["price"]
+    coins = _shared_pet_coins(state)
+    if coins["pet_coins"] < price:
+        return {
+            "ok": False,
+            "pet_id": pet_id,
+            "price": price,
+            "message": f"还差 {price - coins['pet_coins']} 枚 Pet币。",
+        }
+
+    coins["pet_coins"] -= price
+    if coins is not state and "pet_coins" in state:
+        state["pet_coins"] = coins["pet_coins"]
+    owned_pet_ids.append(pet_id)
+    _consume_first_purchase_discount(state, "pets", price)
+    player = state.get("player")
+    if isinstance(player, dict) and isinstance(player.get("owned_pet_ids"), list):
+        player["owned_pet_ids"] = list(state["owned_pet_ids"])
+    return {
+        "ok": True,
+        "pet_id": pet_id,
+        "price": price,
+        "original_price": pricing["original_price"],
+        "discount": pricing["discount"],
+        "message": f"已购买 {definition['default_name']}！",
+    }
 
 
 def _normalized_decoration_transform(decoration_id, values=None):
@@ -340,6 +468,7 @@ def _normalized_decoration_transform(decoration_id, values=None):
 def ensure_progression(state):
     """Normalize new progression fields without disturbing an old save."""
     state["pet_coins"] = _safe_int(state.get("pet_coins", 0))
+    _first_purchase_flags(state)
     state["pending_dig_reward"] = _safe_int(
         state.get("pending_dig_reward", 0)
     )
@@ -944,13 +1073,16 @@ def purchase_outfit(state, outfit_id):
     if outfit_owned(state, outfit_id):
         return {"ok": False, "message": "这套装扮已经拥有啦。"}
     price = int(definition.get("price", 0))
-    if state["pet_coins"] < price:
+    coins = _shared_pet_coins(state)
+    if coins["pet_coins"] < price:
         return {
             "ok": False,
             "price": price,
-            "message": f"还差 {price - state['pet_coins']} 枚 Pet币。",
+            "message": f"还差 {price - coins['pet_coins']} 枚 Pet币。",
         }
-    state["pet_coins"] -= price
+    coins["pet_coins"] -= price
+    if coins is not state:
+        state["pet_coins"] = coins["pet_coins"]
     state["records"]["coins_spent"] += price
     state["owned_outfits"].append(outfit_id)
     state["records"]["decorations_collected"] += 1
@@ -1141,13 +1273,16 @@ def purchase_home_decoration(state, decoration_id):
     if decoration_id in state["owned_home_decorations"]:
         return {"ok": False, "message": "Home decoration already owned."}
     price = int(definition.get("price", 0))
-    if state["pet_coins"] < price:
+    coins = _shared_pet_coins(state)
+    if coins["pet_coins"] < price:
         return {
             "ok": False,
             "price": price,
-            "message": f"Need {price - state['pet_coins']} more Pet coins.",
+            "message": f"Need {price - coins['pet_coins']} more Pet coins.",
         }
-    state["pet_coins"] -= price
+    coins["pet_coins"] -= price
+    if coins is not state:
+        state["pet_coins"] = coins["pet_coins"]
     state["records"]["coins_spent"] += price
     state["owned_home_decorations"].append(decoration_id)
     state["home_decoration_positions"][decoration_id] = clamp_home_furniture_position(

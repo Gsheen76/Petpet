@@ -206,6 +206,14 @@ class HomePetWalkRenderSpec:
     contact_foot_y: float
 
 
+def home_pet_static_source_rect(pixmap: QPixmap) -> QRect:
+    """Return the full source rectangle for a non-spritesheet pixmap."""
+
+    if pixmap is None or pixmap.isNull():
+        return QRect()
+    return QRect(0, 0, pixmap.width(), pixmap.height())
+
+
 def home_pet_walk_source_rect(frame_index: int) -> QRect:
     """Return the shared content crop for one authored walk-sheet frame."""
 

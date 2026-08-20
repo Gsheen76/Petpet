@@ -962,6 +962,25 @@ class MenuUiTests(unittest.TestCase):
         labels = [action.text() for action in menu.actions()]
         self.assertTrue(any("调试" in label for label in labels))
 
+    def test_debug_menu_adds_1000_pet_coins_and_saves_shared_balance(self):
+        tray = self._tray_harness()
+        tray.state = progression.ensure_progression({
+            "pet_coins": 25,
+            "player": {"pet_coins": 25},
+        })
+        tray.pet.state = tray.state
+        tray.pet.say = Mock()
+        menu = QMenu()
+        with patch("pet.IS_FROZEN", False), patch("pet.save_state") as save:
+            pet.TrayApp._populate_menu(tray, menu, include_status=False)
+            debug = next(action.menu() for action in menu.actions() if "调试" in action.text())
+            add_coins = next(action for action in debug.actions() if "1000 Pet币" in action.text())
+            add_coins.trigger()
+
+        self.assertEqual(tray.state["player"]["pet_coins"], 1025)
+        self.assertEqual(tray.state["pet_coins"], 1025)
+        save.assert_called_once_with(tray.state)
+
 
 if __name__ == "__main__":
     unittest.main()

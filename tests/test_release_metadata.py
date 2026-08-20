@@ -64,6 +64,15 @@ def test_readme_documents_one_click_release_and_v152_assets():
     assert "个人 GLM-4.6V-Flash" in readme
 
 
+def test_readme_documents_multi_pet_behavior():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+
+    assert "宠物" in readme
+    assert "午餐肉" in readme
+    assert "冰淇淋" in readme
+    assert "active_pet_id" not in readme
+
+
 def test_runtime_props_are_packaged_on_both_platforms():
     for filename in ("Petpet-windows.spec", "Petpet-mac.spec"):
         spec = (

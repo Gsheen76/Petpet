@@ -102,6 +102,8 @@ else:
 ASSET_ROOT_DIR = os.path.join(RESOURCE_DIR, "assets")
 ASSETS_DIR = os.path.join(ASSET_ROOT_DIR, "runtime")
 SOURCE_ASSETS_DIR = os.path.join(ASSET_ROOT_DIR, "source")
+PETS_DIR = os.path.join(ASSETS_DIR, "pets")
+PETS_MANIFEST_PATH = os.path.join(PETS_DIR, "manifest.json")
 DESKTOP_PET_DIR = os.path.join(ASSETS_DIR, "pets", "desktop")
 HOME_PET_DIR = os.path.join(ASSETS_DIR, "pets", "home")
 POSES_DIR = os.path.join(DESKTOP_PET_DIR, "poses")

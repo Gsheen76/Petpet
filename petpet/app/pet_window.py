@@ -11,7 +11,8 @@ from petpet.chat import api as ai
 from petpet.ui import decorations as decoration_renderer
 from petpet.minigames import ui as minigames
 from petpet.progression import core as progression
-from petpet.app.paths import ANIMATIONS_DIR, OUTFITS_DIR, POSES_DIR, SOUNDS_DIR
+from petpet.app.paths import OUTFITS_DIR, SOUNDS_DIR
+from petpet.app.pets import pet_asset_path, pet_definition
 from petpet.app.settings import load_settings
 from petpet.ui.common import pixel_font
 from PyQt5.QtCore import (
@@ -135,25 +136,10 @@ class PetWindow(QWidget):
         self.setAttribute(Qt.WA_ShowWithoutActivating, True)
         self.setMouseTracking(True)
 
-        # Load pose images: prefer PNG frames in poses/, fall back to SVG spritesheet
-        self.pose_pixmaps = {}  # pose index -> QPixmap
-        self.use_png = False
-        for name, idx in _dependency("POSE").items():
-            p = os.path.join(POSES_DIR, f"{name}.png")
-            if os.path.exists(p):
-                pm = QPixmap(p)
-                if not pm.isNull():
-                    # keep original aspect; we'll scale at draw time
-                    self.pose_pixmaps[idx] = pm
-        if len(self.pose_pixmaps) == len(_dependency("POSE")):
-            self.use_png = True
-        else:
-            # fall back to SVG spritesheet
-            with open(_dependency("SVG_PATH"), "rb") as f:
-                self.svg_bytes = QByteArray(f.read())
-            self.renderer = QSvgRenderer(self.svg_bytes)
-            if not self.renderer.isValid():
-                raise RuntimeError("no pose PNGs and pet.svg invalid")
+        self._current_pet_id = pet_definition(
+            self.state.get("active_pet_id", "lunch_meat")
+        )["id"]
+        self._load_static_pose_assets()
 
         self.decoration_pixmaps = (
             decoration_renderer.load_decoration_pixmaps()
@@ -313,6 +299,78 @@ class PetWindow(QWidget):
     @property
     def pet_name(self):
         return ai.normalize_pet_name(self.state.get("pet_name"))
+
+    @property
+    def current_pet_id(self):
+        return getattr(
+            self,
+            "_current_pet_id",
+            pet_definition(self.state.get("active_pet_id", "lunch_meat"))["id"],
+        )
+
+    def _load_static_pose_assets(self):
+        """Load the selected pet's static poses, using its idle as fallback."""
+        self.pose_pixmaps = {}
+        self.use_png = False
+        for name, idx in _dependency("POSE").items():
+            path = pet_asset_path(self.current_pet_id, "desktop", name)
+            if not path:
+                continue
+            pixmap = QPixmap(path)
+            if not pixmap.isNull():
+                self.pose_pixmaps[idx] = pixmap
+        if len(self.pose_pixmaps) == len(_dependency("POSE")):
+            self.use_png = True
+            return
+
+        with open(_dependency("SVG_PATH"), "rb") as source:
+            self.svg_bytes = QByteArray(source.read())
+        self.renderer = QSvgRenderer(self.svg_bytes)
+        if not self.renderer.isValid():
+            raise RuntimeError("no pose PNGs and pet.svg invalid")
+
+    def _desktop_animation_manifest_path(self):
+        desktop = pet_definition(self.current_pet_id).get("desktop")
+        if not isinstance(desktop, dict) or not desktop.get("animations_manifest"):
+            return None
+        path = pet_asset_path(
+            self.current_pet_id, "desktop", "animations_manifest"
+        )
+        return path if path and path.lower().endswith(".json") else None
+
+    def refresh_pet_assets(self, pet_id=None):
+        """Reload renderer resources for the selected stable pet ID."""
+        selected_pet_id = pet_definition(
+            pet_id or self.state.get("active_pet_id", "lunch_meat")
+        )["id"]
+        self._current_pet_id = selected_pet_id
+        self._outfit_preview_cache = {}
+        self.animation_frames = {}
+        self._animation_frame_paths = {}
+        self._persistent_animation_names = set(self.PRELOADED_ANIMATIONS)
+        self._load_static_pose_assets()
+        self._load_animations()
+        self._active_animation = None
+        self._animation_override = None
+        self._animation_override_token += 1
+        self._animation_started_at = time.monotonic()
+        self.pose = _dependency("POSE")["idle"]
+        self.blink = False
+        if hasattr(self, "update"):
+            self.update()
+
+    def set_active_pet(self, pet_id):
+        """Forward active-pet switching to the application transaction."""
+        callback = getattr(self, "_set_active_pet_callback", None)
+        if not callable(callback):
+            return False
+        result = callback(pet_id)
+        if result is False or (
+            isinstance(result, dict) and result.get("ok") is False
+        ):
+            return result
+        self._current_pet_id = pet_definition(pet_id)["id"]
+        return result
 
     def debug_parameter_defaults(self):
         defaults = dict(_dependency("DEFAULT_DEBUG_PARAMETERS"))
@@ -474,11 +532,25 @@ class PetWindow(QWidget):
         name = ai.normalize_pet_name(value)
         self.state["pet_name"] = name
         _dependency("save_state")(self.state)
-        ai.set_pet_name(name)
+        ai.set_pet_name(name, pet_id=self.current_pet_id)
         if self.chat_win is not None:
             self.chat_win.refresh_pet_name()
         self.update()
         return name
+
+    def _capture_desktop_position(self):
+        position = [int(self.x()), int(self.y())]
+        self.state["x"], self.state["y"] = position
+        pets = self.state.get("pets")
+        pet_id = self.state.get("active_pet_id")
+        profile = pets.get(pet_id) if isinstance(pets, dict) else None
+        if isinstance(profile, dict):
+            profile["desktop_position"] = position
+        return position
+
+    def _save_desktop_position(self):
+        self._capture_desktop_position()
+        _dependency("save_state")(self.state)
 
     def on_health_check(self):
         """Check if it's time to remind the user to drink/rest/stand."""
@@ -583,8 +655,17 @@ class PetWindow(QWidget):
     # ---------- placement ----------
     def place_initial(self):
         virt = self.screen_rect()  # all screens
-        x = self.state.get("x")
-        y = self.state.get("y")
+        profile = self.state.get("pets", {}).get(self.current_pet_id)
+        saved_position = (
+            profile.get("desktop_position")
+            if isinstance(profile, dict)
+            else None
+        )
+        if isinstance(saved_position, (list, tuple)) and len(saved_position) >= 2:
+            x, y = saved_position[:2]
+        else:
+            x = self.state.get("x")
+            y = self.state.get("y")
         if x is None or y is None:
             # default: bottom-right of primary screen
             ps = QApplication.primaryScreen().availableGeometry()
@@ -693,8 +774,7 @@ class PetWindow(QWidget):
         y = screen.bottom() - self.PET_H - 20
         self.move(x, y)
         self.vx = 0; self.vy = 0
-        self.state["x"] = x; self.state["y"] = y
-        _dependency("save_state")(self.state)
+        self._save_desktop_position()
         self.say("我回来啦！🐶", 1500)
 
     def apply_window_flags(self, show=True):
@@ -815,8 +895,8 @@ class PetWindow(QWidget):
         """Load optional PNG frame sequences without requiring them to exist."""
         specs = {name: dict(values)
                  for name, values in _dependency("DEFAULT_ANIMATIONS").items()}
-        manifest_path = os.path.join(ANIMATIONS_DIR, "manifest.json")
-        if os.path.exists(manifest_path):
+        manifest_path = self._desktop_animation_manifest_path()
+        if manifest_path and os.path.exists(manifest_path):
             try:
                 with open(manifest_path, "r", encoding="utf-8-sig") as f:
                     custom = json.load(f)
@@ -828,10 +908,20 @@ class PetWindow(QWidget):
                 pass
 
         self.animation_specs = specs
+        animation_dir = (
+            os.path.dirname(manifest_path) if manifest_path is not None else None
+        )
+        idle_path = pet_asset_path(self.current_pet_id, "desktop", "idle")
         for name, spec in specs.items():
             folder = str(spec.get("folder", name))
-            frame_dir = os.path.join(ANIMATIONS_DIR, folder)
-            if not os.path.isdir(frame_dir):
+            frame_dir = (
+                os.path.join(animation_dir, folder) if animation_dir else None
+            )
+            if not frame_dir or not os.path.isdir(frame_dir):
+                if name != "idle" and (
+                        pet_asset_path(self.current_pet_id, "desktop", name)
+                        == idle_path):
+                    spec["fallback"] = "idle"
                 continue
             frame_paths = sorted(
                 (os.path.join(frame_dir, filename)
@@ -1048,6 +1138,26 @@ class PetWindow(QWidget):
             elapsed_ms -= frame_duration_ms
         self._animation_frame_index = index
         return frames[index]
+
+    def shared_animation_frame(self):
+        """Expose the currently rendered desktop action to the home scene."""
+
+        name = self._current_animation_name()
+        pixmap = self._animation_frame(name)
+        if pixmap is None:
+            pose = self._fallback_pose(name)
+            pixmap = self.pose_pixmaps.get(
+                pose,
+                self.pose_pixmaps.get(_dependency("POSE")["idle"]),
+            )
+        if pixmap is None or pixmap.isNull():
+            return None
+        return {
+            "name": name,
+            "pixmap": pixmap,
+            "frame_index": getattr(self, "_animation_frame_index", 0) or 0,
+            "spec": dict(self.animation_specs.get(name, {})),
+        }
 
     def _fallback_pose(self, animation_name):
         spec = self.animation_specs.get(animation_name, {})
@@ -1597,9 +1707,7 @@ class PetWindow(QWidget):
 
         # save pos occasionally
         if random.random() < 0.02:
-            self.state["x"] = self.x()
-            self.state["y"] = self.y()
-            _dependency("save_state")(self.state)
+            self._save_desktop_position()
 
         self.update()
 

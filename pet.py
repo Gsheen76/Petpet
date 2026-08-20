@@ -26,6 +26,7 @@ from app_paths import (
     SOUNDS_DIR,
 )
 from petpet.app import state as app_state
+from petpet.app.pets import load_pet_registry
 from petpet.app import pet_window as pet_window_controller
 from petpet.app.settings import (
     DEFAULT_SETTINGS,
@@ -496,7 +497,13 @@ def save_state(s):
     try:
         app_state.prepare_state_for_save(s)
         with open(SAVE_PATH, "w", encoding="utf-8") as f:
-            json.dump(s, f)
+            json.dump({
+                key: value for key, value in s.items()
+                if key not in {
+                    "_active_pet_facade_snapshot",
+                    "_default_pet_name",
+                }
+            }, f)
     except Exception:
         pass
 
@@ -741,10 +748,12 @@ class PetpetPopupMenu(QFrame):
 class ChatWindow(PackageChatWindow):
     """Compatibility facade for the packaged chat window implementation."""
 
-    def __init__(self, pet_window, memory_profile="desktop"):
+    def __init__(self, pet_window, pet_id="lunch_meat", *, memory_profile=None):
+        if memory_profile is not None:
+            pet_id = memory_profile
         super().__init__(
             pet_window,
-            memory_profile,
+            pet_id,
             bridge_provider=lambda: bridge,
             confirm_dialog_factory=lambda *args, **kwargs: PetpetConfirmDialog(
                 *args, **kwargs
@@ -1450,6 +1459,70 @@ pet_window_controller.configure_dependency_resolver(
 PetWindow = pet_window_controller.PetWindow
 
 
+def _active_chat_pet_id(self):
+    state = getattr(self, "state", {})
+    return ai.normalize_memory_pet_id(
+        state.get("active_pet_id", "lunch_meat")
+    )
+
+
+def _chat(self):
+    pet_id = self.active_chat_pet_id()
+    if self.chat_win is None:
+        self.chat_win = ChatWindow(self, pet_id=pet_id)
+        bridge.token.connect(self.chat_win.on_token)
+        bridge.done.connect(self.chat_win.on_done)
+        bridge.error.connect(self.chat_win.on_error)
+    else:
+        self.chat_win.set_pet_id(pet_id)
+    self.chat_win.show_near_pet()
+    self.last_user_t = time.time()
+
+
+def _set_pet_name(self, value):
+    name = ai.normalize_pet_name(value)
+    self.state["pet_name"] = name
+    save_state(self.state)
+    ai.set_pet_name(name, pet_id=self.active_chat_pet_id())
+    if self.chat_win is not None:
+        self.chat_win.refresh_pet_name()
+    self.update()
+    return name
+
+
+def _check_ai_nudge(self):
+    if self.state.get("sleeping"):
+        return
+    settings = self.settings
+    idle = time.time() - self.last_user_t
+    if idle < settings["nudge_idle_min"]:
+        return
+    if time.time() - self.last_nudge_check < 300:
+        return
+    self.last_nudge_check = time.time()
+    pet_id = self.active_chat_pet_id()
+    mem = ai.load_memory(pet_id=pet_id)
+    msg = ai.maybe_nudge(
+        mem,
+        idle,
+        pet_state=self.state,
+        idle_min=settings["nudge_idle_min"],
+        gap_min=settings["nudge_gap_min"],
+        pet_name=self.pet_name,
+        pet_id=pet_id,
+    )
+    if msg:
+        self.say(msg, 4500)
+        self.last_user_t = time.time() - (settings["nudge_idle_min"] - 100)
+
+
+pet_window_controller.PetWindow.active_chat_pet_id = _active_chat_pet_id
+pet_window_controller.PetWindow.active_chat_profile = _active_chat_pet_id
+pet_window_controller.PetWindow.chat = _chat
+pet_window_controller.PetWindow.set_pet_name = _set_pet_name
+pet_window_controller.PetWindow.check_ai_nudge = _check_ai_nudge
+
+
 
 
 
@@ -1464,8 +1537,12 @@ class TrayApp:
         progression.record_session(self.state)
         save_state(self.state)
         self.pet = PetWindow(self.state)
+        self.pet._set_active_pet_callback = self.set_active_pet
         self.pet._app_action_cb = self._handle_bubble_action
-        ai.set_pet_name(self.pet.pet_name)
+        ai.set_pet_name(
+            self.pet.pet_name,
+            pet_id=self.pet.active_chat_pet_id(),
+        )
         self.pet.show()
 
         # tray
@@ -1515,6 +1592,95 @@ class TrayApp:
                 bool(current.get("auto_check_updates", True))):
             self._check_update(manual=False)
         self.refresh_menu()
+
+    def _refresh_active_pet_surface(self, owner, attribute, method, *args):
+        surface = getattr(owner, attribute, None)
+        if surface is None:
+            return
+        callback = getattr(surface, method, None)
+        if not callable(callback):
+            return
+        try:
+            return callback(*args)
+        except RuntimeError:
+            setattr(owner, attribute, None)
+
+    def set_active_pet(self, pet_id: str) -> dict:
+        """Switch the selected pet and refresh every live surface once."""
+        registry = load_pet_registry()
+        if pet_id not in registry:
+            return {
+                "ok": False,
+                "pet_id": pet_id,
+                "message": "没有找到这只宠物。",
+            }
+        owned_pet_ids = self.state.get("owned_pet_ids", [])
+        if pet_id not in owned_pet_ids:
+            return {
+                "ok": False,
+                "pet_id": pet_id,
+                "message": "还没有拥有这只宠物。",
+            }
+
+        chat = getattr(self.pet, "chat_win", None)
+        if chat is not None and getattr(chat, "busy", False):
+            return {
+                "ok": False,
+                "pet_id": pet_id,
+                "message": "聊天正在进行中，请稍后再切换。",
+            }
+
+        self.pet._capture_desktop_position()
+        app_state.bind_active_pet(self.state, pet_id)
+        self.pet.refresh_pet_assets(pet_id)
+        self.pet.place_initial()
+        self.pet._capture_desktop_position()
+        save_state(self.state)
+
+        home = getattr(self.pet, "home_scene_window", None)
+        if home is None:
+            home = getattr(self, "home_scene_window", None)
+        if home is not None:
+            try:
+                refresh = getattr(home, "refresh_active_pet", None)
+                if callable(refresh):
+                    refresh()
+            except RuntimeError:
+                self.pet.home_scene_window = None
+                if hasattr(self, "home_scene_window"):
+                    self.home_scene_window = None
+
+        chat_result = self._refresh_active_pet_surface(
+            self.pet,
+            "chat_win",
+            "set_pet_id",
+            pet_id,
+        )
+        for attribute, method in (
+            ("shop_win", "refresh"),
+            ("records_win", "refresh"),
+            ("achievements_win", "refresh"),
+        ):
+            self._refresh_active_pet_surface(
+                self.pet,
+                attribute,
+                method,
+            )
+
+        chat = getattr(self.pet, "chat_win", None)
+        if chat is not None and chat_result is not False:
+            self._refresh_active_pet_surface(
+                self.pet, "chat_win", "refresh_pet_name"
+            )
+        name = self.pet.pet_name
+        ai.set_pet_name(name, pet_id=pet_id)
+        self.tray.setToolTip(f"我的小狗 {name} — 双击显示/隐藏")
+        self.pet.update()
+        return {
+            "ok": True,
+            "pet_id": pet_id,
+            "message": f"已切换到{name}。",
+        }
 
     def _handle_bubble_action(self, action):
         """Handle app-level actions from the secondary bubble canvas."""
@@ -1858,6 +2024,10 @@ class TrayApp:
         a_force = QAction("强制弹出交互气泡", dm)
         a_force.triggered.connect(self._debug_force_bubble)
         dm.addAction(a_force)
+        dm.addSeparator()
+        a_coins = QAction("🪙 增加 1000 Pet币", dm)
+        a_coins.triggered.connect(self._debug_add_pet_coins)
+        dm.addAction(a_coins)
         parent_menu.addMenu(dm)
 
     def _debug_set_stats(self, hunger=None, mood=None, energy=None):
@@ -1893,6 +2063,21 @@ class TrayApp:
             self.pet._interactive_bubble = None
         self.pet._interactive_bubble = InteractiveBubble(self.pet, label, action, color, "")
         self.pet._last_interactive_t = time.time()
+
+    def _debug_add_pet_coins(self):
+        """Grant a fixed local-test balance through the shared economy path."""
+        progression.add_coins(self.state, 1000, source="debug")
+        player = self.state.get("player")
+        if isinstance(player, dict):
+            player["pet_coins"] = self.state["pet_coins"]
+        save_state(self.state)
+        shop = getattr(self, "shop_window", None)
+        if shop is not None:
+            try:
+                shop.refresh()
+            except RuntimeError:
+                self.shop_window = None
+        self.pet.say("Pet币 +1000", 1400)
 
     def _fresh_menu(self):
         """Build a fresh standalone menu for right-click on pet."""
@@ -1997,8 +2182,12 @@ class TrayApp:
         self.pet.cancel_play_scene(show_pet=False)
         if self.pet.chat_win is not None:
             self.pet.chat_win.close()
-        self.state["x"] = self.pet.x()
-        self.state["y"] = self.pet.y()
+        capture_position = getattr(self.pet, "_capture_desktop_position", None)
+        if callable(capture_position):
+            capture_position()
+        else:
+            self.state["x"] = self.pet.x()
+            self.state["y"] = self.pet.y()
         save_state(self.state)
         self.tray.hide()
         instance_server = getattr(self, "_instance_server", None)

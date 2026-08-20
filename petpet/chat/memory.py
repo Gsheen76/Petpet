@@ -7,14 +7,18 @@ import json
 import os
 from typing import Callable
 
+from petpet.app.pets import DEFAULT_PET_ID, load_pet_registry
 
-MEMORY_PROFILES = ("desktop", "home")
-
-
-def normalize_profile(profile: object) -> str:
-    """Return a supported pet profile, defaulting old callers to desktop."""
-    value = str(profile or "").strip().lower()
-    return value if value in MEMORY_PROFILES else "desktop"
+def normalize_memory_pet_id(value: object) -> str:
+    """Return a registered pet ID, mapping old profile names to lunch meat."""
+    candidate = str(value or "").strip().lower()
+    if candidate in {"desktop", "home"}:
+        return DEFAULT_PET_ID
+    try:
+        registered_ids = load_pet_registry()
+    except (OSError, ValueError, TypeError):
+        registered_ids = {DEFAULT_PET_ID: {}}
+    return candidate if candidate in registered_ids else DEFAULT_PET_ID
 
 
 def _read_json(path: str):

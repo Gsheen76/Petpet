@@ -30,6 +30,7 @@ CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
 DEFAULT_CONFIG_PATH = os.path.join(RESOURCE_DIR, "config.json.example")
 MEMORY_PATH = os.path.join(DATA_DIR, "memory.json")
 HOME_MEMORY_PATH = os.path.join(DATA_DIR, "memory-home.json")
+_INITIAL_DATA_DIR = DATA_DIR
 CHAT_DIAGNOSTIC_LOG_PATH = os.path.join(DATA_DIR, "chat_diagnostic.log")
 CHAT_QUOTA_STATE_PATH = os.path.join(DATA_DIR, "chat_quota_state.json")
 
@@ -187,31 +188,52 @@ def _default_memory():
         "pet_name": DEFAULT_PET_NAME,
     }
 
-def memory_path(profile="desktop"):
-    """Return the persistent chat file for one pet identity."""
-    return (
-        HOME_MEMORY_PATH
-        if chat_memory.normalize_profile(profile) == "home"
-        else MEMORY_PATH
+def _memory_path_for_data_dir(filename, compatibility_path):
+    if DATA_DIR != _INITIAL_DATA_DIR:
+        return os.path.join(DATA_DIR, filename)
+    return compatibility_path
+
+
+def _selected_pet_id(pet_id="lunch_meat", profile=None):
+    return chat_memory.normalize_memory_pet_id(
+        profile if profile is not None else pet_id
     )
+
+
+def normalize_memory_pet_id(value):
+    """Expose registered pet-ID normalization through the chat API."""
+    return chat_memory.normalize_memory_pet_id(value)
+
+
+def memory_path(pet_id="lunch_meat", *, profile=None):
+    """Return the persistent chat file for one registered pet identity."""
+    selected = _selected_pet_id(pet_id, profile)
+    if selected == "lunch_meat":
+        return _memory_path_for_data_dir("memory.json", MEMORY_PATH)
+    return os.path.join(DATA_DIR, f"memory-{selected}.json")
 
 
 def normalize_memory_profile(profile):
-    """Expose profile normalization without leaking the storage module."""
-    return chat_memory.normalize_profile(profile)
+    """Compatibility alias for callers that still use desktop/home profiles."""
+    return normalize_memory_pet_id(profile)
 
 
-def load_memory(profile="desktop"):
-    profile = chat_memory.normalize_profile(profile)
+def load_memory(pet_id="lunch_meat", *, profile=None):
+    pet_id = _selected_pet_id(pet_id, profile)
+    legacy_home_path = _memory_path_for_data_dir(
+        "memory-home.json", HOME_MEMORY_PATH
+    )
     return chat_memory.load_memory(
-        memory_path(profile),
+        memory_path(pet_id),
         _default_memory,
-        seed_path=MEMORY_PATH if profile == "home" else None,
+        seed_path=legacy_home_path if (
+            pet_id == "lunch_meat" and not os.path.exists(memory_path(pet_id))
+        ) else None,
     )
 
 
-def save_memory(m, profile="desktop"):
-    chat_memory.save_memory(memory_path(profile), m)
+def save_memory(m, pet_id="lunch_meat", *, profile=None):
+    chat_memory.save_memory(memory_path(pet_id, profile=profile), m)
 
 
 def load_config():
@@ -541,7 +563,8 @@ def _default_proxy_stream(primary_endpoint, fallback_endpoint, user_text, mem,
 
 
 def chat_stream(user_text, mem=None, on_token=None, timeout=45,
-                pet_name=None, image_attachment=None):
+                pet_name=None, image_attachment=None, *, pet_id="lunch_meat",
+                profile=None):
     """Stream tokens from GLM. Yields (kind, payload) events:
        ('token', str)         -> a piece of reply text
        ('done',  full_text)   -> finished
@@ -549,7 +572,7 @@ def chat_stream(user_text, mem=None, on_token=None, timeout=45,
        Automatically retries on 429 rate limit (up to 2 times with backoff).
     """
     if mem is None:
-        mem = load_memory()
+        mem = load_memory(pet_id, profile=profile)
 
     mode = get_chat_mode()
     key = get_api_key()
@@ -664,15 +687,17 @@ def fallback_reply(user_text, err=None, pet_name=None):
     return "汪？"
 
 
-def set_pet_name(pet_name, profile="desktop"):
+def set_pet_name(pet_name, pet_id="lunch_meat", *, profile=None):
     """Persist the current pet name alongside chat memory."""
-    mem = load_memory(profile=profile)
+    selected = _selected_pet_id(pet_id, profile)
+    mem = load_memory(selected)
     mem["pet_name"] = normalize_pet_name(pet_name)
-    save_memory(mem, profile=profile)
+    save_memory(mem, selected)
 
 
 # ---------------- memory update (lightweight) ----------------
-def append_history(mem, role, content, image=None, profile="desktop"):
+def append_history(mem, role, content, image=None, pet_id="lunch_meat", *,
+                   profile=None):
     entry = {"role": role, "content": content, "t": time.time()}
     if isinstance(image, dict):
         thumbnail = str(image.get("thumbnail", ""))
@@ -686,17 +711,18 @@ def append_history(mem, role, content, image=None, profile="desktop"):
     # keep last 60 turns
     if len(mem["history"]) > 60:
         mem["history"] = mem["history"][-60:]
-    save_memory(mem, profile=profile)
+    selected = _selected_pet_id(pet_id, profile)
+    save_memory(mem, selected)
     # every 6 user turns, refresh user_profile in background
     user_turns = sum(1 for h in mem["history"] if h["role"] == "user")
     if role == "user" and user_turns % 6 == 0:
         try:
-            _refresh_user_profile(mem, profile=profile)
+            _refresh_user_profile(mem, pet_id=selected)
         except Exception:
             pass
 
 
-def _refresh_user_profile(mem, profile="desktop"):
+def _refresh_user_profile(mem, pet_id="lunch_meat", *, profile=None):
     """Ask the model to summarize what it knows about the user, in background.
     Uses a cheap non-stream call. Failure is silent."""
     if get_chat_mode() != "personal":
@@ -734,14 +760,15 @@ def _refresh_user_profile(mem, profile="desktop"):
         summary = data["choices"][0]["message"]["content"].strip()
         if summary and len(summary) < 200:
             mem["user_profile"] = summary
-            save_memory(mem, profile=profile)
+            save_memory(mem, pet_id, profile=profile)
     except Exception:
         pass
 
 
 # ---------------- proactive nudge ----------------
 def maybe_nudge(mem, idle_seconds, pet_state=None, idle_min=1800,
-                gap_min=10800, pet_name=None, profile="desktop"):
+                gap_min=10800, pet_name=None, pet_id="lunch_meat", *,
+                profile=None):
     """Return a proactive message if appropriate, else None.
     Called periodically by the host app. idle_seconds = seconds since last user msg.
     pet_state optional: {'hunger':n,'mood':n,'energy':n,'sleeping':bool}
@@ -780,7 +807,7 @@ def maybe_nudge(mem, idle_seconds, pet_state=None, idle_min=1800,
     )
     msg = opts[int(time.time()) % len(opts)].replace("Sheen", pet_name)
     mem["last_nudge_t"] = time.time()
-    save_memory(mem, profile=profile)
+    save_memory(mem, pet_id, profile=profile)
     return msg
 
 

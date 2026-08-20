@@ -12,6 +12,7 @@ from PyQt5.QtGui import QColor, QLinearGradient, QPainter, QPainterPath, QPen, Q
 from PyQt5.QtWidgets import QWidget
 
 from petpet.progression import core as progression
+from petpet.app.pets import pet_asset_path, pet_definition
 from petpet.home.pet import (
     HOME_DEFAULT_SLEEP_POINT,
     HomePetController,
@@ -60,6 +61,19 @@ class HomeSceneWindow(QWidget):
         self.home_pet_walk_back_right = QPixmap(HOME_PET_WALK_BACK_RIGHT_PATH)
         self.home_pet_idle = QPixmap(HOME_PET_IDLE_PATH)
         self.home_pet_sleep = QPixmap(HOME_PET_SLEEP_PATH)
+        self._home_pet_walk_down_is_sheet = True
+        self._home_pet_walk_back_right_is_sheet = True
+        self._home_pet_sleep_is_sheet = True
+        self._home_pet_walk_down_source_rect = None
+        self._home_pet_walk_back_right_source_rect = None
+        self._home_pet_sleep_source_rect = home_pet_sleep_source_rect(0)
+        self._home_pet_idle_source_rect = HOME_PET_IDLE_CONTENT_RECT
+        self._home_pet_static_contact = (0.50, 0.55, 0.99)
+        self._home_pet_asset_state = {
+            "idle": HOME_PET_IDLE_PATH,
+            "walk": "home",
+            "sleep": "home",
+        }
         self.home_nav_paw = QPixmap(HOME_NAV_PAW_PATH)
         self.home_nav_target = QPixmap(HOME_NAV_TARGET_PATH)
         self.home_nav_arrow = QPixmap(HOME_NAV_ARROW_PATH)
@@ -82,6 +96,7 @@ class HomeSceneWindow(QWidget):
         self._decoration_category = "all"
         self._interaction_menu_open = False
         self._last_pet_tick = time.monotonic()
+        self._last_persisted_home_target = None
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._sync_scene)
         self._timer.start(33)
@@ -128,20 +143,138 @@ class HomeSceneWindow(QWidget):
         return self.isVisible() and not self.is_decorating()
 
     def _reset_home_pet_controller(self):
-        position = load_home_pet_position(
-            self.state.get("home_scene"),
-            self.state.get("home_scene_dog_world_x"),
-        )
+        profile = self._active_pet_profile()
+        if profile is not None:
+            position = load_home_pet_position(
+                profile.get("home_position"),
+                clamp=False,
+            )
+        else:
+            position = load_home_pet_position(
+                self.state.get("home_scene"),
+                self.state.get("home_scene_dog_world_x"),
+            )
         self.home_pet = HomePetController(position)
-        if self.state.get("sleeping"):
+        sleeping = (
+            profile.get("sleeping", False)
+            if profile is not None
+                else self.state.get("sleeping")
+        )
+        if sleeping:
             self.home_pet.set_sleeping()
+        if profile is not None and profile.get("home_position") is not None:
+            self.home_pet.position = position
+
+    def _active_pet_profile(self):
+        pet_id = self.state.get("active_pet_id")
+        pets = self.state.get("pets")
+        if not isinstance(pet_id, str) or not isinstance(pets, dict):
+            return None
+        profile = pets.get(pet_id)
+        return profile if isinstance(profile, dict) else None
+
+    @property
+    def current_pet_id(self):
+        return pet_definition(
+            self.state.get("active_pet_id", "lunch_meat")
+        )["id"]
 
     def _save_home_pet_position(self):
+        serialized = serialize_home_pet_position(self.home_pet.position)
+        profile = self._active_pet_profile()
+        if profile is not None:
+            profile["home_position"] = [
+                round(float(self.home_pet.position[0]), 2),
+                round(float(self.home_pet.position[1]), 2),
+            ]
         home_scene = self.state.setdefault("home_scene", {})
-        home_scene["pet_position"] = serialize_home_pet_position(
-            self.home_pet.position
-        )
+        home_scene["pet_position"] = serialized
         self.save_state(self.state)
+
+    def refresh_pet_assets(self, pet_id: str | None = None) -> None:
+        """Load the home artwork registered for the selected stable pet."""
+
+        definition = pet_definition(
+            pet_id or self.state.get("active_pet_id", "lunch_meat")
+        )
+        selected_pet_id = definition["id"]
+        idle_path = pet_asset_path(selected_pet_id, "home", "idle")
+        idle_pixmap = QPixmap(idle_path) if idle_path else QPixmap()
+
+        def resolve(action):
+            path = pet_asset_path(selected_pet_id, "home", action)
+            if path and not QPixmap(path).isNull():
+                return path
+            return idle_path
+
+        walk_down_path = resolve("walk_down")
+        walk_back_right_path = resolve("walk_back_right")
+        sleep_path = resolve("sleep")
+        self.home_pet_idle = idle_pixmap
+        self.home_pet_walk_down = QPixmap(walk_down_path) if walk_down_path else QPixmap()
+        self.home_pet_walk_back_right = (
+            QPixmap(walk_back_right_path) if walk_back_right_path else QPixmap()
+        )
+        self.home_pet_sleep = QPixmap(sleep_path) if sleep_path else QPixmap()
+
+        def is_sheet(pixmap):
+            return (
+                not pixmap.isNull()
+                and pixmap.width() >= HOME_PET_WALK_FRAME_SIZE * 3
+                and pixmap.height() >= HOME_PET_WALK_FRAME_SIZE * 3
+            )
+
+        self._home_pet_walk_down_is_sheet = is_sheet(self.home_pet_walk_down)
+        self._home_pet_walk_back_right_is_sheet = is_sheet(
+            self.home_pet_walk_back_right
+        )
+        self._home_pet_sleep_is_sheet = is_sheet(self.home_pet_sleep)
+        self._home_pet_walk_down_source_rect = (
+            None
+            if self._home_pet_walk_down_is_sheet
+            else home_pet_static_source_rect(self.home_pet_walk_down)
+        )
+        self._home_pet_walk_back_right_source_rect = (
+            None
+            if self._home_pet_walk_back_right_is_sheet
+            else home_pet_static_source_rect(self.home_pet_walk_back_right)
+        )
+        self._home_pet_sleep_source_rect = (
+            home_pet_sleep_source_rect(0)
+            if self._home_pet_sleep_is_sheet
+            else home_pet_static_source_rect(self.home_pet_sleep)
+        )
+        self._home_pet_idle_source_rect = (
+            HOME_PET_IDLE_CONTENT_RECT
+            if idle_path
+            and os.path.normcase(os.path.normpath(idle_path))
+            == os.path.normcase(os.path.normpath(HOME_PET_IDLE_PATH))
+            else home_pet_static_source_rect(self.home_pet_idle)
+        )
+        self._home_pet_asset_state = {
+            "idle": idle_path,
+            "walk": "home"
+            if walk_down_path and walk_down_path != idle_path
+            else "idle",
+            "sleep": "home" if sleep_path and sleep_path != idle_path else "idle",
+            "pet_id": selected_pet_id,
+        }
+
+    def refresh_active_pet(self) -> None:
+        """Reload the selected pet's controller and registered artwork."""
+        self._reset_home_pet_controller()
+        self.refresh_pet_assets(self.current_pet_id)
+        self._clear_manual_destination()
+        self._last_persisted_home_target = None
+        self._camera_x = camera_x_for_dog(self.home_pet.position[0], 0)
+        self._manual_camera = False
+        self.furniture["home_status_card"] = render_home_status_card(self.state)
+        self.update()
+
+    def home_pet_asset_state(self) -> dict:
+        """Return the registered source and fallback kind for boundary tests."""
+
+        return dict(self._home_pet_asset_state)
 
     def _clear_manual_destination(self):
         self._manual_destination = None
@@ -278,6 +411,7 @@ class HomeSceneWindow(QWidget):
                     self.state, "autonomous_walks"
                 )
 
+        target_before = self.home_pet.target
         events = self.home_pet.advance(elapsed)
         if "manual_sleep_started" in events:
             self.state["sleeping"] = True
@@ -298,6 +432,11 @@ class HomeSceneWindow(QWidget):
             if self._manual_destination is not None:
                 self._destination_fade_started_at = current
             self._save_home_pet_position()
+            self._last_persisted_home_target = None
+        elif target_before is not None and self.home_pet.target is not None:
+            if target_before != self._last_persisted_home_target:
+                self._save_home_pet_position()
+                self._last_persisted_home_target = target_before
         return events
 
     def pan_view(self, direction, step=HOME_CAMERA_PAN_STEP):
@@ -388,6 +527,7 @@ class HomeSceneWindow(QWidget):
 
     def show_scene(self):
         progression.ensure_progression(self.state)
+        self.refresh_pet_assets()
         self._interaction_menu_open = False
         self._clear_manual_destination()
         self._reset_home_pet_controller()
@@ -745,11 +885,21 @@ class HomeSceneWindow(QWidget):
         if self.home_pet.direction in {"front_left", "front_right"}:
             if self.home_pet_walk_down.isNull():
                 return None
+            source_rect = (
+                home_pet_walk_source_rect(frame)
+                if self._home_pet_walk_down_is_sheet
+                else self._home_pet_walk_down_source_rect
+            )
+            contact = (
+                contact
+                if self._home_pet_walk_down_is_sheet
+                else self._home_pet_static_contact
+            )
             return HomePetWalkRenderSpec(
                 pixmap=self.home_pet_walk_down,
-                source_rect=home_pet_walk_source_rect(frame),
+                source_rect=source_rect,
                 mirrored=self.home_pet.direction == "front_left",
-                frame_index=frame,
+                frame_index=frame if self._home_pet_walk_down_is_sheet else 0,
                 visual_scale=1.0,
                 contact_center_x=contact[0],
                 contact_width=contact[1],
@@ -758,11 +908,21 @@ class HomeSceneWindow(QWidget):
         if self.home_pet.direction in {"back_left", "back_right"}:
             if self.home_pet_walk_back_right.isNull():
                 return None
+            source_rect = (
+                home_pet_back_walk_source_rect(frame)
+                if self._home_pet_walk_back_right_is_sheet
+                else self._home_pet_walk_back_right_source_rect
+            )
+            contact = (
+                contact
+                if self._home_pet_walk_back_right_is_sheet
+                else self._home_pet_static_contact
+            )
             return HomePetWalkRenderSpec(
                 pixmap=self.home_pet_walk_back_right,
-                source_rect=home_pet_back_walk_source_rect(frame),
+                source_rect=source_rect,
                 mirrored=self.home_pet.direction == "back_left",
-                frame_index=frame,
+                frame_index=frame if self._home_pet_walk_back_right_is_sheet else 0,
                 visual_scale=1.06,
                 contact_center_x=contact[0],
                 contact_width=contact[1],
@@ -773,24 +933,59 @@ class HomeSceneWindow(QWidget):
     def home_pet_render_spec(self, now=None):
         """Return the authored artwork for the current home-pet state."""
 
+        if self.home_pet.state not in {
+            "manual_walk",
+            "auto_walk",
+            "manual_sleep_walk",
+            "auto_sleep_walk",
+        }:
+            shared_frame = getattr(self.pet, "shared_animation_frame", None)
+            shared = shared_frame() if callable(shared_frame) else None
+            if shared and not shared["pixmap"].isNull():
+                scale = shared.get("spec", {}).get("scale", 1.0)
+                try:
+                    scale = max(0.1, float(scale))
+                except (TypeError, ValueError):
+                    scale = 1.0
+                return HomePetWalkRenderSpec(
+                    pixmap=shared["pixmap"],
+                    source_rect=home_pet_static_source_rect(shared["pixmap"]),
+                    mirrored=False,
+                    frame_index=int(shared.get("frame_index", 0)),
+                    visual_scale=scale,
+                    contact_center_x=0.5,
+                    contact_width=0.7,
+                    contact_foot_y=0.98,
+                )
+
         if self.home_pet.state == "sleeping":
             if self.home_pet_sleep.isNull():
                 return None
             frame = self.home_pet_sleep_frame(now)
+            source_rect = (
+                home_pet_sleep_source_rect(frame)
+                if self._home_pet_sleep_is_sheet
+                else self._home_pet_sleep_source_rect
+            )
+            contact = (
+                (0.50, 0.84, 0.98)
+                if self._home_pet_sleep_is_sheet
+                else self._home_pet_static_contact
+            )
             return HomePetWalkRenderSpec(
                 pixmap=self.home_pet_sleep,
-                source_rect=home_pet_sleep_source_rect(frame),
+                source_rect=source_rect,
                 mirrored=False,
-                frame_index=frame,
-                visual_scale=0.62,
-                contact_center_x=0.50,
-                contact_width=0.84,
-                contact_foot_y=0.98,
+                frame_index=frame if self._home_pet_sleep_is_sheet else 0,
+                visual_scale=0.62 if self._home_pet_sleep_is_sheet else 1.0,
+                contact_center_x=contact[0],
+                contact_width=contact[1],
+                contact_foot_y=contact[2],
             )
         if self.home_pet.state == "idle" and not self.home_pet_idle.isNull():
             return HomePetWalkRenderSpec(
                 pixmap=self.home_pet_idle,
-                source_rect=HOME_PET_IDLE_CONTENT_RECT,
+                source_rect=self._home_pet_idle_source_rect,
                 mirrored=False,
                 frame_index=0,
                 visual_scale=1.0,

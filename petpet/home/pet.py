@@ -153,23 +153,38 @@ def depth_scale_for_y(
 
 
 def load_home_pet_position(
-    home_scene: Mapping[str, Any] | None,
+    home_scene: Mapping[str, Any] | list[Any] | tuple[Any, ...] | None,
     legacy_x: Any = None,
+    *,
+    clamp: bool = True,
 ) -> Point:
     """Load the saved two-dimensional position or migrate a legacy x value."""
 
+    normalize = clamp_to_walkable if clamp else lambda point: point
     source = home_scene if isinstance(home_scene, Mapping) else {}
-    raw_position = source.get("pet_position")
+    raw_position = source.get("pet_position", source.get("home_position"))
     if isinstance(raw_position, Mapping):
         x = _finite_float(raw_position.get("x"))
         y = _finite_float(raw_position.get("y"))
         if x is not None and y is not None:
-            return clamp_to_walkable((x, y))
+            return normalize((x, y))
+        return HOME_DEFAULT_ENTRY
+    if isinstance(raw_position, (list, tuple)) and len(raw_position) >= 2:
+        x = _finite_float(raw_position[0])
+        y = _finite_float(raw_position[1])
+        if x is not None and y is not None:
+            return normalize((x, y))
+        return HOME_DEFAULT_ENTRY
+    if isinstance(home_scene, (list, tuple)) and len(home_scene) >= 2:
+        x = _finite_float(home_scene[0])
+        y = _finite_float(home_scene[1])
+        if x is not None and y is not None:
+            return normalize((x, y))
         return HOME_DEFAULT_ENTRY
     migrated_x = _finite_float(legacy_x)
     if migrated_x is None:
         return HOME_DEFAULT_ENTRY
-    return clamp_to_walkable((migrated_x, HOME_DEFAULT_ENTRY[1]))
+    return normalize((migrated_x, HOME_DEFAULT_ENTRY[1]))
 
 
 def serialize_home_pet_position(position: Point) -> dict[str, float]:

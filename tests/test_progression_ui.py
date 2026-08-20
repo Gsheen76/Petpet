@@ -124,7 +124,7 @@ class ProgressionWindowUiTests(unittest.TestCase):
         self.assertIn("持久活力", upgrade_text)
         self.assertIn("提高每次抚摸恢复的心情值", upgrade_text)
         self.assertIn("减缓清醒状态下的属性自然消耗", upgrade_text)
-        self.assertNotIn("清醒属性消耗减缓", upgrade_text)
+        self.assertIn("当前加成：清醒属性消耗减缓 0%", upgrade_text)
         self.assertNotIn("套装商店", upgrade_text)
 
     def test_outfit_purchase_and_equip_refreshes_the_pet(self):

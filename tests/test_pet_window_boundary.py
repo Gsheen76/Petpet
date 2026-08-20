@@ -221,6 +221,173 @@ class PetWindowBoundaryTests(unittest.TestCase):
         finally:
             window.close()
 
+    def test_refresh_pet_assets_uses_selected_pet_idle_and_clears_stale_cache(self):
+        import pet
+
+        state = copy.deepcopy(pet.DEFAULT_STATE)
+        state.update({"x": 100, "y": 100, "tutorial_completed": True})
+        window = pet.PetWindow(state)
+        try:
+            window.animation_frames["obsolete"] = [object()]
+            window._animation_frame_paths["obsolete"] = ["obsolete.png"]
+            window._outfit_preview_cache = {"dinosaur_suit": object()}
+
+            window.refresh_pet_assets("ice_cream")
+
+            self.assertEqual(window.current_pet_id, "ice_cream")
+            self.assertEqual(state.get("active_pet_id"), None)
+            self.assertEqual(window._fallback_pose("play"), pet.POSE["idle"])
+            self.assertNotIn("obsolete", window.animation_frames)
+            self.assertNotIn("obsolete", window._animation_frame_paths)
+            self.assertEqual(window._outfit_preview_cache, {})
+            self.assertEqual(len(window.pose_pixmaps), len(pet.POSE))
+        finally:
+            window.close()
+
+    def test_shared_animation_frame_falls_back_to_desktop_static_pose(self):
+        import pet
+
+        state = copy.deepcopy(pet.DEFAULT_STATE)
+        state.update({"x": 100, "y": 100, "tutorial_completed": True})
+        window = pet.PetWindow(state)
+        try:
+            window.refresh_pet_assets("ice_cream")
+
+            shared = window.shared_animation_frame()
+
+            self.assertIsNotNone(shared)
+            self.assertEqual(shared["name"], "idle")
+            self.assertFalse(shared["pixmap"].isNull())
+        finally:
+            window.close()
+
+    def test_place_initial_prefers_active_pet_desktop_position(self):
+        import pet
+        from petpet.app import state as app_state
+
+        state = app_state.ensure_state_schema(
+            copy.deepcopy(pet.DEFAULT_STATE),
+            pet.ai.DEFAULT_PET_NAME,
+            pet.ai.normalize_pet_name,
+        )
+        state.update({"x": 700, "y": 500, "tutorial_completed": True})
+        state["pets"]["lunch_meat"]["desktop_position"] = [100, 120]
+
+        window = pet.PetWindow(state)
+        try:
+            self.assertEqual(window.pos().x(), 100)
+            self.assertEqual(window.pos().y(), 120)
+        finally:
+            window.close()
+
+    def test_set_active_pet_rejection_does_not_refresh_or_mutate_state(self):
+        import pet
+        from petpet.app import state as app_state
+
+        state = app_state.ensure_state_schema(
+            copy.deepcopy(pet.DEFAULT_STATE),
+            pet.ai.DEFAULT_PET_NAME,
+            pet.ai.normalize_pet_name,
+        )
+        state.update({"x": 100, "y": 100, "tutorial_completed": True})
+        window = pet.PetWindow(state)
+        try:
+            rejection = {"ok": False, "message": "not owned"}
+            window._set_active_pet_callback = lambda _pet_id: rejection
+            window.refresh_pet_assets = MagicMock()
+
+            result = window.set_active_pet("ice_cream")
+
+            self.assertIs(result, rejection)
+            self.assertEqual(state["active_pet_id"], "lunch_meat")
+            self.assertEqual(window.current_pet_id, "lunch_meat")
+            window.refresh_pet_assets.assert_not_called()
+        finally:
+            window.close()
+
+    def test_set_active_pet_without_callback_rejects_without_mutating_state(self):
+        import pet
+        from petpet.app import state as app_state
+
+        state = app_state.ensure_state_schema(
+            copy.deepcopy(pet.DEFAULT_STATE),
+            pet.ai.DEFAULT_PET_NAME,
+            pet.ai.normalize_pet_name,
+        )
+        state.update({"x": 100, "y": 100, "tutorial_completed": True})
+        window = pet.PetWindow(state)
+        try:
+            window.refresh_pet_assets = MagicMock()
+
+            result = window.set_active_pet("ice_cream")
+
+            self.assertFalse(result)
+            self.assertEqual(state["active_pet_id"], "lunch_meat")
+            self.assertEqual(window.current_pet_id, "lunch_meat")
+            window.refresh_pet_assets.assert_not_called()
+        finally:
+            window.close()
+
+    def test_set_active_pet_captures_the_old_profile_through_its_callback(self):
+        import pet
+        from petpet.app import state as app_state
+
+        state = app_state.ensure_state_schema(
+            copy.deepcopy(pet.DEFAULT_STATE),
+            pet.ai.DEFAULT_PET_NAME,
+            pet.ai.normalize_pet_name,
+        )
+        state.update({"x": 100, "y": 100, "tutorial_completed": True})
+        state["mood"] = 91
+        window = pet.PetWindow(state)
+        try:
+            window._set_active_pet_callback = (
+                lambda pet_id: app_state.bind_active_pet(state, pet_id)
+            )
+
+            window.set_active_pet("ice_cream")
+
+            self.assertEqual(state["pets"]["lunch_meat"]["mood"], 91)
+            self.assertEqual(state["active_pet_id"], "ice_cream")
+            self.assertEqual(window.current_pet_id, "ice_cream")
+            self.assertEqual(window.pose, pet.POSE["idle"])
+        finally:
+            window.close()
+
+    def test_set_active_pet_forwards_transaction_without_refreshing_assets(self):
+        import pet
+
+        window = pet.PetWindow.__new__(pet.PetWindow)
+        window._set_active_pet_callback = MagicMock(
+            return_value={"ok": True, "pet_id": "ice_cream"}
+        )
+        window.refresh_pet_assets = MagicMock()
+
+        result = window.set_active_pet("ice_cream")
+
+        self.assertEqual(result["pet_id"], "ice_cream")
+        window._set_active_pet_callback.assert_called_once_with("ice_cream")
+        window.refresh_pet_assets.assert_not_called()
+
+    def test_set_active_pet_forwards_unknown_raw_id_for_transaction_rejection(self):
+        import pet
+
+        window = pet.PetWindow.__new__(pet.PetWindow)
+        window._current_pet_id = "lunch_meat"
+        received_pet_ids = []
+
+        def reject_unknown_pet(pet_id):
+            received_pet_ids.append(pet_id)
+            return {"ok": False, "pet_id": pet_id}
+
+        window._set_active_pet_callback = reject_unknown_pet
+
+        result = window.set_active_pet("unknown_pet")
+
+        self.assertEqual(received_pet_ids, ["unknown_pet"])
+        self.assertEqual(result, {"ok": False, "pet_id": "unknown_pet"})
+        self.assertEqual(window._current_pet_id, "lunch_meat")
+
     def test_menu_warmup_constructs_hidden_windows_before_native_show(self):
         from petpet.app.pet_window import PetWindow
 

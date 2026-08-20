@@ -17,6 +17,106 @@ def fresh_state(**overrides):
     return progression.ensure_progression(state)
 
 
+def test_purchase_pet_uses_shared_coins_once():
+    state = {
+        "player": {
+            "pet_coins": 900,
+            "owned_pet_ids": ["lunch_meat"],
+        },
+        "owned_pet_ids": ["lunch_meat"],
+        "pets": {"lunch_meat": {"pet_name": "午餐肉"}},
+    }
+
+    result = progression.purchase_pet(state, "ice_cream")
+
+    assert result["ok"] is True
+    assert result["price"] == 760
+    assert result["original_price"] == 1000
+    assert result["discount"] == 0.76
+    assert state["player"]["pet_coins"] == 140
+    assert state["owned_pet_ids"] == ["lunch_meat", "ice_cream"]
+    assert "ice_cream" not in state["pets"]
+    assert progression.purchase_pet(state, "ice_cream")["ok"] is False
+
+
+def test_available_pet_ids_preserve_registry_order():
+    assert progression.available_pet_ids() == (
+        "lunch_meat", "ice_cream"
+    )
+
+
+def test_pet_owned_reads_the_shared_owned_pet_ids():
+    state = {"owned_pet_ids": ["lunch_meat"]}
+
+    assert progression.pet_owned(state, "lunch_meat") is True
+    assert progression.pet_owned(state, "ice_cream") is False
+
+
+def test_pet_owned_does_not_normalize_render_state():
+    state = {"owned_pet_ids": ("lunch_meat", "lunch_meat", 7)}
+
+    assert progression.pet_owned(state, "lunch_meat") is True
+    assert state == {"owned_pet_ids": ("lunch_meat", "lunch_meat", 7)}
+
+
+def test_purchase_pet_keeps_the_legacy_coin_facade_in_sync():
+    state = {
+        "player": {"pet_coins": 760},
+        "pet_coins": 760,
+        "owned_pet_ids": ["lunch_meat"],
+    }
+
+    progression.purchase_pet(state, "ice_cream")
+
+    assert state["player"]["pet_coins"] == 0
+    assert state["pet_coins"] == 0
+
+
+def test_first_purchase_discount_only_applies_to_pets():
+    state = fresh_state(pet_coins=2000)
+    result = progression.purchase_pet(state, "ice_cream")
+    assert result["price"] == 760
+    assert state["pet_coins"] == 1240
+    assert state["shop_first_purchase_discounts"]["pets"] is False
+
+    outfit = progression.purchase_outfit(state, "dinosaur_suit")
+    assert outfit["price"] == 680
+    home = progression.purchase_home_decoration(state, "home_sofa")
+    assert home["price"] == 240
+    assert state["pet_coins"] == 320
+
+
+def test_old_outfit_and_home_discount_flags_are_ignored():
+    state = fresh_state(
+        pet_coins=1000,
+        shop_first_purchase_discounts={
+            "pets": True,
+            "outfits": True,
+            "home": True,
+        },
+    )
+    assert progression.purchase_outfit(state, "dinosaur_suit")["price"] == 680
+    assert progression.purchase_home_decoration(state, "home_rug")["price"] == 120
+
+
+def test_outfit_and_home_purchases_use_and_sync_shared_player_coins():
+    outfit_state = fresh_state(
+        pet_coins=0,
+        player={"pet_coins": 680},
+    )
+    assert progression.purchase_outfit(outfit_state, "dinosaur_suit")["ok"] is True
+    assert outfit_state["player"]["pet_coins"] == 0
+    assert outfit_state["pet_coins"] == 0
+
+    home_state = fresh_state(
+        pet_coins=0,
+        player={"pet_coins": 240},
+    )
+    assert progression.purchase_home_decoration(home_state, "home_sofa")["ok"] is True
+    assert home_state["player"]["pet_coins"] == 0
+    assert home_state["pet_coins"] == 0
+
+
 class ProgressionMigrationTests(unittest.TestCase):
     def test_old_save_is_extended_without_losing_existing_values(self):
         state = {

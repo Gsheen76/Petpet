@@ -40,7 +40,7 @@ from petpet.ui.common import independent_font_px, independent_pixel_font
 class ChatWindow(QWidget):
     """A small chat panel that floats beside the pet.
     Sheen replies stream in token-by-token via the bridge."""
-    def __init__(self, pet_window, memory_profile="desktop", *,
+    def __init__(self, pet_window, pet_id="lunch_meat", *, memory_profile=None,
                  bridge_provider, confirm_dialog_factory, popup_menu_factory,
                  save_state_callback, progression_service):
         super().__init__()
@@ -51,8 +51,11 @@ class ChatWindow(QWidget):
         self._save_state_callback = save_state_callback
         self._progression_service = progression_service
         self.s = pet_window.settings  # live settings reference
-        self.memory_profile = ai.normalize_memory_profile(memory_profile)
-        self.mem = ai.load_memory(profile=self.memory_profile)
+        self.pet_id = ai.normalize_memory_pet_id(
+            memory_profile if memory_profile is not None else pet_id
+        )
+        self.memory_profile = self.pet_id  # compatibility attribute
+        self.mem = ai.load_memory(pet_id=self.pet_id)
         self.busy = False
         self._pending_user = None
         self._pending_image = None
@@ -69,20 +72,35 @@ class ChatWindow(QWidget):
         self._apply_style()
 
     def _pet_name(self):
+        facade_name = ai.normalize_pet_name(
+            getattr(self.pet, "pet_name", "")
+        )
+        if facade_name != ai.DEFAULT_PET_NAME:
+            return facade_name
         profiles = self.pet.state.get("pets", {})
-        profile = profiles.get(self.memory_profile, {}) \
+        profile = profiles.get(self.pet_id, {}) \
             if isinstance(profiles, dict) else {}
         if isinstance(profile, dict) and profile.get("pet_name"):
             return ai.normalize_pet_name(profile["pet_name"])
-        return self.pet.pet_name
+        return ai.normalize_pet_name(
+            self.mem.get("pet_name") or self.pet.pet_name
+        )
 
-    def set_memory_profile(self, profile):
+    def set_pet_id(self, pet_id):
         """Switch the window to one pet's independent conversation history."""
-        self.memory_profile = ai.normalize_memory_profile(profile)
-        self.mem = ai.load_memory(profile=self.memory_profile)
+        if self.busy:
+            return False
+        self.pet_id = ai.normalize_memory_pet_id(pet_id)
+        self.memory_profile = self.pet_id
+        self.mem = ai.load_memory(pet_id=self.pet_id)
         if getattr(self, "_ui_built", False):
             self.refresh_pet_name()
             self._set_log_messages(self._history_messages())
+        return True
+
+    def set_memory_profile(self, profile):
+        """Compatibility alias for switching by the old profile name."""
+        self.set_pet_id(profile)
 
     def _chat_font_px(self):
         return independent_font_px(self.s["chat_font_size"])
@@ -1058,7 +1076,8 @@ class ChatWindow(QWidget):
         err = None
         for kind, payload in ai.chat_stream(
                 user_text, mem=self.mem,
-                pet_name=self._pet_name(), image_attachment=image_attachment):
+                pet_name=self._pet_name(), image_attachment=image_attachment,
+                pet_id=self.pet_id):
             if kind == "token":
                 full.append(payload)
                 self._bridge_provider().token.emit(payload)
@@ -1108,14 +1127,14 @@ class ChatWindow(QWidget):
             if self._pending_image else None
         ai.append_history(
             self.mem, "user", self._pending_user, image=image,
-            profile=self.memory_profile,
+            pet_id=self.pet_id,
         )
         ai.append_history(
-            self.mem, "assistant", full, profile=self.memory_profile
+            self.mem, "assistant", full, pet_id=self.pet_id
         )
         self._progression_service.record_action(self.pet.state, "ai_replies")
         self._save_state_callback(self.pet.state)
-        self.mem = ai.load_memory(profile=self.memory_profile)
+        self.mem = ai.load_memory(pet_id=self.pet_id)
         self._pending_user = None
         self.clear_pending_image(keep_history=True)
         self._streaming = ""
@@ -1170,14 +1189,14 @@ class ChatWindow(QWidget):
                 if self._pending_image else None
             ai.append_history(
                 self.mem, "user", self._pending_user, image=image,
-                profile=self.memory_profile,
+                pet_id=self.pet_id,
             )
             ai.append_history(
-                self.mem, "assistant", reply, profile=self.memory_profile
+                self.mem, "assistant", reply, pet_id=self.pet_id
             )
             self._progression_service.record_action(self.pet.state, "ai_replies")
             self._save_state_callback(self.pet.state)
-        self.mem = ai.load_memory(profile=self.memory_profile)
+        self.mem = ai.load_memory(pet_id=self.pet_id)
         self._pending_user = None
         self.clear_pending_image(keep_history=True)
         self._streaming = ""
@@ -1217,7 +1236,7 @@ class ChatWindow(QWidget):
         if dialog.exec_() == QDialog.Accepted:
             # wipe memory
             try:
-                path = ai.memory_path(self.memory_profile)
+                path = ai.memory_path(self.pet_id)
                 if os.path.exists(path):
                     os.remove(path)
             except Exception:
@@ -1226,7 +1245,7 @@ class ChatWindow(QWidget):
             self.clear_pending_image()
             self.mem = ai._default_memory()
             self.mem["pet_name"] = self._pet_name()
-            ai.save_memory(self.mem, profile=self.memory_profile)
+            ai.save_memory(self.mem, pet_id=self.pet_id)
             self._set_log_messages([
                 ("assistant", "汪？你是…我们重新认识一下吧。")
             ])

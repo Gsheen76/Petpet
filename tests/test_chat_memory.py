@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import buddy_ai as ai
+from petpet.chat import api
 from petpet.chat import memory
 
 
@@ -17,6 +18,63 @@ def default_memory():
 
 
 class ChatMemoryStoreTests(unittest.TestCase):
+    def test_pet_memories_use_separate_files(self):
+        with tempfile.TemporaryDirectory() as folder:
+            with patch.object(api, "DATA_DIR", folder):
+                lunch = {
+                    "pet_name": "午餐肉",
+                    "history": [{"role": "user", "content": "肉松"}],
+                }
+                ice = {
+                    "pet_name": "冰淇淋",
+                    "history": [{"role": "user", "content": "甜筒"}],
+                }
+
+                api.save_memory(lunch, "lunch_meat")
+                api.save_memory(ice, "ice_cream")
+
+                self.assertEqual(
+                    api.load_memory("lunch_meat")["history"][0]["content"],
+                    "肉松",
+                )
+                self.assertEqual(
+                    api.load_memory("ice_cream")["history"][0]["content"],
+                    "甜筒",
+                )
+                self.assertTrue((Path(folder) / "memory.json").exists())
+                self.assertTrue((Path(folder) / "memory-ice_cream.json").exists())
+
+    def test_old_home_memory_is_migrated_to_lunch_meat(self):
+        with tempfile.TemporaryDirectory() as folder:
+            with patch.object(api, "DATA_DIR", folder):
+                (Path(folder) / "memory-home.json").write_text(
+                    '{"history": [{"role": "assistant", "content": "旧记录"}]}',
+                    encoding="utf-8",
+                )
+
+                self.assertIn("旧记录", str(api.load_memory("lunch_meat")))
+                self.assertEqual(
+                    api.load_memory("lunch_meat")["history"][0]["content"],
+                    "旧记录",
+                )
+                self.assertTrue((Path(folder) / "memory.json").exists())
+
+    def test_pet_id_normalization_preserves_registered_ids_and_aliases(self):
+        self.assertEqual(api.normalize_memory_pet_id("lunch_meat"), "lunch_meat")
+        self.assertEqual(api.normalize_memory_pet_id("ice_cream"), "ice_cream")
+        self.assertEqual(api.normalize_memory_pet_id("desktop"), "lunch_meat")
+        self.assertEqual(api.normalize_memory_pet_id("home"), "lunch_meat")
+        self.assertEqual(api.normalize_memory_pet_id("unknown"), "lunch_meat")
+
+    def test_set_pet_name_updates_only_selected_pet_memory(self):
+        with tempfile.TemporaryDirectory() as folder:
+            with patch.object(api, "DATA_DIR", folder):
+                api.set_pet_name("肉松", "lunch_meat")
+                api.set_pet_name("甜筒", "ice_cream")
+
+                self.assertEqual(api.load_memory("lunch_meat")["pet_name"], "肉松")
+                self.assertEqual(api.load_memory("ice_cream")["pet_name"], "甜筒")
+
     def test_first_home_load_seeds_desktop_memory_once(self):
         with tempfile.TemporaryDirectory() as folder:
             desktop_path = Path(folder) / "memory.json"
@@ -64,39 +122,39 @@ class ChatMemoryStoreTests(unittest.TestCase):
             self.assertEqual(reloaded["pet_name"], "豆包")
             self.assertEqual(reloaded["history"][0]["content"], "回家啦")
 
-    def test_invalid_profile_falls_back_to_desktop(self):
-        self.assertEqual(memory.normalize_profile("home"), "home")
-        self.assertEqual(memory.normalize_profile("desktop"), "desktop")
-        self.assertEqual(memory.normalize_profile("unknown"), "desktop")
-        self.assertEqual(memory.normalize_profile(None), "desktop")
+    def test_old_profile_keyword_aliases_lunch_meat(self):
+        with tempfile.TemporaryDirectory() as folder:
+            with patch.object(api, "DATA_DIR", folder):
+                api.save_memory(
+                    {**default_memory(), "history": [{"role": "user", "content": "旧入口"}]},
+                    profile="home",
+                )
+
+                self.assertEqual(
+                    api.load_memory(profile="desktop")["history"][0]["content"],
+                    "旧入口",
+                )
 
 
 class BuddyAiMemoryCompatibilityTests(unittest.TestCase):
-    def test_profile_aware_append_keeps_histories_independent(self):
+    def test_pet_id_aware_append_keeps_histories_independent(self):
         with tempfile.TemporaryDirectory() as folder:
-            desktop_path = str(Path(folder) / "memory.json")
-            home_path = str(Path(folder) / "memory-home.json")
-            with (
-                patch.object(ai, "MEMORY_PATH", desktop_path),
-                patch.object(ai, "HOME_MEMORY_PATH", home_path, create=True),
-            ):
-                desktop = ai.load_memory(profile="desktop")
-                home = ai.load_memory(profile="home")
-                ai.append_history(
-                    desktop, "user", "桌面消息", profile="desktop"
-                )
-                ai.append_history(home, "user", "小屋消息", profile="home")
+            with patch.object(ai, "DATA_DIR", folder):
+                lunch = ai.load_memory(pet_id="lunch_meat")
+                ice = ai.load_memory(pet_id="ice_cream")
+                ai.append_history(lunch, "user", "午餐肉消息", pet_id="lunch_meat")
+                ai.append_history(ice, "user", "冰淇淋消息", pet_id="ice_cream")
 
-                saved_desktop = ai.load_memory(profile="desktop")
-                saved_home = ai.load_memory(profile="home")
+                saved_lunch = ai.load_memory(pet_id="lunch_meat")
+                saved_ice = ai.load_memory(pet_id="ice_cream")
 
             self.assertEqual(
-                [item["content"] for item in saved_desktop["history"]],
-                ["桌面消息"],
+                [item["content"] for item in saved_lunch["history"]],
+                ["午餐肉消息"],
             )
             self.assertEqual(
-                [item["content"] for item in saved_home["history"]],
-                ["小屋消息"],
+                [item["content"] for item in saved_ice["history"]],
+                ["冰淇淋消息"],
             )
 
     def test_removing_one_memory_only_deletes_its_own_thumbnails(self):
