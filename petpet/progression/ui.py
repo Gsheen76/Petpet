@@ -33,6 +33,12 @@ from petpet.app.pets import (
 from petpet.home.rendering import HOME_FURNITURE_PATHS, render_home_status_card
 
 
+PRICE_TAG_ASSET_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+    "assets", "runtime", "ui",
+).replace("\\", "/")
+
+
 PANEL_STYLE = """
     QWidget {
         background: transparent;
@@ -286,6 +292,36 @@ PANEL_STYLE = """
     }
     QScrollBar::add-line:vertical,
     QScrollBar::sub-line:vertical { height: 0; }
+"""
+
+PANEL_STYLE += f"""
+    QLabel[priceTagRole="normal"] {{
+        border-image: url({PRICE_TAG_ASSET_DIR}/shop-price-normal-v1.png) 18 28 18 28 stretch stretch;
+        color: #7a5040;
+        padding: 8px 18px;
+        font-size: 18px;
+    }}
+    QLabel[priceTagRole="sale"] {{
+        border-image: url({PRICE_TAG_ASSET_DIR}/shop-price-sale-v1.png) 18 28 18 28 stretch stretch;
+        color: #9f4437;
+        padding: 8px 18px;
+        font-size: 19px;
+        font-weight: 900;
+    }}
+    QLabel[priceTagRole="discount"] {{
+        border-image: url({PRICE_TAG_ASSET_DIR}/shop-price-discount-v1.png) 18 22 18 22 stretch stretch;
+        color: #a74439;
+        padding: 5px 12px;
+        font-size: 14px;
+        font-weight: 900;
+    }}
+    QLabel[priceTagRole="gift"] {{
+        border-image: url({PRICE_TAG_ASSET_DIR}/shop-price-gift-v1.png) 18 28 18 28 stretch stretch;
+        color: #a66a26;
+        padding: 8px 18px;
+        font-size: 18px;
+        font-weight: 900;
+    }}
 """
 
 
@@ -1225,20 +1261,35 @@ class ShopWindow(CozyProgressWindow):
         return f"{nickname}（{default}）" if nickname and nickname != default else default
 
     @staticmethod
-    def _price_labels(state, category, original_price, prefix):
+    def _price_tag(text, role, object_name):
+        label = QLabel(text)
+        label.setObjectName(object_name)
+        label.setProperty("priceTagRole", role)
+        label.setAlignment(Qt.AlignCenter)
+        return label
+
+    @classmethod
+    def _price_labels(cls, state, category, original_price, prefix):
         pricing = progression.first_purchase_price(state, category, original_price)
-        original = QLabel(f"{pricing['original_price']} Pet币")
-        original.setObjectName(f"originalPrice_{prefix}")
+        original = cls._price_tag(
+            f"原价：{pricing['original_price']} Pet币",
+            "normal", f"originalPrice_{prefix}",
+        )
         original.setProperty("priceRole", "original")
         font = original.font()
         font.setStrikeOut(True)
         original.setFont(font)
-        original.setObjectName(f"originalPrice_{prefix}")
-        discounted = QLabel(f"{pricing['price']} Pet币")
-        discounted.setObjectName(f"discountPrice_{prefix}")
+        discounted = cls._price_tag(
+            f"现价：{pricing['price']} Pet币",
+            "sale", f"discountPrice_{prefix}",
+        )
         discounted.setProperty("priceRole", "discounted")
-        badge = QLabel("-24%")
-        badge.setObjectName(f"discountBadge_{prefix}")
+        discount = round(
+            (1 - pricing["price"] / pricing["original_price"]) * 100
+        )
+        badge = cls._price_tag(
+            f"-{discount}%", "discount", f"discountBadge_{prefix}"
+        )
         badge.setProperty("discountBubble", True)
         return original, discounted, badge
 

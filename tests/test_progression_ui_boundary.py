@@ -150,12 +150,22 @@ def test_pet_discount_price_row_matches_compact_reference_style(shop_window):
     QApplication.processEvents()
     original = shop_window.findChild(ui.QLabel, "originalPrice_ice_cream")
     discounted = shop_window.findChild(ui.QLabel, "discountPrice_ice_cream")
-    assert original.text() == "1000 Pet币"
-    assert discounted.text() == "760 Pet币"
-    assert original.property("priceRole") == "original"
-    assert discounted.property("priceRole") == "discounted"
-    assert not original.text().startswith("售价")
-    assert not discounted.text().startswith("售价")
+    badge = shop_window.findChild(ui.QLabel, "discountBadge_ice_cream")
+    assert original.text() == "原价：1000 Pet币"
+    assert discounted.text() == "现价：760 Pet币"
+    assert badge.text() == "-24%"
+    assert original.property("priceTagRole") == "normal"
+    assert discounted.property("priceTagRole") == "sale"
+    assert badge.property("priceTagRole") == "discount"
+    assert original.font().strikeOut() is True
+
+
+def test_shop_price_tag_runtime_assets_exist():
+    asset_dir = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)), "assets", "runtime", "ui"
+    )
+    for name in ("normal", "sale", "discount", "gift"):
+        assert os.path.isfile(os.path.join(asset_dir, f"shop-price-{name}-v1.png"))
 
 
 def test_outfit_and_home_pages_show_original_prices_without_discount_badges(shop_window):
