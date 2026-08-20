@@ -162,12 +162,13 @@ def test_pet_discount_price_row_matches_compact_reference_style(shop_window):
     assert original.font().strikeOut() is True
 
 
-def test_shop_price_tag_runtime_assets_exist():
-    asset_dir = os.path.join(
-        os.path.dirname(os.path.dirname(__file__)), "assets", "runtime", "ui"
-    )
-    for name in ("normal", "sale", "discount", "gift"):
-        assert os.path.isfile(os.path.join(asset_dir, f"shop-price-{name}-v1.png"))
+def test_price_tags_reserve_a_text_safe_height(shop_window):
+    for role in ("normal", "sale", "discount", "gift"):
+        label = shop_window._price_tag("售价：760 Pet币", role, role)
+        assert label.minimumHeight() >= 34
+        assert label.contentsMargins().left() >= 12
+        assert label.contentsMargins().right() >= 12
+        assert label.sizeHint().height() >= label.fontMetrics().height() + 10
 
 
 def test_outfit_and_home_pages_show_original_prices_without_discount_badges(shop_window):

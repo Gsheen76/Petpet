@@ -992,7 +992,7 @@ def upgrade_description(
         )
     if upgrade_id == "sleeping":
         return (
-            f"每2秒睡眠结算：精力+{effects['sleep_energy_gain']}点，"
+            f"每2s睡眠：精力+{effects['sleep_energy_gain']}点，"
             f"饱腹-{effects['sleep_hunger_cost']:g}点"
         )
     if upgrade_id == "endurance":
