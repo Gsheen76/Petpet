@@ -206,6 +206,27 @@ class PetWindowBoundaryTests(unittest.TestCase):
 
         self.assertEqual(PetWindow.STAT_DECAY_RATE_MULTIPLIER, 0.5)
 
+    def test_sleep_at_full_energy_does_not_consume_hunger(self):
+        from petpet.app.pet_window import PetWindow
+
+        window = PetWindow.__new__(PetWindow)
+        window.settings = {}
+        window.state = {
+            "sleeping": True,
+            "energy": 100,
+            "hunger": 50,
+        }
+        window.refresh_pose_from_state = MagicMock()
+        window.say = MagicMock()
+
+        with patch(
+            "petpet.app.pet_window._dependency", return_value=lambda _state: None
+        ):
+            window.on_decay()
+
+        self.assertEqual(window.state["energy"], 100)
+        self.assertEqual(window.state["hunger"], 50)
+
     def test_window_preloads_frequent_interaction_animations(self):
         import pet
 

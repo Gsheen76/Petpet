@@ -8,7 +8,11 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt5.QtCore import QRect
 from PyQt5.QtWidgets import QApplication
 
-from parameter_tuner import PARAMETER_GROUPS, ParameterTunerWindow
+from parameter_tuner import (
+    PARAMETER_EFFECT_TIMING,
+    PARAMETER_GROUPS,
+    ParameterTunerWindow,
+)
 
 
 class FakePet:
@@ -61,6 +65,13 @@ class ParameterTunerTests(unittest.TestCase):
     def test_every_declared_parameter_has_controls(self):
         keys = [key for _, definitions in PARAMETER_GROUPS for key, *_ in definitions]
         self.assertEqual(set(keys), set(self.window.controls))
+
+    def test_fixed_sleep_balance_settings_are_not_tunable(self):
+        keys = [key for _, definitions in PARAMETER_GROUPS for key, *_ in definitions]
+
+        for key in ("decay_hunger_sleeping", "decay_energy_sleeping_gain"):
+            self.assertNotIn(key, keys)
+            self.assertNotIn(key, PARAMETER_EFFECT_TIMING)
 
     def test_window_is_readable_and_clamps_to_available_screen(self):
         self.assertGreaterEqual(self.window.width(), 1000)

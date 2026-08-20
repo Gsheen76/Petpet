@@ -59,8 +59,6 @@ PARAMETER_GROUPS = (
             ("decay_hunger", "清醒饥饿衰减", 0, 1, 0.01, "/tick", "每 2 秒减少"),
             ("decay_mood", "清醒心情衰减", 0, 1, 0.01, "/tick", "每 2 秒减少"),
             ("decay_energy", "清醒精力衰减", 0, 1, 0.5, "/tick", "每 2 秒减少"),
-            ("decay_hunger_sleeping", "睡觉饥饿衰减", 0, 1, 0.01, "/tick", "睡觉时每 2 秒减少"),
-            ("decay_energy_sleeping_gain", "睡觉精力恢复", 0, 15, 0.5, "/tick", "睡觉时每 2 秒恢复"),
             ("auto_sleep_energy_threshold", "自动睡觉阈值", 0, 80, 1, "%", "低于此精力自动休息"),
             ("auto_wake_energy_threshold", "自动醒来阈值", 20, 100, 1, "%", "高于此精力自动醒来"),
             ("autonomy_idle_weight", "自主待机权重", 0, 20, 0.5, "", "越大越常待机"),
@@ -101,8 +99,7 @@ _IMMEDIATE_EFFECT_KEYS = {
     "animation_idle_fps", "animation_walk_fps", "animation_eat_fps",
     "animation_pet_fps", "animation_play_fps", "animation_sleep_fps",
     "animation_dig_reward_fps", "decay_hunger", "decay_mood",
-    "decay_energy", "decay_hunger_sleeping",
-    "decay_energy_sleeping_gain", "feed_animation_duration",
+    "decay_energy", "feed_animation_duration",
     "coin_catch_duration", "coin_target_lifetime", "lucky_swap_1",
     "lucky_swap_2", "lucky_swap_3",
 }

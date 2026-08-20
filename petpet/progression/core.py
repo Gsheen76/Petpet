@@ -104,7 +104,7 @@ UPGRADE_DEFINITIONS = {
     "sleeping": {
         "name": "香甜睡眠",
         "icon": "☾",
-        "summary": "提高睡眠恢复的精力，并降低睡眠期间的饱腹消耗。",
+        "summary": "降低睡眠期间的饱腹消耗。",
         "max_level": 5,
         "prices": [40, 60, 90, 125, 170],
     },
@@ -858,12 +858,8 @@ def upgrade_effects(state):
     sleep_level = upgrade_level(state, "sleeping")
     xp_level = upgrade_level(state, "experience")
     endurance_level = upgrade_level(state, "endurance")
-    play_ratio = play_level / UPGRADE_DEFINITIONS["playing"]["max_level"]
-    sleep_ratio = (
-        sleep_level / UPGRADE_DEFINITIONS["sleeping"]["max_level"]
-    )
     return {
-        "pet_mood": 8 + 2 * pet_level,
+        "pet_mood": 10 + 2 * pet_level,
         # Petting/feeding upgrades improve care attributes only. Experience
         # growth is intentionally owned by the separate experience upgrade.
         "pet_xp": 3,
@@ -871,11 +867,11 @@ def upgrade_effects(state):
         "feed_mood": 6 + feed_level,
         "feed_xp": 8,
         "play_mood": 20 + 3 * play_level,
-        "play_energy_cost": int(round(12 * (1.0 - play_ratio))),
-        "play_hunger_cost": int(round(5 * (1.0 - play_ratio))),
+        "play_energy_cost": max(0, 10 - 2 * play_level),
+        "play_hunger_cost": max(0, 5 - play_level),
         "play_xp": 12 + 2 * play_level,
-        "sleep_energy_gain_bonus": 1.2 * sleep_level,
-        "sleep_hunger_multiplier": max(0.0, 1.0 - sleep_ratio),
+        "sleep_energy_gain": 4,
+        "sleep_hunger_cost": max(0, 2 - 0.4 * sleep_level),
         "xp_multiplier": 1.0 + 0.1 * xp_level,
         "awake_decay_multiplier": max(
             0.5, 1.0 - 0.1 * endurance_level
@@ -981,34 +977,23 @@ def upgrade_description(
     awake_hunger_decay = float(decay_rates.get("decay_hunger", 0.14))
     awake_energy_decay = float(decay_rates.get("decay_energy", 0.10))
     awake_mood_decay = float(decay_rates.get("decay_mood", 0.08))
-    sleeping_hunger_decay = float(
-        decay_rates.get("decay_hunger_sleeping", 0.08)
-    )
     if upgrade_id == "petting":
-        return f"每次抚摸：心情恢复 {effects['pet_mood']} 点"
+        return f"每次抚摸：心情+{effects['pet_mood']}点"
     if upgrade_id == "feeding":
         return (
-            f"每次喂食：饱腹恢复 {effects['feed_hunger']} 点，"
-            f"心情恢复 {effects['feed_mood']} 点"
+            f"每次喂食：饱腹+{effects['feed_hunger']}点，"
+            f"心情+{effects['feed_mood']}点"
         )
     if upgrade_id == "playing":
-        suffix = "（满级无消耗）" if level >= definition["max_level"] else ""
         return (
-            f"每次玩耍：心情恢复 {effects['play_mood']} 点；"
-            f"消耗精力 {effects['play_energy_cost']} 点、饱腹 "
-            f"{effects['play_hunger_cost']} 点{suffix}"
+            f"每次玩耍：心情+{effects['play_mood']}点，"
+            f"精力-{effects['play_energy_cost']}点，"
+            f"饱腹-{effects['play_hunger_cost']}点"
         )
     if upgrade_id == "sleeping":
-        suffix = "（满级不消耗饱腹）" if level >= definition["max_level"] else ""
-        hunger_cost = (
-            sleeping_hunger_decay
-            * effects["sleep_hunger_multiplier"]
-        )
         return (
-            f"每 2 秒睡眠结算：精力恢复 "
-            f"{4 + effects['sleep_energy_gain_bonus']:.1f} 点；"
-            f"饱腹消耗 {hunger_cost:.3f} 点"
-            f"{suffix}"
+            f"每2秒睡眠结算：精力+{effects['sleep_energy_gain']}点，"
+            f"饱腹-{effects['sleep_hunger_cost']:g}点"
         )
     if upgrade_id == "endurance":
         reduction = int(round(

@@ -124,7 +124,8 @@ class ProgressionWindowUiTests(unittest.TestCase):
         self.assertIn("持久活力", upgrade_text)
         self.assertIn("提高每次抚摸恢复的心情值", upgrade_text)
         self.assertIn("减缓清醒状态下的属性自然消耗", upgrade_text)
-        self.assertIn("当前加成：清醒属性消耗减缓 0%", upgrade_text)
+        self.assertIn("清醒属性消耗减缓 0%", upgrade_text)
+        self.assertNotIn("当前加成：", upgrade_text)
         self.assertNotIn("套装商店", upgrade_text)
 
     def test_outfit_purchase_and_equip_refreshes_the_pet(self):
@@ -178,6 +179,8 @@ class ProgressionWindowUiTests(unittest.TestCase):
         labels = " ".join(label.text() for label in shop.findChildren(QLabel))
         self.assertNotIn("升级后效果", labels)
         self.assertNotIn("本次强化费用", labels)
+        cards = [grid.itemAt(index).widget() for index in range(grid.count())]
+        self.assertEqual({card.height() for card in cards}, {230})
 
     def test_new_panels_use_the_larger_typography(self):
         shop = ShopWindow(self.pet, Mock())

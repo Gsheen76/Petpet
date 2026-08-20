@@ -153,7 +153,7 @@ class PetClickAnimationTests(unittest.TestCase):
             pet.PetWindow.pet_click(fake)
 
         self.assertEqual(fake.animations, [("pet", None)])
-        self.assertEqual(fake.state["mood"], 58)
+        self.assertEqual(fake.state["mood"], 60)
 
     def test_sequence_duration_is_derived_from_frames_and_fps(self):
         fake = type("FakePet", (), {

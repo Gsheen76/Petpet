@@ -1924,21 +1924,15 @@ class PetWindow(QWidget):
             self, "STAT_DECAY_RATE_MULTIPLIER", 0.5
         )
         if self.state["sleeping"]:
-            energy_gain = (
-                s["decay_energy_sleeping_gain"]
-                + effects["sleep_energy_gain_bonus"]
-            )
-            hunger_cost = (
-                s["decay_hunger_sleeping"]
-                * effects["sleep_hunger_multiplier"]
-                * decay_rate_multiplier
-            )
-            self.state["energy"] = min(
-                100, self.state["energy"] + energy_gain
-            )
-            self.state["hunger"] = max(
-                0, self.state["hunger"] - hunger_cost
-            )
+            if self.state["energy"] < 100:
+                self.state["energy"] = min(
+                    100,
+                    self.state["energy"] + effects["sleep_energy_gain"],
+                )
+                self.state["hunger"] = max(
+                    0,
+                    self.state["hunger"] - effects["sleep_hunger_cost"],
+                )
         else:
             self.state["hunger"] = max(
                 0,

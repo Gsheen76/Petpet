@@ -392,6 +392,38 @@ class AchievementTests(unittest.TestCase):
 
 
 class UpgradeBalanceTests(unittest.TestCase):
+    def test_sleeping_upgrade_summary_only_claims_hunger_cost_reduction(self):
+        summary = progression.UPGRADE_DEFINITIONS["sleeping"]["summary"]
+
+        self.assertEqual(summary, "降低睡眠期间的饱腹消耗。")
+        self.assertNotIn("精力恢复", summary)
+
+    def test_base_petting_restores_ten_mood(self):
+        effects = progression.upgrade_effects(fresh_state())
+
+        self.assertEqual(effects["pet_mood"], 10)
+
+    def test_petting_description_uses_the_shop_effect_format(self):
+        description = progression.upgrade_description(fresh_state(), "petting")
+
+        self.assertEqual(description, "每次抚摸：心情+10点")
+        self.assertNotIn("当前加成", description)
+
+    def test_level_one_playing_uses_rebalanced_costs(self):
+        state = fresh_state(upgrades={"playing": 1})
+
+        effects = progression.upgrade_effects(state)
+
+        self.assertEqual(effects["play_energy_cost"], 8)
+        self.assertEqual(effects["play_hunger_cost"], 4)
+
+    def test_level_two_sleeping_uses_rebalanced_hunger_cost(self):
+        state = fresh_state(upgrades={"sleeping": 2})
+
+        self.assertEqual(
+            progression.upgrade_effects(state)["sleep_hunger_cost"], 1.2
+        )
+
     def test_upgrade_purchase_spends_coins_and_changes_real_effect(self):
         state = fresh_state(pet_coins=100)
 
@@ -403,7 +435,7 @@ class UpgradeBalanceTests(unittest.TestCase):
         self.assertEqual(state["pet_coins"], 70)
         self.assertEqual(state["records"]["coins_spent"], 30)
         self.assertEqual(state["records"]["upgrades_purchased"], 1)
-        self.assertEqual(effects["pet_mood"], 10)
+        self.assertEqual(effects["pet_mood"], 12)
         self.assertEqual(effects["pet_xp"], 3)
 
     def test_play_and_sleep_max_levels_remove_attribute_costs(self):
@@ -415,9 +447,9 @@ class UpgradeBalanceTests(unittest.TestCase):
 
         self.assertEqual(effects["play_energy_cost"], 0)
         self.assertEqual(effects["play_hunger_cost"], 0)
-        self.assertEqual(effects["sleep_hunger_multiplier"], 0)
+        self.assertEqual(effects["sleep_hunger_cost"], 0)
         self.assertGreater(effects["play_mood"], 20)
-        self.assertGreater(effects["sleep_energy_gain_bonus"], 0)
+        self.assertEqual(effects["sleep_energy_gain"], 4)
 
 
     def test_experience_upgrade_is_capped_and_applies_to_all_xp(self):
@@ -456,11 +488,10 @@ class UpgradeBalanceTests(unittest.TestCase):
         description = progression.upgrade_description(
             state,
             "sleeping",
-            decay_rates={"decay_hunger_sleeping": 0.10},
         )
 
-        self.assertIn("精力恢复 6.4 点", description)
-        self.assertIn("饱腹消耗 0.060 点", description)
+        self.assertIn("精力+4点", description)
+        self.assertIn("饱腹-1.2点", description)
         self.assertNotIn("%", description)
 
     def test_full_upgrade_cost_stays_long_term_but_not_unreachable(self):
