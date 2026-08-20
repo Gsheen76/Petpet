@@ -6,25 +6,8 @@ project_root = Path(SPECPATH).resolve().parent
 icon_path = project_root / "build" / "Petpet.icns"
 source_text = (project_root / "version.py").read_text(encoding="utf-8")
 version = re.search(r'^VERSION\s*=\s*"([^"]+)"', source_text, re.MULTILINE).group(1)
-assets_root = project_root / "assets"
-animation_root = assets_root / "animations"
-pose_datas = [
-    (str(path), "assets/poses")
-    for path in (assets_root / "poses").glob("*.png")
-]
-asset_datas = [
-    (str(assets_root / "icons"), "assets/icons"),
-    (str(assets_root / "sounds"), "assets/sounds"),
-    (str(assets_root / "props"), "assets/props"),
-    (str(assets_root / "decorations"), "assets/decorations"),
-    (str(animation_root / "manifest.json"), "assets/animations"),
-]
-asset_datas.extend(pose_datas)
-asset_datas.extend(
-    (str(path), f"assets/animations/{path.name}")
-    for path in animation_root.iterdir()
-    if path.is_dir() and path.name != "sources"
-)
+runtime_assets_root = project_root / "assets" / "runtime"
+asset_datas = [(str(runtime_assets_root), "assets/runtime")]
 
 a = Analysis(
     [str(project_root / "pet.py")],

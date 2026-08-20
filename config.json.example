@@ -1,4 +1,9 @@
 {
-  "api_key": "在此填入你的智谱 API key",
-  "model": "glm-4-flash"
+  "api_key": "",
+  "chat_mode": "default",
+  "model": "glm-4.6v-flash",
+  "default_chat_consent": false,
+  "default_chat_install_id": "",
+  "default_chat_primary_url": "https://petpet-yun-chat-zqblnbrnfs.cn-hangzhou.fcapp.run/v1/chat",
+  "default_chat_fallback_url": "https://petpet-default-chat.gsheen-petpet.workers.dev/v1/chat"
 }

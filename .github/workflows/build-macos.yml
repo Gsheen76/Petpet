@@ -1,7 +1,17 @@
 name: Build macOS app
+run-name: Build macOS ${{ inputs.release_tag || github.ref_name }} ${{ inputs.dispatch_id }}
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Optional existing draft release tag to upload the ZIP into
+        required: false
+        type: string
+      dispatch_id:
+        description: Unique release-script invocation identifier
+        required: true
+        type: string
 
 jobs:
   build-macos:
@@ -15,10 +25,12 @@ jobs:
             arch: arm64
     runs-on: ${{ matrix.runner }}
     permissions:
-      contents: read
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
 
       - uses: actions/setup-python@v5
         with:
@@ -41,3 +53,16 @@ jobs:
           name: Petpet-macOS-${{ matrix.arch }}
           path: dist/Petpet-v*-macOS-${{ matrix.arch }}.zip
           if-no-files-found: error
+
+      - name: Upload portable zip to draft release when absent
+        if: ${{ inputs.release_tag != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          asset_path="$(find dist -maxdepth 1 -name 'Petpet-v*-macOS-${{ matrix.arch }}.zip' -print -quit)"
+          asset_name="$(basename "$asset_path")"
+          if gh release view "${{ inputs.release_tag }}" --json assets | jq -e --arg name "$asset_name" '.assets[] | select(.name == $name and .state == "uploaded" and .size > 0)' >/dev/null; then
+            echo "$asset_name already exists on the release; skipping upload."
+          else
+            gh release upload "${{ inputs.release_tag }}" "$asset_path"
+          fi

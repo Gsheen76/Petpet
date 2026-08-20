@@ -1,0 +1,17 @@
+name = "petpet-default-chat"
+main = "src/index.js"
+compatibility_date = "2026-08-11"
+workers_dev = true
+preview_urls = false
+
+[vars]
+OPENROUTER_MODEL = "openrouter/free"
+OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
+
+[[durable_objects.bindings]]
+name = "CHAT_QUOTA"
+class_name = "QuotaCounter"
+
+[exports.QuotaCounter]
+type = "durable-object"
+storage = "sqlite"

@@ -86,7 +86,7 @@ class MiniGameUiTests(unittest.TestCase):
 
         game._finish_round(7, 4)
 
-        self.assertEqual(self.pet.state["pet_coins"], 7)
+        self.assertEqual(self.pet.state["pet_coins"], 14)
         self.assertEqual(
             self.pet.state["minigame_best_scores"]["coin_catch"], 7
         )
@@ -94,9 +94,9 @@ class MiniGameUiTests(unittest.TestCase):
         save.assert_called_once_with(self.pet.state)
 
     def test_coin_rain_last_five_seconds_are_double(self):
-        self.assertEqual(CoinCatchCanvas.coin_value_for_remaining(5.01), 1)
-        self.assertEqual(CoinCatchCanvas.coin_value_for_remaining(5.0), 2)
-        self.assertEqual(CoinCatchCanvas.coin_value_for_remaining(0.1), 2)
+        self.assertEqual(CoinCatchCanvas.coin_value_for_remaining(5.01), 2)
+        self.assertEqual(CoinCatchCanvas.coin_value_for_remaining(5.0), 4)
+        self.assertEqual(CoinCatchCanvas.coin_value_for_remaining(0.1), 4)
 
     def test_lucky_paws_settles_completed_round(self):
         save = Mock()
@@ -119,7 +119,7 @@ class MiniGameUiTests(unittest.TestCase):
 
         self.assertEqual(
             [config[index]["reward"] for index in (1, 2, 3)],
-            [5, 10, 15],
+            [10, 20, 30],
         )
         self.assertGreater(config[1]["swap_duration"], config[2]["swap_duration"])
         self.assertGreater(config[2]["swap_duration"], config[3]["swap_duration"])

@@ -24,6 +24,7 @@ memory.json
 config.json
 
 # Editor and temporary files
+tmp/
 .DS_Store
 .idea/
 .vscode/
@@ -32,3 +33,7 @@ config.json
 *.log
 *.bak
 assets/poses/clean/
+debug-chat-window.png
+debug-pet-menu.png
+cloudflare-worker/.wrangler/
+.tools/

@@ -9,6 +9,7 @@ from PyQt5.QtGui import QColor, QImage, QPixmap
 from PyQt5.QtWidgets import QApplication
 
 import pet
+from petpet.app.pets import pet_asset_path
 
 
 class AnimationColorTests(unittest.TestCase):
@@ -38,6 +39,20 @@ class AnimationColorTests(unittest.TestCase):
         self.assertEqual(manifest["eat"]["fps"], 20)
         self.assertEqual(manifest["eat"]["saturation"], 0.9)
         self.assertEqual(manifest["eat"]["brightness"], 0.97)
+
+    def test_desktop_asset_lookup_uses_active_pet(self):
+        self.assertTrue(
+            pet_asset_path("ice_cream", "desktop", "idle").endswith(
+                "pets/home/poses/home-pet-idle-sit.png"
+            )
+        )
+
+    def test_missing_ice_cream_action_returns_ice_cream_idle(self):
+        self.assertTrue(
+            pet_asset_path("ice_cream", "desktop", "play").endswith(
+                "home-pet-idle-sit.png"
+            )
+        )
 
 
 if __name__ == "__main__":

@@ -47,7 +47,7 @@ class SleepAnimationAssetTests(unittest.TestCase):
         self.assertEqual(len(frames), 12)
         self.assertEqual(manifest["sleep"]["fps"], 2.4)
         self.assertTrue(manifest["sleep"]["loop"])
-        self.assertEqual(manifest["sleep"]["scale"], 0.8)
+        self.assertEqual(manifest["sleep"]["scale"], 0.7)
         self.assertTrue(manifest["sleep"]["anchor_bottom"])
 
 
