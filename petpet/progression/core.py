@@ -104,7 +104,7 @@ UPGRADE_DEFINITIONS = {
     "sleeping": {
         "name": "香甜睡眠",
         "icon": "☾",
-        "summary": "提高睡眠恢复的精力，并降低睡眠期间的饱腹消耗。",
+        "summary": "降低睡眠期间的饱腹消耗。",
         "max_level": 5,
         "prices": [40, 60, 90, 125, 170],
     },

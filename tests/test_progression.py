@@ -392,6 +392,12 @@ class AchievementTests(unittest.TestCase):
 
 
 class UpgradeBalanceTests(unittest.TestCase):
+    def test_sleeping_upgrade_summary_only_claims_hunger_cost_reduction(self):
+        summary = progression.UPGRADE_DEFINITIONS["sleeping"]["summary"]
+
+        self.assertEqual(summary, "降低睡眠期间的饱腹消耗。")
+        self.assertNotIn("精力恢复", summary)
+
     def test_base_petting_restores_ten_mood(self):
         effects = progression.upgrade_effects(fresh_state())
 
