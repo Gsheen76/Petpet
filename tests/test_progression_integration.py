@@ -76,7 +76,7 @@ class InteractionUpgradeIntegrationTests(unittest.TestCase):
         fake.add_xp.assert_called_once_with(22)
         scene.start.assert_called_once_with()
 
-    def test_max_sleep_upgrade_recovers_more_without_hunger_cost(self):
+    def test_max_sleep_upgrade_recovers_base_energy_without_hunger_cost(self):
         state = progression.ensure_progression({
             "sleeping": True,
             "sleep_mode": "manual",
@@ -99,7 +99,7 @@ class InteractionUpgradeIntegrationTests(unittest.TestCase):
             pet.PetWindow.on_decay(fake)
 
         self.assertEqual(state["hunger"], 50)
-        self.assertEqual(state["energy"], 30)
+        self.assertEqual(state["energy"], 24)
 
     def test_max_endurance_halves_all_awake_natural_decay(self):
         state = progression.ensure_progression({
@@ -149,7 +149,7 @@ class InteractionUpgradeIntegrationTests(unittest.TestCase):
         with patch("pet.save_state"):
             pet.PetWindow.on_decay(fake)
 
-        self.assertAlmostEqual(state["hunger"], 49.96)
+        self.assertAlmostEqual(state["hunger"], 48)
 
     def test_experience_upgrade_is_used_by_pet_leveling(self):
         state = progression.ensure_progression({

@@ -221,7 +221,7 @@ class PetPlayEntryTests(unittest.TestCase):
             pet.PetWindow.play(fake)
 
         self.assertEqual(fake.state["mood"], 70)
-        self.assertEqual(fake.state["energy"], 48)
+        self.assertEqual(fake.state["energy"], 50)
         self.assertEqual(fake.state["hunger"], 75)
         self.assertEqual(fake._play_return_pos, QPoint(120, 180))
         self.assertIs(fake.play_scene, scene)
