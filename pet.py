@@ -6080,7 +6080,13 @@ class TrayApp:
             )
             return
 
-        self._start_update_download(info)
+        # Defer the progress dialog until the confirmation button's mouse
+        # release has been fully processed.  Otherwise Qt can deliver that
+        # release to the newly-created dialog's Cancel button and immediately
+        # set the download cancellation event.
+        QTimer.singleShot(
+            0, lambda update_info=info: self._start_update_download(update_info)
+        )
 
     def _start_update_download(self, info):
         self._update_cancel_event = threading.Event()

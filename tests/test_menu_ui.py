@@ -101,6 +101,39 @@ class MenuUiTests(unittest.TestCase):
 
         fake_pet.recall.assert_called_once_with()
 
+    def test_update_download_starts_after_confirmation_event_finishes(self):
+        fake_pet = SimpleNamespace(pet_name="测试", say=Mock())
+        fake_tray = object.__new__(pet.TrayApp)
+        fake_tray.pet = fake_pet
+        fake_tray._update_checking = False
+        fake_tray._manual_update_check = False
+        update_info = {
+            "status": "update",
+            "version": "1.3.2",
+            "asset_name": "Petpet.exe",
+            "notes": "修复更新链路",
+            "download_url": "https://example.invalid/Petpet.exe",
+        }
+        message_box = Mock()
+        message_box_type = Mock(return_value=message_box)
+        message_box_type.Yes = pet.QMessageBox.Yes
+        message_box_type.No = pet.QMessageBox.No
+        message_box_type.Information = pet.QMessageBox.Information
+        message_box.exec_.return_value = message_box_type.Yes
+        message_box.button.return_value = Mock()
+        with patch.object(pet, "QMessageBox", message_box_type), \
+                patch.object(pet.sys, "frozen", True, create=True), \
+                patch.object(pet, "IS_WINDOWS", True), \
+                patch.object(pet.QTimer, "singleShot") as single_shot, \
+                patch.object(fake_tray, "_start_update_download") as start:
+            pet.TrayApp._on_update_result(fake_tray, update_info)
+            single_shot.assert_called_once()
+            self.assertEqual(single_shot.call_args.args[0], 0)
+            start.assert_not_called()
+            single_shot.call_args.args[1]()
+            start.assert_called_once_with(update_info)
+
+
     def test_right_long_press_stats_feature_is_removed(self):
         self.assertFalse(hasattr(pet.PetWindow, "open_stats"))
         self.assertFalse(hasattr(pet.TrayApp, "_on_right_long"))
