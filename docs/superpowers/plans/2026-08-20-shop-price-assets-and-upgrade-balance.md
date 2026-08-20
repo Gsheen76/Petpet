@@ -130,7 +130,9 @@ git commit -m "feat: add illustrated shop price tags"
 ### Task 3: 卡片布局与强化文本
 
 **Files:**
+- Modify: `petpet/progression/core.py:970-1010`
 - Modify: `petpet/progression/ui.py:1110-1216, 1644-1750, 1798-1845`
+- Modify: `tests/test_progression.py:394-465`
 - Modify: `tests/test_progression_ui.py:82-180`
 - Modify: `tests/test_progression_ui_boundary.py:53-180`
 
@@ -159,7 +161,7 @@ effect = QLabel(progression.upgrade_description(state, upgrade_id))
 card.setFixedHeight(220)
 ```
 
-让宠物、套装、家具都调用价格标签工厂；免费商品使用 gift 标签。家具继续等比缩放，固定高度必须容纳现有标题、简介、价格与按钮，不省略信息。
+让 `upgrade_description()` 统一输出已确认的 `心情+X点`、`精力-Y点` 和 `饱腹-Y点` 文案，UI 不得复制公式。宠物、套装、家具都调用价格标签工厂；免费商品使用 gift 标签。家具继续等比缩放，固定高度必须容纳现有标题、简介、价格与按钮，不省略信息。
 
 - [ ] **Step 4: 验证并提交**
 
