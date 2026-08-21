@@ -537,7 +537,13 @@ class ChatToolsTests(unittest.TestCase):
         self.assertTrue(
             by_role["assistant"].property("avatarSource").endswith(
                 os.path.join(
-                    "assets", "runtime", "pets", "desktop", "poses", "idle.png"
+                    "assets",
+                    "runtime",
+                    "pets",
+                    "lunch_meat",
+                    "desktop",
+                    "poses",
+                    "idle.png",
                 )
             )
         )

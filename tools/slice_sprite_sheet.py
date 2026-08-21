@@ -22,6 +22,12 @@ def parse_args():
     parser.add_argument("--rows", type=int, required=True)
     parser.add_argument("--frames", type=int, default=None,
                         help="Number of cells to export; defaults to all")
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Explicit output directory; defaults to assets/animations/<action>",
+    )
     return parser.parse_args()
 
 
@@ -39,7 +45,7 @@ def main():
         raise SystemExit("image size must divide evenly by columns and rows")
     cell_w = source.width // args.columns
     cell_h = source.height // args.rows
-    output_dir = ANIMATIONS_DIR / args.action
+    output_dir = args.output_dir or (ANIMATIONS_DIR / args.action)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     for index in range(frame_count):
@@ -51,6 +57,8 @@ def main():
             (column + 1) * cell_w,
             (row + 1) * cell_h,
         ))
+        alpha = frame.getchannel("A").point(lambda value: 0 if value < 8 else value)
+        frame.putalpha(alpha)
         output_path = output_dir / f"{index:03d}.png"
         frame.save(output_path)
         print(output_path)
