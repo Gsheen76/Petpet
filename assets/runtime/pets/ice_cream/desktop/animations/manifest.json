@@ -4,5 +4,17 @@
     "fps": 8,
     "loop": true,
     "fallback": "idle"
+  },
+  "sleep": {
+    "spritesheet": "../../home/poses/home-pet-sleep.png",
+    "frame_size": 640,
+    "frame_count": 8,
+    "columns": 3,
+    "content_rect": [24, 176, 592, 288],
+    "fps": 3,
+    "loop": true,
+    "fallback": "sleep",
+    "scale": 0.62,
+    "anchor_bottom": true
   }
 }

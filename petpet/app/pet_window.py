@@ -913,6 +913,12 @@ class PetWindow(QWidget):
         )
         idle_path = pet_asset_path(self.current_pet_id, "desktop", "idle")
         for name, spec in specs.items():
+            spritesheet = spec.get("spritesheet")
+            if animation_dir and isinstance(spritesheet, str) and spritesheet:
+                self._animation_frame_paths[name] = [
+                    os.path.normpath(os.path.join(animation_dir, spritesheet))
+                ]
+                continue
             folder = str(spec.get("folder", name))
             frame_dir = (
                 os.path.join(animation_dir, folder) if animation_dir else None
@@ -948,9 +954,52 @@ class PetWindow(QWidget):
         if not frame_paths:
             return
         spec = self.animation_specs.get(name, {})
+        if spec.get("spritesheet"):
+            sheet = QPixmap(frame_paths[0])
+            content_rect = spec.get("content_rect")
+            values = (
+                spec.get("frame_size"),
+                spec.get("frame_count"),
+                spec.get("columns"),
+                *(content_rect if isinstance(content_rect, (list, tuple)) else ()),
+            )
+            if (
+                sheet.isNull()
+                or not isinstance(content_rect, (list, tuple))
+                or len(content_rect) != 4
+                or len(values) != 7
+                or not all(type(value) is int and value > 0 for value in values)
+            ):
+                return
+            frame_size, frame_count, columns = values[:3]
+            content_x, content_y, content_w, content_h = values[3:]
+            if (
+                content_x + content_w > frame_size
+                or content_y + content_h > frame_size
+            ):
+                return
+            frame_rects = [
+                (
+                    (index % columns) * frame_size + content_x,
+                    (index // columns) * frame_size + content_y,
+                    content_w,
+                    content_h,
+                )
+                for index in range(frame_count)
+            ]
+            if any(
+                x + width > sheet.width() or y + height > sheet.height()
+                for x, y, width, height in frame_rects
+            ):
+                return
+            pixmaps = [
+                sheet.copy(x, y, width, height)
+                for x, y, width, height in frame_rects
+            ]
+        else:
+            pixmaps = (QPixmap(frame_path) for frame_path in frame_paths)
         frames = []
-        for frame_path in frame_paths:
-            pixmap = QPixmap(frame_path)
+        for pixmap in pixmaps:
             if pixmap.isNull():
                 continue
             if (pixmap.width() > self.ANIMATION_MAX_SIZE or

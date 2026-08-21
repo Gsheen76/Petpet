@@ -1,11 +1,13 @@
 import copy
 import os
 import unittest
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QApplication
 
 
@@ -254,6 +256,82 @@ class PetWindowBoundaryTests(unittest.TestCase):
                 {"idle", "pet", "eat", "play", "sleep", "dig_reward"},
             )
             self.assertIn("idle_strawberry", window._animation_frame_paths)
+        finally:
+            window.close()
+
+    def test_ice_cream_sleep_reuses_the_home_eight_frame_spritesheet(self):
+        import pet
+        from petpet.app.paths import ASSETS_DIR
+
+        state = copy.deepcopy(pet.DEFAULT_STATE)
+        state.update({"x": 100, "y": 100, "tutorial_completed": True})
+        window = pet.PetWindow(state)
+        try:
+            self.assertEqual(len(window.animation_frames["sleep"]), 12)
+            self.assertEqual(window.animation_specs["sleep"]["fps"], 2.4)
+
+            window.refresh_pet_assets("ice_cream")
+
+            frames = window.animation_frames["sleep"]
+            spec = window.animation_specs["sleep"]
+            sheet_path = (
+                Path(ASSETS_DIR)
+                / "pets"
+                / "ice_cream"
+                / "home"
+                / "poses"
+                / "home-pet-sleep.png"
+            )
+            expected_first = QPixmap(str(sheet_path)).copy(24, 176, 592, 288)
+            expected_first = expected_first.scaled(
+                384, 384, Qt.KeepAspectRatio, Qt.SmoothTransformation
+            )
+
+            self.assertEqual(len(frames), 8)
+            self.assertEqual(spec["fps"], 3)
+            self.assertAlmostEqual(spec["scale"], 0.62)
+            self.assertTrue(spec["anchor_bottom"])
+            self.assertEqual(frames[0].size(), expected_first.size())
+            self.assertEqual(frames[0].toImage(), expected_first.toImage())
+        finally:
+            window.close()
+
+    def test_malformed_spritesheet_metadata_uses_the_static_fallback(self):
+        import pet
+
+        state = copy.deepcopy(pet.DEFAULT_STATE)
+        state.update({"x": 100, "y": 100, "tutorial_completed": True})
+        window = pet.PetWindow(state)
+        try:
+            window.refresh_pet_assets("ice_cream")
+            valid_spec = dict(window.animation_specs["sleep"])
+            malformed_values = (
+                {"frame_size": True},
+                {"frame_count": True},
+                {"columns": True},
+                {"content_rect": [0, 176, 592, 288]},
+                {"content_rect": [24, 176, 617, 288]},
+                {"columns": 4},
+            )
+            for malformed in malformed_values:
+                with self.subTest(malformed=malformed):
+                    window.animation_specs["sleep"] = {
+                        **valid_spec,
+                        **malformed,
+                    }
+                    window.animation_frames.pop("sleep", None)
+                    window._load_animation("sleep")
+                    self.assertNotIn("sleep", window.animation_frames)
+
+            window.state["sleeping"] = True
+            shared = window.shared_animation_frame()
+
+            self.assertIsNotNone(shared)
+            self.assertEqual(shared["name"], "sleep")
+            self.assertEqual(
+                shared["pixmap"].cacheKey(),
+                window.pose_pixmaps[pet.POSE["sleep"]].cacheKey(),
+            )
         finally:
             window.close()
 
