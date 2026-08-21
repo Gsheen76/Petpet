@@ -22,7 +22,8 @@
     "price": 760,
     "preview": "pets/ice_cream/home/poses/home-pet-idle-sit.png",
     "desktop": {
-      "idle": "pets/ice_cream/home/poses/home-pet-idle-sit.png"
+      "root": "pets/ice_cream/desktop",
+      "animations_manifest": "pets/ice_cream/desktop/animations/manifest.json"
     },
     "home": {
       "root": "pets/ice_cream/home",

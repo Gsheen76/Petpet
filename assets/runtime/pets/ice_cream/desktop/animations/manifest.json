@@ -1,0 +1,8 @@
+{
+  "idle": {
+    "folder": "idle",
+    "fps": 8,
+    "loop": true,
+    "fallback": "idle"
+  }
+}

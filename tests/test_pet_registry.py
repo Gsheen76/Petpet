@@ -47,7 +47,7 @@ def test_valid_action_is_selected_before_current_pet_idle(monkeypatch, tmp_path)
 
 def test_missing_action_falls_back_to_current_pet_idle():
     assert pet_asset_path("ice_cream", "desktop", "play").endswith(
-        "pets/ice_cream/home/poses/home-pet-idle-sit.png"
+        "pets/ice_cream/desktop/poses/idle.png"
     )
 
 
@@ -106,5 +106,5 @@ def test_nested_path_fields_are_validated(tmp_path, monkeypatch):
 
 def test_asset_path_does_not_escape_runtime_assets():
     assert pet_asset_path("ice_cream", "desktop", "../manifest.json").endswith(
-        "pets/ice_cream/home/poses/home-pet-idle-sit.png"
+        "pets/ice_cream/desktop/poses/idle.png"
     )

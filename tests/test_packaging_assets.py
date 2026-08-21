@@ -2,6 +2,7 @@ from pathlib import Path
 import json
 import unittest
 
+from PIL import Image
 from PyQt5.QtGui import QImage
 
 
@@ -84,6 +85,34 @@ class PackagingAssetTests(unittest.TestCase):
         self.assertTrue(image.hasAlphaChannel())
         self.assertEqual(image.size().width(), 1920)
         self.assertEqual(image.size().height(), 1920)
+
+    def test_ice_cream_idle_has_all_sixteen_transparent_frames(self):
+        root = Path(__file__).resolve().parents[1]
+        frame_dir = (
+            root
+            / "assets"
+            / "runtime"
+            / "pets"
+            / "ice_cream"
+            / "desktop"
+            / "animations"
+            / "idle"
+        )
+        expected_names = [f"{index:03d}.png" for index in range(16)]
+
+        self.assertTrue(frame_dir.is_dir(), str(frame_dir))
+        self.assertEqual(
+            sorted(path.name for path in frame_dir.glob("*.png")),
+            expected_names,
+        )
+        for name in expected_names:
+            with self.subTest(name=name):
+                path = frame_dir / name
+                self.assertTrue(path.is_file(), name)
+                with Image.open(path) as image:
+                    self.assertEqual(image.mode, "RGBA", name)
+                    self.assertEqual(image.size, (640, 640), name)
+                    self.assertEqual(image.getpixel((0, 0))[3], 0, name)
 
     def test_navigation_and_furniture_assets_have_runtime_domains(self):
         root = Path(__file__).resolve().parents[1] / "assets" / "runtime"
