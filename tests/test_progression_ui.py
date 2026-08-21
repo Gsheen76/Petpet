@@ -7,7 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt5.QtCore import QEvent, QPoint, QRect, Qt
 from PyQt5.QtGui import QColor
-from PyQt5.QtWidgets import QApplication, QGridLayout, QLabel, QPushButton
+from PyQt5.QtWidgets import QApplication, QFrame, QGridLayout, QLabel, QPushButton
 
 import progression
 from progression_ui import (
@@ -127,6 +127,33 @@ class ProgressionWindowUiTests(unittest.TestCase):
         self.assertIn("清醒属性消耗减缓 0%", upgrade_text)
         self.assertNotIn("当前加成：", upgrade_text)
         self.assertNotIn("套装商店", upgrade_text)
+
+    def test_pet_cards_fit_the_scroll_viewport_without_losing_information(self):
+        self.pet.state["pets"] = {
+            "lunch_meat": {"name": "午餐肉"},
+            "ice_cream": {"name": "冰淇淋"},
+        }
+        self.pet.state["owned_pet_ids"] = ["lunch_meat", "ice_cream"]
+        self.pet.state["active_pet_id"] = "ice_cream"
+        shop = ShopWindow(self.pet, Mock())
+        self.windows = [shop]
+
+        shop.refresh()
+        shop.show()
+        QApplication.processEvents()
+
+        viewport = shop.scroll.viewport()
+        for pet_id in ("lunch_meat", "ice_cream"):
+            card = shop.findChild(QFrame, f"petCard_{pet_id}")
+            self.assertIsNotNone(card)
+            right = card.mapTo(viewport, card.rect().bottomRight()).x()
+            self.assertLessEqual(right, viewport.rect().right())
+            description = shop.findChild(QLabel, f"petDescription_{pet_id}")
+            self.assertIsNotNone(description)
+            self.assertFalse(description.wordWrap())
+            self.assertIsNotNone(shop.findChild(QLabel, f"petPrice_{pet_id}"))
+            self.assertIsNotNone(shop.findChild(QLabel, f"petStatus_{pet_id}"))
+            self.assertIsNotNone(shop.findChild(QPushButton, f"petAction_{pet_id}"))
 
     def test_outfit_purchase_and_equip_refreshes_the_pet(self):
         save = Mock()

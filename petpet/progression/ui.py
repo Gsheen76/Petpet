@@ -110,7 +110,7 @@ PANEL_STYLE = """
         font-size: 18px;
         font-weight: 800;
     }
-    QLabel#levelBadge {
+    QLabel#levelBadge, QLabel[levelBadge="true"] {
         background: #ffe4d8;
         color: #a8604e;
         border-radius: 12px;
@@ -1223,6 +1223,7 @@ class ShopWindow(CozyProgressWindow):
             button.clicked.connect(
                 lambda _checked=False, selected=pet_id: self._switch_pet(selected)
             )
+        button.setObjectName(f"petAction_{pet_id}")
         discount_badge = None
         if not owned and pricing["eligible"]:
             original, discounted, discount_badge = self._price_labels(
@@ -1233,26 +1234,18 @@ class ShopWindow(CozyProgressWindow):
         else:
             price_row.addWidget(price_label)
         price_row.addStretch(1)
+        price_row.addWidget(button)
         info.addLayout(price_row)
         layout.addLayout(info, 1)
 
-        actions = QFrame()
-        actions.setObjectName(f"petActions_{pet_id}")
-        actions.setFixedWidth(180)
-        actions_layout = QVBoxLayout(actions)
-        actions_layout.setContentsMargins(0, 0, 0, 0)
-        actions_layout.setSpacing(8)
-        actions_layout.setAlignment(Qt.AlignRight)
         if discount_badge is not None:
-            actions_layout.addWidget(discount_badge, 0, Qt.AlignRight)
+            title_row.addWidget(discount_badge, 0, Qt.AlignRight)
         status_badge = QLabel(
             "使用中" if active else ("已拥有" if owned else "待解锁")
         )
-        status_badge.setObjectName("levelBadge")
-        actions_layout.addWidget(status_badge, 0, Qt.AlignRight)
-        actions_layout.addStretch(1)
-        actions_layout.addWidget(button, 0, Qt.AlignRight)
-        layout.addWidget(actions)
+        status_badge.setObjectName(f"petStatus_{pet_id}")
+        status_badge.setProperty("levelBadge", True)
+        title_row.addWidget(status_badge, 0, Qt.AlignRight)
         return card
 
     @staticmethod
