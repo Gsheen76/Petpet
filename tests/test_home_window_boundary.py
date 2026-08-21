@@ -49,6 +49,19 @@ def test_lunch_meat_home_uses_desktop_idle_asset(home_window):
     )
 
 
+def test_lunch_meat_home_uses_its_sleep_pose_at_the_home_sleep_scale(home_window):
+    home_window.refresh_pet_assets("lunch_meat")
+    home_window.home_pet.state = "sleeping"
+
+    spec = home_window.home_pet_render_spec(now=0.0)
+
+    assert home_window.home_pet_asset_state()["sleep"] == "home"
+    assert spec.visual_scale == 0.50
+    assert spec.pixmap.toImage() == QPixmap(
+        "assets/runtime/pets/lunch_meat/desktop/poses/sleep.png"
+    ).toImage()
+
+
 def test_missing_home_walk_falls_back_to_active_pet_idle(home_window):
     home_window.refresh_pet_assets("lunch_meat")
 

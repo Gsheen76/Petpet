@@ -10,7 +10,8 @@
       "animations_manifest": "pets/lunch_meat/desktop/animations/manifest.json"
     },
     "home": {
-      "idle": "pets/lunch_meat/desktop/poses/idle.png"
+      "idle": "pets/lunch_meat/desktop/poses/idle.png",
+      "sleep": "pets/lunch_meat/desktop/poses/sleep.png"
     }
   },
   "ice_cream": {
