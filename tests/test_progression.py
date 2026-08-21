@@ -45,6 +45,20 @@ def test_available_pet_ids_preserve_registry_order():
     )
 
 
+def test_equipped_outfit_is_inactive_for_a_different_selected_pet():
+    state = fresh_state(
+        active_pet_id="ice_cream",
+        owned_outfits=["dinosaur_suit"],
+        equipped_outfit="dinosaur_suit",
+    )
+
+    assert progression.equipped_outfit(state) is None
+    assert state["equipped_outfit"] == "dinosaur_suit"
+
+    state["active_pet_id"] = "lunch_meat"
+    assert progression.equipped_outfit(state) == "dinosaur_suit"
+
+
 def test_pet_owned_reads_the_shared_owned_pet_ids():
     state = {"owned_pet_ids": ["lunch_meat"]}
 

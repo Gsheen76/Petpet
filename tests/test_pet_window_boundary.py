@@ -100,6 +100,21 @@ class PetWindowBoundaryTests(unittest.TestCase):
 
         self.assertIsNone(window._equipped_outfit_preview())
 
+    def test_drag_preview_does_not_use_an_outfit_from_another_pet(self):
+        from petpet.app.pet_window import PetWindow
+
+        window = PetWindow.__new__(PetWindow)
+        window.state = {
+            "active_pet_id": "ice_cream",
+            "owned_outfits": ["dinosaur_suit"],
+            "equipped_outfit": "dinosaur_suit",
+        }
+        window._outfit_preview_cache = {}
+
+        with patch("petpet.app.pet_window.QPixmap") as pixmap:
+            self.assertIsNone(window._equipped_outfit_preview())
+            pixmap.assert_not_called()
+
     def test_right_mouse_release_opens_the_bubble_menu(self):
         from petpet.app.pet_window import PetWindow
 

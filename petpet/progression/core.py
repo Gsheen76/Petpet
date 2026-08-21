@@ -1040,7 +1040,13 @@ def outfit_owned(state, outfit_id):
 
 def equipped_outfit(state):
     ensure_progression(state)
-    return state["equipped_outfit"]
+    outfit_id = state["equipped_outfit"]
+    definition = OUTFIT_DEFINITIONS.get(outfit_id)
+    if definition and definition.get("pet_id", "lunch_meat") != state.get(
+        "active_pet_id", "lunch_meat"
+    ):
+        return None
+    return outfit_id
 
 
 def equipped_outfit_animation(state):
