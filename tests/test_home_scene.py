@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from PyQt5.QtCore import QPoint, QPointF, QRect, QRectF, QSize, Qt
-from PyQt5.QtGui import QImage, QPainter, QPixmap
+from PyQt5.QtGui import QColor, QImage, QPainter, QPixmap
 from PyQt5.QtWidgets import QApplication
 
 import home_scene
@@ -57,6 +57,27 @@ class HomeSceneAssetTests(unittest.TestCase):
             home_scene.home_pet_static_source_rect(transparent),
             QRect(0, 0, 40, 50),
         )
+
+    def test_animation_source_rect_unites_threshold_alpha_bounds(self):
+        first_image = QImage(100, 80, QImage.Format_ARGB32)
+        first_image.fill(Qt.transparent)
+        first_image.setPixelColor(0, 0, QColor(255, 255, 255, 1))
+        painter = QPainter(first_image)
+        painter.fillRect(QRect(20, 10, 30, 40), Qt.white)
+        painter.end()
+
+        second_image = QImage(100, 80, QImage.Format_ARGB32)
+        second_image.fill(Qt.transparent)
+        painter = QPainter(second_image)
+        painter.fillRect(QRect(40, 20, 30, 40), Qt.white)
+        painter.end()
+
+        rect = home_scene.home_pet_animation_source_rect(
+            [QPixmap.fromImage(first_image), QPixmap.fromImage(second_image)]
+        )
+
+        self.assertEqual(rect, QRect(20, 10, 50, 50))
+        self.assertEqual(home_scene.home_pet_animation_source_rect([]), QRect())
 
     def test_back_right_walk_sheet_aligns_all_eight_frames_to_one_footline(self):
         self.assertTrue(os.path.isfile(home_scene.HOME_PET_WALK_BACK_RIGHT_PATH))

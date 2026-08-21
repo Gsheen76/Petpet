@@ -7,7 +7,15 @@ import os
 from dataclasses import dataclass
 
 from PyQt5.QtCore import QPointF, QRect, QRectF, Qt
-from PyQt5.QtGui import QColor, QLinearGradient, QPainter, QPen, QPixmap, QRegion
+from PyQt5.QtGui import (
+    QBitmap,
+    QColor,
+    QLinearGradient,
+    QPainter,
+    QPen,
+    QPixmap,
+    QRegion,
+)
 
 from petpet.app.paths import (
     HOME_FURNITURE_DIR,
@@ -214,6 +222,28 @@ def home_pet_static_source_rect(pixmap: QPixmap) -> QRect:
     full = QRect(0, 0, pixmap.width(), pixmap.height())
     visible = QRegion(pixmap.mask()).boundingRect()
     return visible if not visible.isEmpty() else full
+
+
+def home_pet_animation_source_rect(frames) -> QRect:
+    """Return one thresholded alpha crop shared by an animation sequence."""
+
+    visible_union = QRect()
+    fallback = QRect()
+    for pixmap in frames or ():
+        if pixmap is None or pixmap.isNull():
+            continue
+        if fallback.isEmpty():
+            fallback = home_pet_static_source_rect(pixmap)
+        alpha_mask = pixmap.toImage().createAlphaMask(Qt.ThresholdDither)
+        visible = QRegion(QBitmap.fromImage(alpha_mask)).boundingRect()
+        if visible.isEmpty():
+            continue
+        visible_union = (
+            visible
+            if visible_union.isEmpty()
+            else visible_union.united(visible)
+        )
+    return visible_union if not visible_union.isEmpty() else fallback
 
 
 def home_pet_walk_source_rect(frame_index: int) -> QRect:
