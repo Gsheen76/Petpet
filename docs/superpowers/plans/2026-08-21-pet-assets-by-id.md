@@ -150,19 +150,29 @@ git commit -m "feat: add ice cream idle animation"
 - Consumes: 两项迁移提交及验证输出。
 - Produces: 项目规格、实施计划和 Obsidian 记录的相同最终目录/16 帧/当前宠物同步说明。
 
-- [ ] **Step 1: 更新实施结果**
+- [x] **Step 1: 更新实施结果**
 
 在四份 Markdown 中写明 `pets/<pet_id>/` 结构、冰淇淋 `000–015` 16 帧、桌面/家园读取活动宠物和午餐肉自身 idle 回退；记录实际测试计数，不预设版本号。
 
-- [ ] **Step 2: 运行最终验证**
+- [x] **Step 2: 运行最终验证**
 
 Run: `python -m pytest -q; python -m compileall -q petpet pet.py tests; git diff --check`
 
 Expected: 全量 pytest 通过；编译与空白检查退出码 0。
 
-- [ ] **Step 3: 提交记录**
+- [x] **Step 3: 提交记录**
 
 ```bash
 git add docs/superpowers/specs/2026-08-21-pet-assets-by-id-design.md docs/superpowers/plans/2026-08-21-pet-assets-by-id.md
 git commit -m "docs: record pet asset migration"
 ```
+
+## Task 3 实施记录（2026-08-21）
+
+- 已同步项目设计/计划文档与对应 Obsidian 记录，统一说明运行时宠物资源位于 `pets/<pet_id>/`，不再依赖共享 `pets/desktop` 或 `pets/home`。
+- 已记录冰淇淋桌面待机图集为按行优先导出的 16 帧 `000.png` 至 `015.png`，并说明桌面静态预览使用首帧。
+- 已记录桌面与家园都解析当前活动宠物 ID；午餐肉在家园缺少专用动作时仅回退到自身桌面待机。
+- 已记录共享场景、家具、通用音效、通用道具和 `assets/source/` 仍保持共享目录，未随本次迁移移动。
+- Task 1 提交：`4b231bd` `refactor: organize pet assets by id`
+- Task 2 提交：`bc10d63` `feat: add ice cream idle animation`
+- Task 3 最终验证：`python -m pytest -q` 为 `605 passed in 81.97s (0:01:21)`；`python -m compileall -q petpet pet.py tests` 无输出、退出码 0；`git diff --check` 退出码 0，仅有项目文档的 LF/CRLF 工作副本警告、无空白错误。

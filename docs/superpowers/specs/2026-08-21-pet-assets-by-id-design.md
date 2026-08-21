@@ -1,7 +1,7 @@
 # 宠物 ID 资源目录迁移设计
 
 **日期**：2026-08-21
-**状态**：待评审
+**状态**：已实现待发布
 
 ## 目标
 
@@ -53,3 +53,11 @@ assets/runtime/pets/
 - 回归测试覆盖两个宠物的 manifest 路径、活动宠物资源解析、冰淇淋 16 帧顺序和透明通道。
 - 打包资源测试确认新目录被包含，旧 `pets/desktop` 与 `pets/home` 运行时目录不存在。
 - 运行完整 pytest、编译和空白检查；人工确认冰淇淋桌面待机可无缝播放且无橙色底边。
+- 最终验证结果：`python -m pytest -q` 为 `605 passed in 81.97s (0:01:21)`；`python -m compileall -q petpet pet.py tests` 无输出、退出码 0；`git diff --check` 退出码 0，仅有项目文档的 LF/CRLF 工作副本警告、无空白错误。
+
+## 实施结果（2026-08-21）
+
+- 运行时宠物资源现已全部按 `assets/runtime/pets/<pet_id>/` 组织：午餐肉桌面资源位于 `pets/lunch_meat/desktop/`，冰淇淋桌面与家园资源位于 `pets/ice_cream/desktop/` 与 `pets/ice_cream/home/`。
+- 冰淇淋桌面待机图集已按行优先完整导入为 16 帧透明 PNG，文件顺序固定为 `000.png` 到 `015.png`；`000.png` 同时作为 `desktop/poses/idle.png` 静态预览。
+- 桌面窗口与家园窗口都通过当前活动宠物 ID 解析资源；午餐肉在缺少家园专用动作时，仅回退到 `pets/lunch_meat/desktop/poses/idle.png`，不会回退到冰淇淋资源。
+- 家具、场景、通用音效、通用道具和 `assets/source/` 继续保持共享目录，没有并入宠物 ID 目录。
