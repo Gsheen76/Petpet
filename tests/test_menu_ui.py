@@ -174,7 +174,11 @@ class MenuUiTests(unittest.TestCase):
         self.assertEqual(point, QPoint(1035, 199))
 
     def test_open_bubble_menu_closes_old_menu_before_replacement(self):
-        old = SimpleNamespace(_close=Mock())
+        old = SimpleNamespace(
+            _closing=False,
+            isVisible=lambda: False,
+            _close=Mock(),
+        )
         harness = SimpleNamespace(_bubble_menu=old)
 
         with patch("pet.BubbleMenu") as menu_type:
@@ -182,6 +186,31 @@ class MenuUiTests(unittest.TestCase):
 
         old._close.assert_called_once_with()
         self.assertIs(harness._bubble_menu, menu_type.return_value)
+
+    def test_open_bubble_menu_reuses_visible_active_menu(self):
+        old = SimpleNamespace(
+            _closing=False,
+            isVisible=lambda: True,
+            follow_pet=Mock(),
+            raise_=Mock(),
+            activateWindow=Mock(),
+            _close=Mock(),
+        )
+        factory = Mock()
+        harness = SimpleNamespace(
+            _bubble_menu=old,
+            _last_bubble_menu_t=0.0,
+            _create_bubble_menu=factory,
+        )
+
+        result = pet.PetWindow.open_bubble_menu(harness)
+
+        self.assertIs(result, old)
+        old.follow_pet.assert_called_once_with()
+        old.raise_.assert_called_once_with()
+        old.activateWindow.assert_called_once_with()
+        old._close.assert_not_called()
+        factory.assert_not_called()
 
     def test_open_home_scene_is_idempotent_while_already_visible(self):
         scene = SimpleNamespace(
@@ -547,6 +576,7 @@ class MenuUiTests(unittest.TestCase):
 
     def test_click_outside_closes_bubble_canvas(self):
         fake_menu = SimpleNamespace(
+            pet=object(),
             _closing=False,
             isVisible=Mock(return_value=True),
             frameGeometry=Mock(return_value=QRect(20, 20, 100, 80)),
@@ -563,8 +593,32 @@ class MenuUiTests(unittest.TestCase):
 
         fake_menu._close.assert_called_once_with()
 
+    def test_right_clicking_owner_pet_does_not_schedule_menu_close(self):
+        owner = object()
+        fake_menu = SimpleNamespace(
+            pet=owner,
+            _closing=False,
+            _prewarming=False,
+            isVisible=lambda: True,
+            frameGeometry=lambda: QRect(20, 20, 100, 80),
+            stat_bubble=None,
+            _close=Mock(),
+        )
+        event = SimpleNamespace(
+            type=lambda: QEvent.MouseButtonPress,
+            button=lambda: Qt.RightButton,
+            globalPos=lambda: QPoint(300, 300),
+        )
+
+        with patch.object(QTimer, "singleShot") as single_shot:
+            pet.BubbleMenu.eventFilter(fake_menu, owner, event)
+
+        single_shot.assert_not_called()
+        fake_menu._close.assert_not_called()
+
     def test_clicking_attribute_card_does_not_close_bubble_canvas(self):
         fake_menu = SimpleNamespace(
+            pet=object(),
             _closing=False,
             isVisible=Mock(return_value=True),
             frameGeometry=Mock(return_value=QRect(20, 500, 100, 80)),

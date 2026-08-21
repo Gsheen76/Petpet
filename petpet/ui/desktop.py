@@ -808,6 +808,13 @@ class BubbleMenu(QWidget):
             self._close()
 
     def eventFilter(self, watched, event):
+        if (
+            event.type() == QEvent.MouseButtonPress
+            and watched is self.pet
+            and hasattr(event, "button")
+            and event.button() == Qt.RightButton
+        ):
+            return False
         if (not self._closing
                 and not getattr(self, "_prewarming", False)
                 and self.isVisible()

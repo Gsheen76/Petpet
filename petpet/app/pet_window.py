@@ -2438,13 +2438,13 @@ class PetWindow(QWidget):
 
         now = time.monotonic()
         old = getattr(self, "_bubble_menu", None)
-        if (
-            old is not None
-            and now - self.__dict__.get("_last_bubble_menu_t", 0.0) < 0.25
-        ):
+        if old is not None and not getattr(old, "_closing", False):
             try:
                 if old.isVisible():
-                    return
+                    old.follow_pet()
+                    old.raise_()
+                    old.activateWindow()
+                    return old
             except RuntimeError:
                 pass
         self._last_bubble_menu_t = now
@@ -2470,6 +2470,7 @@ class PetWindow(QWidget):
             if callable(factory)
             else _dependency("BubbleMenu")(self)
         )
+        return self._bubble_menu
 
     def hide_treasure_for_menu(self):
         """Temporarily hide a pending treasure while the desktop menu is open."""
