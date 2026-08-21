@@ -7,7 +7,7 @@ import os
 from dataclasses import dataclass
 
 from PyQt5.QtCore import QPointF, QRect, QRectF, Qt
-from PyQt5.QtGui import QColor, QLinearGradient, QPainter, QPen, QPixmap
+from PyQt5.QtGui import QColor, QLinearGradient, QPainter, QPen, QPixmap, QRegion
 
 from petpet.app.paths import (
     HOME_FURNITURE_DIR,
@@ -207,11 +207,13 @@ class HomePetWalkRenderSpec:
 
 
 def home_pet_static_source_rect(pixmap: QPixmap) -> QRect:
-    """Return the full source rectangle for a non-spritesheet pixmap."""
+    """Return visible alpha bounds for a non-spritesheet pixmap."""
 
     if pixmap is None or pixmap.isNull():
         return QRect()
-    return QRect(0, 0, pixmap.width(), pixmap.height())
+    full = QRect(0, 0, pixmap.width(), pixmap.height())
+    visible = QRegion(pixmap.mask()).boundingRect()
+    return visible if not visible.isEmpty() else full
 
 
 def home_pet_walk_source_rect(frame_index: int) -> QRect:

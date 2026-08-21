@@ -39,6 +39,25 @@ class HomeSceneAssetTests(unittest.TestCase):
             QRect(64, 80, 512, 464),
         )
 
+    def test_static_source_rect_crops_transparent_padding(self):
+        pixmap = QPixmap(100, 120)
+        pixmap.fill(Qt.transparent)
+        painter = QPainter(pixmap)
+        painter.fillRect(QRect(20, 10, 60, 90), Qt.white)
+        painter.end()
+
+        self.assertEqual(
+            home_scene.home_pet_static_source_rect(pixmap),
+            QRect(20, 10, 60, 90),
+        )
+
+        transparent = QPixmap(40, 50)
+        transparent.fill(Qt.transparent)
+        self.assertEqual(
+            home_scene.home_pet_static_source_rect(transparent),
+            QRect(0, 0, 40, 50),
+        )
+
     def test_back_right_walk_sheet_aligns_all_eight_frames_to_one_footline(self):
         self.assertTrue(os.path.isfile(home_scene.HOME_PET_WALK_BACK_RIGHT_PATH))
         sheet = QPixmap(home_scene.HOME_PET_WALK_BACK_RIGHT_PATH)
@@ -216,6 +235,50 @@ class HomeSceneAssetTests(unittest.TestCase):
             places=3,
         )
         self.assertAlmostEqual(rect.bottom(), scene.home_pet.position[1])
+
+    def test_shared_idle_matches_walk_height_footline_and_shadow_center(self):
+        idle = QPixmap(100, 120)
+        idle.fill(Qt.transparent)
+        painter = QPainter(idle)
+        painter.fillRect(QRect(20, 10, 60, 90), Qt.white)
+        painter.end()
+        state = progression.ensure_progression({"active_pet_id": "ice_cream"})
+        pet = SimpleNamespace(
+            state=state,
+            width=lambda: 190,
+            height=lambda: 220,
+            current_screen_rect=lambda: QRect(0, 0, 1920, 1080),
+            shared_animation_frame=lambda: {
+                "name": "idle",
+                "pixmap": idle,
+                "frame_index": 0,
+                "spec": {},
+            },
+        )
+        scene = home_scene.HomeSceneWindow(pet, Mock())
+        self.addCleanup(scene.close)
+        scene.home_pet.state = "idle"
+        scene.home_pet.direction = "front_right"
+
+        idle_spec = scene.home_pet_render_spec(now=0.0)
+        idle_rect = scene.home_pet_render_rect(idle_spec)
+        walk_rect = scene.home_pet_render_rect(
+            scene.home_pet_walk_render_spec(now=0.0)
+        )
+        shadow = home_scene.home_pet_shadow_rect(
+            idle_rect,
+            (
+                idle_spec.contact_center_x,
+                idle_spec.contact_width,
+                idle_spec.contact_foot_y,
+            ),
+        )
+
+        self.assertEqual(idle_spec.source_rect, QRect(20, 10, 60, 90))
+        self.assertAlmostEqual(idle_rect.height(), walk_rect.height())
+        self.assertAlmostEqual(idle_rect.bottom(), walk_rect.bottom())
+        self.assertAlmostEqual(shadow.center().x(), idle_rect.center().x())
+        self.assertLess(shadow.bottom(), idle_rect.bottom())
 
     def test_back_directions_select_the_back_sheet_and_mirror_only_left(self):
         state = progression.ensure_progression({})
