@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWidgets import QApplication, QLabel
 
 import buddy_ai as ai
 import pet
@@ -117,6 +117,33 @@ class ChatProfileTests(unittest.TestCase):
             ["来自午餐肉", "午餐肉的回复"],
         )
         self.assertEqual(ice_history, [])
+
+    def test_ice_cream_identity_updates_title_and_existing_assistant_avatar(self):
+        self.window = pet.ChatWindow(FakePet(), pet_id="ice_cream")
+        self.window.pet.state["pet_name"] = "冰淇淋"
+        self.window.refresh_pet_name()
+        self.assertEqual(self.window.title.text().strip(), "冰淇淋")
+
+        self.window.pet.state["pet_name"] = "奶油"
+        self.window.refresh_pet_name()
+        self.assertEqual(self.window.title.text().strip(), "奶油（冰淇淋）")
+
+        ai.save_memory(
+            {**ai._default_memory(), "pet_name": "奶油", "history": [
+                {"role": "assistant", "content": "你好"},
+            ]},
+            pet_id="ice_cream",
+        )
+        self.window.set_pet_id("ice_cream")
+
+        avatar = self.window.findChild(QLabel, "chatAvatar")
+        self.assertEqual(avatar.property("avatarRole"), "assistant")
+        self.assertTrue(avatar.property("avatarSource").endswith(
+            os.path.join(
+                "assets", "runtime", "pets", "ice_cream", "desktop",
+                "poses", "idle.png",
+            )
+        ))
 
 
 if __name__ == "__main__":

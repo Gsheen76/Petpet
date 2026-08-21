@@ -515,8 +515,19 @@ class ChatToolsTests(unittest.TestCase):
 
         self.assertEqual(bubble.text(), "你好")
 
-    def test_chat_title_uses_only_pet_name(self):
-        self.assertEqual(self.window.title.text().strip(), "summer")
+    def test_assistant_bubble_collapses_blank_lines_but_user_bubble_preserves_them(self):
+        self.window._set_log_messages([
+            ("assistant", "第一句\n\n第二句"),
+            ("user", "第一句\n\n第二句"),
+        ])
+
+        bubbles = self.window.findChildren(QLabel, "chatMessage")
+
+        self.assertEqual(bubbles[0].text(), "第一句\n第二句")
+        self.assertEqual(bubbles[1].text(), "第一句\n\n第二句")
+
+    def test_chat_title_includes_real_name_when_pet_is_renamed(self):
+        self.assertEqual(self.window.title.text().strip(), "summer（午餐肉）")
 
     def test_title_bar_has_player_avatar_editor(self):
         self.assertEqual(self.window.avatar_btn.text(), "头像")

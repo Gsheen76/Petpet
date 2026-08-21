@@ -5,7 +5,7 @@ import threading
 import time
 
 from petpet.chat import api as ai
-from petpet.app.paths import POSES_DIR
+from petpet.app.pets import pet_asset_path, pet_definition
 from PyQt5.QtCore import QPoint, QRect, QRectF, QSize, Qt, QTimer
 from PyQt5.QtGui import (
     QColor,
@@ -85,6 +85,11 @@ class ChatWindow(QWidget):
         return ai.normalize_pet_name(
             self.mem.get("pet_name") or self.pet.pet_name
         )
+
+    def _chat_title(self) -> str:
+        nickname = self._pet_name()
+        real_name = pet_definition(self.pet_id).get("default_name", nickname)
+        return nickname if nickname == real_name else f"{nickname}（{real_name}）"
 
     def set_pet_id(self, pet_id):
         """Switch the window to one pet's independent conversation history."""
@@ -230,7 +235,7 @@ class ChatWindow(QWidget):
             return
 
         # title bar (draggable) — title label on the left, close button on the right
-        self.title = QLabel(f"  {self._pet_name()}")
+        self.title = QLabel(f"  {self._chat_title()}")
         self.title.setObjectName("title")
         self.title.setFixedHeight(38)
         self.title.setStyleSheet(
@@ -454,7 +459,7 @@ class ChatWindow(QWidget):
         """Refresh every visible name after onboarding or renaming."""
         name = self._pet_name()
         self.mem["pet_name"] = name
-        self.title.setText(f"  {name}")
+        self.title.setText(f"  {self._chat_title()}")
         self.clear_btn.setToolTip(f"让 {name} 忘记所有对话")
         if not self.busy:
             self.input.setPlaceholderText(f"跟 {name} 说点什么…")
@@ -810,7 +815,9 @@ class ChatWindow(QWidget):
         source = "default"
         image = QImage()
         if role == "assistant":
-            source = os.path.join(POSES_DIR, "idle.png")
+            source = os.path.normpath(
+                pet_asset_path(self.pet_id, "desktop", "idle") or ""
+            )
             image = QImage(source)
         else:
             player_path = ai.get_player_avatar_path()
