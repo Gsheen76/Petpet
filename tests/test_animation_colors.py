@@ -43,14 +43,14 @@ class AnimationColorTests(unittest.TestCase):
     def test_desktop_asset_lookup_uses_active_pet(self):
         self.assertTrue(
             pet_asset_path("ice_cream", "desktop", "idle").endswith(
-                "pets/home/poses/home-pet-idle-sit.png"
+                "pets/ice_cream/desktop/poses/idle.png"
             )
         )
 
     def test_missing_ice_cream_action_returns_ice_cream_idle(self):
         self.assertTrue(
             pet_asset_path("ice_cream", "desktop", "play").endswith(
-                "home-pet-idle-sit.png"
+                "pets/ice_cream/desktop/poses/idle.png"
             )
         )
 

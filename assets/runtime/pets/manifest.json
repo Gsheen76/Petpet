@@ -4,13 +4,13 @@
     "default_name": "午餐肉",
     "description": "元气满满的陪伴小狗，喜欢在桌面上撒娇。",
     "price": 0,
-    "preview": "pets/desktop/poses/idle.png",
+    "preview": "pets/lunch_meat/desktop/poses/idle.png",
     "desktop": {
-      "root": "pets/desktop",
-      "animations_manifest": "pets/desktop/animations/manifest.json"
+      "root": "pets/lunch_meat/desktop",
+      "animations_manifest": "pets/lunch_meat/desktop/animations/manifest.json"
     },
     "home": {
-      "idle": "pets/desktop/poses/idle.png"
+      "idle": "pets/lunch_meat/desktop/poses/idle.png"
     }
   },
   "ice_cream": {
@@ -20,15 +20,17 @@
     "original_price": 1000,
     "discount": 0.76,
     "price": 760,
-    "preview": "pets/home/poses/home-pet-idle-sit.png",
+    "preview": "pets/ice_cream/home/poses/home-pet-idle-sit.png",
     "desktop": {
-      "idle": "pets/home/poses/home-pet-idle-sit.png"
+      "root": "pets/ice_cream/desktop",
+      "animations_manifest": "pets/ice_cream/desktop/animations/manifest.json"
     },
     "home": {
-      "idle": "pets/home/poses/home-pet-idle-sit.png",
-      "walk_down": "pets/home/poses/home-pet-walk-down.png",
-      "walk_back_right": "pets/home/poses/home-pet-walk-back-right.png",
-      "sleep": "pets/home/poses/home-pet-sleep.png"
+      "root": "pets/ice_cream/home",
+      "idle": "pets/ice_cream/home/poses/home-pet-idle-sit.png",
+      "walk_down": "pets/ice_cream/home/poses/home-pet-walk-down.png",
+      "walk_back_right": "pets/ice_cream/home/poses/home-pet-walk-back-right.png",
+      "sleep": "pets/ice_cream/home/poses/home-pet-sleep.png"
     }
   }
 }

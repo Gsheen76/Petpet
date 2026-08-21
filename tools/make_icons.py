@@ -4,7 +4,13 @@ from PIL import Image, ImageDraw
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 POSES_DIR = os.path.join(
-    PROJECT_DIR, "assets", "runtime", "pets", "desktop", "poses"
+    PROJECT_DIR,
+    "assets",
+    "runtime",
+    "pets",
+    "lunch_meat",
+    "desktop",
+    "poses",
 )
 ICON_DIR = os.path.join(PROJECT_DIR, "assets", "runtime", "icons")
 os.makedirs(ICON_DIR, exist_ok=True)

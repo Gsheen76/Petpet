@@ -3,7 +3,7 @@
 一只住在桌面上的治愈系陪伴小狗。它会在桌面上走动、弹跳、撒娇、提醒你休息，也可以进入小屋布置家居；你可以通过默认免费文字聊天或自己的智谱 API 与它交流。
 
 <p align="center">
-  <img src="assets/runtime/pets/desktop/poses/idle.png" width="280" alt="Pet陪它桌面小狗">
+  <img src="assets/runtime/pets/lunch_meat/desktop/poses/idle.png" width="280" alt="Pet陪它桌面小狗">
 </p>
 
 当前版本：`v1.5.2`
@@ -102,8 +102,8 @@ macOS 请根据“ → 关于本机”显示的处理器选择 `arm64` 或 `i
 - 默认待机为 16 帧循环，目标播放频率为 8 FPS。
 - 小恐龙待机的逻辑播放序列为 `1..16, 7, 8, 9, 10, 11`，共 21 个逻辑帧；第 3、4、5 帧为 40 ms，其余帧为 160 ms。
 - 草莓小子待机的逻辑播放序列为 `5..16, 8, 9, 10, 11, 12, 13`，共 18 个逻辑帧；第 6、7 帧为 60 ms，其余帧为 160 ms。
-- 播放顺序和单帧时长由 `assets/runtime/pets/desktop/animations/manifest.json` 配置，不在窗口绘制代码中硬编码。
-- 桌面动画资源位于 `assets/runtime/pets/desktop/animations/`；专属套装待机动画位于其中的 `outfits/` 目录。
+- 播放顺序和单帧时长由 `assets/runtime/pets/lunch_meat/desktop/animations/manifest.json` 配置，不在窗口绘制代码中硬编码。
+- 桌面动画资源按宠物 ID 放在 `assets/runtime/pets/<pet_id>/desktop/animations/`；专属套装待机动画位于对应宠物动画目录的 `outfits/` 子目录。
 - 生成动画时应保持透明背景、主体位置一致、画布留出防溢出像素，并让第一帧与循环结束帧自然衔接。
 
 ## 成长、Pet币与商店
@@ -130,7 +130,7 @@ Pet币可以通过以下方式获得：
 - 商店的“🐾 宠物”栏目提供午餐肉和冰淇淋。新存档默认拥有并使用午餐肉；旧存档的现有养成数据会迁移到午餐肉。
 - 冰淇淋是可购买宠物，定价为原价 `1000 Pet币`、折扣 `0.76`、实际支付 `760 Pet币`。购买后会自动切换到冰淇淋，已拥有的宠物也可以在商店切换。
 - 等级、经验、Pet币、家具、成就、强化和小游戏进度在宠物之间共享；饱腹、心情、精力、好感、昵称、桌面/家园位置和聊天记忆按宠物分别保存。
-- 桌面和家园会显示同一只当前宠物。某个动作缺少正式资源时，使用当前宠物自己的待机图回退，不借用另一只宠物的动作。
+- 桌面和家园都会从 `assets/runtime/pets/manifest.json` 解析当前宠物，再分别读取该宠物自己的桌面或家园资源。某个动作缺少正式资源时，使用当前宠物自己的待机图回退，不借用另一只宠物的动作。
 - 午餐肉的桌面待机动画和冰淇淋的现有预览/部分动作已经接入；其余正式宠物动画资源仍在补齐，待资源上传后替换回退图即可。
 
 ### 商店栏目
@@ -146,10 +146,10 @@ Pet币可以通过以下方式获得：
 
 家园是固定在屏幕内的横向场景，小狗会在其中点击移动、四向行走、待机和自主活动。进入家园后可以通过家居商店购买家具，并在场景中拖动调整位置；背景视口会随小狗移动。
 
-家园宠物资源与桌面宠物资源独立维护：
+家园宠物资源与桌面宠物资源独立维护，并且都按宠物 ID 组织：
 
-- 桌面宠物资源：`assets/runtime/pets/desktop/`
-- 家园宠物资源：`assets/runtime/pets/home/`
+- 桌面宠物资源：`assets/runtime/pets/<pet_id>/desktop/`
+- 家园宠物资源：`assets/runtime/pets/<pet_id>/home/`
 - 家园背景：`assets/runtime/scenes/home/`
 - 家居资源：`assets/runtime/furniture/home/`
 
@@ -326,8 +326,8 @@ Petpet/
 ├── config.json.example             安全配置模板
 ├── assets/
 │   ├── runtime/                   唯一进入安装包的运行资源
-│   │   ├── pets/desktop/           桌面姿势、动画和套装
-│   │   ├── pets/home/              家园宠物姿势和动画
+│   │   ├── pets/<pet_id>/desktop/  当前宠物的桌面姿势、动画和套装
+│   │   ├── pets/<pet_id>/home/     当前宠物的家园姿势和动画
 │   │   ├── furniture/home/         家园家具
 │   │   ├── scenes/home/            家园背景和反馈资源
 │   │   ├── decorations/            兼容装饰资源
