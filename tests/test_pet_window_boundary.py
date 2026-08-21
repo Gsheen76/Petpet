@@ -319,7 +319,7 @@ class PetWindowBoundaryTests(unittest.TestCase):
         finally:
             window.close()
 
-    def test_invalid_spritesheet_is_decoded_once_until_assets_refresh(self):
+    def test_spritesheet_content_rect_may_start_at_the_cell_edge(self):
         import pet
 
         state = copy.deepcopy(pet.DEFAULT_STATE)
@@ -329,6 +329,25 @@ class PetWindowBoundaryTests(unittest.TestCase):
             window.refresh_pet_assets("ice_cream")
             window.animation_frames.pop("sleep", None)
             window.animation_specs["sleep"]["content_rect"] = [0, 176, 592, 288]
+
+            window._load_animation("sleep")
+
+            self.assertEqual(len(window.animation_frames["sleep"]), 8)
+        finally:
+            window.close()
+
+    def test_invalid_spritesheet_is_decoded_once_until_assets_refresh(self):
+        import pet
+
+        state = copy.deepcopy(pet.DEFAULT_STATE)
+        state.update({"x": 100, "y": 100, "tutorial_completed": True})
+        window = pet.PetWindow(state)
+        try:
+            window.refresh_pet_assets("ice_cream")
+            window.animation_frames.pop("sleep", None)
+            window.animation_specs["sleep"]["content_rect"] = [
+                24, 176, 617, 288
+            ]
 
             with patch(
                 "petpet.app.pet_window.QPixmap", wraps=QPixmap
@@ -358,7 +377,7 @@ class PetWindowBoundaryTests(unittest.TestCase):
                 {"frame_size": True},
                 {"frame_count": True},
                 {"columns": True},
-                {"content_rect": [0, 176, 592, 288]},
+                {"content_rect": [-1, 176, 592, 288]},
                 {"content_rect": [24, 176, 617, 288]},
                 {"columns": 4},
             )
@@ -369,6 +388,7 @@ class PetWindowBoundaryTests(unittest.TestCase):
                         **malformed,
                     }
                     window.animation_frames.pop("sleep", None)
+                    window._failed_animation_names.discard("sleep")
                     window._load_animation("sleep")
                     self.assertNotIn("sleep", window.animation_frames)
 

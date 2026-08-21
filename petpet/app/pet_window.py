@@ -973,7 +973,9 @@ class PetWindow(QWidget):
                 or not isinstance(content_rect, (list, tuple))
                 or len(content_rect) != 4
                 or len(values) != 7
-                or not all(type(value) is int and value > 0 for value in values)
+                or not all(type(value) is int for value in values)
+                or not all(value > 0 for value in (*values[:3], *values[5:]))
+                or not all(value >= 0 for value in values[3:5])
             ):
                 failed.add(name)
                 return
