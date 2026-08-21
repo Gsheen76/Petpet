@@ -16,11 +16,23 @@ class WindowsPackagingTests(unittest.TestCase):
         mac_build = (ROOT / "scripts" / "build_macos.sh").read_text(
             encoding="utf-8"
         )
+        normalized_icon_tool = " ".join(icon_tool.split())
+        idle_input = (
+            ROOT
+            / "assets"
+            / "runtime"
+            / "pets"
+            / "lunch_meat"
+            / "desktop"
+            / "poses"
+            / "idle.png"
+        )
 
         self.assertIn(
-            '"assets", "runtime", "pets", "desktop", "poses"',
-            icon_tool,
+            '"assets", "runtime", "pets", "lunch_meat", "desktop", "poses"',
+            normalized_icon_tool,
         )
+        self.assertTrue(idle_input.is_file())
         self.assertIn('"assets", "runtime", "icons"', icon_tool)
         self.assertIn("assets/runtime/icons/", mac_build)
         self.assertNotIn("cp assets/icons/", mac_build)

@@ -146,7 +146,7 @@ class PetWindow(QWidget):
         )
 
         # Optional multi-frame actions. Each action lives in
-        # assets/runtime/pets/desktop/animations/<action>/ and falls back to
+        # assets/runtime/pets/<pet_id>/desktop/animations/<action>/ and falls back to
         # the static pose above.
         self.animation_specs = {}
         self.animation_frames = {}
