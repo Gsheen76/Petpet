@@ -45,7 +45,7 @@ def test_lunch_meat_home_uses_desktop_idle_asset(home_window):
     home_window.refresh_pet_assets("lunch_meat")
 
     assert home_window.home_pet_asset_state()["idle"].endswith(
-        "pets/desktop/poses/idle.png"
+        "pets/lunch_meat/desktop/poses/idle.png"
     )
 
 

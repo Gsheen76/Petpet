@@ -56,11 +56,11 @@ class AppPathsTests(unittest.TestCase):
         self.assertEqual(Path(paths.SOURCE_ASSETS_DIR).name, "source")
         self.assertEqual(
             Path(paths.POSES_DIR).relative_to(paths.ASSETS_DIR),
-            Path("pets/desktop/poses"),
+            Path("pets/lunch_meat/desktop/poses"),
         )
         self.assertEqual(
             Path(paths.HOME_POSES_DIR).relative_to(paths.ASSETS_DIR),
-            Path("pets/home/poses"),
+            Path("pets/ice_cream/home/poses"),
         )
 
     def test_windows_data_dir_is_independent_of_executable(self):

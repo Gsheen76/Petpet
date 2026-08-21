@@ -50,6 +50,7 @@ class PackagingAssetTests(unittest.TestCase):
             / "assets"
             / "runtime"
             / "pets"
+            / "ice_cream"
             / "home"
             / "poses"
         )
@@ -72,6 +73,7 @@ class PackagingAssetTests(unittest.TestCase):
             / "assets"
             / "runtime"
             / "pets"
+            / "ice_cream"
             / "home"
             / "poses"
             / "home-pet-sleep.png"
@@ -97,7 +99,14 @@ class PackagingAssetTests(unittest.TestCase):
     def test_animation_source_art_is_not_in_runtime_assets(self):
         root = Path(__file__).resolve().parents[1] / "assets"
         self.assertTrue((root / "source/spritesheets").is_dir())
-        self.assertFalse((root / "runtime/pets/desktop/animations/sources").exists())
+        self.assertFalse(
+            (root / "runtime/pets/lunch_meat/desktop/animations/sources").exists()
+        )
+
+    def test_legacy_shared_pet_directories_do_not_exist(self):
+        root = Path(__file__).resolve().parents[1] / "assets" / "runtime" / "pets"
+        self.assertFalse((root / "desktop").exists())
+        self.assertFalse((root / "home").exists())
 
 
 if __name__ == "__main__":
