@@ -269,6 +269,8 @@ class PetWindowBoundaryTests(unittest.TestCase):
         try:
             self.assertEqual(len(window.animation_frames["sleep"]), 12)
             self.assertEqual(window.animation_specs["sleep"]["fps"], 2.4)
+            self.assertEqual(window.animation_specs["sleep"]["scale"], 0.7)
+            self.assertTrue(window.animation_specs["sleep"]["anchor_bottom"])
 
             window.refresh_pet_assets("ice_cream")
 
@@ -293,6 +295,53 @@ class PetWindowBoundaryTests(unittest.TestCase):
             self.assertTrue(spec["anchor_bottom"])
             self.assertEqual(frames[0].size(), expected_first.size())
             self.assertEqual(frames[0].toImage(), expected_first.toImage())
+        finally:
+            window.close()
+
+    def test_spritesheet_rejects_impossible_frame_count_before_iteration(self):
+        import pet
+
+        state = copy.deepcopy(pet.DEFAULT_STATE)
+        state.update({"x": 100, "y": 100, "tutorial_completed": True})
+        window = pet.PetWindow(state)
+        try:
+            window.refresh_pet_assets("ice_cream")
+            window.animation_frames.pop("sleep", None)
+            window.animation_specs["sleep"]["frame_count"] = 10 ** 100
+
+            with patch(
+                "petpet.app.pet_window.range", return_value=(), create=True
+            ) as frame_range:
+                window._load_animation("sleep")
+
+            self.assertNotIn("sleep", window.animation_frames)
+            frame_range.assert_not_called()
+        finally:
+            window.close()
+
+    def test_invalid_spritesheet_is_decoded_once_until_assets_refresh(self):
+        import pet
+
+        state = copy.deepcopy(pet.DEFAULT_STATE)
+        state.update({"x": 100, "y": 100, "tutorial_completed": True})
+        window = pet.PetWindow(state)
+        try:
+            window.refresh_pet_assets("ice_cream")
+            window.animation_frames.pop("sleep", None)
+            window.animation_specs["sleep"]["content_rect"] = [0, 176, 592, 288]
+
+            with patch(
+                "petpet.app.pet_window.QPixmap", wraps=QPixmap
+            ) as pixmap_loader:
+                first = window._animation_frame("sleep")
+                second = window._animation_frame("sleep")
+
+            self.assertIsNone(first)
+            self.assertIsNone(second)
+            self.assertEqual(pixmap_loader.call_count, 1)
+
+            window.refresh_pet_assets("ice_cream")
+            self.assertEqual(len(window.animation_frames["sleep"]), 8)
         finally:
             window.close()
 

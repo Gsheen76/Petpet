@@ -151,6 +151,7 @@ class PetWindow(QWidget):
         self.animation_specs = {}
         self.animation_frames = {}
         self._animation_frame_paths = {}
+        self._failed_animation_names = set()
         self._persistent_animation_names = set(self.PRELOADED_ANIMATIONS)
         self._active_animation = None
         self._animation_started_at = time.monotonic()
@@ -347,6 +348,7 @@ class PetWindow(QWidget):
         self._outfit_preview_cache = {}
         self.animation_frames = {}
         self._animation_frame_paths = {}
+        self._failed_animation_names = set()
         self._persistent_animation_names = set(self.PRELOADED_ANIMATIONS)
         self._load_static_pose_assets()
         self._load_animations()
@@ -948,10 +950,13 @@ class PetWindow(QWidget):
 
     def _load_animation(self, name):
         """Decode one animation sequence from its paths into the Qt cache."""
-        if name in self.animation_frames:
+        failed = getattr(self, "_failed_animation_names", set())
+        self._failed_animation_names = failed
+        if name in self.animation_frames or name in failed:
             return
         frame_paths = self._animation_frame_paths.get(name, ())
         if not frame_paths:
+            failed.add(name)
             return
         spec = self.animation_specs.get(name, {})
         if spec.get("spritesheet"):
@@ -970,6 +975,7 @@ class PetWindow(QWidget):
                 or len(values) != 7
                 or not all(type(value) is int and value > 0 for value in values)
             ):
+                failed.add(name)
                 return
             frame_size, frame_count, columns = values[:3]
             content_x, content_y, content_w, content_h = values[3:]
@@ -977,25 +983,29 @@ class PetWindow(QWidget):
                 content_x + content_w > frame_size
                 or content_y + content_h > frame_size
             ):
+                failed.add(name)
                 return
-            frame_rects = [
-                (
+            max_columns = (
+                (sheet.width() - content_x - content_w) // frame_size + 1
+            )
+            max_rows = (
+                (sheet.height() - content_y - content_h) // frame_size + 1
+            )
+            if (
+                columns > max_columns
+                or frame_count > columns * max_rows
+            ):
+                failed.add(name)
+                return
+            pixmaps = (
+                sheet.copy(
                     (index % columns) * frame_size + content_x,
                     (index // columns) * frame_size + content_y,
                     content_w,
                     content_h,
                 )
                 for index in range(frame_count)
-            ]
-            if any(
-                x + width > sheet.width() or y + height > sheet.height()
-                for x, y, width, height in frame_rects
-            ):
-                return
-            pixmaps = [
-                sheet.copy(x, y, width, height)
-                for x, y, width, height in frame_rects
-            ]
+            )
         else:
             pixmaps = (QPixmap(frame_path) for frame_path in frame_paths)
         frames = []
@@ -1031,10 +1041,15 @@ class PetWindow(QWidget):
                 frames = [frames[index] for index in indices]
         if frames:
             self.animation_frames[name] = frames
+        else:
+            failed.add(name)
 
     def _ensure_animation_loaded(self, name):
         """Load a known animation only when a caller needs its frames."""
-        if name not in self.animation_frames:
+        if (
+            name not in self.animation_frames
+            and name not in getattr(self, "_failed_animation_names", ())
+        ):
             self._load_animation(name)
 
     @staticmethod
