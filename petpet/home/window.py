@@ -68,6 +68,7 @@ class HomeSceneWindow(QWidget):
         self._home_pet_walk_back_right_source_rect = None
         self._home_pet_sleep_source_rect = home_pet_sleep_source_rect(0)
         self._home_pet_idle_source_rect = HOME_PET_IDLE_CONTENT_RECT
+        self._home_pet_animation_source_rects = {}
         self._home_pet_static_contact = (0.50, 0.55, 0.99)
         self._home_pet_asset_state = {
             "idle": HOME_PET_IDLE_PATH,
@@ -194,6 +195,7 @@ class HomeSceneWindow(QWidget):
     def refresh_pet_assets(self, pet_id: str | None = None) -> None:
         """Load the home artwork registered for the selected stable pet."""
 
+        self._home_pet_animation_source_rects = {}
         definition = pet_definition(
             pet_id or self.state.get("active_pet_id", "lunch_meat")
         )
@@ -930,33 +932,23 @@ class HomeSceneWindow(QWidget):
             )
         return None
 
+    def _shared_animation_source_rect(self, shared):
+        """Return the stable crop cached for one pet animation sequence."""
+
+        name = str(shared.get("name", "idle"))
+        key = (self.current_pet_id, name)
+        cached = self._home_pet_animation_source_rects.get(key)
+        if cached is not None:
+            return cached
+        frames = getattr(self.pet, "animation_frames", {}).get(name, ())
+        source_rect = home_pet_animation_source_rect(frames)
+        if source_rect.isEmpty():
+            source_rect = home_pet_static_source_rect(shared["pixmap"])
+        self._home_pet_animation_source_rects[key] = QRect(source_rect)
+        return source_rect
+
     def home_pet_render_spec(self, now=None):
         """Return the authored artwork for the current home-pet state."""
-
-        if self.home_pet.state not in {
-            "manual_walk",
-            "auto_walk",
-            "manual_sleep_walk",
-            "auto_sleep_walk",
-        }:
-            shared_frame = getattr(self.pet, "shared_animation_frame", None)
-            shared = shared_frame() if callable(shared_frame) else None
-            if shared and not shared["pixmap"].isNull():
-                scale = shared.get("spec", {}).get("scale", 1.0)
-                try:
-                    scale = max(0.1, float(scale))
-                except (TypeError, ValueError):
-                    scale = 1.0
-                return HomePetWalkRenderSpec(
-                    pixmap=shared["pixmap"],
-                    source_rect=home_pet_static_source_rect(shared["pixmap"]),
-                    mirrored=False,
-                    frame_index=int(shared.get("frame_index", 0)),
-                    visual_scale=scale,
-                    contact_center_x=0.5,
-                    contact_width=0.7,
-                    contact_foot_y=0.98,
-                )
 
         if self.home_pet.state == "sleeping":
             if self.home_pet_sleep.isNull():
@@ -977,11 +969,41 @@ class HomeSceneWindow(QWidget):
                 source_rect=source_rect,
                 mirrored=False,
                 frame_index=frame if self._home_pet_sleep_is_sheet else 0,
-                visual_scale=0.62 if self._home_pet_sleep_is_sheet else 1.0,
+                visual_scale=(
+                    HOME_PET_SLEEP_VISUAL_SCALE
+                    if self._home_pet_sleep_is_sheet
+                    else 1.0
+                ),
                 contact_center_x=contact[0],
                 contact_width=contact[1],
                 contact_foot_y=contact[2],
             )
+
+        if self.home_pet.state not in {
+            "manual_walk",
+            "auto_walk",
+            "manual_sleep_walk",
+            "auto_sleep_walk",
+        }:
+            shared_frame = getattr(self.pet, "shared_animation_frame", None)
+            shared = shared_frame() if callable(shared_frame) else None
+            if shared and not shared["pixmap"].isNull():
+                scale = shared.get("spec", {}).get("scale", 1.0)
+                try:
+                    scale = max(0.1, float(scale))
+                except (TypeError, ValueError):
+                    scale = 1.0
+                return HomePetWalkRenderSpec(
+                    pixmap=shared["pixmap"],
+                    source_rect=self._shared_animation_source_rect(shared),
+                    mirrored=False,
+                    frame_index=int(shared.get("frame_index", 0)),
+                    visual_scale=scale,
+                    contact_center_x=0.5,
+                    contact_width=0.7,
+                    contact_foot_y=0.98,
+                )
+
         if self.home_pet.state == "idle" and not self.home_pet_idle.isNull():
             return HomePetWalkRenderSpec(
                 pixmap=self.home_pet_idle,

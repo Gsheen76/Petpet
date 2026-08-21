@@ -178,11 +178,19 @@ class HomeSceneAssetTests(unittest.TestCase):
 
     def test_sleeping_uses_the_sleep_sheet_and_falls_back_when_it_is_missing(self):
         state = progression.ensure_progression({})
+        shared_sleep = QPixmap(20, 20)
+        shared_sleep.fill(Qt.white)
         pet = SimpleNamespace(
             state=state,
             width=lambda: 190,
             height=lambda: 220,
             current_screen_rect=lambda: QRect(0, 0, 1920, 1080),
+            shared_animation_frame=lambda: {
+                "name": "sleep",
+                "pixmap": shared_sleep,
+                "frame_index": 0,
+                "spec": {"scale": 0.7},
+            },
         )
         scene = home_scene.HomeSceneWindow(pet, Mock())
         self.addCleanup(scene.close)
@@ -195,7 +203,10 @@ class HomeSceneAssetTests(unittest.TestCase):
         self.assertEqual(spec.source_rect, QRect(664, 176, 592, 288))
         self.assertEqual(spec.frame_index, 1)
         self.assertFalse(spec.mirrored)
-        self.assertEqual(spec.visual_scale, 0.62)
+        self.assertEqual(spec.visual_scale, 0.50)
+        rect = scene.home_pet_render_rect(spec)
+        self.assertAlmostEqual(rect.width(), 118.46, places=2)
+        self.assertAlmostEqual(rect.height(), 57.63, places=2)
 
         scene.home_pet_sleep = QPixmap()
         self.assertIsNone(scene.home_pet_render_spec(now=1.0 / 3.0))
@@ -300,6 +311,90 @@ class HomeSceneAssetTests(unittest.TestCase):
         self.assertAlmostEqual(idle_rect.bottom(), walk_rect.bottom())
         self.assertAlmostEqual(shadow.center().x(), idle_rect.center().x())
         self.assertLess(shadow.bottom(), idle_rect.bottom())
+
+    def test_shared_idle_frames_keep_one_cached_render_rect(self):
+        frames = []
+        for body in (QRect(20, 10, 40, 80), QRect(30, 10, 40, 80)):
+            pixmap = QPixmap(100, 100)
+            pixmap.fill(Qt.transparent)
+            painter = QPainter(pixmap)
+            painter.fillRect(body, Qt.white)
+            painter.end()
+            frames.append(pixmap)
+
+        current = {"index": 0}
+        state = progression.ensure_progression({"active_pet_id": "ice_cream"})
+        pet = SimpleNamespace(
+            state=state,
+            width=lambda: 190,
+            height=lambda: 220,
+            current_screen_rect=lambda: QRect(0, 0, 1920, 1080),
+            animation_frames={"idle": frames},
+            shared_animation_frame=lambda: {
+                "name": "idle",
+                "pixmap": frames[current["index"]],
+                "frame_index": current["index"],
+                "spec": {},
+            },
+        )
+        scene = home_scene.HomeSceneWindow(pet, Mock())
+        self.addCleanup(scene.close)
+        scene.home_pet.state = "idle"
+
+        first_spec = scene.home_pet_render_spec(now=0.0)
+        first_rect = scene.home_pet_render_rect(first_spec)
+        current["index"] = 1
+        second_spec = scene.home_pet_render_spec(now=0.1)
+        second_rect = scene.home_pet_render_rect(second_spec)
+
+        self.assertEqual(first_spec.source_rect, QRect(20, 10, 50, 80))
+        self.assertEqual(second_spec.source_rect, first_spec.source_rect)
+        self.assertEqual(second_rect, first_rect)
+
+    def test_refresh_pet_assets_discards_shared_animation_crop(self):
+        first = QPixmap(100, 100)
+        first.fill(Qt.transparent)
+        painter = QPainter(first)
+        painter.fillRect(QRect(20, 10, 30, 40), Qt.white)
+        painter.end()
+
+        second = QPixmap(100, 100)
+        second.fill(Qt.transparent)
+        painter = QPainter(second)
+        painter.fillRect(QRect(10, 5, 70, 80), Qt.white)
+        painter.end()
+
+        current = {"pixmap": first}
+        state = progression.ensure_progression({"active_pet_id": "ice_cream"})
+        pet = SimpleNamespace(
+            state=state,
+            width=lambda: 190,
+            height=lambda: 220,
+            current_screen_rect=lambda: QRect(0, 0, 1920, 1080),
+            animation_frames={"idle": [first]},
+            shared_animation_frame=lambda: {
+                "name": "idle",
+                "pixmap": current["pixmap"],
+                "frame_index": 0,
+                "spec": {},
+            },
+        )
+        scene = home_scene.HomeSceneWindow(pet, Mock())
+        self.addCleanup(scene.close)
+        scene.home_pet.state = "idle"
+
+        self.assertEqual(
+            scene.home_pet_render_spec().source_rect,
+            QRect(20, 10, 30, 40),
+        )
+        pet.animation_frames["idle"] = [second]
+        current["pixmap"] = second
+        scene.refresh_pet_assets("ice_cream")
+
+        self.assertEqual(
+            scene.home_pet_render_spec().source_rect,
+            QRect(10, 5, 70, 80),
+        )
 
     def test_back_directions_select_the_back_sheet_and_mirror_only_left(self):
         state = progression.ensure_progression({})
