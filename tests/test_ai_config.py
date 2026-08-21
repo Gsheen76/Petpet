@@ -294,6 +294,22 @@ class AiConfigTests(unittest.TestCase):
             ai.clean_assistant_reply("我在呀（摇摇"), "我在呀"
         )
 
+    def test_clean_assistant_reply_collapses_only_extra_blank_lines(self):
+        self.assertEqual(
+            ai.clean_assistant_reply("第一句\n\n  第二句"), "第一句\n第二句"
+        )
+
+    def test_api_uses_pet_id_personality_after_pet_is_renamed(self):
+        memory = ai._default_memory()
+        messages = ai._build_messages(
+            "你好", memory, pet_name="奶油", pet_id="ice_cream"
+        )
+
+        system = messages[0]["content"]
+        self.assertIn("奶油", system)
+        self.assertIn("温柔可爱", system)
+        self.assertNotIn("活泼开朗", system)
+
     def test_game_question_injects_matched_knowledge_only(self):
         entry = {
             "title": "小屋与家具",

@@ -69,6 +69,7 @@ def build_messages(
     memory,
     *,
     pet_name,
+    personality="",
     normalize_name,
     knowledge_finder,
     now_description=time_description,
@@ -89,7 +90,10 @@ def build_messages(
     system = PERSONA.replace("Sheen", pet_name).format(
         user_profile=memory.get("user_profile", "（还没了解主人）"),
         now=now_description(),
-    ) + mood_hint
+    )
+    if personality:
+        system += "\n\n# 当前小狗的性格\n" + str(personality).strip()
+    system += mood_hint
     entries = knowledge_finder(user_text, limit=5)
     if entries:
         lines = ["# 游戏资料"]

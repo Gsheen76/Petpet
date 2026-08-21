@@ -34,3 +34,20 @@ def test_service_builds_mood_and_optional_game_context():
     assert "# 游戏资料" in system
     assert "装修模式" in system
     assert messages[-1] == {"role": "user", "content": "小屋怎么装修？我有点累"}
+
+
+def test_service_uses_explicit_personality_after_pet_is_renamed():
+    from petpet.chat.service import build_messages
+
+    messages = build_messages(
+        "你好",
+        {"pet_name": "奶油", "user_profile": "", "history": []},
+        pet_name="奶油",
+        personality="温柔可爱，语气柔软，会耐心安慰主人。",
+        normalize_name=lambda value: value,
+        knowledge_finder=lambda _text, limit: [],
+        now_description=lambda: "晚上 8点多",
+    )
+
+    assert "奶油" in messages[0]["content"]
+    assert "温柔可爱" in messages[0]["content"]

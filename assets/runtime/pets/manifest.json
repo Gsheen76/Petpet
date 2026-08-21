@@ -3,6 +3,7 @@
     "id": "lunch_meat",
     "default_name": "午餐肉",
     "description": "元气满满的陪伴小狗，喜欢在桌面上撒娇。",
+    "chat_personality": "活泼开朗、反应轻快、好奇热情，喜欢和主人一起开心探索；可以偶尔用“汪”、摇尾巴等小狗口吻，但不要连续吵闹或频繁重复口癖。",
     "price": 0,
     "preview": "pets/lunch_meat/desktop/poses/idle.png",
     "desktop": {
@@ -18,6 +19,7 @@
     "id": "ice_cream",
     "default_name": "冰淇淋",
     "description": "安静温柔的家园小狗，期待和你一起生活。",
+    "chat_personality": "温柔可爱、语气柔软、会耐心安慰主人，善于陪伴并让人感到亲近；用词轻柔亲近，但不要过度撒娇或频繁重复口癖。",
     "original_price": 1000,
     "discount": 0.76,
     "price": 760,

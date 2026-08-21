@@ -17,6 +17,7 @@ import shutil
 import uuid
 import requests
 from petpet.app.paths import DATA_DIR, RESOURCE_DIR
+from petpet.app.pets import pet_definition
 from PyQt5.QtCore import Qt
 from PyQt5.QtCore import QRect
 from PyQt5.QtGui import QImageReader
@@ -50,6 +51,7 @@ DEFAULT_CHAT_ERRORS = {
 # Kept for compatibility with older imports. Requests use get_model().
 MODEL = DEFAULT_MODEL
 DEFAULT_PET_NAME = "Sheen"
+DEFAULT_CHAT_PERSONALITY = "温暖、体贴、善于倾听，像一位认识很久的小狗朋友；偶尔可以用小狗口吻，但不过度。"
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
 MAX_HISTORY_THUMBNAIL_EDGE = 320
 PLAYER_AVATAR_SIZE = 256
@@ -177,7 +179,9 @@ def clean_assistant_reply(text: str) -> str:
     cleaned = re.sub(r"\([^)]*$", "", cleaned)
     cleaned = cleaned.replace("（", "").replace("）", "")
     cleaned = cleaned.replace("(", "").replace(")", "")
-    return re.sub(r"[ \t]+", " ", cleaned).strip()
+    cleaned = cleaned.replace("\r\n", "\n").replace("\r", "\n")
+    lines = [line.strip() for line in cleaned.split("\n")]
+    return "\n".join(line for line in lines if line).strip()
 
 
 def _default_memory():
@@ -502,12 +506,16 @@ _time_desc = chat_service.time_description
 _detect_mood = chat_service.detect_mood
 
 
-def _build_messages(user_text, mem, pet_name=None, image_attachment=None):
+def _build_messages(user_text, mem, pet_name=None, image_attachment=None,
+                    pet_id="lunch_meat"):
     """Compatibility adapter for the package-owned prompt service."""
     return chat_service.build_messages(
         user_text,
         mem,
         pet_name=pet_name or mem.get("pet_name", DEFAULT_PET_NAME),
+        personality=pet_definition(pet_id).get(
+            "chat_personality", DEFAULT_CHAT_PERSONALITY
+        ) or DEFAULT_CHAT_PERSONALITY,
         normalize_name=normalize_pet_name,
         knowledge_finder=game_knowledge.find_relevant_entries,
         now_description=_time_desc,
@@ -535,14 +543,16 @@ def _fit_default_proxy_payload(request_id, install_id, messages):
 
 
 def _default_proxy_stream(primary_endpoint, fallback_endpoint, user_text, mem,
-                          timeout, pet_name=None):
+                          timeout, pet_name=None, pet_id="lunch_meat"):
     install_id = load_config().get("default_chat_install_id")
     if not install_id:
         install_id = str(uuid.uuid4())
         config = load_config()
         config["default_chat_install_id"] = install_id
         save_config(config)
-    messages = _build_messages(user_text, mem, pet_name=pet_name)
+    messages = _build_messages(
+        user_text, mem, pet_name=pet_name, pet_id=pet_id
+    )
     yield from chat_transport.default_proxy_stream(
         primary_endpoint,
         fallback_endpoint,
@@ -591,7 +601,7 @@ def chat_stream(user_text, mem=None, on_token=None, timeout=45,
             else:
                 yield from _default_proxy_stream(
                     primary_endpoint, fallback_endpoint, user_text, mem,
-                    timeout, pet_name=pet_name
+                    timeout, pet_name=pet_name, pet_id=pet_id
                 )
         return
     if not key:
@@ -604,7 +614,7 @@ def chat_stream(user_text, mem=None, on_token=None, timeout=45,
     for attempt in range(3):
         for ev in _stream_once(
                 user_text, mem, key, on_token, timeout, pet_name=pet_name,
-                model=model, image_attachment=image_attachment):
+                model=model, image_attachment=image_attachment, pet_id=pet_id):
             kind, payload = ev
             if kind == "error" and payload == "rate_limit" and attempt < 2:
                 # backoff: wait 8s then 15s
@@ -617,7 +627,7 @@ def chat_stream(user_text, mem=None, on_token=None, timeout=45,
 
 
 def _stream_once(user_text, mem, key, on_token, timeout, pet_name=None,
-                 model=None, image_attachment=None):
+                 model=None, image_attachment=None, pet_id="lunch_meat"):
     selected_model = model or get_model()
     if image_attachment and not is_vision_model(selected_model):
         raise ValueError("当前模型不支持图片聊天")
@@ -626,6 +636,7 @@ def _stream_once(user_text, mem, key, on_token, timeout, pet_name=None,
         mem,
         pet_name=pet_name,
         image_attachment=image_attachment,
+        pet_id=pet_id,
     )
     yield from chat_transport.personal_stream(
         messages=messages,
