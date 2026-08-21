@@ -28,6 +28,7 @@ from PyQt5.QtCore import (
 from PyQt5.QtGui import (
     QColor,
     QFont,
+    QImageReader,
     QLinearGradient,
     QPainter,
     QPen,
@@ -58,6 +59,8 @@ class PetWindow(QWidget):
     # Runtime frames are displayed at roughly half this size on desktop.
     # Keeping a 2x-ish buffer preserves crispness while bounding Qt memory.
     ANIMATION_MAX_SIZE = 384
+    ANIMATION_MAX_FRAMES = 64
+    ANIMATION_MAX_SOURCE_PIXELS = 16_777_216
     PRELOADED_ANIMATIONS = (
         "idle", "pet", "eat", "play", "sleep", "dig_reward"
     )
@@ -959,8 +962,8 @@ class PetWindow(QWidget):
             failed.add(name)
             return
         spec = self.animation_specs.get(name, {})
+        expected_frame_count = None
         if spec.get("spritesheet"):
-            sheet = QPixmap(frame_paths[0])
             content_rect = spec.get("content_rect")
             values = (
                 spec.get("frame_size"),
@@ -969,8 +972,7 @@ class PetWindow(QWidget):
                 *(content_rect if isinstance(content_rect, (list, tuple)) else ()),
             )
             if (
-                sheet.isNull()
-                or not isinstance(content_rect, (list, tuple))
+                not isinstance(content_rect, (list, tuple))
                 or len(content_rect) != 4
                 or len(values) != 7
                 or not all(type(value) is int for value in values)
@@ -982,9 +984,38 @@ class PetWindow(QWidget):
             frame_size, frame_count, columns = values[:3]
             content_x, content_y, content_w, content_h = values[3:]
             if (
-                content_x + content_w > frame_size
+                frame_count > self.ANIMATION_MAX_FRAMES
+                or content_x + content_w > frame_size
                 or content_y + content_h > frame_size
             ):
+                failed.add(name)
+                return
+            source_size = QImageReader(frame_paths[0]).size()
+            source_width = source_size.width()
+            source_height = source_size.height()
+            if (
+                not source_size.isValid()
+                or source_width <= 0
+                or source_height <= 0
+                or source_width * source_height
+                > self.ANIMATION_MAX_SOURCE_PIXELS
+            ):
+                failed.add(name)
+                return
+            max_columns = (
+                (source_width - content_x - content_w) // frame_size + 1
+            )
+            max_rows = (
+                (source_height - content_y - content_h) // frame_size + 1
+            )
+            if (
+                columns > max_columns
+                or frame_count > columns * max_rows
+            ):
+                failed.add(name)
+                return
+            sheet = QPixmap(frame_paths[0])
+            if sheet.isNull():
                 failed.add(name)
                 return
             max_columns = (
@@ -999,6 +1030,7 @@ class PetWindow(QWidget):
             ):
                 failed.add(name)
                 return
+            expected_frame_count = frame_count
             pixmaps = (
                 sheet.copy(
                     (index % columns) * frame_size + content_x,
@@ -1012,7 +1044,16 @@ class PetWindow(QWidget):
             pixmaps = (QPixmap(frame_path) for frame_path in frame_paths)
         frames = []
         for pixmap in pixmaps:
-            if pixmap.isNull():
+            if pixmap.isNull() or (
+                expected_frame_count is not None
+                and (
+                    pixmap.width() != content_w
+                    or pixmap.height() != content_h
+                )
+            ):
+                if expected_frame_count is not None:
+                    failed.add(name)
+                    return
                 continue
             if (pixmap.width() > self.ANIMATION_MAX_SIZE or
                     pixmap.height() > self.ANIMATION_MAX_SIZE):
@@ -1024,7 +1065,16 @@ class PetWindow(QWidget):
                 saturation=spec.get("saturation", 1.0),
                 brightness=spec.get("brightness", 1.0),
             )
+            if expected_frame_count is not None and pixmap.isNull():
+                failed.add(name)
+                return
             frames.append(pixmap)
+        if (
+            expected_frame_count is not None
+            and len(frames) != expected_frame_count
+        ):
+            failed.add(name)
+            return
         sequence = spec.get("frame_sequence")
         if isinstance(sequence, list):
             try:

@@ -299,6 +299,14 @@ class AiConfigTests(unittest.TestCase):
             ai.clean_assistant_reply("第一句\n\n  第二句"), "第一句\n第二句"
         )
 
+    def test_clean_assistant_reply_collapses_inline_spaces_and_tabs_per_line(self):
+        self.assertEqual(
+            ai.clean_assistant_reply(
+                "  第一句  有空格\t\t还有  \r\n\t第二句\t  也有  "
+            ),
+            "第一句 有空格 还有\n第二句 也有",
+        )
+
     def test_api_uses_pet_id_personality_after_pet_is_renamed(self):
         memory = ai._default_memory()
         messages = ai._build_messages(
@@ -307,6 +315,77 @@ class AiConfigTests(unittest.TestCase):
 
         system = messages[0]["content"]
         self.assertIn("奶油", system)
+        self.assertIn("温柔可爱", system)
+        self.assertNotIn("活泼开朗", system)
+
+    def test_chat_forwards_keyword_identity_to_streaming_api(self):
+        memory = ai._default_memory()
+        with patch.object(
+            ai, "chat_stream", return_value=iter([("done", "冰淇淋回复")])
+        ) as chat_stream:
+            reply = ai.chat(
+                "你好",
+                memory,
+                pet_id="lunch_meat",
+                profile="ice_cream",
+            )
+
+        self.assertEqual(reply, "冰淇淋回复")
+        self.assertEqual(chat_stream.call_args.args, ("你好",))
+        self.assertIs(chat_stream.call_args.kwargs["mem"], memory)
+        self.assertEqual(chat_stream.call_args.kwargs["pet_id"], "lunch_meat")
+        self.assertEqual(chat_stream.call_args.kwargs["profile"], "ice_cream")
+
+    def test_profile_selects_same_memory_and_personality_for_default_chat(self):
+        ai.save_memory(
+            {
+                **ai._default_memory(),
+                "user_profile": "只属于冰淇淋的记忆",
+            },
+            pet_id="ice_cream",
+        )
+        ai.set_default_chat_consent(True)
+        ai.set_default_chat_proxy_url("https://chat.example/v1/chat")
+        response = FakeRequestsStreamResponse([b"data: [DONE]"])
+
+        with patch("buddy_ai.requests.post", return_value=response) as post:
+            list(ai.chat_stream(
+                "你好",
+                pet_id="lunch_meat",
+                profile="ice_cream",
+                timeout=5,
+            ))
+
+        body = json.loads(post.call_args.kwargs["data"].decode("utf-8"))
+        system = body["messages"][0]["content"]
+        self.assertIn("只属于冰淇淋的记忆", system)
+        self.assertIn("温柔可爱", system)
+        self.assertNotIn("活泼开朗", system)
+
+    def test_profile_selects_same_memory_and_personality_for_personal_chat(self):
+        ai.save_memory(
+            {
+                **ai._default_memory(),
+                "user_profile": "只属于冰淇淋的记忆",
+            },
+            pet_id="ice_cream",
+        )
+        ai.set_api_key("id.secret")
+        ai.set_chat_mode("personal")
+
+        with patch(
+            "buddy_ai.urllib.request.urlopen", return_value=FakeStreamResponse()
+        ) as urlopen:
+            list(ai.chat_stream(
+                "你好",
+                pet_id="lunch_meat",
+                profile="ice_cream",
+                timeout=5,
+            ))
+
+        body = json.loads(urlopen.call_args.args[0].data.decode("utf-8"))
+        system = body["messages"][0]["content"]
+        self.assertIn("只属于冰淇淋的记忆", system)
         self.assertIn("温柔可爱", system)
         self.assertNotIn("活泼开朗", system)
 

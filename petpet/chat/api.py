@@ -180,7 +180,8 @@ def clean_assistant_reply(text: str) -> str:
     cleaned = cleaned.replace("（", "").replace("）", "")
     cleaned = cleaned.replace("(", "").replace(")", "")
     cleaned = cleaned.replace("\r\n", "\n").replace("\r", "\n")
-    lines = [line.strip() for line in cleaned.split("\n")]
+    lines = [re.sub(r"[ \t]+", " ", line.strip())
+             for line in cleaned.split("\n")]
     return "\n".join(line for line in lines if line).strip()
 
 
@@ -581,8 +582,9 @@ def chat_stream(user_text, mem=None, on_token=None, timeout=45,
        ('error', msg)         -> failed; caller should fallback
        Automatically retries on 429 rate limit (up to 2 times with backoff).
     """
+    pet_id = _selected_pet_id(pet_id, profile)
     if mem is None:
-        mem = load_memory(pet_id, profile=profile)
+        mem = load_memory(pet_id)
 
     mode = get_chat_mode()
     key = get_api_key()
@@ -655,13 +657,14 @@ def _stream_once(user_text, mem, key, on_token, timeout, pet_name=None,
 
 
 # ---------------- one-shot helper ----------------
-def chat(user_text, mem=None, timeout=30, pet_name=None):
+def chat(user_text, mem=None, timeout=30, pet_name=None, *,
+         pet_id="lunch_meat", profile=None):
     """Blocking call, returns full reply string. Falls back to rules on error."""
     full = []
     last_err = None
     for kind, payload in chat_stream(
             user_text, mem=mem, on_token=full.append, timeout=timeout,
-            pet_name=pet_name):
+            pet_name=pet_name, pet_id=pet_id, profile=profile):
         if kind == "done":
             return payload
         if kind == "error":

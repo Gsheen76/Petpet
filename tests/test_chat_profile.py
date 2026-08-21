@@ -118,25 +118,38 @@ class ChatProfileTests(unittest.TestCase):
         )
         self.assertEqual(ice_history, [])
 
-    def test_ice_cream_identity_updates_title_and_existing_assistant_avatar(self):
-        self.window = pet.ChatWindow(FakePet(), pet_id="ice_cream")
-        self.window.pet.state["pet_name"] = "冰淇淋"
-        self.window.refresh_pet_name()
-        self.assertEqual(self.window.title.text().strip(), "冰淇淋")
-
-        self.window.pet.state["pet_name"] = "奶油"
-        self.window.refresh_pet_name()
-        self.assertEqual(self.window.title.text().strip(), "奶油（冰淇淋）")
-
+    def test_switch_to_ice_cream_rerenders_title_and_existing_assistant_avatar(self):
+        ai.save_memory(
+            {**ai._default_memory(), "pet_name": "豆包", "history": [
+                {"role": "assistant", "content": "午餐肉历史"},
+            ]},
+            pet_id="lunch_meat",
+        )
         ai.save_memory(
             {**ai._default_memory(), "pet_name": "奶油", "history": [
-                {"role": "assistant", "content": "你好"},
+                {"role": "assistant", "content": "冰淇淋历史"},
             ]},
             pet_id="ice_cream",
         )
-        self.window.set_pet_id("ice_cream")
+        self.window = pet.ChatWindow(FakePet(), pet_id="lunch_meat")
+
+        lunch_avatar = self.window.findChild(QLabel, "chatAvatar")
+        self.assertEqual(self.window.title.text().strip(), "豆包（午餐肉）")
+        self.assertTrue(lunch_avatar.property("avatarSource").endswith(
+            os.path.join(
+                "assets", "runtime", "pets", "lunch_meat", "desktop",
+                "poses", "idle.png",
+            )
+        ))
+
+        self.window.pet.state["active_pet_id"] = "ice_cream"
+        self.window.pet.state["pet_name"] = "奶油"
+        self.window.pet.state["pets"]["ice_cream"] = {"pet_name": "奶油"}
+        self.assertTrue(self.window.set_pet_id("ice_cream"))
 
         avatar = self.window.findChild(QLabel, "chatAvatar")
+        bubble = self.window.findChild(QLabel, "chatMessage")
+        self.assertEqual(self.window.title.text().strip(), "奶油（冰淇淋）")
         self.assertEqual(avatar.property("avatarRole"), "assistant")
         self.assertTrue(avatar.property("avatarSource").endswith(
             os.path.join(
@@ -144,6 +157,7 @@ class ChatProfileTests(unittest.TestCase):
                 "poses", "idle.png",
             )
         ))
+        self.assertEqual(bubble.text(), "冰淇淋历史")
 
 
 if __name__ == "__main__":

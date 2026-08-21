@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QSize, Qt
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QApplication
 
@@ -288,6 +288,12 @@ class PetWindowBoundaryTests(unittest.TestCase):
             expected_first = expected_first.scaled(
                 384, 384, Qt.KeepAspectRatio, Qt.SmoothTransformation
             )
+            expected_last = QPixmap(str(sheet_path)).copy(
+                664, 1456, 592, 288
+            )
+            expected_last = expected_last.scaled(
+                384, 384, Qt.KeepAspectRatio, Qt.SmoothTransformation
+            )
 
             self.assertEqual(len(frames), 8)
             self.assertEqual(spec["fps"], 3)
@@ -295,10 +301,12 @@ class PetWindowBoundaryTests(unittest.TestCase):
             self.assertTrue(spec["anchor_bottom"])
             self.assertEqual(frames[0].size(), expected_first.size())
             self.assertEqual(frames[0].toImage(), expected_first.toImage())
+            self.assertEqual(frames[-1].size(), expected_last.size())
+            self.assertEqual(frames[-1].toImage(), expected_last.toImage())
         finally:
             window.close()
 
-    def test_spritesheet_rejects_impossible_frame_count_before_iteration(self):
+    def test_spritesheet_rejects_frame_count_above_limit_before_iteration(self):
         import pet
 
         state = copy.deepcopy(pet.DEFAULT_STATE)
@@ -307,7 +315,12 @@ class PetWindowBoundaryTests(unittest.TestCase):
         try:
             window.refresh_pet_assets("ice_cream")
             window.animation_frames.pop("sleep", None)
-            window.animation_specs["sleep"]["frame_count"] = 10 ** 100
+            window.animation_specs["sleep"].update({
+                "frame_size": 1,
+                "frame_count": 65,
+                "columns": 65,
+                "content_rect": [0, 0, 1, 1],
+            })
 
             with patch(
                 "petpet.app.pet_window.range", return_value=(), create=True
@@ -315,6 +328,7 @@ class PetWindowBoundaryTests(unittest.TestCase):
                 window._load_animation("sleep")
 
             self.assertNotIn("sleep", window.animation_frames)
+            self.assertIn("sleep", window._failed_animation_names)
             frame_range.assert_not_called()
         finally:
             window.close()
@@ -336,7 +350,147 @@ class PetWindowBoundaryTests(unittest.TestCase):
         finally:
             window.close()
 
-    def test_invalid_spritesheet_is_decoded_once_until_assets_refresh(self):
+    def test_spritesheet_content_rect_accepts_zero_y_origin_independently(self):
+        import pet
+
+        state = copy.deepcopy(pet.DEFAULT_STATE)
+        state.update({"x": 100, "y": 100, "tutorial_completed": True})
+        window = pet.PetWindow(state)
+        try:
+            window.refresh_pet_assets("ice_cream")
+            window.animation_frames.pop("sleep", None)
+            window.animation_specs["sleep"]["content_rect"] = [24, 0, 592, 288]
+
+            window._load_animation("sleep")
+
+            self.assertEqual(len(window.animation_frames["sleep"]), 8)
+        finally:
+            window.close()
+
+    def test_spritesheet_rejects_oversized_source_before_pixmap_decode(self):
+        import pet
+
+        state = copy.deepcopy(pet.DEFAULT_STATE)
+        state.update({"x": 100, "y": 100, "tutorial_completed": True})
+        window = pet.PetWindow(state)
+        try:
+            window.refresh_pet_assets("ice_cream")
+            window.animation_frames.pop("sleep", None)
+
+            with patch(
+                "petpet.app.pet_window.QImageReader", create=True
+            ) as reader_type, patch(
+                "petpet.app.pet_window.QPixmap", wraps=QPixmap
+            ) as pixmap_loader:
+                reader_type.return_value.size.return_value = QSize(4097, 4096)
+                window._load_animation("sleep")
+
+            self.assertNotIn("sleep", window.animation_frames)
+            self.assertIn("sleep", window._failed_animation_names)
+            pixmap_loader.assert_not_called()
+        finally:
+            window.close()
+
+    def test_spritesheet_rejects_unreadable_dimensions_before_pixmap_decode(self):
+        import pet
+
+        state = copy.deepcopy(pet.DEFAULT_STATE)
+        state.update({"x": 100, "y": 100, "tutorial_completed": True})
+        window = pet.PetWindow(state)
+        try:
+            window.refresh_pet_assets("ice_cream")
+            window.animation_frames.pop("sleep", None)
+
+            with patch(
+                "petpet.app.pet_window.QImageReader", create=True
+            ) as reader_type, patch(
+                "petpet.app.pet_window.QPixmap", wraps=QPixmap
+            ) as pixmap_loader:
+                reader_type.return_value.size.return_value = QSize()
+                window._load_animation("sleep")
+
+            self.assertNotIn("sleep", window.animation_frames)
+            self.assertIn("sleep", window._failed_animation_names)
+            pixmap_loader.assert_not_called()
+        finally:
+            window.close()
+
+    def test_spritesheet_source_at_exact_pixel_budget_is_accepted(self):
+        import pet
+
+        state = copy.deepcopy(pet.DEFAULT_STATE)
+        state.update({"x": 100, "y": 100, "tutorial_completed": True})
+        window = pet.PetWindow(state)
+        try:
+            window.refresh_pet_assets("ice_cream")
+            window.animation_frames.pop("sleep", None)
+
+            with patch(
+                "petpet.app.pet_window.QImageReader", create=True
+            ) as reader_type:
+                reader_type.return_value.size.return_value = QSize(4096, 4096)
+                window._load_animation("sleep")
+
+            self.assertEqual(len(window.animation_frames["sleep"]), 8)
+        finally:
+            window.close()
+
+    def test_invalid_spritesheet_crop_is_discarded_and_failed_until_refresh(self):
+        import pet
+
+        state = copy.deepcopy(pet.DEFAULT_STATE)
+        state.update({"x": 100, "y": 100, "tutorial_completed": True})
+        window = pet.PetWindow(state)
+        try:
+            window.refresh_pet_assets("ice_cream")
+            window.animation_frames.pop("sleep", None)
+            source = QPixmap(window._animation_frame_paths["sleep"][0])
+
+            class PartialSheet:
+                def __init__(self, invalid_crop):
+                    self.copy_count = 0
+                    self.invalid_crop = invalid_crop
+
+                def isNull(self):
+                    return False
+
+                def width(self):
+                    return source.width()
+
+                def height(self):
+                    return source.height()
+
+                def copy(self, *args):
+                    self.copy_count += 1
+                    if self.copy_count == 2:
+                        return self.invalid_crop
+                    return source.copy(*args)
+
+            invalid_crops = (
+                ("null", QPixmap()),
+                ("undersized", source.copy(24, 176, 591, 288)),
+            )
+            for label, invalid_crop in invalid_crops:
+                with self.subTest(crop=label):
+                    window.animation_frames.pop("sleep", None)
+                    window._failed_animation_names.discard("sleep")
+                    partial = PartialSheet(invalid_crop)
+                    with patch(
+                        "petpet.app.pet_window.QPixmap", return_value=partial
+                    ) as pixmap_loader:
+                        window._load_animation("sleep")
+                        window._load_animation("sleep")
+
+                    self.assertNotIn("sleep", window.animation_frames)
+                    self.assertIn("sleep", window._failed_animation_names)
+                    self.assertEqual(pixmap_loader.call_count, 1)
+
+            window.refresh_pet_assets("ice_cream")
+            self.assertEqual(len(window.animation_frames["sleep"]), 8)
+        finally:
+            window.close()
+
+    def test_invalid_spritesheet_is_failed_without_decode_until_assets_refresh(self):
         import pet
 
         state = copy.deepcopy(pet.DEFAULT_STATE)
@@ -350,6 +504,8 @@ class PetWindowBoundaryTests(unittest.TestCase):
             ]
 
             with patch(
+                "petpet.app.pet_window.QImageReader"
+            ) as reader_type, patch(
                 "petpet.app.pet_window.QPixmap", wraps=QPixmap
             ) as pixmap_loader:
                 first = window._animation_frame("sleep")
@@ -357,7 +513,9 @@ class PetWindowBoundaryTests(unittest.TestCase):
 
             self.assertIsNone(first)
             self.assertIsNone(second)
-            self.assertEqual(pixmap_loader.call_count, 1)
+            self.assertIn("sleep", window._failed_animation_names)
+            reader_type.assert_not_called()
+            pixmap_loader.assert_not_called()
 
             window.refresh_pet_assets("ice_cream")
             self.assertEqual(len(window.animation_frames["sleep"]), 8)
