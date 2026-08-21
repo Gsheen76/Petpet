@@ -129,7 +129,7 @@ def test_shop_shows_pet_name_with_default_name_when_nicknamed(shop_window):
     assert title.text() == "小肉（午餐肉）"
 
 
-def test_pet_cards_are_framed_and_discount_badge_has_its_own_action_column(shop_window):
+def test_pet_cards_are_framed_and_keep_discount_details_inside_the_card(shop_window):
     shop_window.refresh()
     QApplication.processEvents()
     lunch_card = shop_window.findChild(ui.QFrame, "petCard_lunch_meat")
@@ -140,11 +140,13 @@ def test_pet_cards_are_framed_and_discount_badge_has_its_own_action_column(shop_
     actions = shop_window.findChild(ui.QFrame, "petActions_ice_cream")
     badge = shop_window.findChild(ui.QLabel, "discountBadge_ice_cream")
     discounted = shop_window.findChild(ui.QLabel, "discountPrice_ice_cream")
-    assert actions is not None
-    assert badge.parent() is actions
+    action = shop_window.findChild(ui.QPushButton, "petAction_ice_cream")
+    assert actions is None
+    assert ice_card.isAncestorOf(badge)
+    assert ice_card.isAncestorOf(discounted)
+    assert ice_card.isAncestorOf(action)
     assert badge.property("discountBubble") is True
     assert badge.fontMetrics().height() < discounted.fontMetrics().height()
-    assert actions.layout().indexOf(badge) == 0
 
 
 def test_pet_discount_price_row_matches_compact_reference_style(shop_window):
