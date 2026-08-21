@@ -482,7 +482,7 @@ class UpgradeBalanceTests(unittest.TestCase):
         )
         self.assertEqual(description, "清醒属性消耗减缓 50%")
 
-    def test_sleep_upgrade_description_uses_actual_values_not_percentages(self):
+    def test_sleep_upgrade_description_uses_compact_two_second_format(self):
         state = fresh_state(upgrades={"sleeping": 2})
 
         description = progression.upgrade_description(
@@ -490,9 +490,7 @@ class UpgradeBalanceTests(unittest.TestCase):
             "sleeping",
         )
 
-        self.assertIn("精力+4点", description)
-        self.assertIn("饱腹-1.2点", description)
-        self.assertNotIn("%", description)
+        self.assertEqual(description, "每2s睡眠：精力+4点，饱腹-1.2点")
 
     def test_full_upgrade_cost_stays_long_term_but_not_unreachable(self):
         total_cost = sum(

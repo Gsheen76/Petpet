@@ -33,12 +33,6 @@ from petpet.app.pets import (
 from petpet.home.rendering import HOME_FURNITURE_PATHS, render_home_status_card
 
 
-PRICE_TAG_ASSET_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-    "assets", "runtime", "ui",
-).replace("\\", "/")
-
-
 PANEL_STYLE = """
     QWidget {
         background: transparent;
@@ -294,34 +288,41 @@ PANEL_STYLE = """
     QScrollBar::sub-line:vertical { height: 0; }
 """
 
-PANEL_STYLE += f"""
-    QLabel[priceTagRole="normal"] {{
-        border-image: url({PRICE_TAG_ASSET_DIR}/shop-price-normal-v1.png) 18 28 18 28 stretch stretch;
+PANEL_STYLE += """
+    QLabel[priceTagRole="normal"],
+    QLabel[priceTagRole="sale"],
+    QLabel[priceTagRole="discount"],
+    QLabel[priceTagRole="gift"] {
+        border-radius: 11px;
+        padding: 0;
+    }
+    QLabel[priceTagRole="normal"] {
+        background: #fff8e8;
+        border: 1px solid #e8c789;
         color: #7a5040;
-        padding: 8px 18px;
+        font-size: 17px;
+    }
+    QLabel[priceTagRole="sale"] {
+        background: #fff0e8;
+        border: 1px solid #f19a7b;
+        color: #a34b3c;
         font-size: 18px;
-    }}
-    QLabel[priceTagRole="sale"] {{
-        border-image: url({PRICE_TAG_ASSET_DIR}/shop-price-sale-v1.png) 18 28 18 28 stretch stretch;
-        color: #9f4437;
-        padding: 8px 18px;
-        font-size: 19px;
-        font-weight: 900;
-    }}
-    QLabel[priceTagRole="discount"] {{
-        border-image: url({PRICE_TAG_ASSET_DIR}/shop-price-discount-v1.png) 18 22 18 22 stretch stretch;
+        font-weight: 800;
+    }
+    QLabel[priceTagRole="discount"] {
+        background: #ffe5dd;
+        border: 1px solid #ef9279;
         color: #a74439;
-        padding: 5px 12px;
         font-size: 14px;
-        font-weight: 900;
-    }}
-    QLabel[priceTagRole="gift"] {{
-        border-image: url({PRICE_TAG_ASSET_DIR}/shop-price-gift-v1.png) 18 28 18 28 stretch stretch;
-        color: #a66a26;
-        padding: 8px 18px;
-        font-size: 18px;
-        font-weight: 900;
-    }}
+        font-weight: 800;
+    }
+    QLabel[priceTagRole="gift"] {
+        background: #fff2c9;
+        border: 1px solid #e9c573;
+        color: #966821;
+        font-size: 17px;
+        font-weight: 800;
+    }
 """
 
 
@@ -1268,6 +1269,8 @@ class ShopWindow(CozyProgressWindow):
         label = QLabel(text)
         label.setObjectName(object_name)
         label.setProperty("priceTagRole", role)
+        label.setContentsMargins(12, 5, 12, 5)
+        label.setMinimumHeight(34)
         label.setAlignment(Qt.AlignCenter)
         return label
 
