@@ -46,4 +46,4 @@
 - No additional source files.
 
 - [x] 运行家园焦点测试、全量 `python -m pytest -q`、`python -m py_compile` 和 `git diff --check`。
-- [ ] 提交修改、同步 Obsidian 记录并重启源码小狗。
+- [x] 提交修改、同步 Obsidian 记录并重启源码小狗。
