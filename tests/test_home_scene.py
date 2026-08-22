@@ -458,8 +458,9 @@ class HomeSceneAssetTests(unittest.TestCase):
         scene = home_scene.HomeSceneWindow(pet, Mock())
         self.addCleanup(scene.close)
         scene.resize(900, 768)
-        self.assertLess(scene.left_view_button_rect().right(), 100)
-        self.assertGreater(scene.right_view_button_rect().left(), 800)
+        canvas = scene.scene_canvas_rect()
+        self.assertLess(scene.left_view_button_rect().right(), canvas.left() + 100)
+        self.assertGreater(scene.right_view_button_rect().left(), canvas.right() - 100)
         self.assertLess(scene.decoration_button_rect().right(), scene.exit_button_rect().left())
         self.assertLess(scene.exit_button_rect().bottom(), 80)
         self.assertEqual(scene.scene_button_label("left"), "左移")
@@ -533,7 +534,7 @@ class HomeSceneAssetTests(unittest.TestCase):
 
     def test_board_geometry_uses_scene_math_and_saved_position(self):
         rect = home_scene.board_geometry(QRect(0, 0, 1920, 1080))
-        self.assertEqual(rect, QRect(1020, 312, 900, 768))
+        self.assertEqual(rect, QRect(1320, 312, 600, 768))
 
     def test_decoration_sidebar_sits_outside_the_scene_canvas(self):
         state = progression.ensure_progression({})
@@ -617,11 +618,16 @@ class HomeSceneAssetTests(unittest.TestCase):
         save = Mock()
         scene = home_scene.HomeSceneWindow(pet, save)
         self.addCleanup(scene.close)
-        scene.setGeometry(QRect(0, 0, 900, 768))
+        scene.setGeometry(QRect(0, 0, 938, 768))
         scene._camera_x = 0
         scene.toggle_decoration_mode()
 
-        self.assertEqual(scene.furniture_at(QPoint(230, 360)), "home_sofa")
+        self.assertEqual(
+            scene.furniture_at(
+                QPoint(scene.scene_canvas_rect().left() + 230, 360)
+            ),
+            "home_sofa",
+        )
         self.assertEqual(
             scene.move_furniture("home_sofa", QPoint(-60, 900)),
             {"x": 0, "y": 543},
@@ -670,7 +676,7 @@ class HomeSceneAssetTests(unittest.TestCase):
         self.assertFalse(scene.view_pan_enabled())
         self.assertFalse(scene._manual_camera)
         self.assertEqual(scene.home_pet.position[0], 900.0)
-        self.assertEqual(scene._camera_x, 450)
+        self.assertEqual(scene._camera_x, 600)
 
     def test_scene_tick_camera_follows_the_updated_internal_pet_position(self):
         state = progression.ensure_progression({"energy": 100.0})
@@ -912,7 +918,7 @@ class HomeSceneAssetTests(unittest.TestCase):
 
         scene.mousePressEvent(event)
 
-        self.assertEqual(scene.home_pet.target, (400.0, 600.0))
+        self.assertEqual(scene.home_pet.target, (550.0, 600.0))
         event.accept.assert_called_once_with()
 
     def test_right_click_never_opens_the_desktop_menu_inside_home(self):
@@ -1646,7 +1652,7 @@ class HomeSceneAssetTests(unittest.TestCase):
 
         panel = scene._panel_rect()
         self.assertGreaterEqual(panel.x(), 0)
-        self.assertLess(panel.width(), scene.scene_canvas_rect().width() // 2)
+        self.assertEqual(panel.width(), home_scene.HOME_DECORATION_SIDEBAR_WIDTH)
         cards = scene._item_card_rects()
         self.assertEqual(set(cards), {"home_sofa", "home_plant"})
         for item_id, card in cards.items():
@@ -1714,7 +1720,7 @@ class HomeSceneAssetTests(unittest.TestCase):
         scene.toggle_decoration_mode()
 
         panel = scene._panel_rect()
-        self.assertLess(panel.width(), scene.scene_canvas_rect().width() // 2)
+        self.assertEqual(panel.width(), home_scene.HOME_DECORATION_SIDEBAR_WIDTH)
         self.assertGreaterEqual(panel.x(), 0)
         self.assertGreaterEqual(panel.y(), 0)
         cards = scene._item_card_rects()

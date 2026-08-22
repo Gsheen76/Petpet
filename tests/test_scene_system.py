@@ -6,19 +6,19 @@ import scene_system
 
 
 class HomeSceneGeometryTests(unittest.TestCase):
-    def test_home_viewport_uses_requested_height(self):
-        self.assertEqual(scene_system.HOME_VIEWPORT_SIZE, (900, 768))
+    def test_home_viewport_uses_reduced_width_and_requested_height(self):
+        self.assertEqual(scene_system.HOME_VIEWPORT_SIZE, (600, 768))
 
     def test_camera_tracks_dog_until_each_world_edge(self):
         self.assertEqual(scene_system.camera_x_for_dog(0, 190), 0)
-        self.assertEqual(scene_system.camera_x_for_dog(900, 190), 545)
-        self.assertEqual(scene_system.camera_x_for_dog(1800, 190), 900)
+        self.assertEqual(scene_system.camera_x_for_dog(900, 190), 695)
+        self.assertEqual(scene_system.camera_x_for_dog(1800, 190), 1200)
 
     def test_manual_view_pan_moves_in_fixed_steps_and_clamps(self):
         self.assertEqual(scene_system.pan_viewport_x(450, "left", 220), 230)
         self.assertEqual(scene_system.pan_viewport_x(230, "left", 220), 10)
         self.assertEqual(scene_system.pan_viewport_x(10, "left", 220), 0)
-        self.assertEqual(scene_system.pan_viewport_x(800, "right", 220), 900)
+        self.assertEqual(scene_system.pan_viewport_x(1100, "right", 220), 1200)
 
     def test_home_decoration_transform_is_normalized(self):
         self.assertEqual(
@@ -38,7 +38,7 @@ class HomeSceneGeometryTests(unittest.TestCase):
         rect = scene_system.scene_rect_for_screen(
             QRect(1000, 40, 1920, 1080), saved_x=2800, saved_y=900
         )
-        self.assertEqual(rect, QRect(2020, 352, 900, 768))
+        self.assertEqual(rect, QRect(2320, 352, 600, 768))
 
     def test_invalid_scene_state_receives_safe_defaults(self):
         state = scene_system.normalize_home_scene({

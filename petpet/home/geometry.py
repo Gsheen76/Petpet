@@ -12,7 +12,7 @@ from typing import Any, Mapping
 from PyQt5.QtCore import QPoint, QPointF, QRect, QRectF
 
 
-HOME_VIEWPORT_SIZE = (900, 768)
+HOME_VIEWPORT_SIZE = (600, 768)
 HOME_WORLD_SIZE = (1800, 768)
 HOME_CAMERA_PAN_STEP = 220
 HOME_CAMERA_REPEAT_STEP = 18
