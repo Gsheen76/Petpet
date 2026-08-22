@@ -4,7 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 from PyQt5.QtCore import QRect
-from PyQt5.QtGui import QPixmap
+from PyQt5.QtGui import QColor, QPixmap
 from PyQt5.QtWidgets import QApplication
 
 from petpet.progression import core as progression
@@ -66,6 +66,33 @@ def test_missing_home_walk_falls_back_to_active_pet_idle(home_window):
     home_window.refresh_pet_assets("lunch_meat")
 
     assert home_window.home_pet_asset_state()["walk"] == "idle"
+
+
+def test_lunch_meat_home_reuses_desktop_walk_animation(home_window):
+    frames = []
+    for color in ("#f08b55", "#d96e3d"):
+        frame = QPixmap(80, 100)
+        frame.fill(QColor(color))
+        frames.append(frame)
+    home_window.pet.animation_frames = {"walk": frames}
+    home_window.refresh_pet_assets("lunch_meat")
+    home_window.home_pet.state = "manual_walk"
+    home_window.home_pet.direction = "front_right"
+
+    first = home_window.home_pet_walk_render_spec(now=0.0)
+    second = home_window.home_pet_walk_render_spec(now=1.0 / 8.0)
+    home_window.home_pet.direction = "front_left"
+    mirrored = home_window.home_pet_walk_render_spec(now=1.0 / 8.0)
+
+    assert home_window.home_pet_asset_state()["walk"] == "desktop_animation"
+    assert first.pixmap.cacheKey() == frames[0].cacheKey()
+    assert second.pixmap.cacheKey() == frames[1].cacheKey()
+    assert first.source_rect == QRect(0, 0, 80, 100)
+    assert first.frame_index == 0
+    assert second.frame_index == 1
+    assert first.visual_scale == 1.0
+    assert not first.mirrored
+    assert mirrored.mirrored
 
 
 def test_home_idle_renders_the_desktop_animation_frame(home_window):
