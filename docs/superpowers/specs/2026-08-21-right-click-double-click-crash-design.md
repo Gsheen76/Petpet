@@ -70,4 +70,3 @@
 
 - 把故障证据、原因、实现和验证结果同步到 Obsidian 的 Petpet 开发记录。
 - 提交代码与文档后重启 `D:\Agent_project\Petpet\pet.py`，供用户直接验证。
-

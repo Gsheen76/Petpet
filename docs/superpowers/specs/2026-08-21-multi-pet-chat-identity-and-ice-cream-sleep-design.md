@@ -156,4 +156,3 @@ assets/runtime/pets/ice_cream/home/poses/home-pet-sleep.png
 - 运行完整 `python -m pytest -q`、Python 编译和 `git diff --check`。
 - 使用 Obsidian CLI 写入并读回开发记录。
 - 重启 `D:\Agent_project\Petpet\pet.py`，人工检查两只宠物头像、人格、标题、空行和冰淇淋桌面睡眠。
-

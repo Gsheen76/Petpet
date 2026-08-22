@@ -191,4 +191,3 @@ git commit -m "docs: record Petpet right-click crash fix"
 - [ ] **Step 5: 最终提交检查并重启小狗**
 
 确认 Petpet 仓库仅剩任务开始前已存在的未跟踪目录。终止命令行精确包含 `D:\Agent_project\Petpet\pet.py` 的旧 `python/pythonw` 进程，再以隐藏窗口启动同一路径，等待约 1.2 秒并确认新 PID 仍存在。
-
