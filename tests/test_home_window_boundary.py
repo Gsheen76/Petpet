@@ -88,43 +88,77 @@ def test_lunch_meat_home_reuses_desktop_walk_animation(home_window):
     assert mirrored.mirrored
 
 
-def test_home_uses_direction_specific_walk_frames_when_available(home_window):
-    directions = {}
-    for index, direction in enumerate(("front", "back", "left", "right")):
-        frame = QPixmap(80, 100)
-        frame.fill(QColor.fromHsv(index * 70, 180, 230))
-        directions[direction] = (frame,)
-    home_window._home_pet_directional_walk_frames = directions
+def test_home_mirrors_the_right_walk_frames_when_moving_left(home_window):
+    frame = QPixmap(80, 100)
+    frame.fill(QColor.fromHsv(70, 180, 230))
+    home_window._home_pet_directional_walk_frames = {
+        "left": (frame,),
+        "right": (frame,),
+    }
     home_window.home_pet.state = "manual_walk"
 
-    rendered = {}
-    for direction in directions:
-        home_window.home_pet.direction = direction
-        rendered[direction] = home_window.home_pet_walk_render_spec(now=0.0)
+    home_window.home_pet.direction = "right"
+    right = home_window.home_pet_walk_render_spec(now=0.0)
+    home_window.home_pet.direction = "left"
+    left = home_window.home_pet_walk_render_spec(now=0.0)
 
-    assert all(spec is not None for spec in rendered.values())
-    assert all(
-        rendered[direction].pixmap.cacheKey()
-        == directions[direction][0].cacheKey()
-        for direction in directions
-    )
-    assert all(spec.source_rect == QRect(0, 0, 80, 100) for spec in rendered.values())
+    assert right.pixmap.cacheKey() == frame.cacheKey()
+    assert left.pixmap.cacheKey() == frame.cacheKey()
+    assert right.source_rect == QRect(0, 0, 80, 100)
+    assert left.source_rect == QRect(0, 0, 80, 100)
+    assert not right.mirrored
+    assert left.mirrored
 
 
-def test_lunch_meat_home_loads_all_four_sixteen_frame_walk_grids(home_window):
+def test_lunch_meat_home_loads_one_sixteen_frame_side_grid(home_window):
     home_window.refresh_pet_assets("lunch_meat")
 
-    assert home_window.home_pet_asset_state()["walk"] == "home_4way"
-    assert set(home_window._home_pet_directional_walk_frames) == {
-        "front",
-        "back",
-        "left",
-        "right",
-    }
+    assert home_window.home_pet_asset_state()["walk"] == "home_side"
+    assert set(home_window._home_pet_directional_walk_frames) == {"left", "right"}
     assert {
         len(frames)
         for frames in home_window._home_pet_directional_walk_frames.values()
     } == {16}
+    assert (
+        home_window._home_pet_directional_walk_frames["left"][0].cacheKey()
+        == home_window._home_pet_directional_walk_frames["right"][0].cacheKey()
+    )
+
+
+@pytest.mark.parametrize(
+    ("outfit_id", "filename"),
+    (
+        (None, "walk_right.png"),
+        ("dinosaur_suit", "walk_right_dinosaur.png"),
+        ("strawberry_suit", "walk_right_strawberry.png"),
+    ),
+)
+def test_lunch_meat_home_walk_follows_equipped_outfit(
+    home_window, outfit_id, filename
+):
+    if outfit_id:
+        home_window.state["owned_outfits"] = [outfit_id]
+    home_window.state["equipped_outfit"] = outfit_id
+
+    home_window.refresh_pet_assets("lunch_meat")
+
+    asset_state = home_window.home_pet_asset_state()
+    assert asset_state["outfit"] == outfit_id
+    assert asset_state["walk_source"].endswith(filename)
+
+
+@pytest.mark.parametrize(
+    "filename",
+    ("walk_right.png", "walk_right_dinosaur.png", "walk_right_strawberry.png"),
+)
+def test_lunch_meat_home_walk_sheets_stay_below_generation_limit(
+    home_window, filename
+):
+    sheet = QPixmap(f"assets/runtime/pets/lunch_meat/home/animations/{filename}")
+
+    assert not sheet.isNull()
+    assert sheet.width() < 2048
+    assert sheet.height() < 2048
 
 
 def test_home_walk_frame_keeps_progress_for_sixteen_frame_sequences(home_window):

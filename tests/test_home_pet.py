@@ -14,11 +14,11 @@ class HomePetGeometryTests(unittest.TestCase):
         self.assertGreaterEqual(x, 0.0)
         self.assertLessEqual(y, 730.0)
 
-    def test_four_directions_follow_dominant_screen_axis(self):
+    def test_side_direction_follows_horizontal_delta_and_keeps_facing(self):
         self.assertEqual(home_pet.direction_for_delta(-20, 5), "left")
         self.assertEqual(home_pet.direction_for_delta(20, 5), "right")
-        self.assertEqual(home_pet.direction_for_delta(5, 20), "front")
-        self.assertEqual(home_pet.direction_for_delta(5, -20), "back")
+        self.assertEqual(home_pet.direction_for_delta(0, 20, "left"), "left")
+        self.assertEqual(home_pet.direction_for_delta(0, -20, "right"), "right")
 
     def test_depth_scale_is_clamped_and_increases_toward_foreground(self):
         self.assertEqual(home_pet.depth_scale_for_y(100), 0.72)
@@ -115,7 +115,7 @@ class HomePetMovementTests(unittest.TestCase):
 
         self.assertEqual(pet.target, (400.0, 500.0))
         self.assertEqual(pet.state, "manual_walk")
-        self.assertEqual(pet.direction, "back")
+        self.assertEqual(pet.direction, "left")
 
     def test_large_frame_delta_is_capped(self):
         pet = home_pet.HomePetController(

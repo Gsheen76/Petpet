@@ -218,20 +218,20 @@ class HomeSceneWindow(QWidget):
         home_definition = definition.get("home", {})
         grid_columns = home_definition.get("walk_grid_columns", 0)
         grid_rows = home_definition.get("walk_grid_rows", 0)
+        outfit_id = progression.equipped_outfit(self.state)
+        outfit_definition = progression.OUTFIT_DEFINITIONS.get(outfit_id, {})
+        walk_action = outfit_definition.get("home_walk_action", "walk_right")
+        walk_source = pet_asset_path(selected_pet_id, "home", walk_action)
         if isinstance(grid_columns, int) and isinstance(grid_rows, int):
-            for direction, action in (
-                ("front", "walk_down"),
-                ("back", "walk_up"),
-                ("left", "walk_left"),
-                ("right", "walk_right"),
-            ):
-                path = pet_asset_path(selected_pet_id, "home", action)
-                if path and path != idle_path:
-                    frames = self._home_walk_grid_frames(
-                        path, grid_columns, grid_rows
-                    )
-                    if frames:
-                        self._home_pet_directional_walk_frames[direction] = frames
+            if walk_source and walk_source != idle_path:
+                frames = self._home_walk_grid_frames(
+                    walk_source, grid_columns, grid_rows
+                )
+                if frames:
+                    self._home_pet_directional_walk_frames = {
+                        "left": frames,
+                        "right": frames,
+                    }
         self._home_pet_desktop_walk_frames = ()
         if not self._home_pet_directional_walk_frames and walk_down_path == idle_path:
             ensure_walk = getattr(self.pet, "_ensure_animation_loaded", None)
@@ -287,7 +287,7 @@ class HomeSceneWindow(QWidget):
         self._home_pet_asset_state = {
             "idle": idle_path,
             "walk": (
-                "home_4way"
+                "home_side"
                 if self._home_pet_directional_walk_frames
                 else "home"
                 if walk_down_path and walk_down_path != idle_path
@@ -297,6 +297,8 @@ class HomeSceneWindow(QWidget):
             ),
             "sleep": "home" if sleep_path and sleep_path != idle_path else "idle",
             "pet_id": selected_pet_id,
+            "outfit": outfit_id,
+            "walk_source": walk_source,
         }
 
     @staticmethod
@@ -957,7 +959,7 @@ class HomeSceneWindow(QWidget):
             return HomePetWalkRenderSpec(
                 pixmap=pixmap,
                 source_rect=source_rect,
-                mirrored=False,
+                mirrored=self.home_pet.direction == "left",
                 frame_index=frame_index,
                 visual_scale=1.0,
                 contact_center_x=0.50,

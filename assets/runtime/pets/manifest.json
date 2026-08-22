@@ -15,10 +15,9 @@
       "sleep": "pets/lunch_meat/desktop/poses/sleep.png",
       "walk_grid_columns": 4,
       "walk_grid_rows": 4,
-      "walk_down": "pets/lunch_meat/home/animations/walk_down.png",
-      "walk_up": "pets/lunch_meat/home/animations/walk_up.png",
-      "walk_left": "pets/lunch_meat/home/animations/walk_left.png",
-      "walk_right": "pets/lunch_meat/home/animations/walk_right.png"
+      "walk_right": "pets/lunch_meat/home/animations/walk_right.png",
+      "walk_right_dinosaur": "pets/lunch_meat/home/animations/walk_right_dinosaur.png",
+      "walk_right_strawberry": "pets/lunch_meat/home/animations/walk_right_strawberry.png"
     }
   },
   "ice_cream": {

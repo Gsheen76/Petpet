@@ -1,49 +1,33 @@
-# 午餐肉家园移动动画实施计划
+# 午餐肉三套家园横向移动动画实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+**Goal:** 用三张右向 4×4 精灵图替换午餐肉旧四向资源，并按当前套装同步播放。
 
-**Goal:** 让午餐肉在家园内播放已清理的四向 16 帧行走动画。
+**Architecture:** manifest 只登记原版、恐龙和草莓三张右向网格；家园加载当前装备对应的 16 帧序列，向左时镜像，纯纵向移动保持上一次左右朝向。
 
-**Architecture:** 导入脚本将四张用户提供的 4×4 精灵图清理为透明家园资源；manifest 声明网格规格，家园窗口按当前移动主轴加载并渲染对应方向的 16 帧序列。
+## Task 1：锁定横向行为
 
-**Tech Stack:** Python、PyQt5、unittest。
+- [x] 将朝向判断收敛为左/右，纯纵向移动保持已有朝向。
+- [x] 断言右向原图、左向镜像同一帧。
+- [x] 保持冰淇淋旧家园动画兼容。
 
-## Global Constraints
+## Task 2：导入三套资源
 
-- 仅为声明四向网格资源的宠物启用四向播放。
-- 冰淇淋的原生家园 walk 资源优先级不变。
-- 缺少有效四向帧时保持既有原生资源与桌面帧回退。
+- [x] 导入未装备、小恐龙、草莓小子三张 16 帧右向网格。
+- [x] 使用 alpha 连通域清理，兼容不同套装颜色。
+- [x] 统一输出为 1600×1600，验证 16 帧均非空且没有贴边裁切。
+- [x] 删除旧 `walk_down`、`walk_up`、`walk_left`，覆盖旧 `walk_right`。
 
-### Task 1: 四向资源与回归测试
+## Task 3：装备同步
 
-**Files:**
-- Modify: `tests/test_home_pet.py`
-- Modify: `tests/test_home_scene.py`
-- Modify: `tests/test_home_window_boundary.py`
+- [x] 在套装定义中登记 `home_walk_action`。
+- [x] 家园打开或刷新资源时依据 `equipped_outfit` 选择对应网格。
+- [x] 未装备时安全回退基础动画。
 
-- [x] 断言位移主轴选择上、下、左、右四个朝向。
-- [x] 断言午餐肉四张网格均拆为 16 帧，并按方向优先渲染。
-- [x] 断言帧索引可推进到第 9–16 帧。
+## Task 4：验证与交付
 
-### Task 2: 四向网格导入与家园渲染
-
-**Files:**
-- Create: `tools/import_lunch_meat_home_walk.py`
-- Create: `assets/runtime/pets/lunch_meat/home/animations/walk_*.png`
-- Modify: `assets/runtime/pets/manifest.json`
-- Modify: `petpet/home/pet.py`
-- Modify: `petpet/home/rendering.py`
-- Modify: `petpet/home/window.py`
-
-- [x] 清理每格的半透明生成杂边，保留最大犬体区域。
-- [x] 在 manifest 登记四张 4×4 家园网格。
-- [x] 在 `refresh_pet_assets()` 拆分网格，在 `home_pet_walk_render_spec()` 按方向输出对应帧。
-- [x] 保留原生两向和桌面帧回退，以兼容冰淇淋与未补图宠物。
-
-### Task 3: 全量验证与交付
-
-**Files:**
-- No additional source files.
-
-- [x] 运行家园焦点测试、全量 `python -m pytest -q`、`python -m py_compile` 和 `git diff --check`。
-- [x] 提交修改、同步 Obsidian 记录并重启源码小狗。
+- [x] 定向测试：40 项通过。
+- [x] 全量测试：655 项通过。
+- [x] Python 编译与差异检查。
+- [x] 同步 Obsidian。
+- [x] 重启源码小狗并确认新进程存活。
+- [ ] 提交本次修改。

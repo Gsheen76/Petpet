@@ -11,28 +11,21 @@ from scipy import ndimage
 
 
 GRID_SIZE = 4
-ALPHA_THRESHOLD = 144
+OUTPUT_SIZE = 1600
+ALPHA_THRESHOLD = 32
 SOURCE_FILES = {
-    "walk_down": "ChatGPT Image 2026年8月22日 20_55_13 (1).png",
-    "walk_right": "ChatGPT Image 2026年8月22日 20_55_13 (2).png",
-    "walk_up": "ChatGPT Image 2026年8月22日 20_55_13 (3).png",
-    "walk_left": "ChatGPT Image 2026年8月22日 20_55_14 (4).png",
+    "walk_right": "job_87fb25d73c4648429a1cc637b8a1dcd7-transparent.png",
+    "walk_right_dinosaur": "job_18089add7a83419b8dc5cc60e203e38d-transparent.png",
+    "walk_right_strawberry": "job_185a81ec997e44c689f114046221d89d-transparent.png",
 }
 
 
 def _dog_region(frame: Image.Image) -> numpy.ndarray:
-    """Keep the largest warm/cream connected region in one sprite cell."""
+    """Keep the largest authored subject regardless of outfit color."""
 
     pixels = numpy.asarray(frame)
-    red, green, blue, alpha = numpy.moveaxis(pixels, -1, 0)
-    orange = (red >= 120) & (green >= 40) & (green <= 225) & (blue <= 170)
-    cream = (
-        (red >= 130)
-        & (green >= 90)
-        & (blue >= 55)
-        & ((red.astype(int) - blue.astype(int)) <= 125)
-    )
-    candidate = (alpha >= ALPHA_THRESHOLD) & (orange | cream)
+    alpha = pixels[:, :, 3]
+    candidate = alpha >= ALPHA_THRESHOLD
     labels, count = ndimage.label(candidate)
     if count == 0:
         return alpha >= ALPHA_THRESHOLD
@@ -62,7 +55,7 @@ def clean_grid(source: Path) -> Image.Image:
 
 
 def import_grids(source_dir: Path, output_dir: Path) -> None:
-    """Write the four cleaned source grids with their 4x4 geometry unchanged."""
+    """Write the three cleaned right-facing grids with geometry unchanged."""
 
     output_dir.mkdir(parents=True, exist_ok=True)
     for action, filename in SOURCE_FILES.items():
@@ -70,6 +63,10 @@ def import_grids(source_dir: Path, output_dir: Path) -> None:
         image = clean_grid(source)
         if image.width != image.height:
             raise ValueError(f"Expected a square {GRID_SIZE}x{GRID_SIZE} grid: {source}")
+        if image.width > OUTPUT_SIZE:
+            image = image.resize(
+                (OUTPUT_SIZE, OUTPUT_SIZE), Image.Resampling.LANCZOS
+            )
         image.save(output_dir / f"{action}.png", optimize=True)
 
 
