@@ -969,7 +969,11 @@ class HomeSceneWindow(QWidget):
                 source_rect=source_rect,
                 mirrored=False,
                 frame_index=frame if self._home_pet_sleep_is_sheet else 0,
-                visual_scale=HOME_PET_SLEEP_VISUAL_SCALE,
+                visual_scale=(
+                    HOME_PET_SLEEP_VISUAL_SCALE
+                    if self.current_pet_id == "ice_cream"
+                    else HOME_PET_DEFAULT_SLEEP_VISUAL_SCALE
+                ),
                 contact_center_x=contact[0],
                 contact_width=contact[1],
                 contact_foot_y=contact[2],

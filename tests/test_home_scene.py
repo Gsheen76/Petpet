@@ -177,7 +177,7 @@ class HomeSceneAssetTests(unittest.TestCase):
         self.assertEqual(fallback.frame_index, 0)
 
     def test_sleeping_uses_the_sleep_sheet_and_falls_back_when_it_is_missing(self):
-        state = progression.ensure_progression({})
+        state = progression.ensure_progression({"active_pet_id": "ice_cream"})
         shared_sleep = QPixmap(20, 20)
         shared_sleep.fill(Qt.white)
         pet = SimpleNamespace(
@@ -203,10 +203,10 @@ class HomeSceneAssetTests(unittest.TestCase):
         self.assertEqual(spec.source_rect, QRect(664, 176, 592, 288))
         self.assertEqual(spec.frame_index, 1)
         self.assertFalse(spec.mirrored)
-        self.assertEqual(spec.visual_scale, 0.50)
+        self.assertEqual(spec.visual_scale, 1.0)
         rect = scene.home_pet_render_rect(spec)
-        self.assertAlmostEqual(rect.width(), 118.46, places=2)
-        self.assertAlmostEqual(rect.height(), 57.63, places=2)
+        idle_rect = scene.home_pet_draw_rect()
+        self.assertAlmostEqual(rect.height(), idle_rect.height(), places=2)
 
         scene.home_pet_sleep = QPixmap()
         self.assertIsNone(scene.home_pet_render_spec(now=1.0 / 3.0))

@@ -124,6 +124,35 @@ class PettingAnimationAssetTests(unittest.TestCase):
             {"pet": 1.0, "eat": 1.0, "dig_reward": 1.0, "sleep": 0.7},
         )
 
+    def test_ice_cream_sleep_animation_matches_idle_visible_height(self):
+        manifest_path = (
+            Path(pet.ANIMATIONS_DIR).parents[2]
+            / "ice_cream"
+            / "desktop"
+            / "animations"
+            / "manifest.json"
+        )
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        sleep_scale = manifest["sleep"]["scale"]
+
+        idle_path = manifest_path.parents[1] / "poses" / "idle.png"
+        sleep_path = manifest_path.parents[2] / "home" / "poses" / "home-pet-sleep.png"
+        with Image.open(idle_path).convert("RGBA") as idle, Image.open(sleep_path).convert("RGBA") as sheet:
+            idle_height = idle.getchannel("A").getbbox()[3]
+            idle_top = idle.getchannel("A").getbbox()[1]
+            idle_visible_height = idle_height - idle_top
+            sleep_frame = sheet.crop((24, 176, 616, 464))
+            sleep_box = sleep_frame.getchannel("A").getbbox()
+            sleep_visible_height = sleep_box[3] - sleep_box[1]
+
+        idle_fit = min(pet.DEFAULT_PET_SIZE[0] / idle.width, pet.DEFAULT_PET_SIZE[2] / idle.height)
+        sleep_fit = min(pet.DEFAULT_PET_SIZE[0] / sleep_frame.width, pet.DEFAULT_PET_SIZE[2] / sleep_frame.height)
+        self.assertAlmostEqual(
+            sleep_visible_height * sleep_fit * sleep_scale,
+            idle_visible_height * idle_fit,
+            delta=1.0,
+        )
+
 
 class PetClickAnimationTests(unittest.TestCase):
     def test_single_click_plays_the_complete_petting_sequence(self):
