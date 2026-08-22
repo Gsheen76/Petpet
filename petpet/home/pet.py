@@ -82,15 +82,15 @@ def clamp_to_walkable(
 def direction_for_delta(
     dx: float,
     dy: float,
-    fallback: str = "front_right",
+    fallback: str = "front",
 ) -> str:
     """Map a screen-space target vector to one of four home directions."""
 
     if abs(dx) <= 1e-9 and abs(dy) <= 1e-9:
         return fallback
-    depth = "front" if dy >= 0 else "back"
-    side = "right" if dx >= 0 else "left"
-    return f"{depth}_{side}"
+    if abs(dx) > abs(dy):
+        return "right" if dx > 0 else "left"
+    return "front" if dy > 0 else "back"
 
 
 def route_footprints(
@@ -208,7 +208,7 @@ class HomePetController:
         self.position = clamp_to_walkable(position)
         self.target: Point | None = None
         self.state = "idle"
-        self.direction = "front_right"
+        self.direction = "front"
         self.walk_speed = max(0.0, float(walk_speed))
         self.arrival_radius = max(0.0, float(arrival_radius))
         self.sleep_retry_seconds = max(0.0, float(sleep_retry_seconds))

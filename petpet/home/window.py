@@ -69,6 +69,7 @@ class HomeSceneWindow(QWidget):
         self._home_pet_sleep_source_rect = home_pet_sleep_source_rect(0)
         self._home_pet_idle_source_rect = HOME_PET_IDLE_CONTENT_RECT
         self._home_pet_animation_source_rects = {}
+        self._home_pet_directional_walk_frames = {}
         self._home_pet_desktop_walk_frames = ()
         self._home_pet_static_contact = (0.50, 0.55, 0.99)
         self._home_pet_asset_state = {
@@ -213,8 +214,26 @@ class HomeSceneWindow(QWidget):
         walk_down_path = resolve("walk_down")
         walk_back_right_path = resolve("walk_back_right")
         sleep_path = resolve("sleep")
+        self._home_pet_directional_walk_frames = {}
+        home_definition = definition.get("home", {})
+        grid_columns = home_definition.get("walk_grid_columns", 0)
+        grid_rows = home_definition.get("walk_grid_rows", 0)
+        if isinstance(grid_columns, int) and isinstance(grid_rows, int):
+            for direction, action in (
+                ("front", "walk_down"),
+                ("back", "walk_up"),
+                ("left", "walk_left"),
+                ("right", "walk_right"),
+            ):
+                path = pet_asset_path(selected_pet_id, "home", action)
+                if path and path != idle_path:
+                    frames = self._home_walk_grid_frames(
+                        path, grid_columns, grid_rows
+                    )
+                    if frames:
+                        self._home_pet_directional_walk_frames[direction] = frames
         self._home_pet_desktop_walk_frames = ()
-        if walk_down_path == idle_path:
+        if not self._home_pet_directional_walk_frames and walk_down_path == idle_path:
             ensure_walk = getattr(self.pet, "_ensure_animation_loaded", None)
             if callable(ensure_walk):
                 ensure_walk("walk")
@@ -268,7 +287,9 @@ class HomeSceneWindow(QWidget):
         self._home_pet_asset_state = {
             "idle": idle_path,
             "walk": (
-                "home"
+                "home_4way"
+                if self._home_pet_directional_walk_frames
+                else "home"
                 if walk_down_path and walk_down_path != idle_path
                 else "desktop_animation"
                 if self._home_pet_desktop_walk_frames
@@ -277,6 +298,27 @@ class HomeSceneWindow(QWidget):
             "sleep": "home" if sleep_path and sleep_path != idle_path else "idle",
             "pet_id": selected_pet_id,
         }
+
+    @staticmethod
+    def _home_walk_grid_frames(path, columns, rows):
+        """Split an authored rectangular walk grid into transparent frames."""
+
+        if columns <= 0 or rows <= 0:
+            return ()
+        sheet = QPixmap(path)
+        if sheet.isNull():
+            return ()
+        frames = []
+        for row in range(rows):
+            top = round(row * sheet.height() / rows)
+            bottom = round((row + 1) * sheet.height() / rows)
+            for column in range(columns):
+                left = round(column * sheet.width() / columns)
+                right = round((column + 1) * sheet.width() / columns)
+                frame = sheet.copy(left, top, right - left, bottom - top)
+                if not frame.isNull():
+                    frames.append(frame)
+        return tuple(frames)
 
     def refresh_active_pet(self) -> None:
         """Reload the selected pet's controller and registered artwork."""
@@ -883,7 +925,7 @@ class HomeSceneWindow(QWidget):
         }:
             return 0
         current = time.monotonic() if now is None else max(0.0, float(now))
-        return int(current * HOME_PET_WALK_FPS) % HOME_PET_WALK_FRAME_COUNT
+        return int(current * HOME_PET_WALK_FPS)
 
     def home_pet_sleep_frame(self, now=None):
         """Return the current sleep frame at its deliberately gentle cadence."""
@@ -899,6 +941,29 @@ class HomeSceneWindow(QWidget):
         if self.home_pet.state == "sleeping":
             return None
         frame = self.home_pet_walk_frame(now)
+        directional_walk_frames = self._home_pet_directional_walk_frames.get(
+            self.home_pet.direction, ()
+        )
+        if directional_walk_frames:
+            frame_index = frame % len(directional_walk_frames)
+            pixmap = directional_walk_frames[frame_index]
+            source_rect = self._shared_animation_source_rect(
+                {
+                    "name": f"home_{self.home_pet.direction}_walk",
+                    "pixmap": pixmap,
+                    "frames": directional_walk_frames,
+                }
+            )
+            return HomePetWalkRenderSpec(
+                pixmap=pixmap,
+                source_rect=source_rect,
+                mirrored=False,
+                frame_index=frame_index,
+                visual_scale=1.0,
+                contact_center_x=0.50,
+                contact_width=0.55,
+                contact_foot_y=0.98,
+            )
         desktop_walk_frames = self._home_pet_desktop_walk_frames
         if desktop_walk_frames:
             frame_index = frame % len(desktop_walk_frames)
@@ -913,7 +978,7 @@ class HomeSceneWindow(QWidget):
             return HomePetWalkRenderSpec(
                 pixmap=pixmap,
                 source_rect=source_rect,
-                mirrored=self.home_pet.direction in {"front_left", "back_left"},
+                mirrored=self.home_pet.direction in {"front_left", "back_left", "left"},
                 frame_index=frame_index,
                 visual_scale=1.0,
                 contact_center_x=0.50,
@@ -921,7 +986,13 @@ class HomeSceneWindow(QWidget):
                 contact_foot_y=0.98,
             )
         contact = home_pet_frame_contact(self.home_pet.direction, frame)
-        if self.home_pet.direction in {"front_left", "front_right"}:
+        if self.home_pet.direction in {
+            "front",
+            "front_left",
+            "front_right",
+            "left",
+            "right",
+        }:
             if self.home_pet_walk_down.isNull():
                 return None
             source_rect = (
@@ -937,14 +1008,14 @@ class HomeSceneWindow(QWidget):
             return HomePetWalkRenderSpec(
                 pixmap=self.home_pet_walk_down,
                 source_rect=source_rect,
-                mirrored=self.home_pet.direction == "front_left",
+                mirrored=self.home_pet.direction in {"front_left", "left"},
                 frame_index=frame if self._home_pet_walk_down_is_sheet else 0,
                 visual_scale=1.0,
                 contact_center_x=contact[0],
                 contact_width=contact[1],
                 contact_foot_y=contact[2],
             )
-        if self.home_pet.direction in {"back_left", "back_right"}:
+        if self.home_pet.direction in {"back", "back_left", "back_right"}:
             if self.home_pet_walk_back_right.isNull():
                 return None
             source_rect = (

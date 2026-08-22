@@ -112,7 +112,7 @@ class HomeSceneAssetTests(unittest.TestCase):
         self.assertEqual(scene.home_pet_walk_frame(now=0.0), 0)
         self.assertEqual(scene.home_pet_walk_frame(now=0.125), 1)
         self.assertEqual(scene.home_pet_walk_frame(now=0.999), 7)
-        self.assertEqual(scene.home_pet_walk_frame(now=1.0), 0)
+        self.assertEqual(scene.home_pet_walk_frame(now=1.0), 8)
         scene.home_pet.state = "manual_sleep_walk"
         self.assertEqual(scene.home_pet_walk_frame(now=0.125), 1)
 

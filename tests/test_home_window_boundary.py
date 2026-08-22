@@ -62,29 +62,22 @@ def test_lunch_meat_home_uses_its_sleep_pose_at_the_home_sleep_scale(home_window
     ).toImage()
 
 
-def test_missing_home_walk_falls_back_to_active_pet_idle(home_window):
-    home_window.refresh_pet_assets("lunch_meat")
-
-    assert home_window.home_pet_asset_state()["walk"] == "idle"
-
-
 def test_lunch_meat_home_reuses_desktop_walk_animation(home_window):
     frames = []
     for color in ("#f08b55", "#d96e3d"):
         frame = QPixmap(80, 100)
         frame.fill(QColor(color))
         frames.append(frame)
-    home_window.pet.animation_frames = {"walk": frames}
-    home_window.refresh_pet_assets("lunch_meat")
+    home_window._home_pet_directional_walk_frames = {}
+    home_window._home_pet_desktop_walk_frames = tuple(frames)
     home_window.home_pet.state = "manual_walk"
-    home_window.home_pet.direction = "front_right"
+    home_window.home_pet.direction = "right"
 
     first = home_window.home_pet_walk_render_spec(now=0.0)
     second = home_window.home_pet_walk_render_spec(now=1.0 / 8.0)
-    home_window.home_pet.direction = "front_left"
+    home_window.home_pet.direction = "left"
     mirrored = home_window.home_pet_walk_render_spec(now=1.0 / 8.0)
 
-    assert home_window.home_pet_asset_state()["walk"] == "desktop_animation"
     assert first.pixmap.cacheKey() == frames[0].cacheKey()
     assert second.pixmap.cacheKey() == frames[1].cacheKey()
     assert first.source_rect == QRect(0, 0, 80, 100)
@@ -93,6 +86,50 @@ def test_lunch_meat_home_reuses_desktop_walk_animation(home_window):
     assert first.visual_scale == 1.0
     assert not first.mirrored
     assert mirrored.mirrored
+
+
+def test_home_uses_direction_specific_walk_frames_when_available(home_window):
+    directions = {}
+    for index, direction in enumerate(("front", "back", "left", "right")):
+        frame = QPixmap(80, 100)
+        frame.fill(QColor.fromHsv(index * 70, 180, 230))
+        directions[direction] = (frame,)
+    home_window._home_pet_directional_walk_frames = directions
+    home_window.home_pet.state = "manual_walk"
+
+    rendered = {}
+    for direction in directions:
+        home_window.home_pet.direction = direction
+        rendered[direction] = home_window.home_pet_walk_render_spec(now=0.0)
+
+    assert all(spec is not None for spec in rendered.values())
+    assert all(
+        rendered[direction].pixmap.cacheKey()
+        == directions[direction][0].cacheKey()
+        for direction in directions
+    )
+    assert all(spec.source_rect == QRect(0, 0, 80, 100) for spec in rendered.values())
+
+
+def test_lunch_meat_home_loads_all_four_sixteen_frame_walk_grids(home_window):
+    home_window.refresh_pet_assets("lunch_meat")
+
+    assert home_window.home_pet_asset_state()["walk"] == "home_4way"
+    assert set(home_window._home_pet_directional_walk_frames) == {
+        "front",
+        "back",
+        "left",
+        "right",
+    }
+    assert {
+        len(frames)
+        for frames in home_window._home_pet_directional_walk_frames.values()
+    } == {16}
+
+
+def test_home_walk_frame_keeps_progress_for_sixteen_frame_sequences(home_window):
+    home_window.home_pet.state = "manual_walk"
+    assert home_window.home_pet_walk_frame(now=1.0) == 8
 
 
 def test_home_idle_renders_the_desktop_animation_frame(home_window):

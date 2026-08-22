@@ -292,11 +292,11 @@ def home_pet_frame_contact(direction: str, frame_index: int):
     index = int(frame_index) % HOME_PET_WALK_FRAME_COUNT
     contacts = (
         HOME_PET_FRONT_CONTACTS
-        if direction in {"front_left", "front_right"}
+        if direction in {"front", "front_left", "front_right", "left", "right"}
         else HOME_PET_BACK_CONTACTS
     )
     center_x, width, foot_y = contacts[index]
-    if direction in {"front_left", "back_left"}:
+    if direction in {"front_left", "back_left", "left"}:
         center_x = round(1.0 - center_x, 4)
     return center_x, width, foot_y
 
