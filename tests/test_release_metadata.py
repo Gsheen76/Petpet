@@ -1,4 +1,5 @@
 import re
+import json
 from pathlib import Path
 
 import pet
@@ -9,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_public_version_has_one_source_of_truth():
-    assert VERSION == "1.5.2"
+    assert VERSION == "1.6.0"
     assert pet.VERSION == VERSION
 
 
@@ -32,9 +33,18 @@ def test_macos_build_uses_lightweight_version_module():
     ).read_text(encoding="utf-8")
     assert "from version import VERSION" in workflow
     assert 'project_root / "version.py"' in mac_spec
-    assert re.search(r'^VERSION = "1\.5\.2"$', (
+    assert re.search(r'^VERSION = "1\.6\.0"$', (
         ROOT / "version.py"
     ).read_text(encoding="utf-8"), re.MULTILINE)
+
+
+def test_game_knowledge_matches_public_version():
+    knowledge = json.loads(
+        (ROOT / "assets/runtime/knowledge/game_knowledge.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert knowledge["version"] == VERSION
 
 
 def test_release_ignores_local_debug_and_wrangler_cache():
@@ -50,14 +60,14 @@ def test_release_ignores_local_debug_and_wrangler_cache():
     assert ".tools/" in ignored_paths
 
 
-def test_readme_documents_one_click_release_and_v152_assets():
+def test_readme_documents_one_click_release_and_v160_assets():
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    assert ".\\scripts\\release.ps1 -Version 1.5.2" in readme
+    assert ".\\scripts\\release.ps1 -Version 1.6.0" in readme
     for asset in (
         "Petpet.exe",
-        "Petpet-v1.5.2-windows.zip",
-        "Petpet-v1.5.2-macOS-arm64.zip",
-        "Petpet-v1.5.2-macOS-intel.zip",
+        "Petpet-v1.6.0-windows.zip",
+        "Petpet-v1.6.0-macOS-arm64.zip",
+        "Petpet-v1.6.0-macOS-intel.zip",
     ):
         assert asset in readme
     assert "默认免费文字聊天" in readme

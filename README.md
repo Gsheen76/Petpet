@@ -6,7 +6,20 @@
   <img src="assets/runtime/pets/lunch_meat/desktop/poses/idle.png" width="280" alt="Pet陪它桌面小狗">
 </p>
 
-当前版本：`v1.5.2`
+当前版本：`v1.6.0`
+
+## v1.6.0 更新亮点
+
+- 新增冰淇淋小狗，支持购买、切换和按宠物独立保存昵称、属性、位置与聊天记忆。
+- 桌面与家园始终展示同一只当前宠物；冰淇淋桌面睡眠复用家园的 8 帧动画，尺寸与待机保持一致。
+- 资源按宠物 ID 组织，动画图集增加尺寸、帧数和失败回退保护，损坏资源不会拖慢绘制。
+- 商店统一宠物、套装、家具和强化卡片，折扣价格、免费赠送、双列家具和当前加成展示更清晰。
+- 聊天头像、标题和性格随当前宠物切换；午餐肉活泼开朗，冰淇淋温柔可爱，并清理助手回复中的多余空行。
+- 修复快速右键双击闪退、家园待机微小横移、睡眠尺寸和脚底阴影不一致等问题。
+
+## v1.6.0 发布
+
+完整资产通过 `scripts/release.ps1 -Version 1.6.0` 一键构建、校验并发布。
 
 支持平台：Windows 10/11、macOS Intel、macOS Apple 芯片
 
@@ -54,15 +67,15 @@
 
 ## 下载
 
-正式版本发布在 [GitHub Releases](https://github.com/Gsheen76/Petpet/releases)。当前 `v1.5.2` 的公开资产如下：
+正式版本发布在 [GitHub Releases](https://github.com/Gsheen76/Petpet/releases)。当前 `v1.6.0` 的公开资产如下：
 
 | 平台 | 文件 |
 | --- | --- |
 | Windows 直接运行 | `Petpet.exe` |
-| Windows 便携包 | `Petpet-v1.5.2-windows.zip` |
-| macOS Apple 芯片 | `Petpet-v1.5.2-macOS-arm64.zip` |
-| macOS Intel | `Petpet-v1.5.2-macOS-intel.zip` |
-| 校验和 | `Petpet-v1.5.2-SHA256SUMS.txt` |
+| Windows 便携包 | `Petpet-v1.6.0-windows.zip` |
+| macOS Apple 芯片 | `Petpet-v1.6.0-macOS-arm64.zip` |
+| macOS Intel | `Petpet-v1.6.0-macOS-intel.zip` |
+| 校验和 | `Petpet-v1.6.0-SHA256SUMS.txt` |
 
 Windows 下载 ZIP 后解压并运行 `Petpet.exe`。直接下载的 `Petpet.exe` 也可以独立运行，程序不会弹出命令行窗口。
 
@@ -294,7 +307,7 @@ dist/Petpet.app
 发布前应先更新 `version.py`、`docs/RELEASE_NOTES_v<版本>.md` 和 README，并提交全部改动。在干净工作树中运行：
 
 ```powershell
-.\scripts\release.ps1 -Version 1.5.2
+.\scripts\release.ps1 -Version 1.6.0
 ```
 
 脚本会依次检查版本和工作树、运行全量测试、编译检查、构建并冒烟验证 Windows 版本、生成 Windows 便携包和 SHA256 校验文件，然后同步 `main`、创建或继续草稿 Release，并触发 macOS 双架构工作流。
@@ -363,7 +376,7 @@ Petpet/
 
 ### 小狗不见了或没有保持置顶
 
-点击 Windows 系统托盘或 macOS 菜单栏中的 Petpet 图标，选择显示或唤醒。v1.5.2 已增加意外隐藏后的恢复和置顶保持逻辑；若仍无法显示，先检查是否被移到屏幕边缘，再重新启动程序。
+点击 Windows 系统托盘或 macOS 菜单栏中的 Petpet 图标，选择显示或唤醒。v1.6.0 延续意外隐藏后的恢复和置顶保持逻辑；若仍无法显示，先检查是否被移到屏幕边缘，再重新启动程序。
 
 ### 右键菜单第一次打开有延迟
 
