@@ -446,7 +446,7 @@ class HomeSceneAssetTests(unittest.TestCase):
         )
         self.assertEqual(home_scene.home_destination_opacity(20.0, 20.35), 0.0)
 
-    def test_home_scene_controls_have_chinese_labels_and_upper_right_exit(self):
+    def test_home_scene_actions_expand_upward_from_the_lower_right_corner(self):
         state = progression.ensure_progression({})
         pet = SimpleNamespace(
             state=state,
@@ -461,22 +461,26 @@ class HomeSceneAssetTests(unittest.TestCase):
         canvas = scene.scene_canvas_rect()
         self.assertLess(scene.left_view_button_rect().right(), canvas.left() + 100)
         self.assertGreater(scene.right_view_button_rect().left(), canvas.right() - 100)
-        self.assertLess(scene.decoration_button_rect().right(), scene.exit_button_rect().left())
-        self.assertLess(scene.exit_button_rect().bottom(), 80)
+        toggle = scene.home_action_toggle_rect()
+        self.assertLessEqual(toggle.right(), canvas.right() - 14)
+        self.assertLessEqual(toggle.bottom(), canvas.bottom() - 14)
         self.assertEqual(scene.scene_button_label("left"), "左移")
         self.assertEqual(scene.scene_button_label("right"), "右移")
         self.assertEqual(scene.scene_button_label("decorate"), "装修")
         self.assertEqual(scene.scene_button_label("exit"), "退出")
         self.assertEqual(scene.scene_button_label("shop"), "商店")
-        self.assertEqual(scene.scene_button_label("interaction"), "互动⌄")
+        self.assertEqual(scene.scene_button_label("interaction"), "互动")
+        self.assertEqual(scene.scene_button_label("menu"), "菜单⌃")
 
         actions = scene.home_action_button_rects()
         self.assertNotIn("status", actions)
-        ordered = [
-            actions[name].left()
+        self.assertTrue(all(rect.right() == toggle.right() for rect in actions.values()))
+        self.assertTrue(all(rect.bottom() < toggle.top() for rect in actions.values()))
+        upward = [
+            actions[name].top()
             for name in ("shop", "interaction", "decorate", "exit")
         ]
-        self.assertEqual(ordered, sorted(ordered))
+        self.assertEqual(upward, sorted(upward, reverse=True))
 
     def test_status_card_uses_a_large_live_three_stat_layout(self):
         state = progression.ensure_progression({
@@ -501,7 +505,7 @@ class HomeSceneAssetTests(unittest.TestCase):
         for rect in home_scene.home_status_card_value_rects():
             self.assertGreaterEqual(rect.width(), 64)
 
-    def test_home_action_buttons_are_compact_text_controls_with_a_shared_height(self):
+    def test_home_action_buttons_are_compact_vertical_controls_with_a_shared_width(self):
         state = progression.ensure_progression({})
         pet = SimpleNamespace(
             state=state,
@@ -517,7 +521,55 @@ class HomeSceneAssetTests(unittest.TestCase):
         self.assertGreater(decorate.width(), decorate.height())
         self.assertGreater(exit_button.width(), exit_button.height())
         self.assertEqual(decorate.height(), exit_button.height())
-        self.assertEqual(decorate.y(), exit_button.y())
+        self.assertEqual(decorate.width(), exit_button.width())
+        self.assertEqual(decorate.right(), exit_button.right())
+        self.assertGreater(decorate.y(), exit_button.y())
+
+    def test_home_action_toggle_opens_primary_menu_and_interaction_submenu(self):
+        state = progression.ensure_progression({})
+        pet = SimpleNamespace(
+            state=state,
+            width=lambda: 190,
+            height=lambda: 220,
+            current_screen_rect=lambda: QRect(0, 0, 1920, 1080),
+            raise_=Mock(),
+            open_shop=Mock(),
+        )
+        scene = home_scene.HomeSceneWindow(pet, Mock())
+        self.addCleanup(scene.close)
+
+        self.assertFalse(scene._scene_control_at(scene.shop_button_rect().center()))
+        self.assertTrue(scene.handle_scene_click(scene.home_action_toggle_rect().center()))
+        self.assertTrue(scene._home_action_menu_open)
+        self.assertFalse(scene._interaction_menu_open)
+        self.assertTrue(scene._scene_control_at(scene.shop_button_rect().center()))
+
+        self.assertTrue(scene.handle_scene_click(scene.interaction_button_rect().center()))
+        self.assertFalse(scene._home_action_menu_open)
+        self.assertTrue(scene._interaction_menu_open)
+        interaction_actions = scene.home_interaction_action_rects()
+        toggle = scene.home_action_toggle_rect()
+        self.assertTrue(
+            all(rect.right() == toggle.right() for rect in interaction_actions.values())
+        )
+        self.assertTrue(
+            all(rect.bottom() < toggle.top() for rect in interaction_actions.values())
+        )
+
+        self.assertTrue(scene.handle_scene_click(QPoint(100, 100)))
+        self.assertFalse(scene._interaction_menu_open)
+        self.assertTrue(scene.handle_scene_click(toggle.center()))
+        self.assertTrue(scene.handle_scene_click(scene.interaction_button_rect().center()))
+        self.assertTrue(scene.handle_scene_click(toggle.center()))
+        self.assertTrue(scene._home_action_menu_open)
+        self.assertFalse(scene._interaction_menu_open)
+        self.assertTrue(scene.handle_scene_click(QPoint(100, 100)))
+        self.assertFalse(scene._home_action_menu_open)
+
+        self.assertTrue(scene.handle_scene_click(toggle.center()))
+        self.assertTrue(scene.handle_scene_click(scene.shop_button_rect().center()))
+        pet.open_shop.assert_called_once_with()
+        self.assertFalse(scene._home_action_menu_open)
 
     def test_furniture_assets_match_their_authored_scene_sizes(self):
         expected_sizes = {
@@ -580,7 +632,7 @@ class HomeSceneAssetTests(unittest.TestCase):
     def test_scene_uses_rounded_corners(self):
         self.assertEqual(home_scene.HOME_SCENE_CORNER_RADIUS, 24)
 
-    def test_exit_button_is_inside_upper_right_corner(self):
+    def test_exit_button_is_farthest_option_in_the_lower_right_pull_up_menu(self):
         state = progression.ensure_progression({})
         pet = SimpleNamespace(
             state=state,
@@ -594,14 +646,16 @@ class HomeSceneAssetTests(unittest.TestCase):
         self.addCleanup(scene.close)
         scene.setGeometry(QRect(1020, 312, 900, 768))
 
+        toggle = scene.home_action_toggle_rect()
         button = scene.exit_button_rect()
 
-        self.assertGreaterEqual(button.top(), 10)
-        self.assertLess(button.bottom(), 80)
+        self.assertLess(button.bottom(), toggle.top())
         self.assertTrue(button.right() <= scene.width() - 10)
         self.assertGreater(button.width(), 30)
 
         state["home_scene"]["enabled"] = True
+        self.assertTrue(scene.handle_scene_click(toggle.center()))
+        self.assertTrue(scene._home_action_menu_open)
         self.assertTrue(scene.handle_scene_click(button.center()))
         self.assertFalse(state["home_scene"]["enabled"])
         pet.raise_.assert_called()
@@ -884,7 +938,7 @@ class HomeSceneAssetTests(unittest.TestCase):
         scene.show_scene()
 
         self.assertFalse(
-            scene.command_home_pet(scene.exit_button_rect().center(), now=1.0)
+            scene.command_home_pet(scene.home_action_toggle_rect().center(), now=1.0)
         )
         self.assertFalse(scene.command_home_pet(QPoint(20, 600), now=1.5))
         scene.toggle_decoration_mode()
