@@ -14,7 +14,7 @@
     "fps": 3,
     "loop": true,
     "fallback": "sleep",
-    "scale": 1.34,
+    "scale": 0.75,
     "anchor_bottom": true
   }
 }

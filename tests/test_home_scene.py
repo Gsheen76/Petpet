@@ -203,10 +203,10 @@ class HomeSceneAssetTests(unittest.TestCase):
         self.assertEqual(spec.source_rect, QRect(664, 176, 592, 288))
         self.assertEqual(spec.frame_index, 1)
         self.assertFalse(spec.mirrored)
-        self.assertEqual(spec.visual_scale, 1.0)
+        self.assertEqual(spec.visual_scale, 0.60)
         rect = scene.home_pet_render_rect(spec)
         idle_rect = scene.home_pet_draw_rect()
-        self.assertAlmostEqual(rect.height(), idle_rect.height(), places=2)
+        self.assertAlmostEqual(rect.height(), idle_rect.height() * 0.60, places=2)
 
         scene.home_pet_sleep = QPixmap()
         self.assertIsNone(scene.home_pet_render_spec(now=1.0 / 3.0))

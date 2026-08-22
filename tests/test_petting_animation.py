@@ -124,7 +124,7 @@ class PettingAnimationAssetTests(unittest.TestCase):
             {"pet": 1.0, "eat": 1.0, "dig_reward": 1.0, "sleep": 0.7},
         )
 
-    def test_ice_cream_sleep_animation_matches_idle_visible_height(self):
+    def test_ice_cream_sleep_animation_is_gently_larger_than_original(self):
         manifest_path = (
             Path(pet.ANIMATIONS_DIR).parents[2]
             / "ice_cream"
@@ -147,11 +147,12 @@ class PettingAnimationAssetTests(unittest.TestCase):
 
         idle_fit = min(pet.DEFAULT_PET_SIZE[0] / idle.width, pet.DEFAULT_PET_SIZE[2] / idle.height)
         sleep_fit = min(pet.DEFAULT_PET_SIZE[0] / sleep_frame.width, pet.DEFAULT_PET_SIZE[2] / sleep_frame.height)
-        self.assertAlmostEqual(
-            sleep_visible_height * sleep_fit * sleep_scale,
-            idle_visible_height * idle_fit,
-            delta=1.0,
-        )
+        displayed_height = sleep_visible_height * sleep_fit * sleep_scale
+        original_height = sleep_visible_height * sleep_fit * 0.62
+        idle_height = idle_visible_height * idle_fit
+        self.assertEqual(sleep_scale, 0.75)
+        self.assertGreater(displayed_height, original_height)
+        self.assertLess(displayed_height, idle_height)
 
 
 class PetClickAnimationTests(unittest.TestCase):

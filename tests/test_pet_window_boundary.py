@@ -297,7 +297,7 @@ class PetWindowBoundaryTests(unittest.TestCase):
 
             self.assertEqual(len(frames), 8)
             self.assertEqual(spec["fps"], 3)
-            self.assertAlmostEqual(spec["scale"], 1.34)
+            self.assertAlmostEqual(spec["scale"], 0.75)
             self.assertTrue(spec["anchor_bottom"])
             self.assertEqual(frames[0].size(), expected_first.size())
             self.assertEqual(frames[0].toImage(), expected_first.toImage())
