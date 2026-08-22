@@ -1607,6 +1607,10 @@ class ShopWindow(CozyProgressWindow):
         if result.get("ok"):
             self.save_callback(self.pet.state)
             self.pet.update()
+            home = getattr(self.pet, "home_scene_window", None)
+            refresh_home = getattr(home, "refresh_pet_assets", None)
+            if callable(refresh_home):
+                refresh_home()
         self.pet.say(message, 2100)
         self.refresh()
         self.status_label.setText(message)

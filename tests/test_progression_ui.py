@@ -10,6 +10,7 @@ from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import QApplication, QFrame, QGridLayout, QLabel, QPushButton
 
 import progression
+from petpet.home.window import HomeSceneWindow
 from progression_ui import (
     AchievementsWindow,
     DecorationAdjustWindow,
@@ -39,6 +40,7 @@ class ProgressionWindowUiTests(unittest.TestCase):
             interface_window_position=Mock(return_value=QPoint(700, 180)),
             say=Mock(),
             update=Mock(),
+            home_scene_window=None,
         )
         self.windows = []
 
@@ -172,6 +174,26 @@ class ProgressionWindowUiTests(unittest.TestCase):
         )
         self.assertEqual(save.call_count, 2)
         self.assertEqual(self.pet.update.call_count, 2)
+
+    def test_equipping_outfit_refreshes_open_home_walk_assets(self):
+        self.pet.state["owned_outfits"] = ["dinosaur_suit"]
+        home = HomeSceneWindow(self.pet, Mock())
+        self.pet.home_scene_window = home
+        home.refresh_pet_assets("lunch_meat")
+        shop = ShopWindow(self.pet, Mock())
+        self.windows = [shop, home]
+
+        self.assertTrue(
+            home.home_pet_asset_state()["walk_source"].endswith("walk_right.png")
+        )
+
+        shop._equip_outfit("dinosaur_suit")
+
+        self.assertTrue(
+            home.home_pet_asset_state()["walk_source"].endswith(
+                "walk_right_dinosaur.png"
+            )
+        )
 
     def test_home_shop_page_lists_home_furniture(self):
         shop = ShopWindow(self.pet, Mock())
