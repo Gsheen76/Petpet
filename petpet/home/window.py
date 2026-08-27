@@ -670,7 +670,7 @@ class HomeSceneWindow(QWidget):
         """Right toggle (menu), the pair centered under the item stacks."""
         canvas = self.scene_canvas_rect()
         width, height = HOME_TOGGLE_SIZE
-        stack_right = canvas.right() - 14
+        stack_right = canvas.right() - 14 - 10
         pair_width = 2 * width + 8
         right = stack_right - max(
             0, (HOME_BUTTON_SIZE[0] - pair_width) // 2

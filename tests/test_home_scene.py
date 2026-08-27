@@ -495,7 +495,8 @@ class HomeSceneAssetTests(unittest.TestCase):
         stack_center = (
             stack_right + stack_right - home_scene.HOME_BUTTON_SIZE[0] + 1
         ) / 2
-        self.assertEqual(pair_center, stack_center)
+        # Toggle pair sits 10px left of the item stack.
+        self.assertEqual(pair_center, stack_center - 10)
         interaction_actions = scene.interaction_item_rects()
         self.assertEqual(
             set(interaction_actions), {"pet", "feed", "play", "sleep"}
@@ -623,7 +624,7 @@ class HomeSceneAssetTests(unittest.TestCase):
 
     def test_board_geometry_uses_scene_math_and_saved_position(self):
         rect = home_scene.board_geometry(QRect(0, 0, 1920, 1080))
-        self.assertEqual(rect, QRect(1170, 312, 750, 768))
+        self.assertEqual(rect, QRect(1220, 312, 700, 768))
 
     def test_decoration_sidebar_sits_outside_the_scene_canvas(self):
         state = progression.ensure_progression({})
@@ -767,7 +768,7 @@ class HomeSceneAssetTests(unittest.TestCase):
         self.assertFalse(scene.view_pan_enabled())
         self.assertFalse(scene._manual_camera)
         self.assertEqual(scene.home_pet.position[0], 900.0)
-        self.assertEqual(scene._camera_x, 525)
+        self.assertEqual(scene._camera_x, 550)
 
     def test_scene_tick_camera_follows_the_updated_internal_pet_position(self):
         state = progression.ensure_progression({"energy": 100.0})
@@ -1009,7 +1010,7 @@ class HomeSceneAssetTests(unittest.TestCase):
 
         scene.mousePressEvent(event)
 
-        self.assertEqual(scene.home_pet.target, (475.0, 600.0))
+        self.assertEqual(scene.home_pet.target, (500.0, 600.0))
         event.accept.assert_called_once_with()
 
     def test_right_click_never_opens_the_desktop_menu_inside_home(self):
