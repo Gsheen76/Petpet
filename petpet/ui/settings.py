@@ -319,8 +319,8 @@ class SettingsWindow(QWidget):
             QGroupBox {{
                 background:transparent;
                 border:0;
-                margin-top:6px;
-                padding:10px 14px 12px 14px;
+                margin-top:2px;
+                padding:4px 14px 8px 14px;
             }}
             QGroupBox::title {{
                 color:#925d49;
@@ -402,7 +402,7 @@ class SettingsWindow(QWidget):
         content = QWidget()
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(0, 4, 10, 4)
-        content_layout.setSpacing(10)
+        content_layout.setSpacing(7)
         content_layout.setAlignment(Qt.AlignTop)
 
         content_layout.addWidget(self._interface_group())
@@ -510,7 +510,7 @@ class SettingsWindow(QWidget):
     def _preference_group(self, title, hint, key, labels, field_keys, presets):
         group = QGroupBox()
         layout = QVBoxLayout(group)
-        layout.setSpacing(8)
+        layout.setSpacing(6)
         title_label = QLabel(title)
         title_label.setObjectName("settingsGroupTitle")
         description = QLabel(hint)
@@ -558,7 +558,7 @@ class SettingsWindow(QWidget):
     def _add_row(self, layout, label, hint, control):
         row_widget = QWidget()
         row = QHBoxLayout(row_widget)
-        row.setContentsMargins(4, 5, 4, 5)
+        row.setContentsMargins(4, 2, 4, 2)
         row.setSpacing(16)
         text_layout = QVBoxLayout()
         text_layout.setContentsMargins(0, 0, 0, 0)

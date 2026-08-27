@@ -160,6 +160,28 @@ SHOP_THEME_STYLE = """
         border-image: url("%(active_tab)s") 20 32 20 32 stretch;
         color: #ffffff;
     }
+    QFrame#petTabBar {
+        background: #f7e8d8;
+        border: 1px solid #eed3ba;
+        border-radius: 22px;
+    }
+    QPushButton#petTabButton {
+        background: transparent;
+        color: #9c6b58;
+        border: 0;
+        border-radius: 18px;
+        padding: 6px 3px;
+        font-size: 19px;
+        font-weight: 800;
+    }
+    QPushButton#petTabButton:hover {
+        background: #ffece1;
+        color: #8c5948;
+    }
+    QPushButton#petTabButton:checked {
+        background: #f28f76;
+        color: #ffffff;
+    }
     QFrame#filterBar {
         background: #f7e8d8;
         border: 1px solid #eed3ba;
@@ -1108,30 +1130,28 @@ class RecordsWindow(CozyProgressWindow):
         pets = state.get("pets") or {}
         if not isinstance(pets, dict) or not pets:
             pets = {}
-        if self.record_pet_id not in pets:
-            self.record_pet_id = state.get("active_pet_id")
-            if self.record_pet_id not in pets:
-                self.record_pet_id = next(iter(pets), None)
-        pet_records = (
-            progression.pet_interaction_records(state, self.record_pet_id)
-            if self.record_pet_id
-            else {
-                key: records[key]
-                for key in progression.PET_RECORD_KEYS
-            }
-        )
-        pet_state = pets.get(self.record_pet_id) if self.record_pet_id else {}
-        pet_name = ""
-        if isinstance(pet_state, dict):
+        if self.record_pet_id is not None and self.record_pet_id not in pets:
+            self.record_pet_id = None
+        if self.record_pet_id is not None:
+            # A specific pet tab: only that pet's own mirrored numbers.
+            pet_records = progression.pet_interaction_records(
+                state, self.record_pet_id
+            )
+            pet_state = pets.get(self.record_pet_id) or {}
             pet_name = str(
                 pet_state.get("pet_name")
                 or pet_definition(self.record_pet_id)["default_name"]
             )
-        affection_level = (
-            pet_state.get("affection_level", state.get("affection_level", 1))
-            if isinstance(pet_state, dict)
-            else state.get("affection_level", 1)
-        )
+            affection_level = pet_state.get(
+                "affection_level", state.get("affection_level", 1)
+            )
+        else:
+            # 总计 tab: the shared player-wide numbers.
+            pet_records = {
+                key: records[key] for key in progression.PET_RECORD_KEYS
+            }
+            pet_name = ""
+            affection_level = state.get("affection_level", 1)
 
         if pets:
             self._add_page_header(self._build_pet_switch_bar(pets))
@@ -1174,8 +1194,8 @@ class RecordsWindow(CozyProgressWindow):
         self.content_layout.addWidget(hero)
 
         section = QLabel(
-            f"🐾 我们和{pet_name or '小狗'}做过的事" if pet_name
-            else "🐾 我们一起做过的事"
+            f"🐾 我们和{pet_name}做过的事" if pet_name
+            else "🐾 我们一起做过的事（总计）"
         )
         section.setObjectName("sectionTitle")
         self.content_layout.addWidget(section)
@@ -1253,19 +1273,22 @@ class RecordsWindow(CozyProgressWindow):
 
     def _build_pet_switch_bar(self, pets):
         bar = QFrame()
-        bar.setObjectName("filterBar")
-        bar.setFixedHeight(46)
+        bar.setObjectName("petTabBar")
+        bar.setFixedHeight(58)
         bar_layout = QHBoxLayout(bar)
-        bar_layout.setContentsMargins(4, 4, 4, 4)
-        bar_layout.setSpacing(3)
+        bar_layout.setContentsMargins(6, 6, 6, 6)
+        bar_layout.setSpacing(4)
+        entries = [(None, "总计")]
         for pet_id, pet_state in pets.items():
-            if not isinstance(pet_state, dict):
-                continue
-            name = str(
-                pet_state.get("pet_name") or pet_definition(pet_id)["default_name"]
-            )
+            if isinstance(pet_state, dict):
+                name = str(
+                    pet_state.get("pet_name")
+                    or pet_definition(pet_id)["default_name"]
+                )
+                entries.append((pet_id, name))
+        for pet_id, name in entries:
             button = FeedbackButton(name)
-            button.setObjectName("filterTabButton")
+            button.setObjectName("petTabButton")
             button.setCheckable(True)
             button.setChecked(self.record_pet_id == pet_id)
             button.setCursor(Qt.PointingHandCursor)
