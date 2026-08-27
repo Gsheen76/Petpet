@@ -786,6 +786,25 @@ class PurchasePopup(QDialog):
         button.clicked.connect(self.accept)
         layout.addWidget(button, 0, Qt.AlignCenter)
 
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Escape:
+            self.accept()
+            return
+        super().keyPressEvent(event)
+
+    def mousePressEvent(self, event):
+        # Clicks landing on the translucent frame outside the rounded card
+        # count as dismissing the dialog.
+        if not self._card_path().contains(event.pos()):
+            self.accept()
+            return
+        super().mousePressEvent(event)
+
+    def _card_path(self):
+        path = QPainterPath()
+        path.addRoundedRect(0, 0, self.width(), self.height(), 22, 22)
+        return path
+
 
 class PriceTagLabel(QLabel):
     """Price tag painted from the frame asset with the price fitted inside."""
@@ -1205,27 +1224,18 @@ class RecordsWindow(CozyProgressWindow):
         return box
 
 
-ACHIEVEMENT_FILTERS = (
-    ("all", "全部"),
-    ("days", "天数"),
-    ("pet", "摸摸"),
-    ("feed", "喂饭"),
-    ("play", "玩耍"),
-    ("sleep", "睡眠"),
-    ("interaction", "互动"),
-    ("catch", "接球"),
-    ("chat", "聊天"),
-    ("wake", "唤醒"),
-    ("reply", "回复"),
-    ("stroll", "散步"),
-    ("minigame", "游戏"),
-    ("coins", "金币"),
-    ("collect", "收集"),
-    ("outfit", "换装"),
-    ("upgrade", "强化"),
-    ("claim", "成就"),
-    ("level", "等级"),
+# Achievement id prefixes are consolidated into a handful of filter groups so
+# the tab bar stays readable; unknown future prefixes fall into "other".
+ACHIEVEMENT_FILTER_GROUPS = (
+    ("all", "全部", None),
+    ("interact", "互动",
+     {"pet", "feed", "play", "sleep", "interaction", "catch", "wake"}),
+    ("chat", "聊天", {"chat", "reply"}),
+    ("games", "游戏", {"minigame", "coins", "stroll"}),
+    ("dressup", "换装强化", {"collect", "outfit", "upgrade"}),
+    ("growth", "成长", {"days", "level", "claim"}),
 )
+ACHIEVEMENT_OTHER_GROUP = ("other", "其它")
 
 
 class AchievementsWindow(CozyProgressWindow):
@@ -1291,10 +1301,27 @@ class AchievementsWindow(CozyProgressWindow):
         if self.achievement_filter == "all":
             ordered = list(items)
         else:
-            ordered = [
-                item for item in items
-                if item["id"].split("_", 1)[0] == self.achievement_filter
-            ]
+            group = dict(
+                (key, prefixes)
+                for key, _label, prefixes in ACHIEVEMENT_FILTER_GROUPS
+                if prefixes is not None
+            ).get(self.achievement_filter, set())
+            if group:
+                ordered = [
+                    item for item in items
+                    if item["id"].split("_", 1)[0] in group
+                ]
+            else:
+                known = {
+                    prefix
+                    for _k, _l, prefixes in ACHIEVEMENT_FILTER_GROUPS
+                    if prefixes
+                    for prefix in prefixes
+                }
+                ordered = [
+                    item for item in items
+                    if item["id"].split("_", 1)[0] not in known
+                ]
         ordered = sorted(
             ordered,
             key=lambda item: (
@@ -1309,17 +1336,31 @@ class AchievementsWindow(CozyProgressWindow):
         self.content_layout.addStretch(1)
 
     def _build_filter_bar(self, items):
-        known = {prefix for prefix, _label in ACHIEVEMENT_FILTERS}
+        prefix_groups = {
+            key: prefixes
+            for key, _label, prefixes in ACHIEVEMENT_FILTER_GROUPS
+            if prefixes is not None
+        }
+        known = {
+            prefix
+            for prefixes in prefix_groups.values()
+            for prefix in prefixes
+        }
         available = [
-            (prefix, label)
-            for prefix, label in ACHIEVEMENT_FILTERS
-            if prefix == "all"
-            or prefix in known
-            and any(
-                item["id"].split("_", 1)[0] == prefix
+            (key, label)
+            for key, label, prefixes in ACHIEVEMENT_FILTER_GROUPS
+            if prefixes is None
+            or any(
+                item["id"].split("_", 1)[0] in prefixes
                 for item in items
             )
         ]
+        uncovered = [
+            item for item in items
+            if item["id"].split("_", 1)[0] not in known
+        ]
+        if uncovered:
+            available.append(ACHIEVEMENT_OTHER_GROUP)
         bar = QFrame()
         bar.setObjectName("tabBar")
         bar.setFixedHeight(46)

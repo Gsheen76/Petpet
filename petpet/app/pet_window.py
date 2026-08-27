@@ -6,6 +6,7 @@ import os
 import random
 import threading
 import time
+from collections import OrderedDict
 
 from petpet.chat import api as ai
 from petpet.ui import decorations as decoration_renderer
@@ -376,12 +377,27 @@ class PetWindow(QWidget):
         "animation_specs",
     )
 
+    _MAX_PET_ASSET_CACHE_ENTRIES = 4
+
+    def _evict_stale_pet_assets(self, cache, selected_pet_id):
+        """Cap decoded-asset retention so pets cannot grow memory unbounded.
+
+        Decoded animation frames are large; keep at most a few recent pets
+        cached and evict least-recently-used entries first.
+        """
+        limit = self._MAX_PET_ASSET_CACHE_ENTRIES
+        while len(cache) >= limit:
+            oldest = next(iter(cache))
+            if oldest == selected_pet_id:
+                break
+            del cache[oldest]
+
     def switch_pet_assets(self, pet_id):
         """Swap to another pet's assets, reusing decoded caches when possible."""
         selected_pet_id = pet_definition(pet_id)["id"]
         cache = getattr(self, "_pet_assets_cache", None)
         if cache is None:
-            cache = {}
+            cache = OrderedDict()
             self._pet_assets_cache = cache
         current_id = self.current_pet_id
         if current_id and current_id != selected_pet_id:
@@ -391,7 +407,11 @@ class PetWindow(QWidget):
                 if hasattr(self, key)
             }
         cached = cache.get(selected_pet_id)
-        if cached is None:
+        if cached is not None:
+            # Refresh recency so the live pet's entry is never the LRU victim.
+            cache.move_to_end(selected_pet_id)
+        else:
+            self._evict_stale_pet_assets(cache, selected_pet_id)
             self.refresh_pet_assets(selected_pet_id)
             return
         self._current_pet_id = selected_pet_id

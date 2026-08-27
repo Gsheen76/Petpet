@@ -378,7 +378,9 @@ try {
     $missingMacAssets = @(Get-MissingReleaseAssets | Where-Object { $_ -like "*macOS*" })
     if ($missingMacAssets.Count -gt 0) {
         Verify-RemoteRefs $headCommit
-        $dispatchStartedAt = [DateTime]::UtcNow.AddSeconds(-5)
+        # RFC3339 UTC timestamps from the GitHub API are fixed-width, so string
+        # comparison is safe and independent of the host culture settings.
+        $dispatchStartedAt = [DateTime]::UtcNow.AddSeconds(-5).ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", [Globalization.CultureInfo]::InvariantCulture)
         $dispatchId = [guid]::NewGuid().ToString("N")
         Write-Step "gh workflow run build-macos.yml"
         Invoke-Native $GhCommand @(
@@ -393,23 +395,21 @@ try {
                 "workflow_dispatch", "--limit", "100", "--json",
                 "databaseId,displayTitle,headSha,createdAt,event"
             )
-            $runs = @($runJson | ConvertFrom-Json)
-            $matchingRun = $runs | Where-Object {
-                $_.event -eq "workflow_dispatch" -and
-                $_.displayTitle -eq "Build macOS $Tag $dispatchId" -and
-                $_.headSha -eq $headCommit -and
-                [DateTimeOffset]::Parse(
-                    $_.createdAt,
-                    [Globalization.CultureInfo]::InvariantCulture,
-                    [Globalization.DateTimeStyles]::AssumeUniversal
-                ).UtcDateTime -ge $dispatchStartedAt
-            } | Sort-Object {
-                [DateTimeOffset]::Parse(
-                    $_.createdAt,
-                    [Globalization.CultureInfo]::InvariantCulture,
-                    [Globalization.DateTimeStyles]::AssumeUniversal
-                ).UtcDateTime
-            } -Descending |
+            if ([string]::IsNullOrWhiteSpace($runJson)) {
+                continue
+            }
+            $runs = @(ConvertFrom-Json -InputObject $runJson)
+            if ($runs.Count -eq 1 -and $runs[0] -is [System.Array]) {
+                $runs = @($runs[0])
+            }
+            $matchingRun = @(
+                $runs | Where-Object {
+                    $_.event -eq "workflow_dispatch" -and
+                    $_.displayTitle -eq "Build macOS $Tag $dispatchId" -and
+                    $_.headSha -eq $headCommit -and
+                    $_.createdAt -ge $dispatchStartedAt
+                }
+            ) | Sort-Object { $_.createdAt } -Descending |
                 Select-Object -First 1
         }
         if ($null -eq $matchingRun) {

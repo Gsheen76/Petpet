@@ -772,5 +772,30 @@ class PetWindowBoundaryTests(unittest.TestCase):
         self.assertTrue(all(item[1]["show_window"] is False for item in menus))
 
 
+
+    def test_evict_drops_oldest_beyond_limit(self):
+        from collections import OrderedDict
+        from petpet.app.pet_window import PetWindow
+
+        window = PetWindow.__new__(PetWindow)
+        window._pet_assets_cache = OrderedDict(
+            (key, {"n": key}) for key in ("a", "b", "c")
+        )
+        window._MAX_PET_ASSET_CACHE_ENTRIES = 2
+        window._evict_stale_pet_assets(window._pet_assets_cache, "new")
+        window._pet_assets_cache["new"] = {"n": "new"}
+        self.assertEqual(list(window._pet_assets_cache), ["c", "new"])
+
+    def test_evict_keeps_entries_when_under_limit(self):
+        from collections import OrderedDict
+        from petpet.app.pet_window import PetWindow
+
+        window = PetWindow.__new__(PetWindow)
+        window._pet_assets_cache = OrderedDict(
+            (key, {"n": key}) for key in ("a", "b")
+        )
+        window._MAX_PET_ASSET_CACHE_ENTRIES = 4
+        window._evict_stale_pet_assets(window._pet_assets_cache, "new")
+        self.assertEqual(len(window._pet_assets_cache), 2)
 if __name__ == "__main__":
     unittest.main()
