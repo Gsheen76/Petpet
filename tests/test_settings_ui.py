@@ -176,9 +176,25 @@ class SettingsWindowTests(unittest.TestCase):
             for button in control.level_buttons
         ))
 
+    def test_font_controls_are_three_level_presets(self):
+        from petpet.ui.controls import ThreeLevelSlider
+
+        for key in ("chat_font_size", "ui_font_size"):
+            control = self.window.inputs[key]
+            self.assertIsInstance(control, ThreeLevelSlider)
+            self.assertEqual(
+                [button.text() for button in control.level_buttons],
+                ["小", "中", "大"],
+            )
+            values = pet.SettingsWindow.FONT_LEVEL_VALUES[key]
+            control.setValue(0)
+            with patch("petpet.ui.settings.save_settings"):
+                self.window.apply()
+            self.assertEqual(self.pet.settings[key], values[0])
+
     def test_apply_updates_every_control(self):
         self.window.chat_size_combo.setCurrentIndex(0)
-        self.window.inputs["chat_font_size"].setValue(18)
+        self.window.inputs["chat_font_size"].setValue(2)
         self.window.inputs["always_on_top"].setChecked(False)
         self.window.inputs["health_level"].setValue(2)
         self.window.inputs["personality_level"].setValue(2)
@@ -186,7 +202,7 @@ class SettingsWindowTests(unittest.TestCase):
             self.window.apply()
         self.assertEqual(self.pet.settings["chat_width"], 480)
         self.assertEqual(self.pet.settings["chat_height"], 620)
-        self.assertEqual(self.pet.settings["chat_font_size"], 18)
+        self.assertEqual(self.pet.settings["chat_font_size"], 26)
         self.assertFalse(self.pet.settings["always_on_top"])
         for key, value in self.window.HEALTH_PRESETS[2].items():
             self.assertEqual(self.pet.settings[key], value)
@@ -196,7 +212,7 @@ class SettingsWindowTests(unittest.TestCase):
 
     def test_reset_restores_all_defaults_in_data_and_controls(self):
         self.window.chat_size_combo.setCurrentIndex(4)
-        self.window.inputs["chat_font_size"].setValue(31)
+        self.window.inputs["chat_font_size"].setValue(2)
         self.window.inputs["sound_enabled"].setChecked(False)
         self.window.inputs["health_level"].setValue(0)
         self.window.inputs["personality_level"].setValue(2)
@@ -206,12 +222,16 @@ class SettingsWindowTests(unittest.TestCase):
         self.assertEqual(self.window.chat_size_combo.currentData(), (640, 820))
         self.assertEqual(self.window.inputs["health_level"].value(), 1)
         self.assertEqual(self.window.inputs["personality_level"].value(), 1)
+        font_values = pet.SettingsWindow.FONT_LEVEL_VALUES
         for key, control in self.window.inputs.items():
             if key in {"health_level", "personality_level"}:
                 continue
             default = pet.DEFAULT_SETTINGS[key]
             if isinstance(control, pet.ToggleSwitch):
                 self.assertEqual(control.isChecked(), bool(default))
+            elif key in font_values:
+                values = font_values[key]
+                self.assertEqual(control.value(), values.index(default))
             else:
                 self.assertAlmostEqual(control.value(), default)
 
@@ -238,7 +258,7 @@ class SettingsWindowTests(unittest.TestCase):
         self.assertEqual(self.window.font().pixelSize(), 23)
 
     def test_settings_font_control_scales_the_whole_pixel_hierarchy(self):
-        self.window.inputs["ui_font_size"].setValue(30)
+        self.window.inputs["ui_font_size"].setValue(2)
         with patch("petpet.ui.settings.save_settings"):
             self.window.apply()
 

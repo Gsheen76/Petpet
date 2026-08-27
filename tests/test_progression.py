@@ -327,7 +327,7 @@ class RecordTests(unittest.TestCase):
         self.assertEqual(state["records"]["active_seconds"], 120)
         self.assertEqual(state["pet_coins"], 35)
         self.assertEqual(state["records"]["coins_earned"], 35)
-        self.assertEqual(progression.format_duration(90061), "1 天 1 小时")
+        self.assertEqual(progression.format_duration(90061), "25 小时 1 分钟")
 
 
 class AchievementTests(unittest.TestCase):

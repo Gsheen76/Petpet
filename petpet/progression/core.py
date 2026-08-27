@@ -535,6 +535,11 @@ def ensure_progression(state):
         records[key] = _safe_int(raw_records.get(key, default))
     state["records"] = records
 
+    # Per-pet mirrors only cover display; shared records stay authoritative
+    # for achievements and economy stats.
+    state["pet_records_seeded"] = bool(state.get("pet_records_seeded"))
+    _ensure_pet_records(state)
+
     raw_upgrades = state.get("upgrades")
     if not isinstance(raw_upgrades, dict):
         raw_upgrades = {}
@@ -757,6 +762,71 @@ def grant_interaction_affection(state, action, amount=1, now=None):
     return result
 
 
+PET_RECORD_KEYS = (
+    "pettings", "feedings", "play_sessions", "sleep_sessions",
+    "fetch_catches", "chats_opened", "wake_shakes",
+    "interactions_total", "ai_replies", "autonomous_walks",
+)
+
+
+def _ensure_pet_records(state):
+    """Keep a per-pet mirror of interaction records for the records page."""
+    pets = state.get("pets")
+    if not isinstance(pets, dict):
+        return
+    for pet_state in pets.values():
+        if not isinstance(pet_state, dict):
+            continue
+        raw = pet_state.get("pet_records")
+        if not isinstance(raw, dict):
+            raw = {}
+        pet_state["pet_records"] = {
+            key: _safe_int(raw.get(key, 0)) for key in PET_RECORD_KEYS
+        }
+    if not state["pet_records_seeded"] and pets:
+        seed_id = (
+            "lunch_meat" if "lunch_meat" in pets else next(iter(pets))
+        )
+        first = pets.get(seed_id)
+        if isinstance(first, dict):
+            mirror = first.setdefault("pet_records", {})
+            for key in PET_RECORD_KEYS:
+                mirror.setdefault(
+                    key, _safe_int(state["records"].get(key, 0))
+                )
+        state["pet_records_seeded"] = True
+
+
+def pet_interaction_records(state, pet_id):
+    """Return the mirrored per-pet interaction counts for display."""
+    pets = state.get("pets")
+    if isinstance(pets, dict):
+        pet_state = pets.get(pet_id)
+        if isinstance(pet_state, dict):
+            mirror = pet_state.get("pet_records")
+            if isinstance(mirror, dict):
+                return {
+                    key: _safe_int(mirror.get(key, 0))
+                    for key in PET_RECORD_KEYS
+                }
+    return {key: 0 for key in PET_RECORD_KEYS}
+
+
+def pet_record_action(state, action, amount=1):
+    """Mirror a shared interaction record onto the active pet."""
+    if amount <= 0 or action not in PET_RECORD_KEYS:
+        return
+    pets = state.get("pets")
+    if not isinstance(pets, dict):
+        return
+    pet_state = pets.get(state.get("active_pet_id"))
+    if not isinstance(pet_state, dict):
+        return
+    mirror = pet_state.get("pet_records")
+    if isinstance(mirror, dict) and action in mirror:
+        mirror[action] += _safe_int(amount)
+
+
 def record_action(state, action, amount=1, now=None):
     """Record an interaction and grant its matching affection."""
     ensure_progression(state)
@@ -768,6 +838,7 @@ def record_action(state, action, amount=1, now=None):
         "pettings", "feedings", "play_sessions", "sleep_sessions"
     }:
         state["records"]["interactions_total"] += amount
+    pet_record_action(state, action, amount)
     return grant_interaction_affection(state, action, amount, now)
 
 
@@ -1568,11 +1639,8 @@ def claim_all_achievements(state, now=None):
 
 def format_duration(seconds):
     seconds = max(0, _safe_int(seconds))
-    days, remainder = divmod(seconds, 86400)
-    hours, remainder = divmod(remainder, 3600)
+    hours, remainder = divmod(seconds, 3600)
     minutes = remainder // 60
-    if days:
-        return f"{days} 天 {hours} 小时"
     if hours:
         return f"{hours} 小时 {minutes} 分钟"
     return f"{minutes} 分钟"

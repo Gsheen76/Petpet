@@ -1067,6 +1067,7 @@ class CozyProgressWindow(QWidget):
 class RecordsWindow(CozyProgressWindow):
     def __init__(self, pet, save_callback):
         self.save_callback = save_callback
+        self.record_pet_id = None
         super().__init__(
             pet,
             "温馨记录",
@@ -1104,6 +1105,37 @@ class RecordsWindow(CozyProgressWindow):
         records = state["records"]
         now = time.time()
 
+        pets = state.get("pets") or {}
+        if not isinstance(pets, dict) or not pets:
+            pets = {}
+        if self.record_pet_id not in pets:
+            self.record_pet_id = state.get("active_pet_id")
+            if self.record_pet_id not in pets:
+                self.record_pet_id = next(iter(pets), None)
+        pet_records = (
+            progression.pet_interaction_records(state, self.record_pet_id)
+            if self.record_pet_id
+            else {
+                key: records[key]
+                for key in progression.PET_RECORD_KEYS
+            }
+        )
+        pet_state = pets.get(self.record_pet_id) if self.record_pet_id else {}
+        pet_name = ""
+        if isinstance(pet_state, dict):
+            pet_name = str(
+                pet_state.get("pet_name")
+                or pet_definition(self.record_pet_id)["default_name"]
+            )
+        affection_level = (
+            pet_state.get("affection_level", state.get("affection_level", 1))
+            if isinstance(pet_state, dict)
+            else state.get("affection_level", 1)
+        )
+
+        if pets:
+            self._add_page_header(self._build_pet_switch_bar(pets))
+
         hero = QFrame()
         hero.setObjectName("heroCard")
         hero_layout = QGridLayout(hero)
@@ -1120,7 +1152,7 @@ class RecordsWindow(CozyProgressWindow):
         hero_layout.addWidget(
             self._hero_label(
                 "当前好感",
-                f"Lv.{state.get('affection_level', 1)}",
+                f"Lv.{affection_level}",
             ),
             0, 2,
         )
@@ -1141,7 +1173,10 @@ class RecordsWindow(CozyProgressWindow):
         )
         self.content_layout.addWidget(hero)
 
-        section = QLabel("🐾 我们一起做过的事")
+        section = QLabel(
+            f"🐾 我们和{pet_name or '小狗'}做过的事" if pet_name
+            else "🐾 我们一起做过的事"
+        )
         section.setObjectName("sectionTitle")
         self.content_layout.addWidget(section)
         grid_host = QWidget()
@@ -1149,14 +1184,14 @@ class RecordsWindow(CozyProgressWindow):
         grid.setContentsMargins(0, 0, 0, 0)
         grid.setSpacing(10)
         cards = [
-            ("♡ 抚摸", records["pettings"], "轻轻摸过小狗的头"),
-            ("◇ 喂食", records["feedings"], "一起吃过的饭饭"),
-            ("○ 玩耍", records["play_sessions"], "开启过的玩耍时光"),
-            ("☾ 睡觉", records["sleep_sessions"], "进入过香甜梦乡"),
-            ("🎾 接住小球", records["fetch_catches"], "成功完成的飞扑接球"),
-            ("💬 聊天", records["chats_opened"], "认真发送过的聊天消息"),
-            ("☀ 摇醒", records["wake_shakes"], "被主人温柔摇醒"),
-            ("✦ 总互动", records["interactions_total"], "四种基础互动合计"),
+            ("♡ 抚摸", pet_records["pettings"], "轻轻摸过小狗的头"),
+            ("◇ 喂食", pet_records["feedings"], "一起吃过的饭饭"),
+            ("○ 玩耍", pet_records["play_sessions"], "开启过的玩耍时光"),
+            ("☾ 睡觉", pet_records["sleep_sessions"], "进入过香甜梦乡"),
+            ("🎾 接住小球", pet_records["fetch_catches"], "成功完成的飞扑接球"),
+            ("💬 聊天", pet_records["chats_opened"], "认真发送过的聊天消息"),
+            ("☀ 摇醒", pet_records["wake_shakes"], "被主人温柔摇醒"),
+            ("✦ 总互动", pet_records["interactions_total"], "四种基础互动合计"),
         ]
         for index, item in enumerate(cards):
             grid.addWidget(self._data_card(*item), index // 2, index % 2)
@@ -1200,8 +1235,8 @@ class RecordsWindow(CozyProgressWindow):
         explore_grid.setContentsMargins(0, 0, 0, 0)
         explore_grid.setSpacing(10)
         explore_cards = [
-            ("AI 回复", records["ai_replies"], "小狗认真回复消息的次数"),
-            ("自主散步", records["autonomous_walks"], "自己在桌面散步的次数"),
+            ("AI 回复", pet_records["ai_replies"], "小狗认真回复消息的次数"),
+            ("自主散步", pet_records["autonomous_walks"], "自己在桌面散步的次数"),
             ("收集装扮", records["decorations_collected"], "已经拥有的装扮数量"),
             ("更换装扮", records["outfit_changes"], "穿上或收好装扮的次数"),
             ("购买强化", records["upgrades_purchased"], "累计完成的强化次数"),
@@ -1215,6 +1250,39 @@ class RecordsWindow(CozyProgressWindow):
             )
         self.content_layout.addWidget(explore_host)
         self.content_layout.addStretch(1)
+
+    def _build_pet_switch_bar(self, pets):
+        bar = QFrame()
+        bar.setObjectName("filterBar")
+        bar.setFixedHeight(46)
+        bar_layout = QHBoxLayout(bar)
+        bar_layout.setContentsMargins(4, 4, 4, 4)
+        bar_layout.setSpacing(3)
+        for pet_id, pet_state in pets.items():
+            if not isinstance(pet_state, dict):
+                continue
+            name = str(
+                pet_state.get("pet_name") or pet_definition(pet_id)["default_name"]
+            )
+            button = FeedbackButton(name)
+            button.setObjectName("filterTabButton")
+            button.setCheckable(True)
+            button.setChecked(self.record_pet_id == pet_id)
+            button.setCursor(Qt.PointingHandCursor)
+            button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            button.clicked.connect(
+                lambda _checked=False, selected=pet_id:
+                self._set_record_pet(selected)
+            )
+            bar_layout.addWidget(button)
+        return bar
+
+    def _set_record_pet(self, pet_id):
+        if pet_id == self.record_pet_id:
+            return
+        self.record_pet_id = pet_id
+        self.scroll.verticalScrollBar().setValue(0)
+        self.refresh()
 
     @staticmethod
     def _hero_label(title, value):

@@ -85,6 +85,13 @@ class SettingsWindow(QWidget):
     HEALTH_PRESETS = HEALTH_PRESETS
     PERSONALITY_PRESETS = PERSONALITY_PRESETS
 
+    # Font sizes are chosen as 小/中/大 presets instead of raw numbers.
+    FONT_LEVEL_LABELS = ("小", "中", "大")
+    FONT_LEVEL_VALUES = {
+        "chat_font_size": (14, 20, 26),
+        "ui_font_size": (20, 24, 30),
+    }
+
     FIELDS = [
         # (key, label, min, max, step, hint)
         ("chat_font_size", "聊天字体大小", 12, 32, 1,
@@ -204,8 +211,8 @@ class SettingsWindow(QWidget):
                 border:0;
             }}
             QFrame#settingsCard {{
-                background:#fff8ec;
-                border:1px solid #e7c4ad;
+                background:transparent;
+                border:0;
                 border-radius:24px;
             }}
             QScrollArea, QScrollArea > QWidget > QWidget {{
@@ -293,10 +300,18 @@ class SettingsWindow(QWidget):
                 min-height:38px; padding:0; border-radius:16px;
                 color:#9a796b; background:#f8ebe4;
                 border:1px solid transparent;
+                font-weight:700;
+            }}
+            QPushButton#threeLevelOption:hover {{
+                background:#ffece1; color:#7c5244;
+                border-color:#efc4bb;
+            }}
+            QPushButton#threeLevelOption:pressed {{
+                background:#f8dcd7; color:#5f3d33;
             }}
             QPushButton#threeLevelOption:checked {{
-                color:#70483c; background:#f8dcd7;
-                border-color:#efc4bb;
+                color:#ffffff; background:#f28f76;
+                border-color:#e07e64;
             }}
             QSlider#threeLevelSlider {{ min-height:24px; max-height:24px; }}
             QSlider#threeLevelSlider::groove:horizontal {{
@@ -310,18 +325,17 @@ class SettingsWindow(QWidget):
                 border:2px solid #df998b; border-radius:11px;
             }}
             QGroupBox {{
-                background:#fffdf8;
-                border:1px solid #edcfb5;
-                border-radius:17px;
-                margin-top:17px;
-                padding:21px 18px 15px 18px;
+                background:transparent;
+                border:0;
+                margin-top:6px;
+                padding:10px 14px 12px 14px;
             }}
             QGroupBox::title {{
                 color:#925d49;
                 font-weight:800;
-                left:15px;
-                padding:0 8px;
-                background:#fff8ec;
+                left:10px;
+                padding:0 4px;
+                background:transparent;
             }}
             QScrollBar:vertical {{
                 background:transparent;
@@ -478,13 +492,13 @@ class SettingsWindow(QWidget):
         )
 
         for key in ("chat_font_size", "ui_font_size"):
-            self._add_numeric_row(layout, key)
+            self._add_font_level_row(layout, key)
         for key, label, hint in self.SWITCHES:
             switch = ToggleSwitch()
             switch.setChecked(bool(self.s.get(key, False)))
             self.inputs[key] = switch
             state = QLabel()
-            state.setFixedWidth(36)
+            state.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             state.setObjectName("switchState")
             self.switch_labels[key] = state
             switch.toggled.connect(
@@ -525,6 +539,20 @@ class SettingsWindow(QWidget):
         for key in keys:
             self._add_numeric_row(layout, key)
         return group
+
+    def _add_font_level_row(self, layout, key):
+        label, _minimum, _maximum, _step, hint = self._field_meta(key)
+        values = self.FONT_LEVEL_VALUES[key]
+        current = int(self.s.get(key, values[1]))
+        nearest = min(
+            range(len(values)),
+            key=lambda index: abs(values[index] - current),
+        )
+        control = ThreeLevelSlider(self.FONT_LEVEL_LABELS)
+        control.setValue(nearest)
+        control.setToolTip(hint)
+        self.inputs[key] = control
+        self._add_row(layout, label, hint, control)
 
     def _add_numeric_row(self, layout, key):
         label, minimum, maximum, step, hint = self._field_meta(key)
@@ -604,6 +632,9 @@ class SettingsWindow(QWidget):
         for key, control in self.inputs.items():
             if key in {"health_level", "personality_level"}:
                 continue
+            if key in self.FONT_LEVEL_VALUES:
+                self.s[key] = self.FONT_LEVEL_VALUES[key][control.value()]
+                continue
             if isinstance(control, ToggleSwitch):
                 value = bool(control.isChecked())
             else:
@@ -650,6 +681,12 @@ class SettingsWindow(QWidget):
             value = DEFAULT_SETTINGS.get(key, 0)
             if isinstance(control, ToggleSwitch):
                 control.setChecked(bool(value))
+            elif key in self.FONT_LEVEL_VALUES:
+                values = self.FONT_LEVEL_VALUES[key]
+                control.setValue(min(
+                    range(len(values)),
+                    key=lambda index: abs(values[index] - int(value)),
+                ))
             else:
                 control.setValue(value)
         self.pet.apply_runtime_settings(previous)
