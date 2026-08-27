@@ -169,7 +169,7 @@ SHOP_THEME_STYLE = """
         background: transparent;
         color: #9c6b58;
         border: 0;
-        border-radius: 18px;
+        border-radius: 23px;
         padding: 6px 3px;
         font-size: 19px;
         font-weight: 800;
@@ -1156,6 +1156,13 @@ class RecordsWindow(CozyProgressWindow):
         if pets:
             self._add_page_header(self._build_pet_switch_bar(pets))
 
+        if self.record_pet_id is not None:
+            # Pet tabs only show what belongs to this pet; shared panels
+            # (hero, growth, exploration) live exclusively in 总计.
+            self._add_pet_interaction_section(pet_records)
+            self.content_layout.addStretch(1)
+            return
+
         hero = QFrame()
         hero.setObjectName("heroCard")
         hero_layout = QGridLayout(hero)
@@ -1170,15 +1177,8 @@ class RecordsWindow(CozyProgressWindow):
             self._hero_label("桌面陪伴", active_time), 0, 1
         )
         hero_layout.addWidget(
-            self._hero_label(
-                "当前好感",
-                f"Lv.{affection_level}",
-            ),
-            0, 2,
-        )
-        hero_layout.addWidget(
             self._hero_label("当前等级", f"Lv.{state.get('level', 1)}"),
-            1, 0,
+            0, 2,
         )
         hero_layout.addWidget(
             self._hero_label(
@@ -1191,31 +1191,10 @@ class RecordsWindow(CozyProgressWindow):
             self._hero_label("历史获得", f"{records['coins_earned']} Pet币"),
             1, 2,
         )
+        del affection_level  # per-pet stat, never shown in 总计
         self.content_layout.addWidget(hero)
 
-        section = QLabel(
-            f"🐾 我们和{pet_name}做过的事" if pet_name
-            else "🐾 我们一起做过的事（总计）"
-        )
-        section.setObjectName("sectionTitle")
-        self.content_layout.addWidget(section)
-        grid_host = QWidget()
-        grid = QGridLayout(grid_host)
-        grid.setContentsMargins(0, 0, 0, 0)
-        grid.setSpacing(10)
-        cards = [
-            ("♡ 抚摸", pet_records["pettings"], "轻轻摸过小狗的头"),
-            ("◇ 喂食", pet_records["feedings"], "一起吃过的饭饭"),
-            ("○ 玩耍", pet_records["play_sessions"], "开启过的玩耍时光"),
-            ("☾ 睡觉", pet_records["sleep_sessions"], "进入过香甜梦乡"),
-            ("🎾 接住小球", pet_records["fetch_catches"], "成功完成的飞扑接球"),
-            ("💬 聊天", pet_records["chats_opened"], "认真发送过的聊天消息"),
-            ("☀ 摇醒", pet_records["wake_shakes"], "被主人温柔摇醒"),
-            ("✦ 总互动", pet_records["interactions_total"], "四种基础互动合计"),
-        ]
-        for index, item in enumerate(cards):
-            grid.addWidget(self._data_card(*item), index // 2, index % 2)
-        self.content_layout.addWidget(grid_host)
+        self._add_interaction_section(pet_records, pet_name)
 
         section = QLabel("🌿 成长足迹")
         section.setObjectName("sectionTitle")
@@ -1255,8 +1234,8 @@ class RecordsWindow(CozyProgressWindow):
         explore_grid.setContentsMargins(0, 0, 0, 0)
         explore_grid.setSpacing(10)
         explore_cards = [
-            ("AI 回复", pet_records["ai_replies"], "小狗认真回复消息的次数"),
-            ("自主散步", pet_records["autonomous_walks"], "自己在桌面散步的次数"),
+            ("AI 回复", records["ai_replies"], "小狗认真回复消息的次数"),
+            ("自主散步", records["autonomous_walks"], "自己在桌面散步的次数"),
             ("收集装扮", records["decorations_collected"], "已经拥有的装扮数量"),
             ("更换装扮", records["outfit_changes"], "穿上或收好装扮的次数"),
             ("购买强化", records["upgrades_purchased"], "累计完成的强化次数"),
@@ -1270,6 +1249,41 @@ class RecordsWindow(CozyProgressWindow):
             )
         self.content_layout.addWidget(explore_host)
         self.content_layout.addStretch(1)
+
+    def _add_interaction_section(self, pet_records, pet_name):
+        section = QLabel(
+            f"🐾 我们和{pet_name}做过的事" if pet_name
+            else "🐾 我们一起做过的事（总计）"
+        )
+        section.setObjectName("sectionTitle")
+        self.content_layout.addWidget(section)
+        grid_host = QWidget()
+        grid = QGridLayout(grid_host)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setSpacing(10)
+        cards = [
+            ("♡ 抚摸", pet_records["pettings"], "轻轻摸过小狗的头"),
+            ("◇ 喂食", pet_records["feedings"], "一起吃过的饭饭"),
+            ("○ 玩耍", pet_records["play_sessions"], "开启过的玩耍时光"),
+            ("☾ 睡觉", pet_records["sleep_sessions"], "进入过香甜梦乡"),
+            ("🎾 接住小球", pet_records["fetch_catches"], "成功完成的飞扑接球"),
+            ("💬 聊天", pet_records["chats_opened"], "认真发送过的聊天消息"),
+            ("☀ 摇醒", pet_records["wake_shakes"], "被主人温柔摇醒"),
+            ("✦ 总互动", pet_records["interactions_total"], "四种基础互动合计"),
+        ]
+        for index, item in enumerate(cards):
+            grid.addWidget(self._data_card(*item), index // 2, index % 2)
+        self.content_layout.addWidget(grid_host)
+
+    def _add_pet_interaction_section(self, pet_records):
+        pet_state = (
+            self.pet.state.get("pets", {}).get(self.record_pet_id) or {}
+        )
+        pet_name = str(
+            pet_state.get("pet_name")
+            or pet_definition(self.record_pet_id)["default_name"]
+        )
+        self._add_interaction_section(pet_records, pet_name)
 
     def _build_pet_switch_bar(self, pets):
         bar = QFrame()
