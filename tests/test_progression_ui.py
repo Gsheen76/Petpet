@@ -247,6 +247,17 @@ class ProgressionWindowUiTests(unittest.TestCase):
         self.assertIn("QLabel#effectCurrent", stylesheet)
         self.assertIn("QLabel#effectNext", stylesheet)
 
+    def test_achievement_header_does_not_stack_on_refresh(self):
+        achievements = AchievementsWindow(self.pet, Mock())
+        self.windows = [achievements]
+
+        achievements.refresh()
+        achievements._set_achievement_filter("chat")
+        achievements.refresh()
+
+        summaries = achievements._page_header_layout.count()
+        self.assertEqual(summaries, 2)  # one summary card + one filter bar
+
     def test_achievement_header_shows_completed_over_total(self):
         achievements = AchievementsWindow(self.pet, Mock())
         self.windows = [achievements]

@@ -1290,10 +1290,10 @@ class AchievementsWindow(CozyProgressWindow):
         row.addStretch(1)
         row.addWidget(claim_all)
         if hasattr(self, "_page_header_layout"):
-            self._page_header_layout.addWidget(summary)
-            self._page_header_layout.addWidget(
-                self._build_filter_bar(items)
-            )
+            filter_bar = self._build_filter_bar(items)
+            # _add_page_header clears the header first; adding widgets
+            # directly would stack a new summary/bar on every refresh.
+            self._add_page_header(summary, filter_bar)
         else:
             self.content_layout.addWidget(summary)
 
