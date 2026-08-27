@@ -821,8 +821,8 @@ class ChatWindow(QWidget):
         image = QImage()
         if role == "assistant":
             source = os.path.normpath(
-                pet_avatar_path(self.pet_id)
-                or pet_asset_path(self.pet_id, "desktop", "idle")
+                pet_asset_path(self.pet_id, "desktop", "idle")
+                or pet_avatar_path(self.pet_id)
                 or ""
             )
             image = QImage(source)

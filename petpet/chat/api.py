@@ -168,8 +168,9 @@ PERSONA = chat_service.PERSONA
 
 
 def clean_assistant_reply(text: str) -> str:
-    """Remove stage-direction parentheses from a newly generated dog reply."""
+    """Remove stage directions and leading barks from a dog reply."""
     cleaned = str(text or "")
+    cleaned = re.sub(r"^(?:汪[\s。．,，…!！?？~～]*)+", "", cleaned)
     previous = None
     while cleaned != previous:
         previous = cleaned
@@ -674,9 +675,9 @@ def chat(user_text, mem=None, timeout=30, pet_name=None, *,
 
 # ---------------- fallback (no AI) ----------------
 _FALLBACK = {
-    "你好": ["汪！你回来啦🐶", "嘿嘿，主人来啦~", "汪汪！想你了"],
+    "你好": ["你回来啦🐶", "嘿嘿，主人来啦~", "想你了，摇尾巴！"],
     "难过": ["…过来，Sheen 蹭蹭你。不哭不哭。", "我陪着你呢，慢慢说。"],
-    "开心": ["汪汪！看到你开心我也摇尾巴！", "嘿嘿真好！"],
+    "开心": ["看到你开心我也跟着摇尾巴！", "嘿嘿真好！"],
     "累": ["累就歇会儿，Sheen 陪你躺着。", "辛苦啦，摸摸头~"],
     "饿": ["饿了要好好吃饭呀！Sheen 也想吃🦴", "去吃点东西嘛，我等你~"],
     "睡": ["晚安呀，Sheen 守着你睡💤", "好好睡，明天见~"],
@@ -691,14 +692,14 @@ def fallback_reply(user_text, err=None, pet_name=None):
             reply = random.choice(replies) if "random" in globals() else replies[0]
             return reply.replace("Sheen", pet_name)
     if err == "no_api_key":
-        return f"汪…{pet_name} 现在连不上聊天服务，设置好 API Key 就能聊天啦。"
+        return f"{pet_name} 现在连不上聊天服务，设置好 API Key 就能聊天啦。"
     if err == "rate_limit":
-        return f"汪…{pet_name} 刚才想得太快啦，等一小会儿再和我说吧。"
+        return f"{pet_name} 刚才想得太快啦，等一小会儿再和我说吧。"
     if err == "empty_response":
-        return f"汪…{pet_name} 刚才没听清，可以再和我说一遍吗？"
+        return f"{pet_name} 刚才没听清，可以再和我说一遍吗？"
     if err:
-        return f"汪…{pet_name} 刚才走神了，等一会儿再和我说吧。"
-    return "汪？"
+        return f"{pet_name} 刚才走神了，等一会儿再和我说吧。"
+    return f"{pet_name} 在走神，再和我说一遍吧。"
 
 
 def set_pet_name(pet_name, pet_id="lunch_meat", *, profile=None):
@@ -804,7 +805,7 @@ def maybe_nudge(mem, idle_seconds, pet_state=None, idle_min=1800,
 
     # vary line by idle duration + time
     if idle_seconds > 6 * 3600:
-        opts = ["主人？好久没见到你了，汪…你还好吗？",
+        opts = ["主人？好久没见到你了，你还好吗？",
                 "你回来啦！Sheen 想你了好久了🐶",
                 "终于等到你啦，今天过得怎么样？"]
     elif 5 <= h < 11:

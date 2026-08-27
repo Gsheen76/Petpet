@@ -552,7 +552,9 @@ class ChatToolsTests(unittest.TestCase):
                     "runtime",
                     "pets",
                     "lunch_meat",
-                    "avatar.png",
+                    "desktop",
+                    "poses",
+                    "idle.png",
                 )
             )
         )

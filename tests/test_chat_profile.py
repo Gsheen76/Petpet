@@ -137,7 +137,8 @@ class ChatProfileTests(unittest.TestCase):
         self.assertEqual(self.window.title.text().strip(), "豆包（午餐肉）")
         self.assertTrue(lunch_avatar.property("avatarSource").endswith(
             os.path.join(
-                "assets", "runtime", "pets", "lunch_meat", "avatar.png",
+                "assets", "runtime", "pets", "lunch_meat",
+                "desktop", "poses", "idle.png",
             )
         ))
 
@@ -152,7 +153,8 @@ class ChatProfileTests(unittest.TestCase):
         self.assertEqual(avatar.property("avatarRole"), "assistant")
         self.assertTrue(avatar.property("avatarSource").endswith(
             os.path.join(
-                "assets", "runtime", "pets", "ice_cream", "avatar.png",
+                "assets", "runtime", "pets", "ice_cream",
+                "desktop", "poses", "idle.png",
             )
         ))
         self.assertEqual(bubble.text(), "冰淇淋历史")

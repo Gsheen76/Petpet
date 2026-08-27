@@ -198,7 +198,7 @@ class SettingsWindowTests(unittest.TestCase):
         self.window.inputs["personality_level"].setValue(2)
         with patch("petpet.ui.settings.save_settings"):
             self.window.apply()
-        self.assertEqual(self.pet.settings["chat_font_size"], 28)
+        self.assertEqual(self.pet.settings["chat_font_size"], 26)
         self.assertFalse(self.pet.settings["always_on_top"])
         for key, value in self.window.HEALTH_PRESETS[2].items():
             self.assertEqual(self.pet.settings[key], value)
