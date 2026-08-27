@@ -36,7 +36,7 @@ class SettingsWindowTests(unittest.TestCase):
     def tearDown(self):
         self.window.close()
 
-    def test_uses_size_dropdown_and_switches(self):
+    def test_uses_font_presets_and_switches(self):
         self.assertEqual(self.window.windowTitle(), "温馨设置")
         self.assertGreaterEqual(
             self.window.width(), pet.SettingsWindow.COMPACT_MIN_WIDTH
@@ -44,7 +44,6 @@ class SettingsWindowTests(unittest.TestCase):
         self.assertGreaterEqual(
             self.window.height(), pet.SettingsWindow.COMPACT_MIN_HEIGHT
         )
-        self.assertEqual(self.window.chat_size_combo.currentData(), (640, 820))
         self.assertNotIn("chat_bubble_max", self.window.inputs)
         self.assertNotIn("decay_hunger", self.window.inputs)
         self.assertNotIn("decay_energy", self.window.inputs)
@@ -193,15 +192,12 @@ class SettingsWindowTests(unittest.TestCase):
             self.assertEqual(self.pet.settings[key], values[0])
 
     def test_apply_updates_every_control(self):
-        self.window.chat_size_combo.setCurrentIndex(0)
         self.window.inputs["chat_font_size"].setValue(2)
         self.window.inputs["always_on_top"].setChecked(False)
         self.window.inputs["health_level"].setValue(2)
         self.window.inputs["personality_level"].setValue(2)
         with patch("petpet.ui.settings.save_settings"):
             self.window.apply()
-        self.assertEqual(self.pet.settings["chat_width"], 480)
-        self.assertEqual(self.pet.settings["chat_height"], 620)
         self.assertEqual(self.pet.settings["chat_font_size"], 26)
         self.assertFalse(self.pet.settings["always_on_top"])
         for key, value in self.window.HEALTH_PRESETS[2].items():
@@ -211,7 +207,6 @@ class SettingsWindowTests(unittest.TestCase):
         self.assertEqual(len(self.pet.applied), 1)
 
     def test_reset_restores_all_defaults_in_data_and_controls(self):
-        self.window.chat_size_combo.setCurrentIndex(4)
         self.window.inputs["chat_font_size"].setValue(2)
         self.window.inputs["sound_enabled"].setChecked(False)
         self.window.inputs["health_level"].setValue(0)
@@ -219,7 +214,6 @@ class SettingsWindowTests(unittest.TestCase):
         with patch("petpet.ui.settings.save_settings"):
             self.window.reset_defaults()
         self.assertEqual(self.pet.settings, pet.DEFAULT_SETTINGS)
-        self.assertEqual(self.window.chat_size_combo.currentData(), (640, 820))
         self.assertEqual(self.window.inputs["health_level"].value(), 1)
         self.assertEqual(self.window.inputs["personality_level"].value(), 1)
         font_values = pet.SettingsWindow.FONT_LEVEL_VALUES

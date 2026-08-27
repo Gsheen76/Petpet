@@ -923,16 +923,6 @@ class PetWindow(QWidget):
         if self.chat_win is not None:
             chat = self.chat_win
             chat.s = self.settings
-            screen = self.current_screen_rect()
-            width = min(
-                int(self.settings["chat_width"]),
-                max(320, screen.width() - 20),
-            )
-            height = min(
-                int(self.settings["chat_height"]),
-                max(400, screen.height() - 80),
-            )
-            chat.setFixedSize(width, height)
             chat._apply_style()
             chat._refresh_ai_tool_buttons()
             chat._set_log_messages(chat._history_messages())

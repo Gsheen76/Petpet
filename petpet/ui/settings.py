@@ -114,21 +114,12 @@ class SettingsWindow(QWidget):
         ("auto_check_updates", "启动时检查更新", "开启后每次启动都会检查 GitHub 最新版本"),
     ]
 
-    CHAT_SIZES = [
-        ("小巧 · 480 × 620", (480, 620)),
-        ("舒适 · 560 × 720", (560, 720)),
-        ("标准 · 640 × 820", (640, 820)),
-        ("宽敞 · 720 × 900", (720, 900)),
-        ("超大 · 800 × 980", (800, 980)),
-    ]
-
     def __init__(self, pet_window):
         super().__init__()
         self.pet = pet_window
         self.s = pet_window.settings
         self.inputs = {}
         self.switch_labels = {}
-        self.chat_size_combo = None
 
         self._drag_offset = None
         self.setWindowFlags(
@@ -467,22 +458,6 @@ class SettingsWindow(QWidget):
         group_title.setObjectName("settingsGroupTitle")
         layout.addWidget(group_title)
 
-        combo = QComboBox()
-        combo.setMinimumWidth(220)
-        for label, size in self.CHAT_SIZES:
-            combo.addItem(label, size)
-        self.chat_size_combo = combo
-        self._select_chat_size(
-            int(self.s.get("chat_width", 640)),
-            int(self.s.get("chat_height", 820)),
-        )
-        self._add_row(
-            layout,
-            "聊天窗口大小",
-            "五档常用比例，从小巧到超大",
-            combo,
-        )
-
         for key in ("chat_font_size", "ui_font_size"):
             self._add_font_level_row(layout, key)
         for key, label, hint in self.SWITCHES:
@@ -579,19 +554,6 @@ class SettingsWindow(QWidget):
         if label is not None:
             label.setText("开启" if checked else "关闭")
 
-    def _select_chat_size(self, width, height):
-        if self.chat_size_combo is None:
-            return
-        best_index = 0
-        best_distance = None
-        for index in range(self.chat_size_combo.count()):
-            size = self.chat_size_combo.itemData(index)
-            distance = abs(size[0] - width) + abs(size[1] - height)
-            if best_distance is None or distance < best_distance:
-                best_index = index
-                best_distance = distance
-        self.chat_size_combo.setCurrentIndex(best_index)
-
     def _field_meta(self, key):
         for k, label, mn, mx, step, hint in self.FIELDS:
             if k == key: return label, mn, mx, step, hint
@@ -618,9 +580,6 @@ class SettingsWindow(QWidget):
 
     def apply(self):
         previous = dict(self.s)
-        width, height = self.chat_size_combo.currentData()
-        self.s["chat_width"] = int(width)
-        self.s["chat_height"] = int(height)
         for key, control in self.inputs.items():
             if key in {"health_level", "personality_level"}:
                 continue
@@ -659,10 +618,6 @@ class SettingsWindow(QWidget):
         self.s.pop("chat_bubble_max", None)
         save_settings(self.s)
         self.pet.settings = self.s
-        self._select_chat_size(
-            DEFAULT_SETTINGS["chat_width"],
-            DEFAULT_SETTINGS["chat_height"],
-        )
         for key, control in self.inputs.items():
             if key == "health_level":
                 control.setValue(1)
