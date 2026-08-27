@@ -72,7 +72,7 @@ class SettingsWindowTests(unittest.TestCase):
         )
         close_button = self.window.findChild(QPushButton, "closeButton")
         self.assertIsNotNone(close_button)
-        self.assertEqual(close_button.text(), "×")
+        self.assertIn(close_button.text(), ("", "×"))
         self.assertEqual(close_button.cursor().shape(), Qt.PointingHandCursor)
         title_bar = self.window.findChild(QFrame, "settingsTitleBar")
         self.assertIsNotNone(title_bar)
@@ -85,11 +85,22 @@ class SettingsWindowTests(unittest.TestCase):
                      if item[0] == "ui_font_size")
         self.assertEqual(field[2:4], (20, 40))
 
-    def test_settings_window_is_twenty_percent_larger(self):
-        self.assertEqual(pet.SettingsWindow.PREFERRED_WIDTH, 840)
+    def test_settings_window_matches_achievements_panel_size(self):
+        self.assertEqual(pet.SettingsWindow.PREFERRED_WIDTH, 850)
         self.assertEqual(pet.SettingsWindow.PREFERRED_HEIGHT, 960)
         self.assertEqual(pet.SettingsWindow.COMPACT_MIN_WIDTH, 648)
         self.assertEqual(pet.SettingsWindow.COMPACT_MIN_HEIGHT, 708)
+
+    def test_settings_window_shops_background_asset(self):
+        from petpet.app.paths import SHOP_UI_DIR
+        import os as _os
+        self.assertTrue(
+            _os.path.exists(_os.path.join(SHOP_UI_DIR, "background.png"))
+        )
+        self.assertFalse(self.window._background_pixmap.isNull())
+        # The close button reuses the round shop asset instead of a text pill.
+        close_button = self.window.findChild(QPushButton, "closeButton")
+        self.assertEqual(close_button.text(), "")
 
     def test_health_presets_have_three_confirmed_levels(self):
         self.assertEqual(

@@ -1069,9 +1069,11 @@ class RecordsWindow(CozyProgressWindow):
         self.save_callback = save_callback
         super().__init__(
             pet,
-            "📒 温馨记录",
+            "温馨记录",
             "每一次摸摸、饭饭和陪伴，都被认真记在这里。",
-            (700, 760),
+            (850, 960),
+            shop_theme=True,
+            title_image=False,
         )
 
     @staticmethod

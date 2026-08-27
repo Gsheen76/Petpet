@@ -1,7 +1,17 @@
 """Static presets used by Petpet's settings window."""
 
-from PyQt5.QtCore import QPoint, Qt, QTimer, pyqtSignal
-from PyQt5.QtGui import QFont
+import os
+
+from PyQt5.QtCore import QPoint, QRectF, Qt, QTimer, pyqtSignal
+from PyQt5.QtGui import (
+    QColor,
+    QFont,
+    QLinearGradient,
+    QPainter,
+    QPainterPath,
+    QPen,
+    QPixmap,
+)
 from PyQt5.QtWidgets import (
     QApplication,
     QComboBox,
@@ -15,6 +25,8 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+from petpet.app.fonts import APP_FONT_FAMILY
+from petpet.app.paths import SHOP_UI_DIR
 from petpet.app.settings import DEFAULT_SETTINGS, save_settings
 from petpet.ui.common import independent_pixel_font
 from petpet.ui.controls import StepperControl, ThreeLevelSlider, ToggleSwitch
@@ -65,7 +77,7 @@ PERSONALITY_PRESETS = (
 class SettingsWindow(QWidget):
     """Tunable settings panel — chat window size, decay rates, chatter frequency, etc."""
     CHANGED = pyqtSignal()
-    PREFERRED_WIDTH = 840
+    PREFERRED_WIDTH = 850
     PREFERRED_HEIGHT = 960
     COMPACT_MIN_WIDTH = 648
     COMPACT_MIN_HEIGHT = 708
@@ -118,6 +130,9 @@ class SettingsWindow(QWidget):
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setObjectName("settingsWindow")
         self.setWindowTitle("温馨设置")
+        self._background_pixmap = QPixmap(
+            os.path.join(SHOP_UI_DIR, "background.png")
+        )
         self._build_ui()
         self._apply_font()
         screen = QApplication.primaryScreen().availableGeometry()
@@ -131,6 +146,33 @@ class SettingsWindow(QWidget):
                 min(self.PREFERRED_HEIGHT, screen.height() - 80),
             ),
         )
+
+    def paintEvent(self, event):
+        """Paint the shared shop background behind every settings card."""
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        rounded = QPainterPath()
+        rounded.addRoundedRect(QRectF(self.rect()), 24, 24)
+        painter.setClipPath(rounded)
+        if not self._background_pixmap.isNull():
+            painter.setRenderHint(QPainter.SmoothPixmapTransform)
+            painter.drawPixmap(
+                self.rect(),
+                self._background_pixmap.scaled(
+                    self.size(),
+                    Qt.IgnoreAspectRatio,
+                    Qt.SmoothTransformation,
+                ),
+            )
+            painter.setClipping(False)
+            return
+        outer = self.rect().adjusted(1, 1, -2, -2)
+        gradient = QLinearGradient(outer.topLeft(), outer.bottomRight())
+        gradient.setColorAt(0.0, QColor("#fffaf1"))
+        gradient.setColorAt(1.0, QColor("#fff0df"))
+        painter.setBrush(gradient)
+        painter.setPen(QPen(QColor("#e7c4ad"), 1.4))
+        painter.drawRoundedRect(outer, 22, 22)
 
     def show_near_pet(self):
         """Show settings centered on the active pet's screen."""
@@ -154,7 +196,7 @@ class SettingsWindow(QWidget):
         self.setStyleSheet(f"""
             QWidget {{
                 background:transparent;
-                font-family:'Microsoft YaHei',sans-serif;
+                font-family:'{APP_FONT_FAMILY}','Microsoft YaHei',sans-serif;
                 color:#65483b;
             }}
             QWidget#settingsWindow {{
@@ -236,21 +278,13 @@ class SettingsWindow(QWidget):
             }}
             QPushButton#stepButton:pressed {{ background:#ffd1bf; }}
             QPushButton#closeButton {{
-                background:#ffe5dc;
-                color:#a96254;
-                border:1px solid #efc6b8;
+                background:transparent;
+                color:transparent;
+                border:0;
+                border-image:url("D:/Agent_project/Petpet/assets/runtime/ui/shop/close_button.png");
                 border-radius:16px;
                 padding:0;
                 font-weight:600;
-            }}
-            QPushButton#closeButton:hover {{
-                background:#f49a84;
-                color:#ffffff;
-                border-color:#ed8a73;
-            }}
-            QPushButton#closeButton:pressed {{
-                background:#dc765f;
-                color:#ffffff;
             }}
             QPushButton#reset {{ background:#d7b9a6; color:#6d5145; }}
             QPushButton#reset:hover {{ background:#e2c8b8; }}
@@ -330,10 +364,14 @@ class SettingsWindow(QWidget):
         title_row = QHBoxLayout(title_bar)
         title_row.setContentsMargins(0, 0, 0, 0)
         title_row.setSpacing(10)
-        self.title_label = QLabel("🌼 温馨设置")
+        self.title_label = QLabel("温馨设置")
         self.title_label.setObjectName("settingsTitle")
         self.title_label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
-        close_button = QPushButton("×")
+        close_button = QPushButton(
+            "" if os.path.exists(
+                os.path.join(SHOP_UI_DIR, "close_button.png")
+            ) else "×"
+        )
         close_button.setObjectName("closeButton")
         close_button.setCursor(Qt.PointingHandCursor)
         close_button.setToolTip("关闭温馨设置")
