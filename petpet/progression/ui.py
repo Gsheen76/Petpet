@@ -160,6 +160,11 @@ SHOP_THEME_STYLE = """
         border-image: url("%(active_tab)s") 20 32 20 32 stretch;
         color: #ffffff;
     }
+    QFrame#filterBar {
+        background: #f7e8d8;
+        border: 1px solid #eed3ba;
+        border-radius: 16px;
+    }
     QPushButton#filterTabButton {
         background: transparent;
         color: #9c6b58;
@@ -1260,12 +1265,6 @@ class AchievementsWindow(CozyProgressWindow):
         completed_count = sum(1 for item in items if item["completed"])
         claimed_count = sum(1 for item in items if item["claimed"])
 
-        tip = QLabel("亮起的成就可以领取 Pet币；每升一级也会有一份奖励。")
-        tip.setObjectName("muted")
-        tip.setWordWrap(True)
-        tip.setAlignment(Qt.AlignCenter)
-        self._add_page_header(tip)
-
         summary = QFrame()
         summary.setObjectName("heroCard")
         row = QHBoxLayout(summary)
@@ -1362,7 +1361,9 @@ class AchievementsWindow(CozyProgressWindow):
         if uncovered:
             available.append(ACHIEVEMENT_OTHER_GROUP)
         bar = QFrame()
-        bar.setObjectName("tabBar")
+        # Adaptive warm panel: the shared four-slot tab_bar asset cannot
+        # stretch to a different button count.
+        bar.setObjectName("filterBar")
         bar.setFixedHeight(46)
         bar_layout = QHBoxLayout(bar)
         bar_layout.setContentsMargins(4, 4, 4, 4)
