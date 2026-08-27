@@ -8,7 +8,16 @@ import time
 from dataclasses import dataclass
 
 from PyQt5.QtCore import QPoint, QPointF, QRect, QRectF, Qt, QTimer
-from PyQt5.QtGui import QColor, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap
+from PyQt5.QtGui import (
+    QColor,
+    QFont,
+    QFontDatabase,
+    QLinearGradient,
+    QPainter,
+    QPainterPath,
+    QPen,
+    QPixmap,
+)
 from PyQt5.QtWidgets import QWidget
 
 from petpet.progression import core as progression
@@ -85,6 +94,10 @@ class HomeSceneWindow(QWidget):
             for item_id, path in HOME_FURNITURE_PATHS.items()
         }
         self.furniture["home_status_card"] = render_home_status_card(self.state)
+        self.action_button_pixmaps = {
+            name: QPixmap(path)
+            for name, path in HOME_BUTTON_PATHS.items()
+        }
         self._manual_destination = None
         self._manual_route = None
         self._destination_fade_started_at = None
@@ -97,7 +110,7 @@ class HomeSceneWindow(QWidget):
         self._selected_furniture = None
         self._editing_gesture = None
         self._decoration_category = "all"
-        self._home_action_menu_open = False
+        self._menu_open = False
         self._interaction_menu_open = False
         self._last_pet_tick = time.monotonic()
         self._last_persisted_home_target = None
@@ -565,38 +578,34 @@ class HomeSceneWindow(QWidget):
         if self.view_pan_enabled():
             self._draw_scene_button(painter, self.left_view_button_rect(), "左移")
             self._draw_scene_button(painter, self.right_view_button_rect(), "右移")
-        if self._home_action_menu_open:
-            for name, rect in self.home_action_button_rects().items():
-                self._draw_scene_button(
-                    painter, rect, self.scene_button_label(name), variant="menu_item"
-                )
-            if self.interaction_header_needs_attention():
-                self._draw_attention_dot(
-                    painter, self.interaction_button_rect().topRight()
-                )
+        if self._menu_open:
+            menu_labels = {"shop": "商店", "decorate": "装修", "exit": "退出"}
+            for action, rect in self.menu_item_rects().items():
+                self._draw_action_button(painter, rect, action, menu_labels[action])
         if self._interaction_menu_open:
+            interaction_labels = {
+                "pet": "抚摸",
+                "feed": "喂食",
+                "play": "玩耍",
+                "sleep": "睡觉",
+            }
             attention = self.interaction_actions_needing_attention()
-            for action, rect in self.home_interaction_action_rects().items():
-                self._draw_scene_button(
-                    painter,
-                    rect,
-                    {"pet": "抚摸", "feed": "喂食", "play": "玩耍", "sleep": "睡觉"}[action],
-                    variant="menu_item",
+            for action, rect in self.interaction_item_rects().items():
+                self._draw_action_button(
+                    painter, rect, action, interaction_labels[action]
                 )
                 if action in attention:
                     self._draw_attention_dot(painter, rect.topRight())
-        toggle_label = "返回⌄" if self._interaction_menu_open else (
-            "收起⌄" if self._home_action_menu_open else self.scene_button_label("menu")
+        self._draw_action_button(
+            painter, self.interaction_toggle_rect(), "interaction_toggle", ""
         )
-        self._draw_scene_button(
-            painter, self.home_action_toggle_rect(), toggle_label, variant="menu_toggle"
+        self._draw_action_button(
+            painter, self.menu_toggle_rect(), "menu_toggle", ""
         )
-        if (
-            self.interaction_header_needs_attention()
-            and not self._home_action_menu_open
-            and not self._interaction_menu_open
-        ):
-            self._draw_attention_dot(painter, self.home_action_toggle_rect().topRight())
+        if self.interaction_header_needs_attention() and not self._interaction_menu_open:
+            self._draw_attention_dot(
+                painter, self.interaction_toggle_rect().topRight()
+            )
         painter.restore()
         if self.is_decorating():
             self._draw_decoration_panel(painter)
@@ -605,7 +614,7 @@ class HomeSceneWindow(QWidget):
     def show_scene(self):
         progression.ensure_progression(self.state)
         self.refresh_pet_assets()
-        self._home_action_menu_open = False
+        self._menu_open = False
         self._interaction_menu_open = False
         self._clear_manual_destination()
         self._reset_home_pet_controller()
@@ -625,7 +634,7 @@ class HomeSceneWindow(QWidget):
         self.save_state(self.state)
 
     def hide_scene(self):
-        self._home_action_menu_open = False
+        self._menu_open = False
         self._interaction_menu_open = False
         self.state.setdefault("home_scene", {})["enabled"] = False
         hide_overlays = getattr(self.pet, "hide_overlays", None)
@@ -646,62 +655,83 @@ class HomeSceneWindow(QWidget):
         if callable(raise_pet):
             raise_pet()
 
-    def home_action_button_rects(self):
-        """Return primary actions stacked upward from the lower-right toggle."""
-        anchor = self.home_action_toggle_rect()
-        width = anchor.width()
-        height = 40
-        gap = 7
-        names = ("shop", "interaction", "decorate", "exit")
-        return {
-            name: QRect(
-                anchor.left(),
-                anchor.top() - (index + 1) * (height + gap),
-                width,
-                height,
-            )
-            for index, name in enumerate(names)
-        }
-
-    def home_action_toggle_rect(self):
-        canvas = self.scene_canvas_rect()
-        width = 92
-        height = 44
-        margin = 14
+    def interaction_toggle_rect(self):
+        """Left toggle (interaction) beside the menu toggle."""
+        menu_toggle = self.menu_toggle_rect()
+        width, height = HOME_TOGGLE_SIZE
         return QRect(
-            canvas.right() - margin - width + 1,
-            canvas.bottom() - margin - height + 1,
+            menu_toggle.left() - 8 - width,
+            menu_toggle.top(),
             width,
             height,
         )
 
-    def exit_button_rect(self):
-        return self.home_action_button_rects()["exit"]
+    def menu_toggle_rect(self):
+        """Right toggle (menu), the pair centered under the item stacks."""
+        canvas = self.scene_canvas_rect()
+        width, height = HOME_TOGGLE_SIZE
+        stack_right = canvas.right() - 14
+        pair_width = 2 * width + 8
+        right = stack_right - max(
+            0, (HOME_BUTTON_SIZE[0] - pair_width) // 2
+        )
+        return QRect(
+            right - width + 1,
+            self._toggle_top(),
+            width,
+            height,
+        )
 
-    def decoration_button_rect(self):
-        return self.home_action_button_rects()["decorate"]
+    def _toggle_top(self):
+        canvas = self.scene_canvas_rect()
+        _, height = HOME_TOGGLE_SIZE
+        return canvas.bottom() - 14 - height + 1
 
-    def shop_button_rect(self):
-        return self.home_action_button_rects()["shop"]
+    def interaction_item_rects(self):
+        """Items stacked upward above the toggle pair."""
+        return self._stacked_item_rects(("pet", "feed", "play", "sleep"))
 
-    def interaction_button_rect(self):
-        return self.home_action_button_rects()["interaction"]
+    def menu_item_rects(self):
+        """Items stacked upward above the toggle pair."""
+        return self._stacked_item_rects(("shop", "decorate", "exit"))
 
-    def home_interaction_action_rects(self):
-        anchor = self.home_action_toggle_rect()
-        width = anchor.width()
-        height = 40
+    def _stacked_item_rects(self, names):
+        width, height = HOME_BUTTON_SIZE
         gap = 7
-        names = ("pet", "feed", "play", "sleep")
-        return {
-            name: QRect(
-                anchor.left(),
-                anchor.top() - (index + 1) * (height + gap),
+        right = self.scene_canvas_rect().right() - 14
+        bottom = self._toggle_top() - 6
+        rects = {}
+        for index, name in enumerate(names):
+            item_bottom = bottom - index * (height + gap)
+            rects[name] = QRect(
+                right - width + 1,
+                item_bottom - height + 1,
                 width,
                 height,
             )
-            for index, name in enumerate(names)
-        }
+        return rects
+
+    # Compatibility aliases kept for tests and external callers.
+    def home_action_toggle_rect(self):
+        return self.menu_toggle_rect()
+
+    def home_action_button_rects(self):
+        return self.menu_item_rects()
+
+    def exit_button_rect(self):
+        return self.menu_item_rects()["exit"]
+
+    def decoration_button_rect(self):
+        return self.menu_item_rects()["decorate"]
+
+    def shop_button_rect(self):
+        return self.menu_item_rects()["shop"]
+
+    def interaction_button_rect(self):
+        return self.interaction_toggle_rect()
+
+    def home_interaction_action_rects(self):
+        return self.interaction_item_rects()
 
     def left_view_button_rect(self):
         return QRect(
@@ -742,6 +772,45 @@ class HomeSceneWindow(QWidget):
             "decorate": "装修",
             "exit": "退出",
         }.get(button, "")
+
+    def _needs_menu_attention(self):
+        """The menu toggle currently has no red-dot condition."""
+        return False
+
+    @staticmethod
+    def _cute_button_font():
+        """Return the cutest rounded CJK font available on this system."""
+        families = set(QFontDatabase().families())
+        for preferred in ("幼圆", "YouYuan", "华文琥珀", "楷体", "微软雅黑"):
+            for family in families:
+                if family.startswith(preferred):
+                    font = QFont(family)
+                    font.setBold(True)
+                    font.setPixelSize(17)
+                    return font
+        font = QFont()
+        font.setBold(True)
+        font.setPixelSize(17)
+        return font
+
+
+    def _draw_action_button(self, painter, rect, name, label):
+        """Draw one image button, with an optional runtime label overlay."""
+        pixmap = self.action_button_pixmaps.get(name)
+        if pixmap is None or pixmap.isNull():
+            self._draw_scene_button(painter, rect, label, variant="menu_item")
+            return
+        painter.save()
+        painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
+        painter.drawPixmap(rect, pixmap)
+        if label:
+            painter.setFont(self._cute_button_font())
+            painter.setPen(QColor("#9A5B3F"))
+            text_rect = rect.adjusted(
+                int(rect.width() * 0.55), 0, -int(rect.width() * 0.18), 0
+            )
+            painter.drawText(text_rect, Qt.AlignCenter, label)
+        painter.restore()
 
     def _draw_scene_button(self, painter, rect, label, variant="primary"):
         painter.save()
@@ -808,7 +877,7 @@ class HomeSceneWindow(QWidget):
         if not callable(method):
             return False
         method()
-        self._home_action_menu_open = False
+        self._menu_open = False
         self._interaction_menu_open = False
         self.update()
         return True
@@ -822,7 +891,7 @@ class HomeSceneWindow(QWidget):
 
     def toggle_decoration_mode(self):
         decorating = not self.is_decorating()
-        self._home_action_menu_open = False
+        self._menu_open = False
         self._interaction_menu_open = False
         home_scene = self.state.setdefault("home_scene", {})
         home_scene["decorating"] = decorating
@@ -1606,22 +1675,24 @@ class HomeSceneWindow(QWidget):
 
     def handle_scene_click(self, point):
         """Handle non-furniture clicks without allowing the board above pet."""
-        if self.home_action_toggle_rect().contains(point):
-            if self._interaction_menu_open:
-                self._interaction_menu_open = False
-                self._home_action_menu_open = True
-            else:
-                self._home_action_menu_open = not self._home_action_menu_open
+        if self.interaction_toggle_rect().contains(point):
+            self._interaction_menu_open = not self._interaction_menu_open
+            self._menu_open = False
+            self.update()
+            return True
+        if self.menu_toggle_rect().contains(point):
+            self._menu_open = not self._menu_open
+            self._interaction_menu_open = False
             self.update()
             return True
         if self._interaction_menu_open:
-            for action, rect in self.home_interaction_action_rects().items():
+            for action, rect in self.interaction_item_rects().items():
                 if rect.contains(point):
                     return self.trigger_home_interaction(action)
             self._interaction_menu_open = False
             self.update()
             return True
-        if self._home_action_menu_open:
+        if self._menu_open:
             if self.exit_button_rect().contains(point):
                 self.hide_scene()
                 return True
@@ -1632,15 +1703,10 @@ class HomeSceneWindow(QWidget):
                 opener = getattr(self.pet, "open_shop", None)
                 if callable(opener):
                     opener()
-                self._home_action_menu_open = False
+                self._menu_open = False
                 self.update()
                 return True
-            if self.interaction_button_rect().contains(point):
-                self._home_action_menu_open = False
-                self._interaction_menu_open = True
-                self.update()
-                return True
-            self._home_action_menu_open = False
+            self._menu_open = False
             self.update()
             return True
         if self.view_pan_enabled() and self.left_view_button_rect().contains(point):
@@ -1657,16 +1723,18 @@ class HomeSceneWindow(QWidget):
         return False
 
     def _scene_control_at(self, point):
-        if self.home_action_toggle_rect().contains(point):
+        if self.interaction_toggle_rect().contains(point):
             return True
-        if self._home_action_menu_open and any(
-            rect.contains(point)
-            for rect in self.home_action_button_rects().values()
-        ):
+        if self.menu_toggle_rect().contains(point):
             return True
         if self._interaction_menu_open and any(
             rect.contains(point)
-            for rect in self.home_interaction_action_rects().values()
+            for rect in self.interaction_item_rects().values()
+        ):
+            return True
+        if self._menu_open and any(
+            rect.contains(point)
+            for rect in self.menu_item_rects().values()
         ):
             return True
         if self.view_pan_enabled() and (
@@ -1700,7 +1768,7 @@ class HomeSceneWindow(QWidget):
             self.canvas_to_world(point),
             time.monotonic() if now is None else float(now),
         )
-        self._home_action_menu_open = False
+        self._menu_open = False
         self._interaction_menu_open = False
         self._set_manual_destination(self.home_pet.target)
         if interrupted_sleep:

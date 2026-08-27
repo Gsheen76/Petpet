@@ -6,6 +6,7 @@
     "chat_personality": "活泼开朗、反应轻快、好奇热情，喜欢和主人一起开心探索；可以偶尔用“汪”、摇尾巴等小狗口吻，但不要连续吵闹或频繁重复口癖。",
     "price": 0,
     "preview": "pets/lunch_meat/desktop/poses/idle.png",
+    "avatar": "pets/lunch_meat/avatar.png",
     "desktop": {
       "root": "pets/lunch_meat/desktop",
       "animations_manifest": "pets/lunch_meat/desktop/animations/manifest.json"
@@ -29,6 +30,7 @@
     "discount": 0.76,
     "price": 760,
     "preview": "pets/ice_cream/home/poses/home-pet-idle-sit.png",
+    "avatar": "pets/ice_cream/avatar.png",
     "desktop": {
       "root": "pets/ice_cream/desktop",
       "animations_manifest": "pets/ice_cream/desktop/animations/manifest.json"

@@ -5,7 +5,7 @@ import threading
 import time
 
 from petpet.chat import api as ai
-from petpet.app.pets import pet_asset_path, pet_definition
+from petpet.app.pets import pet_asset_path, pet_avatar_path, pet_definition
 from PyQt5.QtCore import QPoint, QRect, QRectF, QSize, Qt, QTimer
 from PyQt5.QtGui import (
     QColor,
@@ -816,7 +816,9 @@ class ChatWindow(QWidget):
         image = QImage()
         if role == "assistant":
             source = os.path.normpath(
-                pet_asset_path(self.pet_id, "desktop", "idle") or ""
+                pet_avatar_path(self.pet_id)
+                or pet_asset_path(self.pet_id, "desktop", "idle")
+                or ""
             )
             image = QImage(source)
         else:
@@ -834,7 +836,11 @@ class ChatWindow(QWidget):
         painter.setClipPath(path)
         painter.fillRect(canvas.rect(), QColor("#f3ded0"))
         if not image.isNull():
-            if role == "assistant":
+            square_image = (
+                abs(image.width() - image.height())
+                <= min(image.width(), image.height()) * 0.2
+            )
+            if role == "assistant" and not square_image:
                 edge = min(image.width(), max(1, int(image.height() * 0.68)))
                 source_rect = QRect(
                     (image.width() - edge) // 2,

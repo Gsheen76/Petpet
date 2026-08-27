@@ -94,10 +94,10 @@ def test_first_purchase_discount_only_applies_to_pets():
     assert state["shop_first_purchase_discounts"]["pets"] is False
 
     outfit = progression.purchase_outfit(state, "dinosaur_suit")
-    assert outfit["price"] == 680
+    assert outfit["price"] == 600
     home = progression.purchase_home_decoration(state, "home_sofa")
     assert home["price"] == 240
-    assert state["pet_coins"] == 320
+    assert state["pet_coins"] == 400
 
 
 def test_old_outfit_and_home_discount_flags_are_ignored():
@@ -109,14 +109,14 @@ def test_old_outfit_and_home_discount_flags_are_ignored():
             "home": True,
         },
     )
-    assert progression.purchase_outfit(state, "dinosaur_suit")["price"] == 680
+    assert progression.purchase_outfit(state, "dinosaur_suit")["price"] == 600
     assert progression.purchase_home_decoration(state, "home_rug")["price"] == 120
 
 
 def test_outfit_and_home_purchases_use_and_sync_shared_player_coins():
     outfit_state = fresh_state(
         pet_coins=0,
-        player={"pet_coins": 680},
+        player={"pet_coins": 600},
     )
     assert progression.purchase_outfit(outfit_state, "dinosaur_suit")["ok"] is True
     assert outfit_state["player"]["pet_coins"] == 0
@@ -172,7 +172,7 @@ class ProgressionMigrationTests(unittest.TestCase):
         self.assertIsNone(state["equipped_outfit"])
 
     def test_dinosaur_outfit_can_be_purchased_and_equipped(self):
-        state = fresh_state(pet_coins=680)
+        state = fresh_state(pet_coins=600)
 
         purchased = progression.purchase_outfit(state, "dinosaur_suit")
         equipped = progression.equip_outfit(state, "dinosaur_suit")
@@ -187,7 +187,7 @@ class ProgressionMigrationTests(unittest.TestCase):
         )
 
     def test_strawberry_outfit_can_be_purchased_and_equipped(self):
-        state = fresh_state(pet_coins=760)
+        state = fresh_state(pet_coins=680)
 
         purchased = progression.purchase_outfit(state, "strawberry_suit")
         equipped = progression.equip_outfit(state, "strawberry_suit")
@@ -420,7 +420,7 @@ class UpgradeBalanceTests(unittest.TestCase):
     def test_petting_description_uses_the_shop_effect_format(self):
         description = progression.upgrade_description(fresh_state(), "petting")
 
-        self.assertEqual(description, "每次抚摸：心情+10点")
+        self.assertEqual(description, "心情 +10")
         self.assertNotIn("当前加成", description)
 
     def test_level_one_playing_uses_rebalanced_costs(self):
@@ -504,7 +504,7 @@ class UpgradeBalanceTests(unittest.TestCase):
             "sleeping",
         )
 
-        self.assertEqual(description, "每2s睡眠：精力+4点，饱腹-1.2点")
+        self.assertEqual(description, "精力 +4/2s，饱腹 -1.2/2s")
 
     def test_full_upgrade_cost_stays_long_term_but_not_unreachable(self):
         total_cost = sum(
@@ -873,3 +873,27 @@ class DecorationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_reset_shop_purchases_clears_owned_shop_items():
+    state = fresh_state(pet_coins=500)
+    state["owned_outfits"] = ["dinosaur_suit"]
+    state["equipped_outfit"] = "dinosaur_suit"
+    state["owned_decorations"] = ["bow_tie"]
+    state["owned_home_decorations"] = ["warm_rug"]
+    state["upgrades"] = {"petting": 2, "feeding": 1}
+    active_pet = state.get("active_pet_id")
+
+    progression.reset_shop_purchases(state)
+
+    assert state["owned_outfits"] == []
+    assert state["equipped_outfit"] is None
+    assert state["owned_decorations"] == []
+    assert all(
+        value is None for value in state["equipped_decorations"].values()
+    )
+    assert state["owned_home_decorations"] == []
+    assert all(level == 0 for level in state["upgrades"].values())
+    if active_pet:
+        assert state["owned_pet_ids"] == [active_pet]
+    assert state["pet_coins"] == 500

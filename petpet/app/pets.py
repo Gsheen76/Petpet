@@ -107,6 +107,15 @@ def pet_asset_path(pet_id: str, scene: str, action: str = "idle") -> str | None:
     return _candidate_path(definition, definition.get("preview"))
 
 
+def pet_avatar_path(pet_id: str) -> str | None:
+    """Return the pet's square portrait, falling back to its idle pose."""
+    definition = pet_definition(pet_id)
+    resolved = _candidate_path(definition, definition.get("avatar"))
+    if resolved:
+        return resolved
+    return pet_asset_path(pet_id, "desktop", "idle")
+
+
 def pet_display_name(pet_id: str, state: dict) -> str:
     definition = pet_definition(pet_id)
     normalized_pet_id = definition["id"]

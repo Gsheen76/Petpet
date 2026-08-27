@@ -6,11 +6,22 @@ import os
 import time
 import copy
 
-from PyQt5.QtCore import Qt, QPoint, QRectF
-from PyQt5.QtGui import QColor, QLinearGradient, QPainter, QPen, QPixmap
+from PyQt5.QtCore import Qt, QPoint, QRect, QRectF, QSize, QTimer
+from PyQt5.QtGui import (
+    QColor,
+    QFont,
+    QFontMetrics,
+    QIcon,
+    QLinearGradient,
+    QPainter,
+    QPainterPath,
+    QPen,
+    QPixmap,
+)
 from PyQt5.QtWidgets import (
     QApplication,
     QButtonGroup,
+    QDialog,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -18,26 +29,240 @@ from PyQt5.QtWidgets import (
     QProgressBar,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
+    QWIDGETSIZE_MAX,
 )
 
 from petpet.progression import core as progression
 from petpet.ui import decorations as decoration_renderer
-from petpet.app.paths import DECORATIONS_DIR, OUTFITS_DIR, POSES_DIR
+from petpet.app.paths import DECORATIONS_DIR, OUTFITS_DIR, POSES_DIR, SHOP_UI_DIR
+from petpet.app.fonts import APP_FONT_FAMILY
 from petpet.app.pets import (
     load_pet_registry,
     pet_asset_path,
+    pet_avatar_path,
     pet_definition,
 )
 from petpet.home.rendering import HOME_FURNITURE_PATHS, render_home_status_card
+
+
+def _shop_asset(name):
+    return os.path.join(SHOP_UI_DIR, name)
+
+
+def _shop_pixmap(name, height):
+    pixmap = QPixmap(_shop_asset(name))
+    if pixmap.isNull():
+        return pixmap
+    return pixmap.scaledToHeight(
+        height, Qt.SmoothTransformation
+    )
+
+
+_CROPPED_PIXMAP_CACHE = {}
+
+
+def _alpha_bounds(img):
+    """Exact opaque bounding box via numpy; None when fully transparent."""
+    try:
+        import numpy as np
+    except ImportError:
+        return None
+    stride = img.bytesPerLine() // 4
+    raw = img.constBits().asarray(img.bytesPerLine() * img.height())
+    arr = np.frombuffer(raw, dtype=np.uint8).reshape(
+        img.height(), stride, 4
+    )[:, :img.width(), 3]
+    mask = arr > 8
+    rows = np.flatnonzero(mask.any(axis=1))
+    cols = np.flatnonzero(mask.any(axis=0))
+    if rows.size == 0:
+        return None
+    return (
+        int(cols[0]), int(rows[0]),
+        int(cols[-1]), int(rows[-1]),
+    )
+
+
+def _shop_pixmap_cropped(name, height):
+    """Asset cropped to its opaque bounding box, then scaled to height."""
+    key = (name, int(height))
+    cached = _CROPPED_PIXMAP_CACHE.get(key)
+    if cached is not None:
+        return cached
+    pixmap = QPixmap(_shop_asset(name))
+    if pixmap.isNull():
+        _CROPPED_PIXMAP_CACHE[key] = pixmap
+        return pixmap
+    img = pixmap.toImage()
+    bounds = _alpha_bounds(img)
+    if bounds is None:
+        result = pixmap
+    else:
+        left, top, right, bottom = bounds
+        result = pixmap.copy(QRect(
+            left, top, right - left + 1, bottom - top + 1,
+        )).scaledToHeight(int(height), Qt.SmoothTransformation)
+    _CROPPED_PIXMAP_CACHE[key] = result
+    return result
+
+
+def _status_badge_label(text, kind):
+    """Baked 使用中/已拥有 pill when available, styled text otherwise."""
+    label = PreservedTextLabel(text)
+    if kind == "active":
+        pixmap = _shop_pixmap_cropped("status_in_use.png", 47)
+    elif kind == "owned":
+        pixmap = _shop_pixmap_cropped("status_owned.png", 47)
+    else:
+        pixmap = QPixmap()
+    if not pixmap.isNull():
+        label.setPixmap(pixmap)
+        label.setContentsMargins(4, 2, 0, 2)
+        label.setStyleSheet(
+            "background: transparent; border: 0; border-image: none;"
+        )
+    elif kind == "active":
+        label.setProperty("petStatusRole", "active")
+    elif kind == "owned":
+        label.setProperty("petStatusRole", "owned")
+    else:
+        label.setProperty("levelBadge", True)
+    return label
+
+
+SHOP_THEME_STYLE = """
+    QWidget {
+        font-size: 21px;
+        font-weight: 600;
+    }
+    QLabel[cardTitle="true"] {
+        font-size: 24px;
+    }
+    QFrame#tabBar {
+        background: transparent;
+        border: 0;
+        border-image: url("%(tab_bar)s");
+    }
+    QPushButton#tabButton {
+        background: transparent;
+        color: #8a5a3c;
+        border: 0;
+        border-radius: 16px;
+        padding: 12px 18px;
+        font-size: 21px;
+    }
+    QPushButton#tabButton:hover { color: #7a4a34; }
+    QPushButton#tabButton:checked {
+        background: transparent;
+        border-image: url("%(active_tab)s") 20 32 20 32 stretch;
+        color: #ffffff;
+    }
+    QPushButton#filterTabButton {
+        background: transparent;
+        color: #9c6b58;
+        border: 0;
+        border-radius: 12px;
+        padding: 7px 3px;
+        font-size: 14px;
+        font-weight: 800;
+    }
+    QPushButton#filterTabButton:hover {
+        background: #ffece1;
+        color: #8c5948;
+    }
+    QPushButton#filterTabButton:checked {
+        background: #f28f76;
+        color: #ffffff;
+    }
+    QPushButton[coralPill="true"] {
+        background: transparent;
+        border: 0;
+        border-image: url("%(active_tab)s") 20 32 20 32 stretch;
+        color: #ffffff;
+        padding: 0;
+        min-width: 110px;
+        max-width: 110px;
+        min-height: 48px;
+        max-height: 48px;
+        font-size: 19px;
+        font-weight: 800;
+    }
+    QPushButton[coralPill="true"]:disabled {
+        background: #ead8ca;
+        border-image: none;
+        color: #a98b7b;
+    }
+    QPushButton#closeButton {
+        background: transparent;
+        border: 0;
+        border-image: url("%(close_button)s");
+    }
+    QPushButton#closeButton:hover {
+        background: transparent;
+    }
+    QPushButton[switchPill="true"] {
+        background: transparent;
+        border: 0;
+        border-image: url("%(switch_button)s");
+        color: transparent;
+        padding: 8px 16px;
+    }
+    QLabel[priceTagRole="gift"] {
+        background: transparent;
+        border: 0;
+    }
+    QLabel[priceTagRole="normal"] {
+        background: transparent;
+        border: 0;
+        border-image: url("%(price_bg)s");
+        color: #d29a38;
+        font-size: 16px;
+        font-weight: 600;
+        padding: 0 8px 0 40px;
+    }
+    QFrame[shopCard="true"] {
+        background: #fff9ee;
+        border: 1px solid #f0d8ba;
+        border-radius: 20px;
+    }
+    QFrame#dataCard, QFrame#achievementCard, QFrame#upgradeCard,
+    QFrame#decorationCard,
+    QFrame#placeholderCard, QFrame[placeholderCard="true"] {
+        background: #fff9ee;
+        border: 1px solid #f0d8ba;
+        border-radius: 20px;
+    }
+    QFrame#heroCard {
+        background: #fff3e2;
+        border: 1px solid #f0d8ba;
+    }
+    QLabel[petStatusRole="active"] {
+        color: #d2604e;
+        background: #ffe3dc;
+        border: 1px solid #f6bcae;
+    }
+    QLabel[petStatusRole="owned"] {
+        color: #8a5a3c;
+        background: #f7e7d2;
+        border: 1px solid #e8d0b4;
+    }
+""" % {
+    "tab_bar": _shop_asset("tab_bar_bg.png").replace("\\", "/"),
+    "active_tab": _shop_asset("active_tab_bg.png").replace("\\", "/"),
+    "close_button": _shop_asset("close_button.png").replace("\\", "/"),
+    "switch_button": _shop_asset("switch_pet_button.png").replace("\\", "/"),
+    "price_bg": _shop_asset("price_bg.png").replace("\\", "/"),
+}
 
 
 PANEL_STYLE = """
     QWidget {
         background: transparent;
         color: #65483b;
-        font-family: 'Microsoft YaHei', sans-serif;
+        font-family: '%(app_font)s', 'Microsoft YaHei', sans-serif;
         font-size: 20px;
     }
     QWidget#cozyProgressWindow {
@@ -58,14 +283,14 @@ PANEL_STYLE = """
         background: #fff0c8;
         color: #a66a26;
         border: 1px solid #efc979;
-        border-radius: 16px;
-        padding: 7px 14px;
-        font-size: 19px;
+        border-radius: 12px;
+        padding: 3px 7px;
+        font-size: 15px;
         font-weight: 900;
     }
     QLabel#sectionTitle {
         color: #8b5744;
-        font-size: 25px;
+        font-size: 28px;
         font-weight: 900;
         padding: 5px 2px;
     }
@@ -136,13 +361,29 @@ PANEL_STYLE = """
         font-size: 18px;
         font-weight: 400;
     }
+    QLabel#popupTitle {
+        color: #a8604e;
+        font-size: 27px;
+        font-weight: 900;
+        background: transparent;
+        border: 0;
+        border-image: none;
+    }
+    QLabel#popupDetail {
+        color: #8a5a3c;
+        font-size: 20px;
+        font-weight: 600;
+        background: transparent;
+        border: 0;
+        border-image: none;
+    }
     QPushButton {
         background: #f28f76;
         color: white;
         border: 0;
         border-radius: 12px;
-        padding: 9px 17px;
-        font-size: 19px;
+        padding: 9px 9px;
+        font-size: 18px;
         font-weight: 800;
     }
     QPushButton:hover { background: #f5a08a; }
@@ -286,7 +527,7 @@ PANEL_STYLE = """
     }
     QScrollBar::add-line:vertical,
     QScrollBar::sub-line:vertical { height: 0; }
-"""
+""" % {"app_font": APP_FONT_FAMILY}
 
 PANEL_STYLE += """
     QLabel[priceTagRole="normal"],
@@ -300,13 +541,13 @@ PANEL_STYLE += """
         background: #fff8e8;
         border: 1px solid #e8c789;
         color: #7a5040;
-        font-size: 17px;
+        font-size: 16px;
     }
     QLabel[priceTagRole="sale"] {
         background: #fff0e8;
         border: 1px solid #f19a7b;
         color: #a34b3c;
-        font-size: 18px;
+        font-size: 17px;
         font-weight: 800;
     }
     QLabel[priceTagRole="discount"] {
@@ -320,8 +561,18 @@ PANEL_STYLE += """
         background: #fff2c9;
         border: 1px solid #e9c573;
         color: #966821;
-        font-size: 17px;
+        font-size: 16px;
         font-weight: 800;
+    }
+    QFrame[shopCard="true"] {
+        background: #fffdf6;
+        border: 2px dashed #e9c8a6;
+        border-radius: 20px;
+    }
+    QFrame#tabBar {
+        background: #f9ead6;
+        border: 1px solid #efd3ba;
+        border-radius: 20px;
     }
 """
 
@@ -346,13 +597,267 @@ def _coin_balance(state):
     )
 
 
+class RoundedPixmapLabel(QLabel):
+    """QLabel whose pixmap is clipped to rounded corners."""
+
+    def __init__(self, radius=22):
+        super().__init__()
+        self._radius = radius
+
+    def paintEvent(self, event):
+        pixmap = self.pixmap()
+        if pixmap is None or pixmap.isNull():
+            super().paintEvent(event)
+            return
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        rounded = QPainterPath()
+        rounded.addRoundedRect(QRectF(self.rect()), self._radius, self._radius)
+        painter.setClipPath(rounded)
+        painter.drawPixmap(
+            0, 0, pixmap.width(), pixmap.height(), pixmap
+        )
+        painter.end()
+
+
+class PreservedTextLabel(QLabel):
+    """QLabel that keeps text() readable while showing a baked asset."""
+
+    def __init__(self, text=""):
+        super().__init__()
+        self._stored_text = text
+        QLabel.setText(self, text)
+
+    def setText(self, text):
+        self._stored_text = text
+        pixmap = self.pixmap()
+        if pixmap is None or pixmap.isNull():
+            QLabel.setText(self, text)
+
+    def setPixmap(self, pixmap):
+        super().setPixmap(pixmap)
+
+    def text(self):
+        return self._stored_text
+
+
+class FeedbackButton(QPushButton):
+    """Push button with hover brightening and pressed tint feedback.
+
+    Asset-backed pills (border-image QSS) hide plain background swaps, so
+    the feedback is painted as a translucent overlay above the skin.
+    """
+
+    def __init__(self, text="", parent=None):
+        super().__init__(text, parent)
+        self.setAttribute(Qt.WA_Hover)
+        self.setCursor(Qt.PointingHandCursor)
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        if not self.isEnabled():
+            return
+        if self.isDown():
+            tint = QColor(150, 60, 40, 70)
+        elif self.underMouse():
+            tint = QColor(255, 255, 255, 55)
+        else:
+            return
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        path = QPainterPath()
+        path.addRoundedRect(
+            QRectF(self.rect()).adjusted(2, 2, -2, -2), 16, 16
+        )
+        painter.fillPath(path, tint)
+        painter.end()
+
+
+class CoinPillLabel(QLabel):
+    """Compact Pet币 counter painted on the clean price_bg asset."""
+
+    def __init__(self):
+        super().__init__()
+        self._asset = QPixmap(_shop_asset("price_bg.png"))
+        self._balance = 0
+        if not self._asset.isNull():
+            self._asset = self._asset.scaledToHeight(
+                46, Qt.SmoothTransformation
+            )
+            self.setFixedSize(self._asset.size())
+        else:
+            self.setFixedSize(158, 44)
+        # Suppress themed background layers behind the custom painting.
+        self.setStyleSheet(
+            "background: transparent; border: 0; border-image: none;"
+        )
+
+    def set_balance(self, value):
+        self._balance = int(value)
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        if not self._asset.isNull():
+            painter.drawPixmap(self.rect(), self._asset)
+        font = QFont(APP_FONT_FAMILY)
+        font.setPixelSize(22)
+        font.setBold(True)
+        painter.setFont(font)
+        painter.setPen(QPen(QColor("#d29a38"), 1.0))
+        rect = QRect(
+            int(self.width() * 0.26), 0,
+            int(self.width() * 0.68), self.height(),
+        )
+        painter.drawText(rect, Qt.AlignVCenter, f"Pet币 {self._balance}")
+        painter.end()
+
+
+class PurchasePopup(QDialog):
+    """Cute shop-themed popup confirming a transaction."""
+
+    def __init__(self, title, lines, parent=None):
+        super().__init__(
+            parent,
+            Qt.Dialog | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint,
+        )
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setModal(True)
+        self.setFixedSize(360, 250)
+
+        sheet = QPixmap(_shop_asset("background.png"))
+        rounded = QPixmap(self.size())
+        rounded.fill(Qt.transparent)
+        painter = QPainter(rounded)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        path = QPainterPath()
+        path.addRoundedRect(0, 0, self.width(), self.height(), 22, 22)
+        painter.setClipPath(path)
+        if not sheet.isNull():
+            crop_height = max(1, int(sheet.height() * 0.45))
+            cropped = sheet.copy(
+                0, sheet.height() - crop_height, sheet.width(), crop_height
+            )
+            scaled = cropped.scaled(
+                self.size(),
+                Qt.KeepAspectRatioByExpanding,
+                Qt.SmoothTransformation,
+            )
+            painter.drawPixmap(
+                (self.width() - scaled.width()) // 2,
+                self.height() - scaled.height(),
+                scaled,
+            )
+        painter.end()
+
+        background = QLabel(self)
+        background.setGeometry(self.rect())
+        background.setPixmap(rounded)
+
+        overlay = QLabel(self)
+        overlay.setGeometry(self.rect())
+        overlay.setStyleSheet(
+            "background: rgba(255, 247, 238, 196);"
+            "border: 2px solid #f2c9a8;"
+            "border-radius: 22px;"
+        )
+        overlay.lower()
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(26, 24, 26, 20)
+        layout.setSpacing(4)
+        title_label = QLabel(title)
+        title_label.setObjectName("popupTitle")
+        title_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title_label)
+        layout.addSpacing(18)
+        for line in lines:
+            detail = QLabel(line)
+            detail.setObjectName("popupDetail")
+            detail.setAlignment(Qt.AlignCenter)
+            detail.setWordWrap(True)
+            layout.addWidget(detail)
+        layout.addStretch(1)
+        button = FeedbackButton("好的")
+        button.setProperty("coralPill", True)
+        button.clicked.connect(self.accept)
+        layout.addWidget(button, 0, Qt.AlignCenter)
+
+
+class PriceTagLabel(QLabel):
+    """Price tag painted from the frame asset with the price fitted inside."""
+
+    TEXT_LEFT = 0.26
+    TEXT_RIGHT = 0.94
+
+    def __init__(self, text):
+        super().__init__()
+        self._stored_text = str(text)
+        # Crop to the opaque bounding box so the visible pill — not the
+        # transparent canvas — defines size and left alignment.
+        self._asset = _shop_pixmap_cropped("price_frame.png", 44)
+        if not self._asset.isNull():
+            self.setFixedSize(self._asset.size())
+        else:
+            self.setFixedSize(180, 52)
+        self.setContentsMargins(12, 5, 12, 5)
+        # The themed priceTagRole QSS paints a background/border-image box
+        # behind the custom painting; suppress every painted layer.
+        self.setStyleSheet(
+            "background: transparent; border: 0; border-image: none;"
+        )
+
+    def text(self):
+        return self._stored_text
+
+    def setText(self, text):
+        self._stored_text = str(text)
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        if not self._asset.isNull():
+            painter.drawPixmap(self.rect(), self._asset)
+        rect = QRect(
+            int(self.width() * self.TEXT_LEFT), 0,
+            int(self.width() * (self.TEXT_RIGHT - self.TEXT_LEFT)),
+            self.height(),
+        )
+        font = QFont(APP_FONT_FAMILY)
+        font.setBold(True)
+        size = 22
+        while size > 12:
+            font.setPixelSize(size)
+            if QFontMetrics(font).horizontalAdvance(
+                self._stored_text
+            ) <= rect.width():
+                break
+            size -= 1
+        painter.setFont(font)
+        painter.setPen(QPen(QColor("#a8742c"), 1.0))
+        painter.drawText(rect, Qt.AlignCenter, self._stored_text)
+        painter.end()
+
+
 class CozyProgressWindow(QWidget):
     """Shared frameless shell with warm styling and draggable title bar."""
 
-    def __init__(self, pet, title, subtitle, preferred_size):
+    def __init__(
+        self, pet, title, subtitle, preferred_size, shop_theme=False,
+        title_image=True,
+    ):
         super().__init__()
         self.pet = pet
         self._drag_offset = None
+        self.shop_theme = bool(shop_theme)
+        self._background_pixmap = (
+            QPixmap(_shop_asset("background.png"))
+            if self.shop_theme else QPixmap()
+        )
         self.setWindowFlags(
             Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
         )
@@ -362,7 +867,8 @@ class CozyProgressWindow(QWidget):
         # the warm cream base real instead of exposing the desktop beneath.
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setObjectName("cozyProgressWindow")
-        self.setStyleSheet(PANEL_STYLE)
+        style = PANEL_STYLE + (SHOP_THEME_STYLE if self.shop_theme else "")
+        self.setStyleSheet(style)
 
         screen = QApplication.primaryScreen().availableGeometry()
         width = max(520, min(preferred_size[0], screen.width() - 60))
@@ -372,35 +878,51 @@ class CozyProgressWindow(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(25, 18, 25, 20)
         root.setSpacing(9)
+        self.root_layout = root
+        if self.shop_theme:
+            root.setContentsMargins(25, 18, 25, 0)
 
         title_bar = QFrame()
         title_bar.setCursor(Qt.ArrowCursor)
         title_row = QHBoxLayout(title_bar)
         title_row.setContentsMargins(0, 0, 0, 0)
         title_row.setSpacing(10)
-        title_label = QLabel(title)
+        if self.shop_theme and title_image:
+            title_label = QLabel()
+            title_label.setPixmap(_shop_pixmap("shop_title_icon.png", 76))
+            title_label.setFixedSize(404, 76)
+            title_label.setScaledContents(True)
+        else:
+            title_label = QLabel(title)
         title_label.setObjectName("panelTitle")
         title_label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
-        self.coin_label = QLabel()
-        self.coin_label.setObjectName("coinPill")
-        close_button = QPushButton("×")
+        if self.shop_theme:
+            self.coin_label = CoinPillLabel()
+        else:
+            self.coin_label = QLabel()
+            self.coin_label.setObjectName("coinPill")
+        close_button = FeedbackButton("" if self.shop_theme else "×")
         close_button.setObjectName("closeButton")
         close_button.setCursor(Qt.PointingHandCursor)
         close_button.setFixedSize(38, 38)
         close_button.clicked.connect(self.close)
         title_row.addWidget(title_label)
         title_row.addStretch(1)
-        title_row.addWidget(self.coin_label)
+        if self.coin_label is not None:
+            title_row.addWidget(self.coin_label)
         title_row.addWidget(close_button)
         title_bar.mousePressEvent = self._title_bar_press
         title_bar.mouseMoveEvent = self._title_bar_move
         title_bar.mouseReleaseEvent = self._title_bar_release
+        if self.shop_theme:
+            title_bar.setFixedHeight(78)
         root.addWidget(title_bar)
 
-        subtitle_label = QLabel(subtitle)
-        subtitle_label.setObjectName("panelSubtitle")
-        subtitle_label.setWordWrap(True)
-        root.addWidget(subtitle_label)
+        if not self.shop_theme:
+            subtitle_label = QLabel(subtitle)
+            subtitle_label.setObjectName("panelSubtitle")
+            subtitle_label.setWordWrap(True)
+            root.addWidget(subtitle_label)
 
         self.status_label = QLabel("")
         self.status_label.setObjectName("status")
@@ -416,8 +938,27 @@ class CozyProgressWindow(QWidget):
         self.content_layout.setSpacing(11)
         self.content_layout.setAlignment(Qt.AlignTop)
         self.scroll.setWidget(self.content)
-        root.addWidget(self.scroll, 1)
-        root.addWidget(self.status_label)
+        if self.shop_theme:
+            # Fixed page body: scroll region ends 30px above window bottom.
+            page_body = QWidget()
+            body_layout = QVBoxLayout(page_body)
+            body_layout.setContentsMargins(0, 0, 0, 0)
+            body_layout.setSpacing(0)
+            body_layout.addWidget(self.scroll, 1)
+            self.status_label.setFixedHeight(30)
+            body_layout.addWidget(self.status_label)
+            root.addWidget(page_body, 1)
+            self._page_header = QWidget()
+            self._page_header_layout = QVBoxLayout(self._page_header)
+            self._page_header_layout.setContentsMargins(0, 2, 0, 4)
+            self._page_header_layout.setSpacing(3)
+            root.insertWidget(1, self._page_header)
+        else:
+            root.addWidget(self.scroll, 1)
+            # Absorbs leftover space when the scroll area is height-capped so
+            # the fixed header and tab bar never shift between pages.
+            root.addStretch(0)
+            root.addWidget(self.status_label)
 
     def _title_bar_press(self, event):
         if event.button() == Qt.LeftButton:
@@ -437,6 +978,22 @@ class CozyProgressWindow(QWidget):
         """Paint a real warm base behind every child on translucent windows."""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
+        if self.shop_theme and not self._background_pixmap.isNull():
+            painter.setRenderHint(QPainter.Antialiasing)
+            painter.setRenderHint(QPainter.SmoothPixmapTransform)
+            rounded = QPainterPath()
+            rounded.addRoundedRect(QRectF(self.rect()), 24, 24)
+            painter.setClipPath(rounded)
+            painter.drawPixmap(
+                self.rect(),
+                self._background_pixmap.scaled(
+                    self.size(),
+                    Qt.IgnoreAspectRatio,
+                    Qt.SmoothTransformation,
+                ),
+            )
+            painter.setClipping(False)
+            return
         outer = self.rect().adjusted(1, 1, -2, -2)
         gradient = QLinearGradient(outer.topLeft(), outer.bottomRight())
         gradient.setColorAt(0.0, QColor("#fffaf1"))
@@ -446,15 +1003,38 @@ class CozyProgressWindow(QWidget):
         painter.drawRoundedRect(outer, 22, 22)
 
     def _refresh_coin_label(self):
+        if self.coin_label is None:
+            return
         progression.ensure_progression(self.pet.state)
-        self.coin_label.setText(f"Pet币  {_coin_balance(self.pet.state)}")
+        balance = _coin_balance(self.pet.state)
+        if isinstance(self.coin_label, CoinPillLabel):
+            self.coin_label.set_balance(balance)
+        else:
+            self.coin_label.setText(f"Pet币 {balance}")
 
     def show_near_pet(self):
         self.refresh()
-        self.move(self.pet.interface_window_position(self.size(), gap=20))
+        # Panel pages open centred on the screen and always start from the
+        # top of their content — no remembered drag position or scroll.
+        screen = QApplication.primaryScreen().availableGeometry()
+        self.move(
+            screen.center().x() - self.width() // 2,
+            screen.center().y() - self.height() // 2,
+        )
+        self.scroll.verticalScrollBar().setValue(0)
         self.show()
         self.raise_()
         self.activateWindow()
+
+    def _add_page_header(self, *widgets):
+        """Page title and intro stay fixed above the shared scroll region."""
+        if not hasattr(self, "_page_header_layout"):
+            for widget in widgets:
+                self.content_layout.addWidget(widget)
+            return
+        _clear_layout(self._page_header_layout)
+        for widget in widgets:
+            self._page_header_layout.addWidget(widget)
 
     def refresh(self):
         raise NotImplementedError
@@ -625,14 +1205,40 @@ class RecordsWindow(CozyProgressWindow):
         return box
 
 
+ACHIEVEMENT_FILTERS = (
+    ("all", "全部"),
+    ("days", "天数"),
+    ("pet", "摸摸"),
+    ("feed", "喂饭"),
+    ("play", "玩耍"),
+    ("sleep", "睡眠"),
+    ("interaction", "互动"),
+    ("catch", "接球"),
+    ("chat", "聊天"),
+    ("wake", "唤醒"),
+    ("reply", "回复"),
+    ("stroll", "散步"),
+    ("minigame", "游戏"),
+    ("coins", "金币"),
+    ("collect", "收集"),
+    ("outfit", "换装"),
+    ("upgrade", "强化"),
+    ("claim", "成就"),
+    ("level", "等级"),
+)
+
+
 class AchievementsWindow(CozyProgressWindow):
     def __init__(self, pet, save_callback):
         self.save_callback = save_callback
+        self.achievement_filter = "all"
         super().__init__(
             pet,
-            "🏅 暖心成就",
+            "暖心成就",
             "亮起的成就可以领取 Pet币；每升一级也会有一份奖励。",
-            (760, 800),
+            (850, 960),
+            shop_theme=True,
+            title_image=False,
         )
 
     def refresh(self):
@@ -643,6 +1249,12 @@ class AchievementsWindow(CozyProgressWindow):
         claimable = [item for item in items if item["claimable"]]
         completed_count = sum(1 for item in items if item["completed"])
         claimed_count = sum(1 for item in items if item["claimed"])
+
+        tip = QLabel("亮起的成就可以领取 Pet币；每升一级也会有一份奖励。")
+        tip.setObjectName("muted")
+        tip.setWordWrap(True)
+        tip.setAlignment(Qt.AlignCenter)
+        self._add_page_header(tip)
 
         summary = QFrame()
         summary.setObjectName("heroCard")
@@ -658,7 +1270,7 @@ class AchievementsWindow(CozyProgressWindow):
             f"已领取 {claimed_count} 项  ·  "
             f"待领取 {len(claimable)} 项"
         )
-        claim_all = QPushButton(
+        claim_all = FeedbackButton(
             f"一键领取（{len(claimable)}）"
             if claimable else "暂无待领取奖励"
         )
@@ -668,10 +1280,23 @@ class AchievementsWindow(CozyProgressWindow):
         row.addWidget(info)
         row.addStretch(1)
         row.addWidget(claim_all)
-        self.content_layout.addWidget(summary)
+        if hasattr(self, "_page_header_layout"):
+            self._page_header_layout.addWidget(summary)
+            self._page_header_layout.addWidget(
+                self._build_filter_bar(items)
+            )
+        else:
+            self.content_layout.addWidget(summary)
 
+        if self.achievement_filter == "all":
+            ordered = list(items)
+        else:
+            ordered = [
+                item for item in items
+                if item["id"].split("_", 1)[0] == self.achievement_filter
+            ]
         ordered = sorted(
-            items,
+            ordered,
             key=lambda item: (
                 0 if item["claimable"] else 1,
                 1 if item["claimed"] else 0,
@@ -682,6 +1307,46 @@ class AchievementsWindow(CozyProgressWindow):
         for item in ordered:
             self.content_layout.addWidget(self._achievement_card(item))
         self.content_layout.addStretch(1)
+
+    def _build_filter_bar(self, items):
+        known = {prefix for prefix, _label in ACHIEVEMENT_FILTERS}
+        available = [
+            (prefix, label)
+            for prefix, label in ACHIEVEMENT_FILTERS
+            if prefix == "all"
+            or prefix in known
+            and any(
+                item["id"].split("_", 1)[0] == prefix
+                for item in items
+            )
+        ]
+        bar = QFrame()
+        bar.setObjectName("tabBar")
+        bar.setFixedHeight(46)
+        bar_layout = QHBoxLayout(bar)
+        bar_layout.setContentsMargins(4, 4, 4, 4)
+        bar_layout.setSpacing(3)
+        for prefix, label in available:
+            button = FeedbackButton(label)
+            button.setObjectName("filterTabButton")
+            button.setCheckable(True)
+            button.setChecked(self.achievement_filter == prefix)
+            button.setCursor(Qt.PointingHandCursor)
+            button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            button.clicked.connect(
+                lambda _checked=False, selected=prefix:
+                self._set_achievement_filter(selected)
+            )
+            bar_layout.addWidget(button)
+        return bar
+
+    def _set_achievement_filter(self, prefix):
+        if prefix == self.achievement_filter:
+            return
+        self.achievement_filter = prefix
+        self.status_label.clear()
+        self.scroll.verticalScrollBar().setValue(0)
+        self.refresh()
 
     def _achievement_card(self, item):
         card = QFrame()
@@ -695,7 +1360,7 @@ class AchievementsWindow(CozyProgressWindow):
         title.setObjectName("cardTitle")
         reward = QLabel(f"+{item['reward']} Pet币")
         reward.setObjectName("reward")
-        button = QPushButton()
+        button = FeedbackButton()
         button.setFixedWidth(92)
         if item["claimed"]:
             button.setText("已领取")
@@ -998,7 +1663,7 @@ class DecorationAdjustWindow(CozyProgressWindow):
             ("左转", 0.0, -2.0),
             ("右转", 0.0, 2.0),
         ):
-            button = QPushButton(text)
+            button = FeedbackButton(text)
             button.setObjectName("softButton")
             button.clicked.connect(
                 lambda _checked=False, s=scale, r=rotation:
@@ -1007,7 +1672,7 @@ class DecorationAdjustWindow(CozyProgressWindow):
             shape_row.addWidget(button)
         self.content_layout.addLayout(shape_row)
 
-        reset_button = QPushButton("恢复这件装饰的默认位置")
+        reset_button = FeedbackButton("恢复这件装饰的默认位置")
         reset_button.setObjectName("softButton")
         reset_button.clicked.connect(self._reset)
         self.content_layout.addWidget(reset_button)
@@ -1087,40 +1752,64 @@ class ShopWindow(CozyProgressWindow):
         self.preview_window = None
         super().__init__(
             pet,
-            "🛍 Pet币商店",
+            "🏪 Pet币商店",
             "挑选可爱装扮，或用成就奖励强化日常互动。",
             (850, 960),
+            shop_theme=True,
         )
+        self._tab_icons = {
+            "pets": _shop_asset("pet_tab_icon.png"),
+            "outfits": _shop_asset("gift_icon.png"),
+            "home": _shop_asset("furniture_tab_icon.png"),
+            "upgrades": _shop_asset("upgrade_tab_icon.png"),
+        }
+        self._tab_buttons = {}
+        self._build_tab_bar()
 
-    def refresh(self):
-        progression.ensure_progression(self.pet.state)
-        self._refresh_coin_label()
-        _clear_layout(self.content_layout)
-
+    def _build_tab_bar(self):
+        """Fixed tab bar above the scroll area so paging never moves it."""
         tab_bar = QFrame()
         tab_bar.setObjectName("tabBar")
+        if self.shop_theme:
+            tab_bar.setFixedHeight(58)
         tab_layout = QHBoxLayout(tab_bar)
-        tab_layout.setContentsMargins(5, 5, 5, 5)
+        tab_layout.setContentsMargins(6, 6, 6, 6)
         tab_layout.setSpacing(7)
-        pages = [
-            ("outfits", "🎁 套装"),
-            ("home", "🏠 家居"),
-            ("upgrades", "✨ 强化"),
-        ]
-        if isinstance(self.pet.state.get("pets"), dict):
-            pages.insert(0, ("pets", "🐾 宠物"))
-        for page, text in pages:
-            button = QPushButton(text)
+        for page, text in (
+            ("pets", "宠物"),
+            ("outfits", "套装"),
+            ("home", "家居"),
+            ("upgrades", "强化"),
+        ):
+            button = FeedbackButton(text)
             button.setObjectName("tabButton")
+            icon_path = self._tab_icons.get(page)
+            if icon_path and os.path.exists(icon_path):
+                button.setIcon(QIcon(icon_path))
+                button.setIconSize(QSize(26, 26))
             button.setCheckable(True)
             button.setChecked(self.page == page)
             button.setCursor(Qt.PointingHandCursor)
+            button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             button.clicked.connect(
                 lambda _checked=False, selected=page:
                 self._set_page(selected)
             )
             tab_layout.addWidget(button)
-        self.content_layout.addWidget(tab_bar)
+            self._tab_buttons[page] = button
+        self.root_layout.insertWidget(1, tab_bar)
+
+    def _sync_tab_bar(self):
+        has_pets = isinstance(self.pet.state.get("pets"), dict)
+        for page, button in self._tab_buttons.items():
+            button.setVisible(page != "pets" or has_pets)
+            button.setChecked(self.page == page)
+
+    def refresh(self):
+        progression.ensure_progression(self.pet.state)
+        self._refresh_coin_label()
+        self._sync_tab_bar()
+        _clear_layout(self.content_layout)
 
         if self.page == "pets":
             self._build_pets_page()
@@ -1145,9 +1834,14 @@ class ShopWindow(CozyProgressWindow):
         return ("pets", "outfits", "home", "upgrades")
 
     def _build_pets_page(self):
-        title = QLabel("🐾 宠物商店")
+        title = QLabel("宠物商店")
         title.setObjectName("sectionTitle")
-        self.content_layout.addWidget(title)
+        title.setAlignment(Qt.AlignCenter)
+        tip = QLabel("挑选可爱的小狗，用 Pet币 带回家。")
+        tip.setObjectName("muted")
+        tip.setWordWrap(True)
+        tip.setAlignment(Qt.AlignCenter)
+        self._add_page_header(title, tip)
         registry = load_pet_registry()
         pet_ids = sorted(
             progression.available_pet_ids(),
@@ -1165,14 +1859,14 @@ class ShopWindow(CozyProgressWindow):
         card.setObjectName(f"petCard_{pet_id}")
         card.setProperty("shopCard", True)
         layout = QHBoxLayout(card)
-        layout.setContentsMargins(18, 14, 18, 14)
-        layout.setSpacing(18)
+        layout.setContentsMargins(14, 16, 14, 16)
+        layout.setSpacing(14)
 
-        preview = QLabel()
+        preview = RoundedPixmapLabel(radius=26)
         preview.setObjectName(f"petPreview_{pet_id}")
-        preview.setFixedSize(210, 112)
+        preview.setFixedSize(135, 135)
         preview.setAlignment(Qt.AlignCenter)
-        preview_path = pet_asset_path(pet_id, "desktop")
+        preview_path = pet_avatar_path(pet_id)
         pixmap = QPixmap(preview_path) if preview_path else QPixmap()
         if pixmap.isNull():
             preview.setStyleSheet("background: #f4d6b5; border-radius: 8px;")
@@ -1198,32 +1892,39 @@ class ShopWindow(CozyProgressWindow):
         description.setWordWrap(False)
         info.addWidget(description)
 
-        price_row = QHBoxLayout()
+        price_row_container = QWidget()
+        price_row_container.setFixedHeight(54)
+        price_row = QHBoxLayout(price_row_container)
+        price_row.setContentsMargins(0, 0, 5, 0)
         price = int(definition.get("price", 0))
         pricing = progression.first_purchase_price(
             state, "pets", definition.get("original_price", price)
         )
         displayed_price = price if owned else pricing["price"]
         price_label = self._price_tag(
-            "免费赠送" if displayed_price == 0 else f"售价：{displayed_price} Pet币",
+            "免费赠送" if displayed_price == 0 else f"{displayed_price} Pet币",
             "gift" if displayed_price == 0 else "normal",
             f"petPrice_{pet_id}",
         )
+        button = None
         if not owned:
-            button = QPushButton("免费领取" if pricing["price"] == 0 else f"{pricing['price']} Pet币 · 购买")
+            button = FeedbackButton(
+                "免费领取" if pricing["price"] == 0 else "购买"
+            )
             button.setEnabled(_coin_balance(state) >= pricing["price"])
+            button.setProperty("coralPill", True)
             button.clicked.connect(
                 lambda _checked=False, selected=pet_id: self._purchase_pet(selected)
             )
-        elif active:
-            button = QPushButton("使用中")
-            button.setEnabled(False)
-        else:
-            button = QPushButton("切换宠物")
+        elif not active:
+            button = FeedbackButton("切换宠物")
+            button.setProperty("switchPill", True)
+            button.setFixedSize(115, 50)
             button.clicked.connect(
                 lambda _checked=False, selected=pet_id: self._switch_pet(selected)
             )
-        button.setObjectName(f"petAction_{pet_id}")
+        if button is not None:
+            button.setObjectName(f"petAction_{pet_id}")
         discount_badge = None
         if not owned and pricing["eligible"]:
             original, discounted, discount_badge = self._price_labels(
@@ -1234,18 +1935,29 @@ class ShopWindow(CozyProgressWindow):
         else:
             price_row.addWidget(price_label)
         price_row.addStretch(1)
-        price_row.addWidget(button)
-        info.addLayout(price_row)
+        if button is not None:
+            price_row.addWidget(button)
+        info.addWidget(price_row_container)
         layout.addLayout(info, 1)
 
         if discount_badge is not None:
             title_row.addWidget(discount_badge, 0, Qt.AlignRight)
-        status_badge = QLabel(
-            "使用中" if active else ("已拥有" if owned else "待解锁")
-        )
+        if active:
+            status_badge = _status_badge_label("🐾 使用中", "active")
+        elif owned:
+            status_badge = _status_badge_label("🐾 已拥有", "owned")
+        else:
+            status_badge = _status_badge_label("🔒 待解锁", None)
+        status_pixmap = status_badge.pixmap()
+        if status_pixmap is None or status_pixmap.isNull():
+            status_badge.setProperty("levelBadge", True)
         status_badge.setObjectName(f"petStatus_{pet_id}")
-        status_badge.setProperty("levelBadge", True)
-        title_row.addWidget(status_badge, 0, Qt.AlignRight)
+        status_slot = QWidget()
+        status_slot.setFixedSize(132, 48)
+        status_slot_layout = QHBoxLayout(status_slot)
+        status_slot_layout.setContentsMargins(0, 0, 0, 0)
+        status_slot_layout.addWidget(status_badge, 0, Qt.AlignCenter)
+        title_row.addWidget(status_slot, 0, Qt.AlignRight)
         return card
 
     @staticmethod
@@ -1259,12 +1971,22 @@ class ShopWindow(CozyProgressWindow):
 
     @staticmethod
     def _price_tag(text, role, object_name):
-        label = QLabel(text)
+        if role == "gift":
+            gift_pixmap = _shop_pixmap_cropped("free_gift_button.png", 50)
+            if not gift_pixmap.isNull():
+                label = PreservedTextLabel(text)
+                label.setObjectName(object_name)
+                label.setProperty("priceTagRole", role)
+                label.setPixmap(gift_pixmap)
+                label.setContentsMargins(12, 4, 12, 4)
+                label.setMinimumHeight(54)
+                label.setStyleSheet(
+                    "background: transparent; border: 0; border-image: none;"
+                )
+                return label
+        label = PriceTagLabel(text)
         label.setObjectName(object_name)
         label.setProperty("priceTagRole", role)
-        label.setContentsMargins(12, 5, 12, 5)
-        label.setMinimumHeight(34)
-        label.setAlignment(Qt.AlignCenter)
         return label
 
     @classmethod
@@ -1302,10 +2024,35 @@ class ShopWindow(CozyProgressWindow):
         self.refresh()
         self.status_label.setText(message)
 
+    def _show_purchase_popup(self, title, lines):
+        previous = getattr(self, "_purchase_popup", None)
+        if previous is not None:
+            try:
+                previous.close()
+            except RuntimeError:
+                pass
+        popup = PurchasePopup(title, lines, self)
+        self._purchase_popup = popup
+        geometry = self.frameGeometry()
+        popup.move(
+            geometry.center().x() - popup.width() // 2,
+            geometry.center().y() - popup.height() // 2,
+        )
+        popup.show()
+        QApplication.processEvents()
+
     def _purchase_pet(self, pet_id):
         result = progression.purchase_pet(self.pet.state, pet_id)
         save_purchase = True
         if result.get("ok"):
+            registry = load_pet_registry().get(pet_id, {})
+            pet_name = registry.get("name", pet_id)
+            price = int(result.get("price", 0))
+            self._show_purchase_popup(
+                "欢迎新伙伴",
+                [f"{pet_name} 已加入你的家庭！"]
+                + ([f"消耗 {price} Pet币"] if price > 0 else ["免费带回家"]),
+            )
             switch_result = self._set_active_pet_result(pet_id)
             if switch_result.get("ok"):
                 save_purchase = False
@@ -1333,21 +2080,28 @@ class ShopWindow(CozyProgressWindow):
         return result
 
     def _switch_pet(self, pet_id):
-        self._finish_pet_action(
-            self._set_active_pet_result(pet_id),
-            save=False,
+        self.status_label.setText("正在切换宠物…")
+        self.status_label.repaint()
+        QApplication.processEvents()
+        QTimer.singleShot(
+            10,
+            lambda: self._finish_pet_action(
+                self._set_active_pet_result(pet_id),
+                save=False,
+            ),
         )
 
     def _build_outfits_page(self):
-        products_title = QLabel("🎁 套装商店")
+        products_title = QLabel("套装商店")
         products_title.setObjectName("sectionTitle")
-        self.content_layout.addWidget(products_title)
+        products_title.setAlignment(Qt.AlignCenter)
         tip = QLabel(
             "购买完整套装后直接装备，待机时会替换为套装专属动画。"
         )
         tip.setObjectName("muted")
         tip.setWordWrap(True)
-        self.content_layout.addWidget(tip)
+        tip.setAlignment(Qt.AlignCenter)
+        self._add_page_header(products_title, tip)
 
         selector = QFrame()
         selector.setObjectName("outfitPetSelector")
@@ -1358,7 +2112,7 @@ class ShopWindow(CozyProgressWindow):
         selector_group = QButtonGroup(selector)
         selector_group.setExclusive(True)
         for pet_id, text in (("lunch_meat", "午餐肉"), ("ice_cream", "冰淇淋")):
-            button = QPushButton(text)
+            button = FeedbackButton(text)
             button.setObjectName(f"outfitPet_{pet_id}")
             button.setProperty("outfitPetTab", True)
             button.setCheckable(True)
@@ -1423,6 +2177,7 @@ class ShopWindow(CozyProgressWindow):
         equipped = progression.equipped_outfit(state) == outfit_id
         card = QFrame()
         card.setObjectName("decorationCard")
+        card.setFixedHeight(200)
         layout = QHBoxLayout(card)
         layout.setContentsMargins(18, 14, 18, 14)
         layout.setSpacing(18)
@@ -1447,39 +2202,50 @@ class ShopWindow(CozyProgressWindow):
         title_row = QHBoxLayout()
         title = QLabel(f"{definition['icon']} {definition['name']}")
         title.setObjectName("cardTitle")
-        badge_text = "装备中" if equipped else ("已拥有" if owned else "完整套装")
-        badge = QLabel(badge_text)
-        badge.setObjectName("levelBadge")
         title_row.addWidget(title)
         title_row.addStretch(1)
+        if equipped:
+            badge = _status_badge_label("🐾 使用中", "active")
+        else:
+            badge = _status_badge_label("🐾 已拥有", "owned")
+            if not badge.pixmap().isNull():
+                placeholder = QPixmap(badge.pixmap().size())
+                placeholder.fill(Qt.transparent)
+                badge.setPixmap(placeholder)
+        if badge.pixmap().isNull():
+            badge.setObjectName("levelBadge")
         title_row.addWidget(badge)
         info.addLayout(title_row)
 
         description = QLabel(definition["description"])
         description.setObjectName("muted")
         description.setWordWrap(True)
+        description.setMinimumHeight(46)
         info.addWidget(description)
 
         action_row = QHBoxLayout()
+        action_row.setContentsMargins(0, 0, 13, 0)
         price = int(definition.get("price", 0))
         price_text = self._price_tag(
-            "免费赠送" if price == 0 else f"售价：{price} Pet币",
+            "免费赠送" if price == 0 else f"{price} Pet币",
             "gift" if price == 0 else "normal",
             f"outfitPrice_{outfit_id}",
         )
         if not owned:
-            button = QPushButton(f"{price} Pet币 · 购买")
+            button = FeedbackButton("购买")
             button.setEnabled(_coin_balance(state) >= price)
+            button.setProperty("coralPill", True)
             button.clicked.connect(
                 lambda _checked=False, selected=outfit_id:
                 self._purchase_outfit(selected)
             )
         elif equipped:
-            button = QPushButton("卸下套装")
-            button.setObjectName("softButton")
+            button = FeedbackButton("卸下套装")
+            button.setProperty("coralPill", True)
             button.clicked.connect(self._unequip_outfit)
         else:
-            button = QPushButton("装备套装")
+            button = FeedbackButton("装备套装")
+            button.setProperty("coralPill", True)
             button.clicked.connect(
                 lambda _checked=False, selected=outfit_id:
                 self._equip_outfit(selected)
@@ -1487,6 +2253,7 @@ class ShopWindow(CozyProgressWindow):
         action_row.addWidget(price_text)
         action_row.addStretch(1)
         action_row.addWidget(button)
+        info.addStretch(1)
         info.addLayout(action_row)
         layout.addLayout(info, 1)
         return card
@@ -1534,13 +2301,14 @@ class ShopWindow(CozyProgressWindow):
             f"{definition['icon']} {definition['name']}"
         )
         title.setObjectName("cardTitle")
-        badge_text = (
-            "佩戴中"
-            if equipped
-            else ("已拥有" if owned else definition["category_name"])
-        )
-        badge = QLabel(badge_text)
-        badge.setObjectName("levelBadge")
+        if equipped:
+            badge = _status_badge_label("🐾 使用中", "active")
+        elif owned:
+            badge = _status_badge_label("🐾 已拥有", "owned")
+        else:
+            badge = _status_badge_label(definition["category_name"], None)
+        if badge.pixmap().isNull():
+            badge.setObjectName("levelBadge")
         title_row.addWidget(title)
         title_row.addStretch(1)
         title_row.addWidget(badge)
@@ -1555,34 +2323,36 @@ class ShopWindow(CozyProgressWindow):
         price = int(definition.get("price", 0))
         price_text = QLabel(
             "第一件装扮免费赠送"
-            if price == 0 else f"售价：{price} Pet币"
+            if price == 0 else f"{price} Pet币"
         )
         price_text.setObjectName("reward")
         if not owned:
-            button = QPushButton(
+            button = FeedbackButton(
                 "免费领取" if price == 0 else f"{price} Pet币 · 购买"
             )
             button.setEnabled(state.get("pet_coins", 0) >= price)
+            button.setProperty("coralPill", True)
             button.clicked.connect(
                 lambda _checked=False, selected=decoration_id:
                 self._purchase_decoration(selected)
             )
         elif equipped:
-            button = QPushButton("卸下")
-            button.setObjectName("softButton")
+            button = FeedbackButton("卸下")
+            button.setProperty("coralPill", True)
             button.clicked.connect(
                 lambda _checked=False, category=definition["category"]:
                 self._unequip_decoration(category)
             )
         else:
-            button = QPushButton("装备")
+            button = FeedbackButton("装备")
+            button.setProperty("coralPill", True)
             button.clicked.connect(
                 lambda _checked=False, selected=decoration_id:
                 self._equip_decoration(selected)
             )
         action_row.addWidget(price_text)
         action_row.addStretch(1)
-        preview_button = QPushButton("预览")
+        preview_button = FeedbackButton("预览")
         preview_button.setObjectName("softButton")
         preview_button.clicked.connect(
             lambda _checked=False, selected=decoration_id:
@@ -1590,7 +2360,7 @@ class ShopWindow(CozyProgressWindow):
         )
         action_row.addWidget(preview_button)
         if equipped:
-            adjust_button = QPushButton("微调位置")
+            adjust_button = FeedbackButton("微调位置")
             adjust_button.setObjectName("softButton")
             adjust_button.clicked.connect(
                 lambda _checked=False, selected=decoration_id:
@@ -1623,9 +2393,17 @@ class ShopWindow(CozyProgressWindow):
         )
 
     def _purchase_outfit(self, outfit_id):
-        self._finish_decoration_action(
-            progression.purchase_outfit(self.pet.state, outfit_id)
-        )
+        result = progression.purchase_outfit(self.pet.state, outfit_id)
+        if result.get("ok"):
+            definition = progression.OUTFIT_DEFINITIONS.get(outfit_id, {})
+            name = definition.get("name", outfit_id)
+            price = int(result.get("price", 0))
+            self._show_purchase_popup(
+                "套装入手",
+                [f"{name} 已放入衣柜"]
+                + ([f"消耗 {price} Pet币"] if price > 0 else ["免费获得"]),
+            )
+        self._finish_decoration_action(result)
 
     def _equip_outfit(self, outfit_id):
         self._finish_decoration_action(
@@ -1699,15 +2477,16 @@ class ShopWindow(CozyProgressWindow):
             self.adjust_window = None
 
     def _build_home_page(self):
-        title = QLabel("🏠 家居小铺")
+        title = QLabel("家居小铺")
         title.setObjectName("sectionTitle")
-        self.content_layout.addWidget(title)
+        title.setAlignment(Qt.AlignCenter)
         tip = QLabel(
             "购买后的家具会放入家场景。打开家场景后，可直接拖动家具调整位置。"
         )
         tip.setObjectName("muted")
         tip.setWordWrap(True)
-        self.content_layout.addWidget(tip)
+        tip.setAlignment(Qt.AlignCenter)
+        self._add_page_header(title, tip)
 
         grid_host = QWidget()
         grid = QGridLayout(grid_host)
@@ -1737,12 +2516,12 @@ class ShopWindow(CozyProgressWindow):
         card.setProperty("shopCard", True)
         card.setFixedHeight(310)
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(18, 14, 18, 14)
-        layout.setSpacing(18)
+        layout.setContentsMargins(10, 12, 10, 12)
+        layout.setSpacing(12)
 
         preview = QLabel()
         preview.setObjectName(f"homePreview_{decoration_id}")
-        preview.setFixedSize(170, 112)
+        preview.setFixedSize(150, 112)
         preview.setAlignment(Qt.AlignCenter)
         if decoration_id == "home_status_card":
             pixmap = render_home_status_card(state)
@@ -1755,48 +2534,49 @@ class ShopWindow(CozyProgressWindow):
         layout.addWidget(preview, 0, Qt.AlignCenter)
 
         info = QVBoxLayout()
+        info.setSpacing(6)
         title_row = QHBoxLayout()
         title = QLabel(definition["name"])
         title.setObjectName("cardTitle")
-        badge = QLabel("已拥有" if owned else "家居")
-        badge.setObjectName("levelBadge")
         title_row.addWidget(title)
         title_row.addStretch(1)
-        title_row.addWidget(badge)
         info.addLayout(title_row)
 
         description = QLabel(definition["description"])
         description.setObjectName("muted")
         description.setWordWrap(True)
+        description.setMinimumHeight(46)
         info.addWidget(description)
 
         action_row = QHBoxLayout()
+        action_row.setContentsMargins(0, 0, 13, 0)
         price = int(definition["price"])
         price_label = self._price_tag(
-            "免费赠送" if price == 0 else f"售价：{price} Pet币",
+            "免费赠送" if price == 0 else f"{price} Pet币",
             "gift" if price == 0 else "normal",
             f"homePrice_{decoration_id}",
         )
         action_row.addWidget(price_label)
         action_row.addStretch(1)
-        button = QPushButton(
-            "已领取"
-            if owned and price == 0
-            else (
-                "已购买"
-                if owned
-                else ("免费领取" if price == 0 else f"{price} Pet币 · 购买")
-            )
-        )
-        button.setEnabled(owned or _coin_balance(state) >= price)
-        if not owned:
+        slot = QWidget()
+        slot.setFixedSize(132, 48)
+        slot_layout = QHBoxLayout(slot)
+        slot_layout.setContentsMargins(0, 0, 0, 0)
+        if owned:
+            owned_label = _status_badge_label("🐾 已拥有", "owned")
+            slot_layout.addWidget(owned_label, 0, Qt.AlignRight | Qt.AlignVCenter)
+        else:
+            button = FeedbackButton("免费领取" if price == 0 else "购买")
+            button.setProperty("coralPill", True)
+            button.setEnabled(_coin_balance(state) >= price)
             button.clicked.connect(
                 lambda _checked=False, selected=decoration_id:
                 self._purchase_home_decoration(selected)
             )
-        action_row.addWidget(button)
+            slot_layout.addWidget(button, 0, Qt.AlignRight | Qt.AlignVCenter)
+        action_row.addWidget(slot)
         info.addLayout(action_row)
-        layout.addLayout(info)
+        layout.addLayout(info, 1)
         return card
 
     def _purchase_home_decoration(self, decoration_id):
@@ -1805,6 +2585,16 @@ class ShopWindow(CozyProgressWindow):
         )
         message = result.get("message", "家居状态没有改变。")
         if result.get("ok"):
+            definition = progression.HOME_DECORATION_DEFINITIONS.get(
+                decoration_id, {}
+            )
+            name = definition.get("name", decoration_id)
+            price = int(result.get("price", 0))
+            self._show_purchase_popup(
+                "家具到手",
+                [f"{name} 已放入你的小家"]
+                + ([f"消耗 {price} Pet币"] if price > 0 else ["免费领取"]),
+            )
             self.save_callback(self.pet.state)
             self.pet.update()
         self.pet.say(message, 2100)
@@ -1827,13 +2617,14 @@ class ShopWindow(CozyProgressWindow):
         super().closeEvent(event)
 
     def _build_upgrades_page(self):
-        upgrades_title = QLabel("✨ 成长强化")
+        upgrades_title = QLabel("成长强化")
         upgrades_title.setObjectName("sectionTitle")
-        self.content_layout.addWidget(upgrades_title)
+        upgrades_title.setAlignment(Qt.AlignCenter)
         tip = QLabel("每项最多 5 级，强化后立即生效。")
         tip.setObjectName("muted")
         tip.setWordWrap(True)
-        self.content_layout.addWidget(tip)
+        tip.setAlignment(Qt.AlignCenter)
+        self._add_page_header(upgrades_title, tip)
 
         grid_host = QWidget()
         grid = QGridLayout(grid_host)
@@ -1876,6 +2667,7 @@ class ShopWindow(CozyProgressWindow):
         summary = QLabel(definition.get("summary", "强化对应的互动效果。"))
         summary.setObjectName("upgradeSummary")
         summary.setWordWrap(True)
+        summary.setMinimumHeight(46)
         layout.addWidget(summary)
 
         effect = QLabel(progression.upgrade_description(state, upgrade_id))
@@ -1884,20 +2676,29 @@ class ShopWindow(CozyProgressWindow):
         effect.setWordWrap(True)
         layout.addWidget(effect)
 
+        price = definition["prices"][level] if level < maximum else None
         if level >= maximum:
-            button = QPushButton("已满级")
+            button = FeedbackButton("已满级")
+            button.setProperty("coralPill", True)
             button.setEnabled(False)
         else:
-            price = definition["prices"][level]
-            button = QPushButton(f"{price} Pet币 · 强化")
-            button.setEnabled(state.get("pet_coins", 0) >= price)
+            button = FeedbackButton("强化")
+            button.setProperty("coralPill", True)
+            button.setEnabled(_coin_balance(state) >= price)
             button.clicked.connect(
                 lambda _checked=False, selected=upgrade_id:
                 self._purchase(selected)
             )
         bottom = QHBoxLayout()
+        bottom.setSpacing(10)
         bottom.addStretch(1)
+        if price is not None:
+            bottom.addWidget(self._price_tag(
+                f"{price} Pet币", "normal", f"upgradePrice_{upgrade_id}"
+            ))
+            bottom.addSpacing(30)
         bottom.addWidget(button)
+        layout.addStretch(1)
         layout.addLayout(bottom)
         return card
 
@@ -1908,6 +2709,16 @@ class ShopWindow(CozyProgressWindow):
             self.pet.say(result["message"], 2200)
             message = (
                 f"✓ {result['message']}  消耗 {result['price']} Pet币"
+            )
+            definition = progression.UPGRADE_DEFINITIONS.get(upgrade_id, {})
+            name = definition.get("name", upgrade_id)
+            level = int(self.pet.state.get("upgrades", {}).get(upgrade_id, 0))
+            self._show_purchase_popup(
+                "强化成功",
+                [
+                    f"{name} 提升至 Lv.{level} / 5",
+                    f"消耗 {result['price']} Pet币",
+                ],
             )
         else:
             message = result.get("message", "暂时无法强化。")

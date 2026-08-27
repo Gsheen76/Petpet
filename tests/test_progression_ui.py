@@ -69,17 +69,18 @@ class ProgressionWindowUiTests(unittest.TestCase):
             self.assertGreater(base.red(), 240)
             self.assertGreater(base.green(), 220)
 
-    def test_progression_window_uses_active_interface_position(self):
+    def test_progression_window_opens_centred_on_the_screen(self):
         records = RecordsWindow(self.pet, Mock())
         self.windows = [records]
 
         records.show_near_pet()
 
-        self.assertEqual(records.pos(), QPoint(700, 180))
-        self.pet.interface_window_position.assert_called_once_with(
-            records.size(),
-            gap=20,
-        )
+        screen = QApplication.primaryScreen().availableGeometry()
+        expected_x = screen.center().x() - records.width() // 2
+        expected_y = screen.center().y() - records.height() // 2
+        self.assertEqual(records.pos().x(), expected_x)
+        self.assertEqual(records.pos().y(), expected_y)
+        self.pet.interface_window_position.assert_not_called()
 
     def test_shop_lists_complete_outfits_and_keeps_upgrade_page(self):
         shop = ShopWindow(self.pet, Mock())
@@ -91,14 +92,14 @@ class ProgressionWindowUiTests(unittest.TestCase):
         )
         tab_texts = [
             button.text() for button in shop.findChildren(QPushButton)
-            if button.objectName() == "tabButton"
+            if button.objectName() == "tabButton" and not button.isHidden()
         ]
-        self.assertEqual(tab_texts, ["🎁 套装", "🏠 家居", "✨ 强化"])
+        self.assertEqual(tab_texts, ["套装", "家居", "强化"])
         self.assertIn("套装商店", outfit_text)
         self.assertIn("小恐龙套装", outfit_text)
-        self.assertIn("680 Pet币", outfit_text)
+        self.assertIn("600 Pet币", outfit_text)
         self.assertIn("草莓小子套装", outfit_text)
-        self.assertIn("760 Pet币", outfit_text)
+        self.assertIn("680 Pet币", outfit_text)
         self.assertNotIn("暖心红项圈", outfit_text)
         self.assertNotIn("奶油贝雷帽", outfit_text)
         self.assertNotIn("暖金圆框眼镜", outfit_text)
@@ -155,11 +156,16 @@ class ProgressionWindowUiTests(unittest.TestCase):
             self.assertFalse(description.wordWrap())
             self.assertIsNotNone(shop.findChild(QLabel, f"petPrice_{pet_id}"))
             self.assertIsNotNone(shop.findChild(QLabel, f"petStatus_{pet_id}"))
-            self.assertIsNotNone(shop.findChild(QPushButton, f"petAction_{pet_id}"))
+            is_active = self.pet.state["active_pet_id"] == pet_id
+            action = shop.findChild(QPushButton, f"petAction_{pet_id}")
+            if is_active:
+                self.assertIsNone(action)
+            else:
+                self.assertIsNotNone(action)
 
     def test_outfit_purchase_and_equip_refreshes_the_pet(self):
         save = Mock()
-        self.pet.state["pet_coins"] = 680
+        self.pet.state["pet_coins"] = 600
         shop = ShopWindow(self.pet, save)
         self.windows = [shop]
 

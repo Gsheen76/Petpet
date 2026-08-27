@@ -1632,7 +1632,11 @@ class TrayApp:
 
         self.pet._capture_desktop_position()
         app_state.bind_active_pet(self.state, pet_id)
-        self.pet.refresh_pet_assets(pet_id)
+        switch_assets = getattr(self.pet, "switch_pet_assets", None)
+        if callable(switch_assets):
+            switch_assets(pet_id)
+        else:
+            self.pet.refresh_pet_assets(pet_id)
         self.pet.place_initial()
         self.pet._capture_desktop_position()
         save_state(self.state)
@@ -2034,6 +2038,9 @@ class TrayApp:
         a_coins = QAction("🪙 增加 1000 Pet币", dm)
         a_coins.triggered.connect(self._debug_add_pet_coins)
         dm.addAction(a_coins)
+        a_reset_shop = QAction("♻ 重置商店购买", dm)
+        a_reset_shop.triggered.connect(self._debug_reset_shop_purchases)
+        dm.addAction(a_reset_shop)
         parent_menu.addMenu(dm)
 
     def _debug_set_stats(self, hunger=None, mood=None, energy=None):
@@ -2084,6 +2091,19 @@ class TrayApp:
             except RuntimeError:
                 self.shop_window = None
         self.pet.say("Pet币 +1000", 1400)
+
+    def _debug_reset_shop_purchases(self):
+        """Clear every shop purchase so the store returns to fresh state."""
+        progression.reset_shop_purchases(self.state)
+        save_state(self.state)
+        shop = getattr(self, "shop_window", None)
+        if shop is not None:
+            try:
+                shop.refresh()
+            except RuntimeError:
+                self.shop_window = None
+        self.pet.refresh_pose_from_state()
+        self.pet.say("商店购买已重置", 1600)
 
     def _fresh_menu(self):
         """Build a fresh standalone menu for right-click on pet."""
@@ -2209,6 +2229,11 @@ def main():
     configure_display_scaling()
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
+    try:
+        from petpet.app.fonts import apply_app_font
+        apply_app_font(app)
+    except Exception:
+        pass
     instance_server = SingleInstanceServer()
     if not instance_server.start():
         return 0

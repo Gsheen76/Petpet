@@ -1,4 +1,5 @@
 import os
+import time
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -79,12 +80,12 @@ def test_shop_sorts_free_items_first_and_preserves_furniture_information(
     preview = shop_window.findChild(
         ui.QLabel, "homePreview_home_status_card"
     )
-    assert preview.size().width() == 170
+    assert preview.size().width() == 150
     assert preview.size().height() == 112
     labels = " ".join(
         label.text() for label in free_card.findChildren(ui.QLabel)
     )
-    assert all(text in labels for text in ("成长", "免费赠送", "家居"))
+    assert all(text in labels for text in ("成长", "免费赠送"))
     assert free_card.height() == paid_card.height() == 310
 
 
@@ -180,9 +181,14 @@ def test_outfit_and_home_pages_show_original_prices_without_discount_badges(shop
     assert not any(label.objectName().startswith("discountBadge_") for label in labels)
     outfit_button = next(
         button for button in shop_window.findChildren(ui.QPushButton)
-        if button.text() == "680 Pet币 · 购买"
+        if button.text() == "购买"
     )
     assert outfit_button.isEnabled() is True
+    price_labels = [
+        label for label in shop_window.findChildren(ui.QLabel)
+        if label.objectName().startswith("outfitPrice_")
+    ]
+    assert any("600" in label.text() for label in price_labels)
 
     shop_window._set_page("home")
     QApplication.processEvents()
@@ -190,7 +196,7 @@ def test_outfit_and_home_pages_show_original_prices_without_discount_badges(shop
     assert not any(label.objectName().startswith("discountBadge_") for label in labels)
     home_button = next(
         button for button in shop_window.findChildren(ui.QPushButton)
-        if button.text() == "120 Pet币 · 购买"
+        if button.text() == "购买"
     )
     assert home_button.isEnabled() is True
 
@@ -281,6 +287,14 @@ def test_pet_card_switches_through_callbacks(shop_window):
     QApplication.processEvents()
     card = shop_window.findChild(ui.QFrame, "petCard_ice_cream")
     card.findChild(ui.QPushButton).click()
+    deadline = time.monotonic() + 1.0
+    while (
+        shop_window.pet.set_active_pet.call_count == 0
+        and time.monotonic() < deadline
+    ):
+        QApplication.processEvents()
+        time.sleep(0.01)
+    QApplication.processEvents()
 
     shop_window.pet.set_active_pet.assert_called_once_with("ice_cream")
     shop_window.save_callback.assert_not_called()

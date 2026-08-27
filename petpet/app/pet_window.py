@@ -364,6 +364,49 @@ class PetWindow(QWidget):
         if hasattr(self, "update"):
             self.update()
 
+    _PET_ASSET_CACHE_KEYS = (
+        "pose_pixmaps",
+        "use_png",
+        "svg_bytes",
+        "renderer",
+        "animation_frames",
+        "_animation_frame_paths",
+        "_failed_animation_names",
+        "_persistent_animation_names",
+        "animation_specs",
+    )
+
+    def switch_pet_assets(self, pet_id):
+        """Swap to another pet's assets, reusing decoded caches when possible."""
+        selected_pet_id = pet_definition(pet_id)["id"]
+        cache = getattr(self, "_pet_assets_cache", None)
+        if cache is None:
+            cache = {}
+            self._pet_assets_cache = cache
+        current_id = self.current_pet_id
+        if current_id and current_id != selected_pet_id:
+            cache[current_id] = {
+                key: getattr(self, key)
+                for key in self._PET_ASSET_CACHE_KEYS
+                if hasattr(self, key)
+            }
+        cached = cache.get(selected_pet_id)
+        if cached is None:
+            self.refresh_pet_assets(selected_pet_id)
+            return
+        self._current_pet_id = selected_pet_id
+        self._outfit_preview_cache = {}
+        for key, value in cached.items():
+            setattr(self, key, value)
+        self._active_animation = None
+        self._animation_override = None
+        self._animation_override_token += 1
+        self._animation_started_at = time.monotonic()
+        self.pose = _dependency("POSE")["idle"]
+        self.blink = False
+        if hasattr(self, "update"):
+            self.update()
+
     def set_active_pet(self, pet_id):
         """Forward active-pet switching to the application transaction."""
         callback = getattr(self, "_set_active_pet_callback", None)

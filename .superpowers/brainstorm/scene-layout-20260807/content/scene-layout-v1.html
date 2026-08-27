@@ -1,0 +1,55 @@
+<h2>家场景第一版布局</h2>
+<p class="subtitle">确认场景板、摄像机视口和家具拖拽的空间关系</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">固定在屏幕上的家场景板</div>
+    <div class="mockup-body" style="padding:0;background:#ead7bf;">
+      <div style="position:relative;height:300px;overflow:hidden;background:#f2dfc8;border:12px solid #8f624c;box-shadow:inset 0 0 0 5px #c79872;">
+        <div style="position:absolute;inset:0;background:linear-gradient(#c8e0e4 0 40%,#e7c29f 40% 100%);">
+          <div style="position:absolute;left:22px;top:22px;width:115px;height:78px;background:#f8edda;border:5px solid #b77d5f;box-shadow:inset 0 -8px #bdd7d6;"></div>
+          <div style="position:absolute;left:170px;top:18px;font-size:38px;">☁</div>
+          <div style="position:absolute;left:400px;top:20px;font-size:36px;">☀</div>
+          <div style="position:absolute;left:590px;top:22px;width:110px;height:94px;background:#efc7a8;border:5px solid #a96c51;"></div>
+          <div style="position:absolute;left:70px;bottom:34px;width:90px;height:48px;background:#d79271;border:5px solid #8b5d49;border-radius:12px 12px 4px 4px;"></div>
+          <div style="position:absolute;left:300px;bottom:30px;width:130px;height:58px;background:#cb795e;border:5px solid #875443;border-radius:8px;"></div>
+          <div style="position:absolute;left:505px;bottom:25px;width:110px;height:60px;background:#8ab6a5;border:5px solid #547d70;border-radius:50% 50% 8px 8px;"></div>
+          <div style="position:absolute;left:250px;bottom:48px;font-size:74px;filter:drop-shadow(0 5px 0 #855746);">🐶</div>
+          <div style="position:absolute;left:462px;bottom:70px;font-size:34px;">🪴</div>
+          <div style="position:absolute;right:24px;bottom:18px;font-size:38px;">🛋️</div>
+        </div>
+        <div style="position:absolute;left:0;right:0;bottom:0;height:5px;background:#8f624c;"></div>
+      </div>
+      <div style="padding:12px 16px;color:#6f4e42;font-size:14px;">展示区域固定；房间内容在视口内横向移动，小狗始终留在区域内。</div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">摄像机随小狗移动</div>
+    <div class="mockup-body" style="padding:0;background:#f3e2ce;">
+      <div style="padding:15px 18px;color:#725044;font-size:14px;line-height:1.65;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><strong>场景坐标</strong><span style="background:#fff7ed;padding:3px 8px;border-radius:999px;">x = 48%</span></div>
+        <div style="height:130px;position:relative;overflow:hidden;border:3px solid #b77d5f;background:#e7c8a7;">
+          <div style="position:absolute;left:-110px;top:0;width:760px;height:100%;background:linear-gradient(#c8e0e4 0 42%,#e5bb99 42% 100%);">
+            <span style="position:absolute;left:150px;bottom:24px;font-size:32px;">🪑</span><span style="position:absolute;left:310px;bottom:28px;font-size:48px;">🐶</span><span style="position:absolute;left:510px;bottom:22px;font-size:40px;">🛋️</span>
+          </div>
+          <div style="position:absolute;inset:0;border:4px solid #825545;pointer-events:none;"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;color:#8b6557;margin-top:7px;"><span>左侧背景</span><span>当前视口</span><span>右侧背景</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:18px;">
+  <h3>第一版交互范围</h3>
+  <div class="pros-cons">
+    <div class="pros"><h4>包含</h4><ul><li>更多 → 家</li><li>背景板显示/隐藏</li><li>小狗移动和视口夹限</li><li>购买家具、拖动家具、保存位置</li></ul></div>
+    <div class="cons"><h4>暂不包含</h4><ul><li>家具碰撞和物理</li><li>家具动画</li><li>多房间切换</li><li>家具影响属性或行为</li></ul></div>
+  </div>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="approve" onclick="toggleSelect(this)"><div class="letter">✓</div><div class="content"><h3>布局方向确认</h3><p>固定场景板 + 横向摄像机 + 可拖拽家具</p></div></div>
+  <div class="option" data-choice="revise" onclick="toggleSelect(this)"><div class="letter">↺</div><div class="content"><h3>需要调整</h3><p>请在终端说明要改的空间关系或交互</p></div></div>
+</div>

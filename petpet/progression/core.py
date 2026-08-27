@@ -97,7 +97,7 @@ UPGRADE_DEFINITIONS = {
     "playing": {
         "name": "活力玩耍",
         "icon": "○",
-        "summary": "提高玩耍带来的心情，并降低精力与饱腹消耗。",
+        "summary": "提高精力获取，降低精力和饱腹消耗。",
         "max_level": 5,
         "prices": [40, 65, 95, 135, 185],
     },
@@ -111,7 +111,7 @@ UPGRADE_DEFINITIONS = {
     "experience": {
         "name": "成长加速",
         "icon": "✦",
-        "summary": "提高互动、陪伴等所有途径获得的经验。",
+        "summary": "提高互动、陪伴等途径获得的经验。",
         "max_level": 5,
         "prices": [60, 90, 135, 195, 270],
     },
@@ -235,7 +235,7 @@ OUTFIT_DEFINITIONS = {
     "dinosaur_suit": {
         "name": "小恐龙套装",
         "icon": "🦖",
-        "price": 680,
+        "price": 600,
         "asset_folder": "dinosaur",
         "preview_asset": "preview.png",
         "animation": "idle_dinosaur",
@@ -246,7 +246,7 @@ OUTFIT_DEFINITIONS = {
     "strawberry_suit": {
         "name": "草莓小子套装",
         "icon": "🍓",
-        "price": 760,
+        "price": 680,
         "asset_folder": "strawberry",
         "preview_asset": "preview.png",
         "animation": "idle_strawberry",
@@ -980,29 +980,60 @@ def upgrade_description(
     awake_energy_decay = float(decay_rates.get("decay_energy", 0.10))
     awake_mood_decay = float(decay_rates.get("decay_mood", 0.08))
     if upgrade_id == "petting":
-        return f"每次抚摸：心情+{effects['pet_mood']}点"
+        return f"心情 +{effects['pet_mood']}"
     if upgrade_id == "feeding":
         return (
-            f"每次喂食：饱腹+{effects['feed_hunger']}点，"
-            f"心情+{effects['feed_mood']}点"
+            f"饱腹 +{effects['feed_hunger']}，"
+            f"心情 +{effects['feed_mood']}"
         )
     if upgrade_id == "playing":
         return (
-            f"每次玩耍：心情+{effects['play_mood']}点，"
-            f"精力-{effects['play_energy_cost']}点，"
-            f"饱腹-{effects['play_hunger_cost']}点"
+            f"心情 +{effects['play_mood']}，"
+            f"精力 -{effects['play_energy_cost']}，"
+            f"饱腹 -{effects['play_hunger_cost']}"
         )
     if upgrade_id == "sleeping":
         return (
-            f"每2s睡眠：精力+{effects['sleep_energy_gain']}点，"
-            f"饱腹-{effects['sleep_hunger_cost']:g}点"
+            f"精力 +{effects['sleep_energy_gain']:g}/2s，"
+            f"饱腹 -{effects['sleep_hunger_cost']:g}/2s"
         )
     if upgrade_id == "endurance":
         reduction = int(round(
             (1.0 - effects["awake_decay_multiplier"]) * 100
         ))
         return f"清醒属性消耗减缓 {reduction}%"
-    return f"所有经验获取倍率：×{effects['xp_multiplier']:.1f}"
+    return f"经验获取倍率：×{effects['xp_multiplier']:.1f}"
+
+
+def reset_shop_purchases(state):
+    """Debug helper: clear every shop purchase back to its fresh state."""
+    ensure_progression(state)
+    state["owned_outfits"] = []
+    state["equipped_outfit"] = None
+    state["owned_decorations"] = []
+    state["equipped_decorations"] = {
+        category: None for category in DECORATION_CATEGORIES
+    }
+    state["decoration_adjustments"] = {}
+    state["home_scene"] = normalize_home_scene(None)
+    state["owned_home_decorations"] = []
+    state["home_decoration_positions"] = {}
+    state["home_stored_decorations"] = []
+    state["home_decoration_transforms"] = {}
+    state["upgrades"] = {
+        upgrade_id: 0 for upgrade_id in UPGRADE_DEFINITIONS
+    }
+    flags = _first_purchase_flags(state)
+    for category in FIRST_PURCHASE_CATEGORIES:
+        flags[category] = False
+    active_pet = state.get("active_pet_id")
+    if active_pet:
+        state["owned_pet_ids"] = [active_pet]
+        player = state.get("player")
+        if isinstance(player, dict):
+            player["owned_pet_ids"] = [active_pet]
+    ensure_progression(state)
+    return state
 
 
 def purchase_upgrade(state, upgrade_id):

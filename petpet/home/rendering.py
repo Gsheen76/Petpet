@@ -18,6 +18,7 @@ from PyQt5.QtGui import (
 )
 
 from petpet.app.paths import (
+    HOME_BUTTONS_DIR,
     HOME_FURNITURE_DIR,
     HOME_POSES_DIR,
     HOME_SCENES_DIR,
@@ -38,6 +39,22 @@ HOME_PET_SLEEP_PATH = os.path.join(HOME_POSES_DIR, "home-pet-sleep.png")
 HOME_NAV_PAW_PATH = os.path.join(SCENES_DIR, "home-nav-paw.png")
 HOME_NAV_TARGET_PATH = os.path.join(SCENES_DIR, "home-nav-target.png")
 HOME_NAV_ARROW_PATH = os.path.join(SCENES_DIR, "home-nav-arrow.png")
+HOME_TOGGLE_SIZE = (46, 46)
+HOME_BUTTON_SIZE = (130, 52)
+HOME_BUTTON_PATHS = {
+    name: os.path.join(HOME_BUTTONS_DIR, f"{name}.png")
+    for name in (
+        "interaction_toggle",
+        "menu_toggle",
+        "pet",
+        "feed",
+        "play",
+        "sleep",
+        "shop",
+        "decorate",
+        "exit",
+    )
+}
 HOME_PET_WALK_FRAME_SIZE = 640
 HOME_PET_WALK_FRAME_COUNT = 8
 HOME_PET_WALK_FPS = 8.0
