@@ -5,7 +5,6 @@ import threading
 import time
 
 from petpet.chat import api as ai
-from petpet.app.paths import SHOP_UI_DIR
 from petpet.app.pets import pet_asset_path, pet_avatar_path, pet_definition
 from PyQt5.QtCore import QPoint, QRect, QRectF, QSize, Qt, QTimer
 from PyQt5.QtGui import (
@@ -71,9 +70,6 @@ class ChatWindow(QWidget):
         self.setObjectName("chat")
         # Same page footprint as the shop/records/settings panels.
         self.setFixedSize(850, 960)
-        self._background_pixmap = QPixmap(
-            os.path.join(SHOP_UI_DIR, "background.png")
-        )
         self._apply_style()
 
     def _pet_name(self):
@@ -125,8 +121,8 @@ class ChatWindow(QWidget):
                 border:0;
             }}
             QFrame#chatCard {{
-                background:transparent;
-                border:0;
+                background:#faf7f3;
+                border:1px solid #e6d8cf;
                 border-radius:24px;
             }}
             QScrollArea#chatHistory {{
@@ -815,7 +811,7 @@ class ChatWindow(QWidget):
             viewport_width = self.width() - 32
         return max(240, int(viewport_width * 0.72))
 
-    def _avatar_pixmap(self, role, size=42):
+    def _avatar_pixmap(self, role, size=84):
         """Build a circular desktop-pet or player avatar pixmap."""
         source = "default"
         image = QImage()
@@ -880,7 +876,7 @@ class ChatWindow(QWidget):
         avatar = QLabel()
         avatar.setObjectName("chatAvatar")
         avatar.setProperty("avatarRole", role)
-        avatar.setFixedSize(42, 42)
+        avatar.setFixedSize(84, 84)
         pixmap, source = self._avatar_pixmap(role)
         avatar.setProperty("avatarSource", source)
         avatar.setPixmap(pixmap)
@@ -1029,28 +1025,6 @@ class ChatWindow(QWidget):
     def _title_move(self, e):
         if self._drag_off is not None:
             self.move(e.globalPos() - self._drag_off)
-
-    def paintEvent(self, event):
-        """Paint the shared warm background behind the chat surfaces."""
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        rounded = QPainterPath()
-        rounded.addRoundedRect(QRectF(self.rect()), 24, 24)
-        painter.setClipPath(rounded)
-        if not self._background_pixmap.isNull():
-            painter.setRenderHint(QPainter.SmoothPixmapTransform)
-            painter.drawPixmap(
-                self.rect(),
-                self._background_pixmap.scaled(
-                    self.size(),
-                    Qt.IgnoreAspectRatio,
-                    Qt.SmoothTransformation,
-                ),
-            )
-            painter.setClipping(False)
-            return
-        gradient = QColor("#fffaf1")
-        painter.fillRect(self.rect(), gradient)
 
     def show_near_pet(self):
         # Open centered on the active pet's screen, like every other panel.
