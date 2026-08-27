@@ -6,9 +6,9 @@
   <img src="assets/runtime/pets/lunch_meat/desktop/poses/idle.png" width="280" alt="Pet陪它桌面小狗">
 </p>
 
-当前版本：`v1.6.0`
+当前版本：`v1.6.1`
 
-## v1.6.0 更新亮点
+## v1.6.1 更新亮点
 
 - 新增冰淇淋小狗，支持购买、切换和按宠物独立保存昵称、属性、位置与聊天记忆。
 - 桌面与家园始终展示同一只当前宠物；冰淇淋桌面睡眠复用家园的 8 帧动画，尺寸与待机保持一致。
@@ -19,9 +19,9 @@
 
 ## v1.6.0 发布
 
-完整资产通过 `scripts/release.ps1 -Version 1.6.0` 一键构建、校验并发布。
+完整资产通过 `scripts/release.ps1 -Version 1.6.1` 一键构建、校验并发布。
 
-支持平台：Windows 10/11、macOS Intel、macOS Apple 芯片
+支持平台：Windows 10/11、macOS Apple 芯片（arm64）
 
 ## v1.5.2 更新亮点
 
@@ -67,19 +67,18 @@
 
 ## 下载
 
-正式版本发布在 [GitHub Releases](https://github.com/Gsheen76/Petpet/releases)。当前 `v1.6.0` 的公开资产如下：
+正式版本发布在 [GitHub Releases](https://github.com/Gsheen76/Petpet/releases)。当前 `v1.6.1` 的公开资产如下：
 
 | 平台 | 文件 |
 | --- | --- |
 | Windows 直接运行 | `Petpet.exe` |
-| Windows 便携包 | `Petpet-v1.6.0-windows.zip` |
-| macOS Apple 芯片 | `Petpet-v1.6.0-macOS-arm64.zip` |
-| macOS Intel | `Petpet-v1.6.0-macOS-intel.zip` |
-| 校验和 | `Petpet-v1.6.0-SHA256SUMS.txt` |
+| Windows 便携包 | `Petpet-v1.6.1-windows.zip` |
+| macOS Apple 芯片 | `Petpet-v1.6.1-macOS-arm64.zip` |
+| 校验和 | `Petpet-v1.6.1-SHA256SUMS.txt` |
 
 Windows 下载 ZIP 后解压并运行 `Petpet.exe`。直接下载的 `Petpet.exe` 也可以独立运行，程序不会弹出命令行窗口。
 
-macOS 请根据“ → 关于本机”显示的处理器选择 `arm64` 或 `intel` 包。安装包当前尚未进行 Apple Developer ID 签名和公证，首次打开可能需要在“系统设置 → 隐私与安全性”中选择“仍要打开”。如果系统明确提示“会损坏你的电脑”或“检测到恶意软件”，不要绕过提示，应重新下载并检查文件来源。
+自 `v1.6.1` 起仅提供 Windows 与 Apple 芯片（arm64）Mac 版本，Intel Mac 可继续使用 `v1.6.0` 及更早版本。安装包当前尚未进行 Apple Developer ID 签名和公证，首次打开可能需要在“系统设置 → 隐私与安全性”中选择“仍要打开”。如果系统明确提示“会损坏你的电脑”或“检测到恶意软件”，不要绕过提示，应重新下载并检查文件来源。
 
 ## 操作
 
@@ -300,24 +299,23 @@ chmod +x scripts/build_macos.sh
 dist/Petpet.app
 ```
 
-`.github/workflows/build-macos.yml` 支持手动触发 Apple 芯片和 Intel 构建。公开分发前仍需配置 Apple Developer ID 签名和公证。
+`.github/workflows/build-macos.yml` 支持手动触发 Apple 芯片（arm64）构建。公开分发前仍需配置 Apple Developer ID 签名和公证。
 
 ### 一键发布
 
 发布前应先更新 `version.py`、`docs/RELEASE_NOTES_v<版本>.md` 和 README，并提交全部改动。在干净工作树中运行：
 
 ```powershell
-.\scripts\release.ps1 -Version 1.6.0
+.\scripts\release.ps1 -Version 1.6.1
 ```
 
-脚本会依次检查版本和工作树、运行全量测试、编译检查、构建并冒烟验证 Windows 版本、生成 Windows 便携包和 SHA256 校验文件，然后同步 `main`、创建或继续草稿 Release，并触发 macOS 双架构工作流。
+脚本会依次检查版本和工作树、运行全量测试、编译检查、构建并冒烟验证 Windows 版本、生成 Windows 便携包和 SHA256 校验文件，然后同步 `main`、创建或继续草稿 Release，并触发 macOS arm64 构建工作流。
 
-公开 Release 必须包含以下四项非空正式资产；校验和文件也会一并上传：
+公开 Release 必须包含以下三项非空正式资产；校验和文件也会一并上传：
 
 - `Petpet.exe`
-- `Petpet-v1.5.2-windows.zip`
-- `Petpet-v1.5.2-macOS-arm64.zip`
-- `Petpet-v1.5.2-macOS-intel.zip`
+- `Petpet-v1.6.1-windows.zip`
+- `Petpet-v1.6.1-macOS-arm64.zip`
 
 中途失败时 Release 会保持草稿。修复问题后可以重复运行同一版本命令；脚本不会强推、覆盖已存在的标签或删除 worktree。已公开且完整的 Release 会先验证远端资产，避免重复修改。
 

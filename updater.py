@@ -97,12 +97,12 @@ def _asset_score(name, platform_name, machine):
             if any(token in lower for token in arm_tokens):
                 score += 40
             elif any(token in lower for token in intel_tokens):
-                score -= 60
+                return None
         else:
             if any(token in lower for token in intel_tokens):
                 score += 40
             elif any(token in lower for token in arm_tokens):
-                score -= 60
+                return None
         return score
 
     return None

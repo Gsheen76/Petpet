@@ -104,6 +104,21 @@ class UpdaterTests(unittest.TestCase):
         self.assertEqual(arm["browser_download_url"], "arm")
         self.assertEqual(intel["browser_download_url"], "intel")
 
+    def test_macos_skips_cross_architecture_assets(self):
+        arm_only = [
+            {"name": "Petpet-v2-macOS-arm64.zip", "browser_download_url": "arm"},
+            {"name": "Petpet.exe", "browser_download_url": "exe"},
+        ]
+        self.assertIsNone(
+            select_release_asset(arm_only, platform_name="darwin", machine="x86_64")
+        )
+        intel_only = [
+            {"name": "Petpet-v2-macOS-intel.zip", "browser_download_url": "intel"},
+        ]
+        self.assertIsNone(
+            select_release_asset(intel_only, platform_name="darwin", machine="arm64")
+        )
+
     def test_extracts_petpet_exe_from_zip(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

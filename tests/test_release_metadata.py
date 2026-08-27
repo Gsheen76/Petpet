@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_public_version_has_one_source_of_truth():
-    assert VERSION == "1.6.0"
+    assert VERSION == "1.6.1"
     assert pet.VERSION == VERSION
 
 
@@ -33,7 +33,7 @@ def test_macos_build_uses_lightweight_version_module():
     ).read_text(encoding="utf-8")
     assert "from version import VERSION" in workflow
     assert 'project_root / "version.py"' in mac_spec
-    assert re.search(r'^VERSION = "1\.6\.0"$', (
+    assert re.search(r'^VERSION = "1\.6\.1"$', (
         ROOT / "version.py"
     ).read_text(encoding="utf-8"), re.MULTILINE)
 
@@ -60,16 +60,16 @@ def test_release_ignores_local_debug_and_wrangler_cache():
     assert ".tools/" in ignored_paths
 
 
-def test_readme_documents_one_click_release_and_v160_assets():
+def test_readme_documents_one_click_release_and_v161_assets():
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    assert ".\\scripts\\release.ps1 -Version 1.6.0" in readme
+    assert ".\\scripts\\release.ps1 -Version 1.6.1" in readme
     for asset in (
         "Petpet.exe",
-        "Petpet-v1.6.0-windows.zip",
-        "Petpet-v1.6.0-macOS-arm64.zip",
-        "Petpet-v1.6.0-macOS-intel.zip",
+        "Petpet-v1.6.1-windows.zip",
+        "Petpet-v1.6.1-macOS-arm64.zip",
     ):
         assert asset in readme
+    assert "-macOS-intel.zip" not in readme
     assert "默认免费文字聊天" in readme
     assert "个人 GLM-4.6V-Flash" in readme
 

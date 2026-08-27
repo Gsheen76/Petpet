@@ -25,8 +25,7 @@ $releaseExitCode = 0
 $requiredAssetNames = @(
     "Petpet.exe",
     "Petpet-v$Version-windows.zip",
-    "Petpet-v$Version-macOS-arm64.zip",
-    "Petpet-v$Version-macOS-intel.zip"
+    "Petpet-v$Version-macOS-arm64.zip"
 )
 
 function Write-Step([string]$Message) {

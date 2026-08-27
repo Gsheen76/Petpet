@@ -73,7 +73,7 @@ def test_release_script_only_uses_non_destructive_git_operations():
     assert "--clobber" not in lowered
 
 
-def test_release_script_uses_draft_and_four_asset_publication_gate():
+def test_release_script_uses_draft_and_three_asset_publication_gate():
     script = _release_script()
     assert "gh release create" in script
     assert "--draft" in script
@@ -84,9 +84,9 @@ def test_release_script_uses_draft_and_four_asset_publication_gate():
         "Petpet.exe",
         "Petpet-v$Version-windows.zip",
         "Petpet-v$Version-macOS-arm64.zip",
-        "Petpet-v$Version-macOS-intel.zip",
     ):
         assert asset in script
+    assert "-macOS-intel.zip" not in script
     assert "gh release edit" in script
     assert "--draft=false" in script
     assert "--prerelease=false" in script
