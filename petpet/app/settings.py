@@ -13,7 +13,7 @@ SETTINGS_PATH = os.path.join(DATA_DIR, "pet_settings.json")
 DEFAULT_SETTINGS = {
     "chat_width": 640,
     "chat_height": 820,
-    "chat_font_size": 22,
+    "chat_font_size": 24,
     "ui_font_size": 24,
     "always_on_top": True,
     "auto_check_updates": True,

@@ -88,7 +88,7 @@ class SettingsWindow(QWidget):
     # Font sizes are chosen as 小/中/大 presets instead of raw numbers.
     FONT_LEVEL_LABELS = ("小", "中", "大")
     FONT_LEVEL_VALUES = {
-        "chat_font_size": (14, 22, 26),
+        "chat_font_size": (20, 24, 28),
         "ui_font_size": (20, 24, 30),
     }
 

@@ -130,12 +130,12 @@ class ChatWindow(QWidget):
                 border-radius:24px;
             }}
             QScrollArea#chatHistory {{
-                background:#fffdfa;
-                border:1px solid #eee4dd;
+                background:transparent;
+                border:0;
                 border-radius:18px;
             }}
             QWidget#chatHistoryBody {{
-                background:#fffdfa;
+                background:transparent;
             }}
             QScrollBar:vertical {{
                 background:#f5efea;
