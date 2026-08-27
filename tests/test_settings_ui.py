@@ -159,10 +159,10 @@ class SettingsWindowTests(unittest.TestCase):
     def test_three_level_slider_has_only_three_snap_positions(self):
         control = pet.ThreeLevelSlider(("文静", "适中", "活泼"))
         self.addCleanup(control.close)
-        slider = control.findChild(QSlider, "threeLevelSlider")
+        # The slider track is gone; selection happens through pill tabs.
+        self.assertIsNone(control.findChild(QSlider, "threeLevelSlider"))
+        self.assertEqual(control.objectName(), "threeLevelTrack")
 
-        self.assertIsNotNone(slider)
-        self.assertEqual((slider.minimum(), slider.maximum()), (0, 2))
         control.setValue(99)
         self.assertEqual(control.value(), 2)
         control.setValue(-5)

@@ -8,7 +8,6 @@ from PyQt5.QtWidgets import (
     QDoubleSpinBox,
     QHBoxLayout,
     QPushButton,
-    QSlider,
     QSpinBox,
     QVBoxLayout,
     QWidget,
@@ -96,48 +95,45 @@ class StepperControl(QWidget):
 
 
 class ThreeLevelSlider(QWidget):
-    """A friendly slider constrained to exactly three named preferences."""
+    """A friendly pill-tab selector constrained to exactly three options.
+
+    Styled after rounded tab pills: the row sits inside a pill-shaped
+    container and the selected option fills as a pill; there is no
+    separate slider track.
+    """
 
     def __init__(self, labels, parent=None):
         super().__init__(parent)
         if len(labels) != 3:
             raise ValueError("ThreeLevelSlider requires exactly three labels")
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
+        self.setObjectName("threeLevelTrack")
+        # Plain QWidget only paints QSS backgrounds with this attribute.
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(6, 6, 6, 6)
         layout.setSpacing(4)
-        self.slider = QSlider(Qt.Horizontal)
-        self.slider.setObjectName("threeLevelSlider")
-        self.slider.setRange(0, 2)
-        self.slider.setSingleStep(1)
-        self.slider.setPageStep(1)
-        self.slider.setTickInterval(1)
-        self.slider.setCursor(Qt.PointingHandCursor)
-        layout.addWidget(self.slider)
-
-        labels_row = QHBoxLayout()
-        labels_row.setContentsMargins(0, 0, 0, 0)
-        labels_row.setSpacing(4)
+        self._value = 0
         self.level_buttons = []
         for index, text in enumerate(labels):
             button = QPushButton(text)
             button.setObjectName("threeLevelOption")
             button.setCheckable(True)
             button.setCursor(Qt.PointingHandCursor)
+            button.setCheckable(True)
             button.clicked.connect(
                 lambda _checked=False, value=index: self.setValue(value)
             )
-            labels_row.addWidget(button, 1)
+            layout.addWidget(button, 1)
             self.level_buttons.append(button)
-        layout.addLayout(labels_row)
-        self.slider.valueChanged.connect(self._refresh_selection)
-        self._refresh_selection(self.slider.value())
+        self._refresh_selection(self._value)
 
     def _refresh_selection(self, value):
+        self._value = max(0, min(2, int(value)))
         for index, button in enumerate(self.level_buttons):
-            button.setChecked(index == value)
+            button.setChecked(index == self._value)
 
     def value(self):
-        return self.slider.value()
+        return self._value
 
     def setValue(self, value):
-        self.slider.setValue(max(0, min(2, int(value))))
+        self._refresh_selection(value)

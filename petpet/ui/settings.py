@@ -296,33 +296,25 @@ class SettingsWindow(QWidget):
             QPushButton#reset {{ background:#d7b9a6; color:#6d5145; }}
             QPushButton#reset:hover {{ background:#e2c8b8; }}
             QPushButton#reset:pressed {{ background:#c9a892; }}
+            QWidget#threeLevelTrack {{
+                background:#fff8ec;
+                border:1px solid #eed3ba;
+                border-radius:20px;
+            }}
             QPushButton#threeLevelOption {{
-                min-height:38px; padding:0; border-radius:16px;
-                color:#9a796b; background:#f8ebe4;
-                border:1px solid transparent;
+                min-height:34px; padding:0 18px; border-radius:17px;
+                color:#9a796b; background:transparent;
+                border:0;
                 font-weight:700;
             }}
             QPushButton#threeLevelOption:hover {{
-                background:#ffece1; color:#7c5244;
-                border-color:#efc4bb;
+                color:#70483c; background:#ffece1;
             }}
             QPushButton#threeLevelOption:pressed {{
-                background:#f8dcd7; color:#5f3d33;
+                color:#5f3d33; background:#f8dcd7;
             }}
             QPushButton#threeLevelOption:checked {{
                 color:#ffffff; background:#f28f76;
-                border-color:#e07e64;
-            }}
-            QSlider#threeLevelSlider {{ min-height:24px; max-height:24px; }}
-            QSlider#threeLevelSlider::groove:horizontal {{
-                height:8px; background:#efdcd2; border-radius:4px;
-            }}
-            QSlider#threeLevelSlider::sub-page:horizontal {{
-                background:#edb8ae; border-radius:4px;
-            }}
-            QSlider#threeLevelSlider::handle:horizontal {{
-                width:22px; margin:-7px 0; background:#fff9f4;
-                border:2px solid #df998b; border-radius:11px;
             }}
             QGroupBox {{
                 background:transparent;
