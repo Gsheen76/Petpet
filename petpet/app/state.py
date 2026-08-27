@@ -27,6 +27,7 @@ PET_FIELDS = (
     "sleeping", "sleep_mode", "x", "y", "desktop_position",
     "home_position", "chat_memory_key", "equipped_decorations",
     "decoration_adjustments", "equipped_outfit",
+    "owned_since", "active_seconds",
 )
 
 _PLAYER_DEFAULTS = {
@@ -49,6 +50,7 @@ _PET_DEFAULTS = {
     "chat_memory_key": None,
     "equipped_decorations": {}, "decoration_adjustments": {},
     "equipped_outfit": None,
+    "owned_since": 0.0, "active_seconds": 0,
 }
 
 

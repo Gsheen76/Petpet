@@ -16,6 +16,7 @@ from petpet.app.pets import load_pet_registry as _load_pet_registry
 RECORD_DEFAULTS = {
     "app_sessions": 0,
     "active_seconds": 0,
+    "pick_ups": 0,
     "pettings": 0,
     "feedings": 0,
     "play_sessions": 0,
@@ -676,7 +677,25 @@ def record_session(state):
 
 def record_active_time(state, seconds=60):
     ensure_progression(state)
-    state["records"]["active_seconds"] += _safe_int(seconds)
+    amount = _safe_int(seconds)
+    state["records"]["active_seconds"] += amount
+    pets = state.get("pets")
+    if isinstance(pets, dict):
+        pet_state = pets.get(state.get("active_pet_id"))
+        if isinstance(pet_state, dict):
+            pet_state["active_seconds"] = _safe_int(
+                pet_state.get("active_seconds", 0)
+            ) + amount
+
+
+def record_pick_up(state, amount=1):
+    """Count grabbing the dog (long-press or drag) for the active pet."""
+    ensure_progression(state)
+    amount = _safe_int(amount)
+    if amount <= 0:
+        return
+    state["records"]["pick_ups"] += amount
+    pet_record_action(state, "pick_ups", amount)
 
 
 def affection_to_next(level):
@@ -763,7 +782,7 @@ def grant_interaction_affection(state, action, amount=1, now=None):
 
 
 PET_RECORD_KEYS = (
-    "pettings", "feedings", "play_sessions", "sleep_sessions",
+    "pick_ups", "pettings", "feedings", "play_sessions", "sleep_sessions",
     "fetch_catches", "chats_opened", "wake_shakes",
     "interactions_total", "ai_replies", "autonomous_walks",
 )
@@ -774,7 +793,8 @@ def _ensure_pet_records(state):
     pets = state.get("pets")
     if not isinstance(pets, dict):
         return
-    for pet_state in pets.values():
+    default_since = float(state.get("born") or 0.0)
+    for index, (pet_id, pet_state) in enumerate(pets.items()):
         if not isinstance(pet_state, dict):
             continue
         raw = pet_state.get("pet_records")
@@ -783,6 +803,14 @@ def _ensure_pet_records(state):
         pet_state["pet_records"] = {
             key: _safe_int(raw.get(key, 0)) for key in PET_RECORD_KEYS
         }
+        if not float(pet_state.get("owned_since") or 0.0):
+            # The original pet inherits the player's known history.
+            fallback = (
+                default_since
+                if (pet_id == "lunch_meat" or index == 0) and default_since
+                else time.time()
+            )
+            pet_state["owned_since"] = float(fallback)
     if not state["pet_records_seeded"] and pets:
         seed_id = (
             "lunch_meat" if "lunch_meat" in pets else next(iter(pets))

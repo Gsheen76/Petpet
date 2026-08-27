@@ -1627,6 +1627,7 @@ class PetWindow(QWidget):
             else:
                 self._wake_shake.reset()
             self.dragging = True
+            self._grab_started_at = time.time()
             self.drag_offset = e.globalPos() - self.frameGeometry().topLeft()
             self.last_drag_pos = e.globalPos()
             self.last_drag_t = time.time()
@@ -1670,6 +1671,13 @@ class PetWindow(QWidget):
         if e.button() == Qt.LeftButton and self.dragging:
             self.dragging = False
             self.setCursor(Qt.ArrowCursor)
+            # A grab is a deliberate pick-up: a long-press hold, with or
+            # without dragging afterwards. Quick single clicks don't count.
+            held_for = time.time() - getattr(
+                self, "_grab_started_at", time.time()
+            )
+            if held_for >= 0.5 and not self._woke_from_shake:
+                progression.record_pick_up(self.state, 1)
             # fling: use instantaneous velocity from the last ~100ms of motion,
             # NOT the average over the whole drag. This gives real inertia:
             # if you were still moving when you let go, it flies; if you'd

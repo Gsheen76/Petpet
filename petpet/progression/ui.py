@@ -169,7 +169,9 @@ SHOP_THEME_STYLE = """
         background: transparent;
         color: #9c6b58;
         border: 0;
-        border-radius: 23px;
+        /* Exactly half the rendered height: oversized radii get scaled
+           down into near-squares by the QSS border-radius fit rules. */
+        border-radius: 22px;
         padding: 6px 3px;
         font-size: 19px;
         font-weight: 800;
@@ -1158,7 +1160,30 @@ class RecordsWindow(CozyProgressWindow):
 
         if self.record_pet_id is not None:
             # Pet tabs only show what belongs to this pet; shared panels
-            # (hero, growth, exploration) live exclusively in 总计.
+            # (growth, exploration) live exclusively in 总计.
+            owned_since = float(
+                (pet_state or {}).get("owned_since") or now
+            )
+            pet_days = max(1, int((now - owned_since) // 86400))
+            pet_active = progression.format_duration(
+                max(0, int((pet_state or {}).get("active_seconds", 0) or 0))
+            )
+            pet_hero = QFrame()
+            pet_hero.setObjectName("heroCard")
+            pet_hero_layout = QGridLayout(pet_hero)
+            pet_hero_layout.setContentsMargins(20, 16, 20, 16)
+            pet_hero_layout.setHorizontalSpacing(24)
+            pet_hero_layout.setVerticalSpacing(5)
+            pet_hero_layout.addWidget(
+                self._hero_label("相识天数", f"{pet_days} 天"), 0, 0
+            )
+            pet_hero_layout.addWidget(
+                self._hero_label("桌面陪伴", pet_active), 0, 1
+            )
+            pet_hero_layout.addWidget(
+                self._hero_label("当前好感", f"Lv.{affection_level}"), 0, 2
+            )
+            self.content_layout.addWidget(pet_hero)
             self._add_pet_interaction_section(pet_records)
             self.content_layout.addStretch(1)
             return
@@ -1170,15 +1195,21 @@ class RecordsWindow(CozyProgressWindow):
         hero_layout.setHorizontalSpacing(24)
         hero_layout.setVerticalSpacing(5)
         born = float(state.get("born", now) or now)
-        total_time = progression.format_duration(now - born)
+        known_days = max(1, int((now - born) // 86400)) if born else 0
         active_time = progression.format_duration(records["active_seconds"])
-        hero_layout.addWidget(self._hero_label("相识时长", total_time), 0, 0)
+        hero_layout.addWidget(
+            self._hero_label("相识天数", f"{known_days} 天"), 0, 0
+        )
         hero_layout.addWidget(
             self._hero_label("桌面陪伴", active_time), 0, 1
         )
         hero_layout.addWidget(
             self._hero_label("当前等级", f"Lv.{state.get('level', 1)}"),
             0, 2,
+        )
+        hero_layout.addWidget(
+            self._hero_label("拥有宠物", str(len(pets))),
+            1, 0,
         )
         hero_layout.addWidget(
             self._hero_label(
@@ -1191,7 +1222,6 @@ class RecordsWindow(CozyProgressWindow):
             self._hero_label("历史获得", f"{records['coins_earned']} Pet币"),
             1, 2,
         )
-        del affection_level  # per-pet stat, never shown in 总计
         self.content_layout.addWidget(hero)
 
         self._add_interaction_section(pet_records, pet_name)
@@ -1218,8 +1248,6 @@ class RecordsWindow(CozyProgressWindow):
                 "好感等级提升的次数",
             ),
             ("消费 Pet币", records["coins_spent"], "用于成长强化的总额"),
-            ("主动入睡", records["manual_sleeps"], "主人安排的睡眠"),
-            ("自己入睡", records["auto_sleeps"], "精力不足时主动休息"),
         ]
         for index, item in enumerate(growth_cards):
             growth_grid.addWidget(
@@ -1234,8 +1262,6 @@ class RecordsWindow(CozyProgressWindow):
         explore_grid.setContentsMargins(0, 0, 0, 0)
         explore_grid.setSpacing(10)
         explore_cards = [
-            ("AI 回复", records["ai_replies"], "小狗认真回复消息的次数"),
-            ("自主散步", records["autonomous_walks"], "自己在桌面散步的次数"),
             ("收集装扮", records["decorations_collected"], "已经拥有的装扮数量"),
             ("更换装扮", records["outfit_changes"], "穿上或收好装扮的次数"),
             ("购买强化", records["upgrades_purchased"], "累计完成的强化次数"),
@@ -1266,7 +1292,7 @@ class RecordsWindow(CozyProgressWindow):
             ("◇ 喂食", pet_records["feedings"], "一起吃过的饭饭"),
             ("○ 玩耍", pet_records["play_sessions"], "开启过的玩耍时光"),
             ("☾ 睡觉", pet_records["sleep_sessions"], "进入过香甜梦乡"),
-            ("🎾 接住小球", pet_records["fetch_catches"], "成功完成的飞扑接球"),
+            ("✊ 抓起次数", pet_records["pick_ups"], "长按或拖动抓起小狗的次数"),
             ("💬 聊天", pet_records["chats_opened"], "认真发送过的聊天消息"),
             ("☀ 摇醒", pet_records["wake_shakes"], "被主人温柔摇醒"),
             ("✦ 总互动", pet_records["interactions_total"], "四种基础互动合计"),
@@ -1306,7 +1332,9 @@ class RecordsWindow(CozyProgressWindow):
             button.setCheckable(True)
             button.setChecked(self.record_pet_id == pet_id)
             button.setCursor(Qt.PointingHandCursor)
-            button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            button.setSizePolicy(
+                QSizePolicy.Expanding, QSizePolicy.Expanding
+            )
             button.clicked.connect(
                 lambda _checked=False, selected=pet_id:
                 self._set_record_pet(selected)
