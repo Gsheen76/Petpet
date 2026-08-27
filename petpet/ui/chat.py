@@ -5,6 +5,7 @@ import threading
 import time
 
 from petpet.chat import api as ai
+from petpet.app.paths import SHOP_UI_DIR
 from petpet.app.pets import pet_asset_path, pet_avatar_path, pet_definition
 from PyQt5.QtCore import QPoint, QRect, QRectF, QSize, Qt, QTimer
 from PyQt5.QtGui import (
@@ -68,7 +69,11 @@ class ChatWindow(QWidget):
         )
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setObjectName("chat")
-        self.setFixedSize(self.s["chat_width"], self.s["chat_height"])
+        # Same page footprint as the shop/records/settings panels.
+        self.setFixedSize(850, 960)
+        self._background_pixmap = QPixmap(
+            os.path.join(SHOP_UI_DIR, "background.png")
+        )
         self._apply_style()
 
     def _pet_name(self):
@@ -120,8 +125,8 @@ class ChatWindow(QWidget):
                 border:0;
             }}
             QFrame#chatCard {{
-                background:#faf7f3;
-                border:1px solid #e6d8cf;
+                background:transparent;
+                border:0;
                 border-radius:24px;
             }}
             QScrollArea#chatHistory {{
@@ -1025,16 +1030,39 @@ class ChatWindow(QWidget):
         if self._drag_off is not None:
             self.move(e.globalPos() - self._drag_off)
 
+    def paintEvent(self, event):
+        """Paint the shared warm background behind the chat surfaces."""
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        rounded = QPainterPath()
+        rounded.addRoundedRect(QRectF(self.rect()), 24, 24)
+        painter.setClipPath(rounded)
+        if not self._background_pixmap.isNull():
+            painter.setRenderHint(QPainter.SmoothPixmapTransform)
+            painter.drawPixmap(
+                self.rect(),
+                self._background_pixmap.scaled(
+                    self.size(),
+                    Qt.IgnoreAspectRatio,
+                    Qt.SmoothTransformation,
+                ),
+            )
+            painter.setClipping(False)
+            return
+        gradient = QColor("#fffaf1")
+        painter.fillRect(self.rect(), gradient)
+
     def show_near_pet(self):
-        # clamp window size to screen so it always fits
+        # Open centered on the active pet's screen, like every other panel.
         screen = self.pet.interface_screen_rect()
-        max_w = screen.width() - 20
-        max_h = screen.height() - 80
-        w = min(self.s["chat_width"], max_w)
-        h = min(self.s["chat_height"], max_h)
+        w = min(self.width(), max(400, screen.width() - 20))
+        h = min(self.height(), max(500, screen.height() - 80))
         if (w, h) != (self.width(), self.height()):
             self.setFixedSize(w, h)
-        self.move(self.pet.interface_window_position(self.size(), gap=16))
+        self.move(QPoint(
+            screen.x() + (screen.width() - self.width()) // 2,
+            screen.y() + (screen.height() - self.height()) // 2,
+        ))
         self.show()
         self.raise_()
         self.activateWindow()

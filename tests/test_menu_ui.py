@@ -309,12 +309,11 @@ class MenuUiTests(unittest.TestCase):
             (1169, 610),
         )
 
-    def test_chat_uses_interface_window_position_and_settings_is_centered(self):
-        position = QPoint(880, 240)
+    def test_chat_opens_screen_centered_like_settings(self):
         pet_host = SimpleNamespace(
             settings=dict(pet.DEFAULT_SETTINGS),
             interface_screen_rect=lambda: QRect(0, 0, 1920, 1080),
-            interface_window_position=Mock(return_value=position),
+            interface_window_position=Mock(return_value=QPoint(880, 240)),
         )
         chat = SimpleNamespace(
             pet=pet_host,
@@ -332,7 +331,7 @@ class MenuUiTests(unittest.TestCase):
 
         pet.ChatWindow.show_near_pet(chat)
 
-        chat.move.assert_called_once_with(position)
+        chat.move.assert_called_once_with(QPoint(680, 180))
 
         settings = SimpleNamespace(
             pet=pet_host,

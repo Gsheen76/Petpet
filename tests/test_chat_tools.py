@@ -195,7 +195,7 @@ class ChatToolsTests(unittest.TestCase):
 
     def test_chat_surface_uses_warm_layered_palette(self):
         style = self.window.styleSheet()
-        self.assertIn("background:#faf7f3", style)
+        self.assertIn("QWidget#chat", style)
         self.assertIn("background:#fffdfa", style)
         self.assertIn("QWidget#chat", style)
         self.assertIn("border-radius:24px", style)
