@@ -32,6 +32,28 @@ from petpet.ui.common import independent_pixel_font
 from petpet.ui.controls import StepperControl, ThreeLevelSlider, ToggleSwitch
 
 
+class HoverCloseButton(QPushButton):
+    """Round close button that tints on hover and darkens when pressed."""
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        from PyQt5.QtGui import QColor, QPainter, QPainterPath
+        if not self.isEnabled():
+            return
+        if self.isDown():
+            tint = QColor(150, 60, 40, 90)
+        elif self.underMouse():
+            tint = QColor(255, 255, 255, 80)
+        else:
+            return
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        path = QPainterPath()
+        path.addEllipse(self.rect().adjusted(1, 1, -1, -1))
+        painter.fillPath(path, tint)
+        painter.end()
+
+
 HEALTH_PRESETS = (
     {
         "remind_drink_min": 120,
@@ -364,7 +386,7 @@ class SettingsWindow(QWidget):
         self.title_label = QLabel("温馨设置")
         self.title_label.setObjectName("settingsTitle")
         self.title_label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
-        close_button = QPushButton(
+        close_button = HoverCloseButton(
             "" if os.path.exists(
                 os.path.join(SHOP_UI_DIR, "close_button.png")
             ) else "×"

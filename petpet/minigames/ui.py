@@ -266,9 +266,11 @@ class CoinCatchGameWindow(CozyProgressWindow):
         self.finished_callback = finished_callback
         super().__init__(
             pet,
-            "🪙 金币雨",
+            "金币雨",
             "20 秒反应挑战；点中金币可以累积本局奖励。",
-            (720, 720),
+            (850, 960),
+            shop_theme=True,
+            title_image=False,
         )
         self.score_label = QLabel("命中 0  ·  最佳连击 0  ·  20.0 秒")
         self.score_label.setObjectName("sectionTitle")
@@ -678,9 +680,11 @@ class LuckyPawsGameWindow(CozyProgressWindow):
         self._game_token = 0
         super().__init__(
             pet,
-            "🐾 幸运爪爪",
+            "幸运爪爪",
             "先看金币放进杯子，再追踪三只杯子的左右移动。",
-            (760, 720),
+            (850, 960),
+            shop_theme=True,
+            title_image=False,
         )
         self.round_label = QLabel("准备开始 · 共 3 轮")
         self.round_label.setObjectName("sectionTitle")
@@ -805,9 +809,11 @@ class MiniGameHubWindow(CozyProgressWindow):
         self.game_window = None
         super().__init__(
             pet,
-            "🎮 小游戏中心",
+            "小游戏中心",
             "选择一款小游戏放松一下，还能赚取 Pet币。",
-            (760, 760),
+            (850, 960),
+            shop_theme=True,
+            title_image=False,
         )
 
     def refresh(self):
