@@ -1386,11 +1386,8 @@ class PetWindow(QWidget):
         dog_y = self.PET_H - self.DOG_H
         dst = QRectF(0, dog_y, self.PET_W, self.DOG_H)
 
-        # Flip horizontally if facing left
-        if self.facing < 0:
-            p.save()
-            p.translate(self.PET_W, 0)
-            p.scale(-1, 1)
+        # The desktop dog keeps one authored orientation; horizontal
+        # mirroring while walking read as flickery, so no flip happens.
 
         if animation_pixmap is not None or self.use_png:
             pm = (animation_pixmap or self.pose_pixmaps.get(pose)
@@ -1435,9 +1432,6 @@ class PetWindow(QWidget):
                 dst,
                 self.decoration_pixmaps,
             )
-
-        if self.facing < 0:
-            p.restore()
 
         if (
             self.needs_api_key_configuration()
@@ -1872,11 +1866,7 @@ class PetWindow(QWidget):
                 if abs(self.vx) < STOP_V:
                     self.vx = 0
 
-            # ---- facing follows horizontal velocity ----
-            if abs(self.vx) > 5:
-                self.facing = 1 if self.vx > 0 else -1
-            elif is_walking:
-                self.facing = 1 if self.target_vx > 0 else -1
+            # Facing stays fixed at the authored right-facing orientation.
 
             # Preserve the legacy bob only while no real walk frames exist.
             if (self.on_ground and abs(self.vx) > 20 and
