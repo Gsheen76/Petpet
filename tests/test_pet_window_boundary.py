@@ -253,7 +253,7 @@ class PetWindowBoundaryTests(unittest.TestCase):
         try:
             self.assertEqual(
                 set(window.animation_frames),
-                {"idle", "pet", "eat", "play", "sleep", "dig_reward"},
+                {"idle", "pet", "eat", "play", "sleep", "dig_reward", "drag"},
             )
             self.assertIn("idle_strawberry", window._animation_frame_paths)
         finally:
@@ -269,7 +269,7 @@ class PetWindowBoundaryTests(unittest.TestCase):
         try:
             self.assertEqual(len(window.animation_frames["sleep"]), 12)
             self.assertEqual(window.animation_specs["sleep"]["fps"], 2.4)
-            self.assertEqual(window.animation_specs["sleep"]["scale"], 0.7)
+            self.assertEqual(window.animation_specs["sleep"]["scale"], 0.665)
             self.assertTrue(window.animation_specs["sleep"]["anchor_bottom"])
 
             window.refresh_pet_assets("ice_cream")

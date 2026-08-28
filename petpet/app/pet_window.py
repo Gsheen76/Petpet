@@ -63,7 +63,7 @@ class PetWindow(QWidget):
     ANIMATION_MAX_FRAMES = 64
     ANIMATION_MAX_SOURCE_PIXELS = 16_777_216
     PRELOADED_ANIMATIONS = (
-        "idle", "pet", "eat", "play", "sleep", "dig_reward"
+        "idle", "pet", "eat", "play", "sleep", "dig_reward", "drag"
     )
     STAT_DECAY_RATE_MULTIPLIER = 0.5
     flung = pyqtSignal()
