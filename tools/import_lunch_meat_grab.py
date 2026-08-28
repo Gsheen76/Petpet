@@ -19,8 +19,8 @@ ALPHA_THRESHOLD = 32
 # Match the idle animation's measured saturation/brightness so the held
 # silhouette reads as the same dog. (Measured: idle sat .644 val .784
 # vs raw grab sat .529 val .899.)
-SATURATION_GAIN = 1.189
-BRIGHTNESS_GAIN = 0.889
+SATURATION_GAIN = 1.153
+BRIGHTNESS_GAIN = 0.862
 # This sheet runs ~1.3 degrees yellow of the idle hue; trimming green
 # pulls the orange back toward the idle red-orange.
 GREEN_GAIN = 0.96
