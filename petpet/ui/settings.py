@@ -37,6 +37,7 @@ class HoverCloseButton(QPushButton):
 
     def paintEvent(self, event):
         super().paintEvent(event)
+        from PyQt5.QtCore import QRectF
         from PyQt5.QtGui import QColor, QPainter, QPainterPath
         if not self.isEnabled():
             return
@@ -49,7 +50,8 @@ class HoverCloseButton(QPushButton):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         path = QPainterPath()
-        path.addEllipse(self.rect().adjusted(1, 1, -1, -1))
+        # The QRect overload of addEllipse crashes this PyQt5 build.
+        path.addEllipse(QRectF(self.rect().adjusted(1, 1, -1, -1)))
         painter.fillPath(path, tint)
         painter.end()
 
