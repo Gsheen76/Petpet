@@ -106,6 +106,12 @@ except Exception:
     HAS_SOUND = False
 
 
+def IS_OFFSCREEN_PLATFORM():
+    """True on the headless Qt test platform (no audio backend)."""
+    instance = QApplication.instance()
+    return instance is not None and instance.platformName() == "offscreen"
+
+
 def configure_display_scaling():
     """Keep Petpet's window geometry stable across Windows DPI settings."""
     QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)

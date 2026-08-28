@@ -182,6 +182,13 @@ class PetWindow(QWidget):
                     se.setVolume(0.5)
                     self.sounds[name] = se
 
+        # The first QSoundEffect play initializes the audio backend and can
+        # block for hundreds of milliseconds; pre-warm it muted in the
+        # background so the user's first interaction never hitches. The
+        # offscreen test platform has no audio backend and must not try.
+        if self.sounds and not _dependency("IS_OFFSCREEN_PLATFORM")():
+            _dependency("QTimer").singleShot(2000, self._prewarm_sounds)
+
         # physics
         self.vx = 0.0
         self.vy = 0.0
@@ -1519,6 +1526,16 @@ class PetWindow(QWidget):
         p.restore()
 
     # ---------- say ----------
+    def _prewarm_sounds(self):
+        for effect in self.sounds.values():
+            try:
+                effect.setVolume(0.0)
+                effect.play()
+                effect.stop()
+                effect.setVolume(0.5)
+            except RuntimeError:
+                pass
+
     def play_sound(self, name):
         if not self.settings.get("sound_enabled", True):
             return
@@ -2580,7 +2597,8 @@ class PetWindow(QWidget):
             "汪呜？天亮了吗～",
             "醒啦醒啦，抱稳我呀～",
         ]), 2200)
-        self.play_sound("bark")
+        # Render the wake frame first; a cold audio backend can block.
+        _dependency("QTimer").singleShot(0, lambda: self.play_sound("bark"))
         _dependency("save_state")(self.state)
         self.refresh_pose_from_state()
         self.update()
