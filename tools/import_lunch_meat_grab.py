@@ -10,12 +10,17 @@ import argparse
 from pathlib import Path
 
 import numpy
-from PIL import Image
+from PIL import Image, ImageEnhance
 from scipy import ndimage
 
 
 GRID_SIZE = 4
 ALPHA_THRESHOLD = 32
+# Match the idle animation's measured saturation/brightness so the held
+# silhouette reads as the same dog. (Measured: idle sat .644 val .784
+# vs raw grab sat .529 val .899.)
+SATURATION_GAIN = 1.296
+BRIGHTNESS_GAIN = 0.845
 
 
 def _dog_region(frame: Image.Image) -> numpy.ndarray:
@@ -51,6 +56,8 @@ def import_grid(source: Path, output_dir: Path) -> int:
             keep = _dog_region(frame)
             pixels[:, :, 3] = numpy.where(keep, pixels[:, :, 3], 0)
             frame = Image.fromarray(pixels)
+            frame = ImageEnhance.Color(frame).enhance(SATURATION_GAIN)
+            frame = ImageEnhance.Brightness(frame).enhance(BRIGHTNESS_GAIN)
             frame.save(output_dir / f"{index:03d}.png", optimize=True)
             written += 1
     return written
