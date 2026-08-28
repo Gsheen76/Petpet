@@ -670,7 +670,7 @@ class HomeSceneWindow(QWidget):
         """Right toggle (menu), the pair centered under the item stacks."""
         canvas = self.scene_canvas_rect()
         width, height = HOME_TOGGLE_SIZE
-        stack_right = canvas.right() - 14 - 10
+        stack_right = canvas.right() - 14 - 12
         pair_width = 2 * width + 8
         right = stack_right - max(
             0, (HOME_BUTTON_SIZE[0] - pair_width) // 2
@@ -696,15 +696,24 @@ class HomeSceneWindow(QWidget):
         return self._stacked_item_rects(("shop", "decorate", "exit"))
 
     def _stacked_item_rects(self, names):
+        """Items stack upward, centered over their circular toggle."""
         width, height = HOME_BUTTON_SIZE
         gap = 7
-        right = self.scene_canvas_rect().right() - 14
         bottom = self._toggle_top() - 6
         rects = {}
+        toggles = (
+            self.menu_toggle_rect()
+            if names[0] == "shop"
+            else self.interaction_toggle_rect()
+        )
+        center = toggles.center().x()
+        # QRect.center() truncates; offset by (width-1)//2 so the printed
+        # center lands exactly on the toggle center.
+        left = center - (width - 1) // 2
         for index, name in enumerate(names):
             item_bottom = bottom - index * (height + gap)
             rects[name] = QRect(
-                right - width + 1,
+                left,
                 item_bottom - height + 1,
                 width,
                 height,

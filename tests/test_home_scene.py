@@ -475,9 +475,12 @@ class HomeSceneAssetTests(unittest.TestCase):
         actions = scene.home_action_button_rects()
         self.assertNotIn("status", actions)
         self.assertEqual(set(actions), {"shop", "decorate", "exit"})
-        stack_right = canvas.right() - 14
+        toggle_center = scene.home_action_toggle_rect().center().x()
         self.assertTrue(
-            all(rect.right() == stack_right for rect in actions.values())
+            all(
+                rect.center().x() == toggle_center
+                for rect in actions.values()
+            )
         )
         self.assertTrue(
             all(rect.bottom() < scene.menu_toggle_rect().top() for rect in actions.values())
@@ -491,19 +494,13 @@ class HomeSceneAssetTests(unittest.TestCase):
         interaction_toggle = scene.interaction_toggle_rect()
         menu_toggle = scene.menu_toggle_rect()
         self.assertLess(interaction_toggle.right(), menu_toggle.left())
-        pair_center = (interaction_toggle.left() + menu_toggle.right()) / 2
-        stack_center = (
-            stack_right + stack_right - home_scene.HOME_BUTTON_SIZE[0] + 1
-        ) / 2
-        # Toggle pair sits 10px left of the item stack.
-        self.assertEqual(pair_center, stack_center - 10)
         interaction_actions = scene.interaction_item_rects()
         self.assertEqual(
             set(interaction_actions), {"pet", "feed", "play", "sleep"}
         )
         self.assertTrue(
             all(
-                rect.right() == stack_right
+                rect.center().x() == interaction_toggle.center().x()
                 for rect in interaction_actions.values()
             )
         )
@@ -584,7 +581,8 @@ class HomeSceneAssetTests(unittest.TestCase):
         interaction_actions = scene.home_interaction_action_rects()
         self.assertTrue(
             all(
-                rect.right() == scene.scene_canvas_rect().right() - 14
+                rect.center().x()
+                == scene.interaction_toggle_rect().center().x()
                 for rect in interaction_actions.values()
             )
         )
@@ -688,7 +686,8 @@ class HomeSceneAssetTests(unittest.TestCase):
         button = scene.exit_button_rect()
 
         self.assertLess(button.bottom(), toggle.top())
-        self.assertTrue(button.right() <= scene.width() - 10)
+        # Centered column may sit flush with the fixed window edge.
+        self.assertTrue(button.right() <= scene.width())
         self.assertGreater(button.width(), 30)
 
         state["home_scene"]["enabled"] = True
