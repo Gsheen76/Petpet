@@ -96,7 +96,7 @@
     "scale": 0.7,
     "anchor_bottom": true
   },
-  "drag":  {"folder": "drag",  "fps": 6,  "loop": true,  "fallback": "drag",  "scale": 1.10},
+  "drag":  {"folder": "drag",  "fps": 6,  "loop": true,  "fallback": "drag",  "scale": 0.95},
   "sad":   {"folder": "sad",   "fps": 5,  "loop": true,  "fallback": "sad"},
   "sit":   {"folder": "sit",   "fps": 6,  "loop": true,  "fallback": "idle"},
   "ask":   {"folder": "ask",   "fps": 8,  "loop": false, "fallback": "idle"}

@@ -21,6 +21,9 @@ ALPHA_THRESHOLD = 32
 # vs raw grab sat .529 val .899.)
 SATURATION_GAIN = 1.189
 BRIGHTNESS_GAIN = 0.889
+# This sheet runs ~1.3 degrees yellow of the idle hue; trimming green
+# pulls the orange back toward the idle red-orange.
+GREEN_GAIN = 0.96
 
 
 def _dog_region(frame: Image.Image) -> numpy.ndarray:
@@ -58,6 +61,13 @@ def import_grid(source: Path, output_dir: Path) -> int:
             frame = Image.fromarray(pixels)
             frame = ImageEnhance.Color(frame).enhance(SATURATION_GAIN)
             frame = ImageEnhance.Brightness(frame).enhance(BRIGHTNESS_GAIN)
+            if abs(GREEN_GAIN - 1.0) > 1e-3:
+                rgb = frame.convert("RGBA")
+                channels = list(rgb.split())
+                channels[1] = channels[1].point(
+                    lambda value: int(round(value * GREEN_GAIN))
+                )
+                frame = Image.merge("RGBA", channels)
             frame.save(output_dir / f"{index:03d}.png", optimize=True)
             written += 1
     return written
