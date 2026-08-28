@@ -19,8 +19,8 @@ ALPHA_THRESHOLD = 32
 # Match the idle animation's measured saturation/brightness so the held
 # silhouette reads as the same dog. (Measured: idle sat .644 val .784
 # vs raw grab sat .529 val .899.)
-SATURATION_GAIN = 1.296
-BRIGHTNESS_GAIN = 0.845
+SATURATION_GAIN = 1.189
+BRIGHTNESS_GAIN = 0.889
 
 
 def _dog_region(frame: Image.Image) -> numpy.ndarray:
