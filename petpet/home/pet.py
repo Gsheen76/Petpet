@@ -213,12 +213,21 @@ class HomePetController:
         self.sleep_retry_seconds = max(0.0, float(sleep_retry_seconds))
         self.sleep_retry_until = 0.0
         self.next_roam_at: float | None = None
+        # Sign of the latest movement delta drives diagonal sheet choice
+        # and the idle facing; the player-command clock gates auto-roam.
+        self.last_move_dx = 0.0
+        self.last_move_dy = 0.0
+        self.last_player_command_at = 0.0
 
     def maybe_start_autonomous_walk(self, now: float, rng=None) -> bool:
         """Start a frequent home-only wander after an idle 12–25s delay."""
         if self.state != "idle" or self.target is not None:
             return False
         current = float(now)
+        # Autonomous wandering yields to the player: it only starts after
+        # 3s without any player command or interaction.
+        if current - self.last_player_command_at < 3.0:
+            return False
         rng = rng or random
         if self.next_roam_at is None:
             self.next_roam_at = current + float(rng.uniform(12.0, 25.0))
@@ -235,6 +244,8 @@ class HomePetController:
         dy = target[1] - self.position[1]
         self.target = target
         self.direction = direction_for_delta(dx, dy, self.direction)
+        self.last_move_dx = dx
+        self.last_move_dy = dy
         self.state = "auto_walk"
         self.next_roam_at = None
         return True
@@ -254,6 +265,8 @@ class HomePetController:
         dy = normalized[1] - self.position[1]
         self.target = normalized
         self.direction = direction_for_delta(dx, dy, self.direction)
+        self.last_move_dx = dx
+        self.last_move_dy = dy
         self.state = "manual_walk"
         return interrupted_sleep
 
@@ -267,6 +280,8 @@ class HomePetController:
         dy = normalized[1] - self.position[1]
         self.target = normalized
         self.direction = direction_for_delta(dx, dy, self.direction)
+        self.last_move_dx = dx
+        self.last_move_dy = dy
         self.state = "manual_sleep_walk"
         return True
 
@@ -280,6 +295,8 @@ class HomePetController:
         dy = normalized[1] - self.position[1]
         self.target = normalized
         self.direction = direction_for_delta(dx, dy, self.direction)
+        self.last_move_dx = dx
+        self.last_move_dy = dy
         self.state = "auto_sleep_walk"
         return True
 

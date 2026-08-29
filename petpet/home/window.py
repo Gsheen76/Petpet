@@ -440,6 +440,7 @@ class HomeSceneWindow(QWidget):
 
         self.home_pet.cancel_target()
         target = self.home_sleep_target()
+        self.home_pet.last_player_command_at = current
         if not self.home_pet.request_manual_sleep(target, current):
             return False
         self.state["sleeping"] = False
@@ -885,6 +886,7 @@ class HomeSceneWindow(QWidget):
         method = getattr(self.pet, method_name, None) if method_name else None
         if not callable(method):
             return False
+        self.home_pet.last_player_command_at = time.monotonic()
         method()
         self._menu_open = False
         self._interaction_menu_open = False
@@ -1077,6 +1079,44 @@ class HomeSceneWindow(QWidget):
 
         if self.home_pet.state == "sleeping":
             return None
+        # Ice cream's two sheets are diagonals keyed by the movement delta:
+        # upward walks use the back sheet (mirrored for up-left), downward
+        # walks the front sheet (mirrored for down-right); pure horizontal
+        # travel follows the last horizontal side.
+        if (
+            self.current_pet_id == "ice_cream"
+            and self.home_pet.state in {
+                "manual_walk", "auto_walk",
+                "manual_sleep_walk", "auto_sleep_walk",
+            }
+        ):
+            dx = getattr(self.home_pet, "last_move_dx", 0.0)
+            dy = getattr(self.home_pet, "last_move_dy", 0.0)
+            side_left = self.home_pet.direction == "left"
+            use_back = (dy < 0) or (dy == 0 and not side_left)
+            if use_back:
+                if self.home_pet_walk_back_right.isNull():
+                    return None
+                spec_pixmap = self.home_pet_walk_back_right
+                mirrored = dx < 0 or (dx == 0 and side_left)
+            else:
+                if self.home_pet_walk_down.isNull():
+                    return None
+                spec_pixmap = self.home_pet_walk_down
+                mirrored = dx > 0 or (dx == 0 and not side_left)
+            frame_index = self.home_pet_walk_frame(now) % (
+                HOME_PET_WALK_FRAME_COUNT
+            )
+            return HomePetWalkRenderSpec(
+                pixmap=spec_pixmap,
+                source_rect=home_pet_walk_source_rect(frame_index),
+                mirrored=mirrored,
+                frame_index=frame_index,
+                visual_scale=1.0,
+                contact_center_x=0.50,
+                contact_width=0.55,
+                contact_foot_y=0.98,
+            )
         frame = self.home_pet_walk_frame(now)
         directional_walk_frames = self._home_pet_directional_walk_frames.get(
             self.home_pet.direction, ()
@@ -1123,21 +1163,9 @@ class HomeSceneWindow(QWidget):
                 contact_foot_y=0.98,
             )
         contact = home_pet_frame_contact(self.home_pet.direction, frame)
-        # Ice cream's sheets are diagonals: walk_down the front-left one,
-        # back_right the up-right one; route horizontal directions to the
-        # matching diagonal (front_right mirrors the front-left sheet).
-        ice_diagonal = self.current_pet_id == "ice_cream"
-        if (
-            self.home_pet.direction in {"front", "front_left", "left"}
-            or (
-                ice_diagonal
-                and self.home_pet.direction == "front_right"
-            )
-            or (
-                not ice_diagonal
-                and self.home_pet.direction == "right"
-            )
-        ):
+        if self.home_pet.direction in {
+            "front", "front_left", "front_right", "left", "right"
+        }:
             if self.home_pet_walk_down.isNull():
                 return None
             source_rect = (
@@ -1153,23 +1181,14 @@ class HomeSceneWindow(QWidget):
             return HomePetWalkRenderSpec(
                 pixmap=self.home_pet_walk_down,
                 source_rect=source_rect,
-                mirrored=(
-                    self.home_pet.direction
-                    in {"front_left", "left"}
-                    or (
-                        ice_diagonal
-                        and self.home_pet.direction == "front_right"
-                    )
-                ),
+                mirrored=self.home_pet.direction in {"front_left", "left"},
                 frame_index=frame if self._home_pet_walk_down_is_sheet else 0,
                 visual_scale=1.0,
                 contact_center_x=contact[0],
                 contact_width=contact[1],
                 contact_foot_y=contact[2],
             )
-        if self.home_pet.direction in {
-            "back", "back_left", "back_right"
-        } or (ice_diagonal and self.home_pet.direction == "right"):
+        if self.home_pet.direction in {"back", "back_left", "back_right"}:
             if self.home_pet_walk_back_right.isNull():
                 return None
             source_rect = (
@@ -1271,8 +1290,13 @@ class HomeSceneWindow(QWidget):
         if self.home_pet.state == "idle" and not self.home_pet_idle.isNull():
             idle_mirrored = (
                 self.current_pet_id == "ice_cream"
-                and self.home_pet.direction
-                in {"front_left", "left", "back_left"}
+                and (
+                    self.home_pet.last_move_dx < 0
+                    or (
+                        self.home_pet.last_move_dx == 0
+                        and self.home_pet.direction == "left"
+                    )
+                )
             )
             return HomePetWalkRenderSpec(
                 pixmap=self.home_pet_idle,
@@ -1800,10 +1824,12 @@ class HomeSceneWindow(QWidget):
             or self._scene_control_at(point)
         ):
             return False
+        command_time = time.monotonic() if now is None else float(now)
         interrupted_sleep = self.home_pet.command_move(
             self.canvas_to_world(point),
-            time.monotonic() if now is None else float(now),
+            command_time,
         )
+        self.home_pet.last_player_command_at = command_time
         self._menu_open = False
         self._interaction_menu_open = False
         self._set_manual_destination(self.home_pet.target)
