@@ -15,6 +15,6 @@
     "loop": true,
     "fallback": "sleep",
     "scale": 0.75,
-    "anchor_bottom": true
+    "anchor_bottom": false
   }
 }

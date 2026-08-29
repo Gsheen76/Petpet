@@ -298,7 +298,9 @@ class PetWindowBoundaryTests(unittest.TestCase):
             self.assertEqual(len(frames), 8)
             self.assertEqual(spec["fps"], 3)
             self.assertAlmostEqual(spec["scale"], 0.75)
-            self.assertTrue(spec["anchor_bottom"])
+            # Sleeping frames rely on authored grid alignment; per-frame
+            # bottom anchoring made the whole dog bob with tail motion.
+            self.assertFalse(spec["anchor_bottom"])
             self.assertEqual(frames[0].size(), expected_first.size())
             self.assertEqual(frames[0].toImage(), expected_first.toImage())
             self.assertEqual(frames[-1].size(), expected_last.size())
