@@ -15,6 +15,7 @@
     "loop": true,
     "fallback": "sleep",
     "scale": 0.75,
-    "anchor_bottom": false
+    "anchor_bottom": false,
+    "offset_y": 24
   }
 }

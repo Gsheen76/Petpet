@@ -1419,6 +1419,10 @@ class PetWindow(QWidget):
                     dy = dog_y + self.DOG_H - visible_bottom * scale
                 else:
                     dy = dog_y + (self.DOG_H - dh) / 2
+                try:
+                    dy += float(spec.get("offset_y", 0))
+                except (TypeError, ValueError):
+                    pass
                 p.drawPixmap(QRectF(dx, dy, dw, dh), pm,
                              QRectF(0, 0, pw, ph))
         else:
