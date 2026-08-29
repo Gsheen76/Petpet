@@ -273,6 +273,17 @@ try {
         throw "Windows build did not produce a non-empty Petpet.exe."
     }
 
+    Write-Step "Stop local Petpet instances"
+    $locals = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.Name -match '^(pythonw?|Petpet)\.exe$' -and
+            $_.CommandLine -match 'pet\.py|Petpet\.exe'
+        }
+    foreach ($proc in $locals) {
+        Stop-ProcessTree ([int]$proc.ProcessId)
+    }
+    Start-Sleep -Seconds 2
+
     Write-Step "Smoke-test Petpet.exe"
     $smokeProcess = Start-Process -FilePath $exePath `
         -WorkingDirectory (Split-Path -Parent $exePath) `

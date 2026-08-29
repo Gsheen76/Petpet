@@ -5,7 +5,10 @@ PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_DIR"
 
 python3 -m pip install -r requirements/build.txt
-python3 tools/make_icons.py
+# Regenerate icons only when absent (see build_windows.ps1 note).
+if [ ! -f "assets/runtime/icons/icon-16.png" ]; then
+    python3 tools/make_icons.py
+fi
 
 ICONSET_DIR="$PROJECT_DIR/build/Petpet.iconset"
 mkdir -p "$ICONSET_DIR"

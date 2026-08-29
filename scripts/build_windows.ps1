@@ -17,9 +17,13 @@ if (-not $dependenciesReady) {
     }
 }
 
-python tools\make_icons.py
-if ($LASTEXITCODE -ne 0) {
-    throw "Failed to generate icons (exit code $LASTEXITCODE)."
+# Icons are committed assets; regenerate only when absent so builds do
+# not dirty the worktree with non-deterministic byte output.
+if (-not (Test-Path "assetsuntime\icons\icon-16.png")) {
+    python tools\make_icons.py
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to generate icons (exit code $LASTEXITCODE)."
+    }
 }
 
 python -m PyInstaller --noconfirm --clean packaging\Petpet-windows.spec
