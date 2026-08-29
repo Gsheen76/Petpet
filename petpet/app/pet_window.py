@@ -1386,8 +1386,12 @@ class PetWindow(QWidget):
         dog_y = self.PET_H - self.DOG_H
         dst = QRectF(0, dog_y, self.PET_W, self.DOG_H)
 
-        # The desktop dog keeps one authored orientation; horizontal
-        # mirroring while walking read as flickery, so no flip happens.
+        # The desktop dog keeps one fixed orientation per pet (no walking
+        # mirror); a pet registry "facing" flips the authored art once.
+        if pet_definition(self._current_pet_id).get("facing") == "left":
+            p.save()
+            p.translate(self.PET_W, 0)
+            p.scale(-1, 1)
 
         if animation_pixmap is not None or self.use_png:
             pm = (animation_pixmap or self.pose_pixmaps.get(pose)
@@ -1432,6 +1436,9 @@ class PetWindow(QWidget):
                 dst,
                 self.decoration_pixmaps,
             )
+
+        if pet_definition(self._current_pet_id).get("facing") == "left":
+            p.restore()
 
         if (
             self.needs_api_key_configuration()

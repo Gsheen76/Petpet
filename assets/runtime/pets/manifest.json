@@ -41,6 +41,7 @@
       "walk_down": "pets/ice_cream/home/poses/home-pet-walk-down.png",
       "walk_back_right": "pets/ice_cream/home/poses/home-pet-walk-back-right.png",
       "sleep": "pets/ice_cream/home/poses/home-pet-sleep.png"
-    }
+    },
+    "facing": "left"
   }
 }
