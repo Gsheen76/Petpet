@@ -1021,13 +1021,18 @@ class HomeSceneWindow(QWidget):
             height,
         )
 
+    def _home_pet_body_scale(self):
+        """Per-pet body scale; ice cream renders 10% smaller at home."""
+
+        return 0.9 if self.current_pet_id == "ice_cream" else 1.0
+
     def home_pet_render_rect(self, render_spec):
         """Return a foot-anchored rect without stretching the source artwork."""
 
         if render_spec is None or render_spec.source_rect.height() <= 0:
             return self.home_pet_draw_rect()
         return self.home_pet_draw_rect(
-            render_spec.visual_scale,
+            render_spec.visual_scale * self._home_pet_body_scale(),
             render_spec.source_rect.width() / render_spec.source_rect.height(),
         )
 
@@ -1118,13 +1123,21 @@ class HomeSceneWindow(QWidget):
                 contact_foot_y=0.98,
             )
         contact = home_pet_frame_contact(self.home_pet.direction, frame)
-        if self.home_pet.direction in {
-            "front",
-            "front_left",
-            "front_right",
-            "left",
-            "right",
-        }:
+        # Ice cream's sheets are diagonals: walk_down the front-left one,
+        # back_right the up-right one; route horizontal directions to the
+        # matching diagonal (front_right mirrors the front-left sheet).
+        ice_diagonal = self.current_pet_id == "ice_cream"
+        if (
+            self.home_pet.direction in {"front", "front_left", "left"}
+            or (
+                ice_diagonal
+                and self.home_pet.direction == "front_right"
+            )
+            or (
+                not ice_diagonal
+                and self.home_pet.direction == "right"
+            )
+        ):
             if self.home_pet_walk_down.isNull():
                 return None
             source_rect = (
@@ -1140,14 +1153,23 @@ class HomeSceneWindow(QWidget):
             return HomePetWalkRenderSpec(
                 pixmap=self.home_pet_walk_down,
                 source_rect=source_rect,
-                mirrored=self.home_pet.direction in {"front_left", "left"},
+                mirrored=(
+                    self.home_pet.direction
+                    in {"front_left", "left"}
+                    or (
+                        ice_diagonal
+                        and self.home_pet.direction == "front_right"
+                    )
+                ),
                 frame_index=frame if self._home_pet_walk_down_is_sheet else 0,
                 visual_scale=1.0,
                 contact_center_x=contact[0],
                 contact_width=contact[1],
                 contact_foot_y=contact[2],
             )
-        if self.home_pet.direction in {"back", "back_left", "back_right"}:
+        if self.home_pet.direction in {
+            "back", "back_left", "back_right"
+        } or (ice_diagonal and self.home_pet.direction == "right"):
             if self.home_pet_walk_back_right.isNull():
                 return None
             source_rect = (
@@ -1247,10 +1269,15 @@ class HomeSceneWindow(QWidget):
                 )
 
         if self.home_pet.state == "idle" and not self.home_pet_idle.isNull():
+            idle_mirrored = (
+                self.current_pet_id == "ice_cream"
+                and self.home_pet.direction
+                in {"front_left", "left", "back_left"}
+            )
             return HomePetWalkRenderSpec(
                 pixmap=self.home_pet_idle,
                 source_rect=self._home_pet_idle_source_rect,
-                mirrored=False,
+                mirrored=idle_mirrored,
                 frame_index=0,
                 visual_scale=1.0,
                 contact_center_x=0.55,

@@ -206,7 +206,10 @@ class HomeSceneAssetTests(unittest.TestCase):
         self.assertEqual(spec.visual_scale, 0.60)
         rect = scene.home_pet_render_rect(spec)
         idle_rect = scene.home_pet_draw_rect()
-        self.assertAlmostEqual(rect.height(), idle_rect.height() * 0.60, places=2)
+        # Ice cream renders 10% smaller overall (per-pet body scale).
+        self.assertAlmostEqual(
+            rect.height(), idle_rect.height() * 0.60 * 0.9, places=2
+        )
 
         scene.home_pet_sleep = QPixmap()
         self.assertIsNone(scene.home_pet_render_spec(now=1.0 / 3.0))
