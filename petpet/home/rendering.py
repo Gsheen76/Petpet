@@ -64,6 +64,13 @@ HOME_PET_SLEEP_FPS = 3.0
 HOME_PET_SLEEP_VISUAL_SCALE = 0.60
 # Furniture whose placed footprint blocks the pet's movement.
 HOME_SOLID_OBSTACLES = ("home_sofa", "home_plant")
+# Fraction of the sprite frame that actually blocks movement:
+# horizontal half-extent ratio and the solid vertical band (top/bottom
+# ratios of the half-height around the center).
+HOME_SOLID_OBSTACLE_INSETS = {
+    "home_sofa": (0.34, 0.05, 0.92),
+    "home_plant": (0.18, 0.25, 0.95),
+}
 HOME_PET_DEFAULT_SLEEP_VISUAL_SCALE = 0.50
 HOME_PET_FIXED_DEPTH_SCALE = 1.08
 HOME_DESTINATION_FADE_SECONDS = 0.35

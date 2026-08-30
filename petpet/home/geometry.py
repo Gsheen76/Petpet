@@ -237,7 +237,9 @@ def clamp_dog_to_scene(dog_rect: QRect, scene_rect: QRect) -> QPoint:
 # limits so rugs and floor pieces can never leave it.
 HOME_WALL_BOTTOM_Y = 460.0
 HOME_FLOOR_TOP_Y = 460.0
-HOME_FLOOR_BOTTOM_Y = 730.0
+# Rugs may span the full visible floor; only the pet's walkable band
+# stops at 730.
+HOME_FLOOR_BOTTOM_Y = 768.0
 HOME_FURNITURE_REGIONS = {
     "home_wall_art": "wall",
     "home_status_card": "wall",

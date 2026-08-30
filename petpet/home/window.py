@@ -976,12 +976,19 @@ class HomeSceneWindow(QWidget):
             )
             center_x = float(position.get("x", 0)) + logical_w / 2
             center_y = float(position.get("y", 0)) + logical_h / 2
-            half_w = logical_w * float(transform["scale"]) / 2
-            half_h = logical_h * float(transform["scale"]) / 2
-            obstacles.append((
-                center_x - half_w, center_y - half_h,
-                center_x + half_w, center_y + half_h,
-            ))
+            scale = float(transform["scale"])
+            half_w = logical_w * scale / 2
+            half_h = logical_h * scale / 2
+            # The blocking part is the solid body (sofa seat/plant pot),
+            # not the full sprite frame; inset per item.
+            inset_x, top_ratio, bottom_ratio = HOME_SOLID_OBSTACLE_INSETS.get(
+                item_id, (0.5, 0.5, 1.0)
+            )
+            left = center_x - half_w * inset_x
+            right = center_x + half_w * inset_x
+            top = center_y + half_h * (2 * top_ratio - 1)
+            bottom = center_y + half_h * (2 * bottom_ratio - 1)
+            obstacles.append((left, top, right, bottom))
         return tuple(obstacles)
 
     def adjust_selected_furniture(self, kind, amount):
@@ -1132,14 +1139,17 @@ class HomeSceneWindow(QWidget):
                 spec_pixmap = self.home_pet_walk_back_right
                 mirrored = dx < 0 or (dx == 0 and side_left)
                 visual_scale = 1.08
-                contact_width = 0.58
+                contact_width = 0.64
+                # Walking away: the shadow sits higher on the body.
+                contact_foot_y = 0.90
             else:
                 if self.home_pet_walk_down.isNull():
                     return None
                 spec_pixmap = self.home_pet_walk_down
                 mirrored = (dy > 0 and dx < 0) or (dx == 0 and side_left)
                 visual_scale = 0.92
-                contact_width = 0.58
+                contact_width = 0.64
+                contact_foot_y = 0.98
             frame_index = self.home_pet_walk_frame(now) % (
                 HOME_PET_WALK_FRAME_COUNT
             )
@@ -1156,7 +1166,7 @@ class HomeSceneWindow(QWidget):
                 visual_scale=visual_scale,
                 contact_center_x=contact_center,
                 contact_width=contact_width,
-                contact_foot_y=0.98,
+                contact_foot_y=contact_foot_y,
             )
         frame = self.home_pet_walk_frame(now)
         directional_walk_frames = self._home_pet_directional_walk_frames.get(
