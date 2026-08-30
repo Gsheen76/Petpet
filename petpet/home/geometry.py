@@ -260,8 +260,9 @@ def clamp_home_furniture_position(decoration_id: str, x: Any, y: Any) -> dict[st
         # the wall/floor boundary.
         max_y = max(0, int(HOME_WALL_BOTTOM_Y) - height)
     elif region == "floor":
-        # Rugs stay inside the walkable floor band.
-        min_y = int(HOME_FLOOR_TOP_Y)
+        # Rugs may tuck slightly under the wall line but must stay on
+        # the visible floor.
+        min_y = int(HOME_FLOOR_TOP_Y) - 40
         max_y = max(min_y, int(HOME_FLOOR_BOTTOM_Y) - height)
     return {
         "x": max(0, min(max_x, _finite_int(x, 0))),

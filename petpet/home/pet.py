@@ -218,38 +218,7 @@ class HomePetController:
         self.last_move_dx = 0.0
         self.last_move_dy = 0.0
         self.last_player_command_at = 0.0
-        # Placed furniture footprints (l, t, r, b) the pet cannot cross.
-        self.obstacles: tuple[tuple[float, float, float, float], ...] = ()
 
-    def _point_in_obstacle(self, x: float, y: float) -> bool:
-        for left, top, right, bottom in self.obstacles:
-            if left <= x <= right and top <= y <= bottom:
-                return True
-        return False
-
-    def _project_out_of_obstacles(self, x: float, y: float) -> Point:
-        """Push a point to the nearest edge of any obstacle containing it."""
-
-        for _ in range(len(self.obstacles)):
-            if not self._point_in_obstacle(x, y):
-                break
-            best = None
-            for left, top, right, bottom in self.obstacles:
-                if not (left <= x <= right and top <= y <= bottom):
-                    continue
-                candidates = (
-                    (x - left, left, y),
-                    (right - x, right, y),
-                    (y - top, x, top),
-                    (bottom - y, x, bottom),
-                )
-                candidate = min(candidates, key=lambda item: item[0])
-                if best is None or candidate[0] < best[0]:
-                    best = candidate
-            if best is None:
-                break
-            _, x, y = best
-        return (float(x), float(y))
 
     def maybe_start_autonomous_walk(self, now: float, rng=None) -> bool:
         """Start a frequent home-only wander after an idle 12–25s delay."""
@@ -278,7 +247,6 @@ class HomePetController:
         self.direction = direction_for_delta(dx, dy, self.direction)
         self.last_move_dx = dx
         self.last_move_dy = dy
-        self.target = self._project_out_of_obstacles(*self.target)
         self.state = "auto_walk"
         self.next_roam_at = None
         return True
@@ -300,7 +268,6 @@ class HomePetController:
         self.direction = direction_for_delta(dx, dy, self.direction)
         self.last_move_dx = dx
         self.last_move_dy = dy
-        self.target = self._project_out_of_obstacles(*self.target)
         self.state = "manual_walk"
         return interrupted_sleep
 
@@ -316,7 +283,6 @@ class HomePetController:
         self.direction = direction_for_delta(dx, dy, self.direction)
         self.last_move_dx = dx
         self.last_move_dy = dy
-        self.target = self._project_out_of_obstacles(*self.target)
         self.state = "manual_sleep_walk"
         return True
 
@@ -332,7 +298,6 @@ class HomePetController:
         self.direction = direction_for_delta(dx, dy, self.direction)
         self.last_move_dx = dx
         self.last_move_dy = dy
-        self.target = self._project_out_of_obstacles(*self.target)
         self.state = "auto_sleep_walk"
         return True
 
@@ -365,15 +330,10 @@ class HomePetController:
             return ("arrived",)
         if distance > 0.0 and step > 0.0:
             ratio = step / distance
-            next_x = self.position[0] + dx * ratio
-            next_y = self.position[1] + dy * ratio
-            if not self._point_in_obstacle(next_x, next_y):
-                self.position = (next_x, next_y)
-            elif not self._point_in_obstacle(next_x, self.position[1]):
-                # Slide along the obstacle edge instead of sticking.
-                self.position = (next_x, self.position[1])
-            elif not self._point_in_obstacle(self.position[0], next_y):
-                self.position = (self.position[0], next_y)
+            self.position = (
+                self.position[0] + dx * ratio,
+                self.position[1] + dy * ratio,
+            )
         return ()
 
     def cancel_target(self) -> None:

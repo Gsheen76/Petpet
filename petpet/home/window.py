@@ -489,7 +489,6 @@ class HomeSceneWindow(QWidget):
                 )
 
         target_before = self.home_pet.target
-        self.home_pet.obstacles = self._home_obstacle_rects()
         events = self.home_pet.advance(elapsed)
         if "manual_sleep_started" in events:
             self.state["sleeping"] = True
@@ -952,44 +951,6 @@ class HomeSceneWindow(QWidget):
             self.save_state(self.state)
             self.update()
         return result
-
-    def _home_obstacle_rects(self):
-        """World-space footprint rects the pet cannot walk through."""
-
-        obstacles = []
-        placed = [
-            item_id
-            for item_id in self.state.get("owned_home_decorations", [])
-            if item_id not in self.state.get("home_stored_decorations", [])
-        ]
-        for item_id in placed:
-            if item_id not in HOME_SOLID_OBSTACLES:
-                continue
-            position = self.state.get("home_decoration_positions", {}).get(
-                item_id, {}
-            )
-            transform = progression.home_decoration_transform(
-                self.state, item_id
-            )
-            logical_w, logical_h = (
-                progression.HOME_DECORATION_DEFINITIONS[item_id]["size"]
-            )
-            center_x = float(position.get("x", 0)) + logical_w / 2
-            center_y = float(position.get("y", 0)) + logical_h / 2
-            scale = float(transform["scale"])
-            half_w = logical_w * scale / 2
-            half_h = logical_h * scale / 2
-            # The blocking part is the solid body (sofa seat/plant pot),
-            # not the full sprite frame; inset per item.
-            inset_x, top_ratio, bottom_ratio = HOME_SOLID_OBSTACLE_INSETS.get(
-                item_id, (0.5, 0.5, 1.0)
-            )
-            left = center_x - half_w * inset_x
-            right = center_x + half_w * inset_x
-            top = center_y + half_h * (2 * top_ratio - 1)
-            bottom = center_y + half_h * (2 * bottom_ratio - 1)
-            obstacles.append((left, top, right, bottom))
-        return tuple(obstacles)
 
     def adjust_selected_furniture(self, kind, amount):
         if not self.is_decorating() or self._selected_furniture is None:

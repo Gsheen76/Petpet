@@ -313,7 +313,8 @@ class HomeSceneAssetTests(unittest.TestCase):
         self.assertAlmostEqual(idle_rect.height(), walk_rect.height())
         self.assertAlmostEqual(idle_rect.bottom(), walk_rect.bottom())
         self.assertAlmostEqual(shadow.center().x(), idle_rect.center().x())
-        self.assertLess(shadow.bottom(), idle_rect.bottom())
+        # The thicker ellipse may peek a few px past the foot line.
+        self.assertLess(shadow.bottom(), idle_rect.bottom() + 10)
 
     def test_shared_idle_frames_keep_one_cached_render_rect(self):
         frames = []
@@ -437,7 +438,7 @@ class HomeSceneAssetTests(unittest.TestCase):
 
         shadow = home_scene.home_pet_shadow_rect(body, (0.25, 0.4, 0.9))
 
-        self.assertEqual(shadow, QRectF(12.0, 105.75, 46.0, 5.5))
+        self.assertEqual(shadow, QRectF(12.0, 104.25, 46.0, 8.5))
         self.assertLess(shadow.bottom(), body.bottom())
 
     def test_home_destination_opacity_fades_out_over_350_milliseconds(self):
@@ -1172,8 +1173,7 @@ class HomeSceneAssetTests(unittest.TestCase):
         scene = home_scene.HomeSceneWindow(pet, Mock())
         self.addCleanup(scene.close)
 
-        # Rug placement clamps to the walkable floor band (y >= 460).
-        self.assertEqual(scene.home_sleep_target(), (840.0, 595.0))
+        self.assertEqual(scene.home_sleep_target(), (840.0, 565.0))
 
         progression.set_home_decoration_position(
             state,
@@ -1181,7 +1181,7 @@ class HomeSceneAssetTests(unittest.TestCase):
             700,
             430,
         )
-        self.assertEqual(scene.home_sleep_target(), (920.0, 595.0))
+        self.assertEqual(scene.home_sleep_target(), (920.0, 565.0))
 
     def test_home_sleep_target_falls_back_when_rug_is_stored(self):
         state = progression.ensure_progression({"pet_coins": 500})

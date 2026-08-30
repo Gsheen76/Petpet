@@ -333,9 +333,9 @@ def home_pet_shadow_rect(body: QRectF, contact) -> QRectF:
     center_ratio, width_ratio, foot_ratio = contact
     width = max(
         body.width() * 0.32,
-        min(body.width() * 0.72, body.width() * width_ratio * 1.15),
+        min(body.width() * 0.85, body.width() * width_ratio * 1.15),
     )
-    height = body.height() * 0.055
+    height = body.height() * 0.085
     center_x = body.left() + body.width() * center_ratio
     center_y = (
         body.top() + body.height() * foot_ratio - body.height() * 0.015
