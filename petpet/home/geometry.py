@@ -232,13 +232,36 @@ def clamp_dog_to_scene(dog_rect: QRect, scene_rect: QRect) -> QPoint:
     return QPoint(x, y)
 
 
+# Region boundaries for placement clamping. The wall spans everything
+# above the walkable floor band; the floor matches the pet's walkable
+# limits so rugs and floor pieces can never leave it.
+HOME_WALL_BOTTOM_Y = 460.0
+HOME_FLOOR_TOP_Y = 460.0
+HOME_FLOOR_BOTTOM_Y = 730.0
+HOME_FURNITURE_REGIONS = {
+    "home_wall_art": "wall",
+    "home_status_card": "wall",
+    "home_rug": "floor",
+}
+
+
 def clamp_home_furniture_position(decoration_id: str, x: Any, y: Any) -> dict[str, int]:
-    """Clamp a furniture top-left to the authored world dimensions."""
+    """Clamp a furniture top-left to its authored world region."""
 
     width, height = HOME_FURNITURE_SIZES.get(decoration_id, (0, 0))
     max_x = max(0, HOME_WORLD_SIZE[0] - width)
+    min_y = 0
     max_y = max(0, HOME_WORLD_SIZE[1] - height)
+    region = HOME_FURNITURE_REGIONS.get(decoration_id)
+    if region == "wall":
+        # Wall art must stay on the wall: its bottom edge may not cross
+        # the wall/floor boundary.
+        max_y = max(0, int(HOME_WALL_BOTTOM_Y) - height)
+    elif region == "floor":
+        # Rugs stay inside the walkable floor band.
+        min_y = int(HOME_FLOOR_TOP_Y)
+        max_y = max(min_y, int(HOME_FLOOR_BOTTOM_Y) - height)
     return {
         "x": max(0, min(max_x, _finite_int(x, 0))),
-        "y": max(0, min(max_y, _finite_int(y, 0))),
+        "y": max(min_y, min(max_y, _finite_int(y, min_y))),
     }

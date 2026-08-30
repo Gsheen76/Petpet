@@ -1172,7 +1172,8 @@ class HomeSceneAssetTests(unittest.TestCase):
         scene = home_scene.HomeSceneWindow(pet, Mock())
         self.addCleanup(scene.close)
 
-        self.assertEqual(scene.home_sleep_target(), (840.0, 565.0))
+        # Rug placement clamps to the walkable floor band (y >= 460).
+        self.assertEqual(scene.home_sleep_target(), (840.0, 595.0))
 
         progression.set_home_decoration_position(
             state,
@@ -1180,7 +1181,7 @@ class HomeSceneAssetTests(unittest.TestCase):
             700,
             430,
         )
-        self.assertEqual(scene.home_sleep_target(), (920.0, 565.0))
+        self.assertEqual(scene.home_sleep_target(), (920.0, 595.0))
 
     def test_home_sleep_target_falls_back_when_rug_is_stored(self):
         state = progression.ensure_progression({"pet_coins": 500})

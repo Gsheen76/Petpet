@@ -489,6 +489,7 @@ class HomeSceneWindow(QWidget):
                 )
 
         target_before = self.home_pet.target
+        self.home_pet.obstacles = self._home_obstacle_rects()
         events = self.home_pet.advance(elapsed)
         if "manual_sleep_started" in events:
             self.state["sleeping"] = True
@@ -952,6 +953,37 @@ class HomeSceneWindow(QWidget):
             self.update()
         return result
 
+    def _home_obstacle_rects(self):
+        """World-space footprint rects the pet cannot walk through."""
+
+        obstacles = []
+        placed = [
+            item_id
+            for item_id in self.state.get("owned_home_decorations", [])
+            if item_id not in self.state.get("home_stored_decorations", [])
+        ]
+        for item_id in placed:
+            if item_id not in HOME_SOLID_OBSTACLES:
+                continue
+            position = self.state.get("home_decoration_positions", {}).get(
+                item_id, {}
+            )
+            transform = progression.home_decoration_transform(
+                self.state, item_id
+            )
+            logical_w, logical_h = (
+                progression.HOME_DECORATION_DEFINITIONS[item_id]["size"]
+            )
+            center_x = float(position.get("x", 0)) + logical_w / 2
+            center_y = float(position.get("y", 0)) + logical_h / 2
+            half_w = logical_w * float(transform["scale"]) / 2
+            half_h = logical_h * float(transform["scale"]) / 2
+            obstacles.append((
+                center_x - half_w, center_y - half_h,
+                center_x + half_w, center_y + half_h,
+            ))
+        return tuple(obstacles)
+
     def adjust_selected_furniture(self, kind, amount):
         if not self.is_decorating() or self._selected_furniture is None:
             return None
@@ -1100,14 +1132,14 @@ class HomeSceneWindow(QWidget):
                 spec_pixmap = self.home_pet_walk_back_right
                 mirrored = dx < 0 or (dx == 0 and side_left)
                 visual_scale = 1.08
-                contact_width = 0.46
+                contact_width = 0.58
             else:
                 if self.home_pet_walk_down.isNull():
                     return None
                 spec_pixmap = self.home_pet_walk_down
                 mirrored = (dy > 0 and dx < 0) or (dx == 0 and side_left)
                 visual_scale = 0.92
-                contact_width = 0.46
+                contact_width = 0.58
             frame_index = self.home_pet_walk_frame(now) % (
                 HOME_PET_WALK_FRAME_COUNT
             )
