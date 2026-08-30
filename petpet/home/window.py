@@ -1099,22 +1099,31 @@ class HomeSceneWindow(QWidget):
                     return None
                 spec_pixmap = self.home_pet_walk_back_right
                 mirrored = dx < 0 or (dx == 0 and side_left)
+                visual_scale = 1.08
+                contact_width = 0.46
             else:
                 if self.home_pet_walk_down.isNull():
                     return None
                 spec_pixmap = self.home_pet_walk_down
-                mirrored = dx > 0 or (dx == 0 and not side_left)
+                mirrored = (dy > 0 and dx < 0) or (dx == 0 and side_left)
+                visual_scale = 0.92
+                contact_width = 0.46
             frame_index = self.home_pet_walk_frame(now) % (
                 HOME_PET_WALK_FRAME_COUNT
             )
+            # The shadow tracks the body; mirroring flips the art across
+            # the center line, so the contact center flips with it.
+            contact_center = 0.5
+            if mirrored:
+                contact_center = 1.0 - contact_center
             return HomePetWalkRenderSpec(
                 pixmap=spec_pixmap,
                 source_rect=home_pet_walk_source_rect(frame_index),
                 mirrored=mirrored,
                 frame_index=frame_index,
-                visual_scale=1.0,
-                contact_center_x=0.50,
-                contact_width=0.55,
+                visual_scale=visual_scale,
+                contact_center_x=contact_center,
+                contact_width=contact_width,
                 contact_foot_y=0.98,
             )
         frame = self.home_pet_walk_frame(now)
