@@ -1378,13 +1378,23 @@ class PetWindow(QWidget):
         animation_pixmap = self._animation_frame(animation_name)
         render_spec_name = animation_name
         if self.dragging:
-            outfit_preview = self._equipped_outfit_preview()
-            if outfit_preview is not None:
-                animation_pixmap = outfit_preview
-                render_spec_name = (
-                    progression.equipped_outfit_animation(self.state)
-                    or animation_name
-                )
+            # Outfits with a dedicated drag animation play it; the static
+            # preview image is only the fallback for outfits without one.
+            drag_variant = progression.equipped_outfit_drag_animation(
+                self.state
+            )
+            has_drag_variant = bool(drag_variant) and (
+                drag_variant in self.animation_frames
+                or drag_variant in self._animation_frame_paths
+            )
+            if not has_drag_variant:
+                outfit_preview = self._equipped_outfit_preview()
+                if outfit_preview is not None:
+                    animation_pixmap = outfit_preview
+                    render_spec_name = (
+                        progression.equipped_outfit_animation(self.state)
+                        or animation_name
+                    )
         # Passive sit/ask behavior changes dialogue timing, not appearance.
         # Keep the authored idle model so equipped decorations never vanish.
         if (
