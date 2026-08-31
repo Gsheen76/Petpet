@@ -56,6 +56,8 @@ def import_grid(
                 column * cell_w, row * cell_h,
                 (column + 1) * cell_w, (row + 1) * cell_h,
             ))
+            if not (numpy.asarray(frame)[:, :, 3] >= ALPHA_THRESHOLD).any():
+                continue  # skip empty grid cells (e.g. 3x3 with 8 poses)
             pixels = numpy.asarray(frame).copy()
             keep = _dog_region(frame)
             pixels[:, :, 3] = numpy.where(keep, pixels[:, :, 3], 0)

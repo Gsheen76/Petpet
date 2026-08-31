@@ -202,6 +202,6 @@
     "fps": 6,
     "loop": true,
     "fallback": "drag",
-    "scale": 0.93
+    "scale": 1.0
   }
 }
