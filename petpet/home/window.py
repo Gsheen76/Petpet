@@ -1503,16 +1503,28 @@ class HomeSceneWindow(QWidget):
         if render_spec is None or self.home_pet.state != "sleeping":
             shadow = home_pet_shadow_rect(body, contact)
             painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor(91, 64, 45, 96))
-            slant = 16 if (render_spec is not None and render_spec.mirrored) else -16
-            painter.save()
-            painter.translate(shadow.center())
-            painter.rotate(slant)
-            painter.drawEllipse(QRectF(
-                -shadow.width() / 2.0, -shadow.height() / 2.0,
-                shadow.width(), shadow.height(),
-            ))
-            painter.restore()
+            walking = self.home_pet.state in {
+                "manual_walk", "auto_walk",
+                "manual_sleep_walk", "auto_sleep_walk",
+            }
+            if walking:
+                # Directional slanted shadow while walking; idle keeps the
+                # original subtle flat ellipse.
+                painter.setBrush(QColor(91, 64, 45, 70))
+                slant = 16 if (
+                    render_spec is not None and render_spec.mirrored
+                ) else -16
+                painter.save()
+                painter.translate(shadow.center())
+                painter.rotate(slant)
+                painter.drawEllipse(QRectF(
+                    -shadow.width() / 2.0, -shadow.height() / 2.0,
+                    shadow.width(), shadow.height(),
+                ))
+                painter.restore()
+            else:
+                painter.setBrush(QColor(91, 64, 45, 42))
+                painter.drawEllipse(shadow)
 
         if render_spec is not None:
             source = QRectF(render_spec.source_rect)
