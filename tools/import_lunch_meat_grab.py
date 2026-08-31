@@ -40,17 +40,18 @@ def _dog_region(frame: Image.Image) -> numpy.ndarray:
     return ndimage.binary_dilation(largest, iterations=2)
 
 
-def import_grid(source: Path, output_dir: Path) -> int:
+def import_grid(
+    source: Path, output_dir: Path, columns: int = GRID_SIZE,
+    rows: int = GRID_SIZE,
+) -> int:
     image = Image.open(source).convert("RGBA")
-    if image.width != image.height:
-        raise ValueError(f"Expected a square {GRID_SIZE}x{GRID_SIZE} grid: {source}")
     output_dir.mkdir(parents=True, exist_ok=True)
-    cell_w = image.width // GRID_SIZE
-    cell_h = image.height // GRID_SIZE
+    cell_w = image.width // columns
+    cell_h = image.height // rows
     written = 0
-    for row in range(GRID_SIZE):
-        for column in range(GRID_SIZE):
-            index = row * GRID_SIZE + column
+    for row in range(rows):
+        for column in range(columns):
+            index = row * columns + column
             frame = image.crop((
                 column * cell_w, row * cell_h,
                 (column + 1) * cell_w, (row + 1) * cell_h,
@@ -82,6 +83,8 @@ def main() -> None:
     parser.add_argument("--val", type=float, default=BRIGHTNESS_GAIN)
     parser.add_argument("--green", type=float, default=GREEN_GAIN)
     parser.add_argument("--no-correct", action="store_true")
+    parser.add_argument("--cols", type=int, default=GRID_SIZE)
+    parser.add_argument("--rows", type=int, default=GRID_SIZE)
     arguments = parser.parse_args()
     if arguments.no_correct:
         SATURATION_GAIN = BRIGHTNESS_GAIN = GREEN_GAIN = 1.0
@@ -89,7 +92,10 @@ def main() -> None:
         SATURATION_GAIN = arguments.sat
         BRIGHTNESS_GAIN = arguments.val
         GREEN_GAIN = arguments.green
-    written = import_grid(arguments.source, arguments.output_dir)
+    written = import_grid(
+        arguments.source, arguments.output_dir,
+        arguments.cols, arguments.rows,
+    )
     print(f"wrote {written} frames to {arguments.output_dir}")
 
 
