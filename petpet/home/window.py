@@ -1116,9 +1116,7 @@ class HomeSceneWindow(QWidget):
             )
             # The shadow tracks the body; mirroring flips the art across
             # the center line, so the contact center flips with it.
-            contact_center = 0.5
-            if mirrored:
-                contact_center = 1.0 - contact_center
+            contact_center = 0.45 if mirrored else 0.55
             return HomePetWalkRenderSpec(
                 pixmap=spec_pixmap,
                 source_rect=home_pet_walk_source_rect(frame_index),
@@ -1505,8 +1503,16 @@ class HomeSceneWindow(QWidget):
         if render_spec is None or self.home_pet.state != "sleeping":
             shadow = home_pet_shadow_rect(body, contact)
             painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor(91, 64, 45, 42))
-            painter.drawEllipse(shadow)
+            painter.setBrush(QColor(91, 64, 45, 96))
+            slant = 16 if (render_spec is not None and render_spec.mirrored) else -16
+            painter.save()
+            painter.translate(shadow.center())
+            painter.rotate(slant)
+            painter.drawEllipse(QRectF(
+                -shadow.width() / 2.0, -shadow.height() / 2.0,
+                shadow.width(), shadow.height(),
+            ))
+            painter.restore()
 
         if render_spec is not None:
             source = QRectF(render_spec.source_rect)
