@@ -1488,6 +1488,61 @@ class HomeSceneWindow(QWidget):
         )
         painter.restore()
 
+    def _ice_shadow_params(self, render_spec):
+        """Measure the drawn sprite's body lean and foot center.
+
+        The shadow ellipse aligns with the dog's actual on-screen body axis
+        (top-half centroid vs bottom-half centroid of the alpha channel),
+        so it can never lean the wrong way regardless of sheet or mirror.
+        Results are cached per (pet, frame, mirror).
+        """
+
+        import io as _io
+        import math
+        import numpy
+        from PIL import Image as PILImage
+        from PyQt5.QtCore import QBuffer, QIODevice
+
+        key = (
+            self.current_pet_id,
+            render_spec.frame_index,
+            render_spec.mirrored,
+        )
+        cache = self.__dict__.setdefault("_ice_shadow_param_cache", {})
+        if key in cache:
+            return cache[key]
+
+        buffer = QBuffer()
+        buffer.open(QIODevice.ReadWrite)
+        render_spec.pixmap.save(buffer, "PNG")
+        png_bytes = bytes(buffer.data())
+        frame = PILImage.open(_io.BytesIO(png_bytes)).convert("RGBA")
+        arr = numpy.asarray(frame)
+        alpha = arr[:, :, 3]
+        ys, xs = numpy.nonzero(alpha >= 32)
+        if len(ys) == 0:
+            cache[key] = (0.0, 0.5)
+            return cache[key]
+        y0, y1 = ys.min(), ys.max()
+        body_h = max(1, y1 - y0)
+        mid = y0 + body_h / 2
+        top_xs = xs[ys < mid]
+        bot_xs = xs[ys >= mid]
+        if len(top_xs) == 0 or len(bot_xs) == 0:
+            cache[key] = (0.0, 0.5)
+            return cache[key]
+        top_cx = float(top_xs.mean())
+        bot_cx = float(bot_xs.mean())
+        lean_deg = round(
+            math.degrees(math.atan2(top_cx - bot_cx, body_h)), 1
+        )
+        if render_spec.mirrored:
+            lean_deg = -lean_deg
+            bot_cx = frame.width - bot_cx
+        foot_center_x = round(bot_cx / frame.width, 3)
+        cache[key] = (lean_deg, foot_center_x)
+        return cache[key]
+
     def _draw_home_pet(self, painter):
         """Draw the replaceable four-direction placeholder pet."""
 
@@ -1506,8 +1561,6 @@ class HomeSceneWindow(QWidget):
         painter.save()
         painter.setRenderHint(QPainter.Antialiasing)
         if render_spec is None or self.home_pet.state != "sleeping":
-            shadow = home_pet_shadow_rect(body, contact)
-            painter.setPen(Qt.NoPen)
             ice_walking = (
                 self.current_pet_id == "ice_cream"
                 and self.home_pet.state in {
@@ -1515,11 +1568,15 @@ class HomeSceneWindow(QWidget):
                     "manual_sleep_walk", "auto_sleep_walk",
                 }
             )
+            if ice_walking and render_spec is not None:
+                # Measure the sprite itself: the shadow ellipse aligns with
+                # the body lean and sits under the feet, per drawn frame.
+                slant, foot_center_x = self._ice_shadow_params(render_spec)
+                contact = (foot_center_x, contact[1], contact[2])
+            shadow = home_pet_shadow_rect(body, contact)
+            painter.setPen(Qt.NoPen)
             if ice_walking:
-                # Directional slanted shadow only for ice cream's walks;
-                # lunch meat and idle states keep the flat original.
                 painter.setBrush(QColor(91, 64, 45, 55))
-                slant = getattr(self, "_walk_shadow_slant", -16)
                 painter.save()
                 painter.translate(shadow.center())
                 painter.rotate(slant)
