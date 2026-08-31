@@ -1576,7 +1576,7 @@ class HomeSceneWindow(QWidget):
             shadow = home_pet_shadow_rect(body, contact)
             painter.setPen(Qt.NoPen)
             if ice_walking:
-                painter.setBrush(QColor(91, 64, 45, 55))
+                painter.setBrush(QColor(91, 64, 45, 110))
                 painter.save()
                 painter.translate(shadow.center())
                 painter.rotate(slant)
