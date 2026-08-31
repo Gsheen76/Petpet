@@ -1107,7 +1107,7 @@ class HomeSceneWindow(QWidget):
                 if self.home_pet_walk_down.isNull():
                     return None
                 spec_pixmap = self.home_pet_walk_down
-                mirrored = (dy > 0 and dx > 0) or (dx == 0 and side_left)
+                mirrored = (dy > 0 and dx < 0) or (dx == 0 and side_left)
                 visual_scale = 0.92
                 contact_width = 0.52
                 contact_foot_y = 0.98
@@ -1117,6 +1117,10 @@ class HomeSceneWindow(QWidget):
             # The shadow tracks the body; mirroring flips the art across
             # the center line, so the contact center flips with it.
             contact_center = 0.45 if mirrored else 0.55
+            # Shadow slant swaps on the down diagonals only; the art
+            # itself never flips here.
+            shadow_slant = 16 if (dy > 0 and dx > 0) else -16
+            self._walk_shadow_slant = shadow_slant
             return HomePetWalkRenderSpec(
                 pixmap=spec_pixmap,
                 source_rect=home_pet_walk_source_rect(frame_index),
@@ -1511,9 +1515,7 @@ class HomeSceneWindow(QWidget):
                 # Directional slanted shadow while walking; idle keeps the
                 # original subtle flat ellipse.
                 painter.setBrush(QColor(91, 64, 45, 70))
-                slant = 16 if (
-                    render_spec is not None and render_spec.mirrored
-                ) else -16
+                slant = getattr(self, "_walk_shadow_slant", -16)
                 painter.save()
                 painter.translate(shadow.center())
                 painter.rotate(slant)
