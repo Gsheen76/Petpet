@@ -1123,11 +1123,11 @@ class HomeSceneWindow(QWidget):
             # down-left & up-right lean right (+16); up-left & down-right
             # lean left (-16).
             if dy > 0:
-                shadow_slant = 16 if dx < 0 else -16
-            elif dy < 0:
                 shadow_slant = -16 if dx < 0 else 16
-            else:
+            elif dy < 0:
                 shadow_slant = 16 if dx < 0 else -16
+            else:
+                shadow_slant = -16 if dx < 0 else 16
             self._walk_shadow_slant = shadow_slant
             return HomePetWalkRenderSpec(
                 pixmap=spec_pixmap,
@@ -1519,6 +1519,7 @@ class HomeSceneWindow(QWidget):
         if key in cache:
             return cache[key]
 
+        from PIL import Image as PILImage
         buffer = QBuffer()
         buffer.open(QIODevice.ReadWrite)
         render_spec.pixmap.save(buffer, "PNG")
@@ -1530,6 +1531,7 @@ class HomeSceneWindow(QWidget):
         if len(ys) == 0:
             cache[key] = (0.0, 0.5)
             return cache[key]
+        width = render_spec.pixmap.width()
         y0, y1 = ys.min(), ys.max()
         body_h = max(1, y1 - y0)
         mid = y0 + body_h / 2
@@ -1545,8 +1547,8 @@ class HomeSceneWindow(QWidget):
         )
         if render_spec.mirrored:
             lean_deg = -lean_deg
-            bot_cx = frame.width - bot_cx
-        foot_center_x = round(bot_cx / frame.width, 3)
+            bot_cx = width - bot_cx
+        foot_center_x = round(bot_cx / width, 3)
         cache[key] = (lean_deg, foot_center_x)
         return cache[key]
 
