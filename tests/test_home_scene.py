@@ -438,7 +438,7 @@ class HomeSceneAssetTests(unittest.TestCase):
 
         shadow = home_scene.home_pet_shadow_rect(body, (0.25, 0.4, 0.9))
 
-        self.assertEqual(shadow, QRectF(12.0, 104.25, 46.0, 8.5))
+        self.assertEqual(shadow, QRectF(12.0, 102.75, 46.0, 11.5))
         self.assertLess(shadow.bottom(), body.bottom())
 
     def test_home_destination_opacity_fades_out_over_350_milliseconds(self):

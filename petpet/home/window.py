@@ -1100,16 +1100,16 @@ class HomeSceneWindow(QWidget):
                 spec_pixmap = self.home_pet_walk_back_right
                 mirrored = dx < 0 or (dx == 0 and side_left)
                 visual_scale = 1.08
-                contact_width = 0.64
+                contact_width = 0.52
                 # Walking away: the shadow sits higher on the body.
                 contact_foot_y = 0.90
             else:
                 if self.home_pet_walk_down.isNull():
                     return None
                 spec_pixmap = self.home_pet_walk_down
-                mirrored = (dy > 0 and dx < 0) or (dx == 0 and side_left)
+                mirrored = (dy > 0 and dx > 0) or (dx == 0 and side_left)
                 visual_scale = 0.92
-                contact_width = 0.64
+                contact_width = 0.52
                 contact_foot_y = 0.98
             frame_index = self.home_pet_walk_frame(now) % (
                 HOME_PET_WALK_FRAME_COUNT
