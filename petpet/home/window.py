@@ -1119,8 +1119,15 @@ class HomeSceneWindow(QWidget):
             contact_center = 0.45 if mirrored else 0.55
             # Shadow slant swaps on the down diagonals only; the art
             # itself never flips here.
-            # Ice cream: up-left walks slant +16, the rest -16.
-            shadow_slant = 16 if mirrored else -16
+            # Shadow slant by travel direction (user-verified):
+            # down-left & up-right lean right (+16); up-left & down-right
+            # lean left (-16).
+            if dy > 0:
+                shadow_slant = 16 if dx < 0 else -16
+            elif dy < 0:
+                shadow_slant = -16 if dx < 0 else 16
+            else:
+                shadow_slant = 16 if dx < 0 else -16
             self._walk_shadow_slant = shadow_slant
             return HomePetWalkRenderSpec(
                 pixmap=spec_pixmap,
@@ -1576,7 +1583,7 @@ class HomeSceneWindow(QWidget):
             shadow = home_pet_shadow_rect(body, contact)
             painter.setPen(Qt.NoPen)
             if ice_walking:
-                painter.setBrush(QColor(91, 64, 45, 110))
+                painter.setBrush(QColor(91, 64, 45, 55))
                 painter.save()
                 painter.translate(shadow.center())
                 painter.rotate(slant)
