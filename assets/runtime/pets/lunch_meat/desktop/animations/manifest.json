@@ -199,9 +199,10 @@
   },
   "drag_dinosaur": {
     "folder": "outfits/dinosaur/drag",
-    "fps": 8,
+    "fps": 6,
     "loop": true,
     "fallback": "drag",
-    "scale": 0.93
+    "scale": 0.93,
+    "frame_sequence": [3, 5, 9, 1, 13, 7, 11, 15, 2, 6, 10, 14, 0, 8, 12, 4]
   }
 }
