@@ -240,6 +240,7 @@ OUTFIT_DEFINITIONS = {
         "asset_folder": "dinosaur",
         "preview_asset": "preview.png",
         "animation": "idle_dinosaur",
+        "drag_animation": "drag_dinosaur",
         "home_walk_action": "walk_right_dinosaur",
         "description": "绿色小恐龙连体套装，装备后直接替换小狗的待机动画。",
         "pet_id": "lunch_meat",
@@ -1185,6 +1186,14 @@ def equipped_outfit_animation(state):
     outfit_id = equipped_outfit(state)
     definition = OUTFIT_DEFINITIONS.get(outfit_id)
     return definition.get("animation") if definition else None
+
+
+def equipped_outfit_drag_animation(state):
+    """Outfit-specific drag animation, or None to use the shared one."""
+
+    outfit_id = equipped_outfit(state)
+    definition = OUTFIT_DEFINITIONS.get(outfit_id)
+    return definition.get("drag_animation") if definition else None
 
 
 def purchase_outfit(state, outfit_id):

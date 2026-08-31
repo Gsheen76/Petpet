@@ -74,10 +74,21 @@ def import_grid(source: Path, output_dir: Path) -> int:
 
 
 def main() -> None:
+    global SATURATION_GAIN, BRIGHTNESS_GAIN, GREEN_GAIN
     parser = argparse.ArgumentParser()
     parser.add_argument("source", type=Path)
     parser.add_argument("output_dir", type=Path)
+    parser.add_argument("--sat", type=float, default=SATURATION_GAIN)
+    parser.add_argument("--val", type=float, default=BRIGHTNESS_GAIN)
+    parser.add_argument("--green", type=float, default=GREEN_GAIN)
+    parser.add_argument("--no-correct", action="store_true")
     arguments = parser.parse_args()
+    if arguments.no_correct:
+        SATURATION_GAIN = BRIGHTNESS_GAIN = GREEN_GAIN = 1.0
+    else:
+        SATURATION_GAIN = arguments.sat
+        BRIGHTNESS_GAIN = arguments.val
+        GREEN_GAIN = arguments.green
     written = import_grid(arguments.source, arguments.output_dir)
     print(f"wrote {written} frames to {arguments.output_dir}")
 

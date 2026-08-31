@@ -1008,6 +1008,11 @@ class PetWindow(QWidget):
         equipped_animation = progression.equipped_outfit_animation(self.state)
         if equipped_animation in self._animation_frame_paths:
             self._persistent_animation_names.add(equipped_animation)
+        # The outfit drag variant preloads too, so grabbing never stalls
+        # on first decode.
+        drag_variant = progression.equipped_outfit_drag_animation(self.state)
+        if drag_variant and drag_variant in self._animation_frame_paths:
+            self._persistent_animation_names.add(drag_variant)
         for animation_name in self._persistent_animation_names:
             self._ensure_animation_loaded(animation_name)
 
@@ -1255,6 +1260,16 @@ class PetWindow(QWidget):
         if self.state.get("sleeping"):
             return "sleep"
         if self.dragging:
+            drag_variant = (
+                progression.equipped_outfit_drag_animation(self.state)
+            )
+            if drag_variant and (
+                drag_variant in self.__dict__.get("animation_frames", {})
+                or drag_variant in self.__dict__.get(
+                    "_animation_frame_paths", {}
+                )
+            ):
+                return drag_variant
             return "drag"
         if self.behavior == "eat":
             return "eat"
