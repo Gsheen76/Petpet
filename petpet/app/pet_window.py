@@ -2485,7 +2485,12 @@ class PetWindow(QWidget):
         else:
             duration_ms = int(round(feed_duration * 1000))
         self.behavior_until = time.time() + feed_duration
-        self.trigger_animation("eat", duration_ms)
+        # The home scene stops this window's tick, so nothing would reset
+        # behavior="eat" there — end it explicitly when the animation ends.
+        self.trigger_animation(
+            "eat", duration_ms,
+            finished_callback=lambda: setattr(self, "behavior", "idle"),
+        )
         self.say("嗷呜嗷呜！🍖", duration_ms)
         self.play_sound("eat")
         if grant_xp:
