@@ -21,7 +21,23 @@ _ASSET_DIR = os.path.join(
 )
 
 # 画布按素材艺术稿等比设计（艺术稿 1201x1309）。
-CANVAS_W, CANVAS_H = 800, 872
+# 布局基准 800x872；_S 为统一放大系数，__init__ 里按屏幕高度自适应。
+BASE_W, BASE_H = 800, 872
+_S = 1.125
+
+
+def _R(x, y, w, h):
+    """布局基准坐标 → 实际画布几何。"""
+    return QRect(round(x * _S), round(y * _S), round(w * _S), round(h * _S))
+
+
+def _resolve_scale(screen_rect) -> float:
+    """按目标屏幕自适应：优先放大到 1.125，小屏按比例缩小，下限 0.72。"""
+    if screen_rect is None or screen_rect.width() <= 0:
+        return _S
+    by_h = (screen_rect.height() - 70) / BASE_H
+    by_w = (screen_rect.width() - 60) / BASE_W
+    return max(0.72, min(1.125, by_h, by_w))
 
 # 各物种的左栏卡头像素材（无素材的物种回退 avatar.png）。
 SPECIES_RAIL_ICON = {"lunch_meat": "pet_icon_1.png", "ice_cream": "pet_icon_2.png"}
@@ -222,28 +238,30 @@ class ArtBar(QWidget):
 
 def _label(parent, text, x, y, w, h, *, size=14, color=_TEXT_BROWN,
            bold=False, align=Qt.AlignLeft | Qt.AlignVCenter, name=None):
-    """绝对定位文本标签的便捷工厂。"""
+    """绝对定位文本标签的便捷工厂（坐标与字号按 _S 缩放）。"""
     label = QLabel(text, parent)
     if name:
         label.setObjectName(name)
     label.setAlignment(align)
     label.setWordWrap(False)
     style = (
-        f"font-family:'{APP_FONT_FAMILY}';font-size:{size}px;"
+        f"font-family:'{APP_FONT_FAMILY}';font-size:{round(size * _S)}px;"
         f"color:{color};background:transparent;"
     )
     if bold:
         style += "font-weight:600;"
     label.setStyleSheet(style)
-    label.setGeometry(QRect(x, y, w, h))
+    label.setGeometry(_R(x, y, w, h))
     return label
 
 
 def _pixmap_label(parent, asset, x, y, w, h, grayscale=False):
     label = QLabel(parent)
-    label.setPixmap(_pp_pixmap(asset, w, h, grayscale=grayscale))
+    label.setPixmap(_pp_pixmap(
+        asset, round(w * _S), round(h * _S), grayscale=grayscale,
+    ))
     label.setScaledContents(True)
-    label.setGeometry(QRect(x, y, w, h))
+    label.setGeometry(_R(x, y, w, h))
     label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
     return label
 
@@ -272,15 +290,26 @@ class PetProfileWindow(QWidget):
         )
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WA_StyledBackground, True)
-        self.setFixedSize(CANVAS_W, CANVAS_H)
-        self._background = _pp_pixmap("background.png", CANVAS_W, CANVAS_H)
+        global _S
+        screen = None
+        rect = getattr(pet, "current_screen_rect", None)
+        try:
+            screen = rect() if callable(rect) else None
+        except (RuntimeError, AttributeError):
+            screen = None
+        _S = _resolve_scale(screen)
+        self.setFixedSize(round(BASE_W * _S), round(BASE_H * _S))
+        self._background = _pp_pixmap(
+            "background.png", self.width(), self.height(),
+        )
         # 标题木牌只在完整组合图里，裁其左上角区域叠加。
         main_art = _pp_pixmap("main_panel.png")
         if main_art.isNull():
             self._plaque = QPixmap()
         else:
             self._plaque = main_art.copy(10, 0, 420, 150).scaled(
-                280, 100, Qt.IgnoreAspectRatio, Qt.SmoothTransformation
+                round(280 * _S), round(100 * _S),
+                Qt.IgnoreAspectRatio, Qt.SmoothTransformation,
             )
 
         self._build_canvas()
@@ -292,12 +321,12 @@ class PetProfileWindow(QWidget):
         # 副标题（title_text 实为「我的伙伴与套装」文案）。
         _pixmap_label(self, "title_text.png", 40, 112, 175, 30)
         close = QPushButton(self)
-        close.setIcon(QIcon(_pp_pixmap("close_button.png", 51, 47)))
-        close.setIconSize(QSize(51, 47))
+        close.setIcon(QIcon(_pp_pixmap("close_button.png", 57, 53)))
+        close.setIconSize(QSize(57, 53))
         close.setFlat(True)
         close.setStyleSheet("QPushButton{border:none;background:transparent;}")
         close.setCursor(Qt.PointingHandCursor)
-        close.setGeometry(QRect(726, 12, 51, 47))
+        close.setGeometry(_R(726, 12, 51, 47))
         close.clicked.connect(self.close)
 
         # 左栏切换卡： species 头像 + 名字 + 使用中/未拥有 标签。
@@ -319,8 +348,8 @@ class PetProfileWindow(QWidget):
                 "QPushButton{border:none;background:transparent;}"
             )
             button.setCursor(Qt.PointingHandCursor)
-            button.setGeometry(QRect(66, button_y, 120, 120))
-            button.setIconSize(QSize(112, 112))
+            button.setGeometry(_R(66, button_y, 135, 135))
+            button.setIconSize(QSize(126, 126))
             button.clicked.connect(
                 lambda _checked=False, target=pet_id: self._select_pet(target)
             )
@@ -329,11 +358,11 @@ class PetProfileWindow(QWidget):
                 size=16, bold=True, align=Qt.AlignCenter,
             )
             badge = QLabel(self)
-            badge.setPixmap(_pp_pixmap("in_use_tag.png", 96, 31))
+            badge.setPixmap(_pp_pixmap("in_use_tag.png", 108, 35))
             badge.setScaledContents(True)
             badge.setAttribute(Qt.WA_TransparentForMouseEvents, True)
             badge.setAlignment(Qt.AlignCenter)
-            badge.setGeometry(QRect(78, tag_y, 96, 31))
+            badge.setGeometry(_R(72, tag_y, 108, 35))
             lock = _label(
                 self, "🔒 未拥有", 27, tag_y, 198, 24,
                 size=12, color="#ffffff", align=Qt.AlignCenter, name="lockBadge",
@@ -348,7 +377,7 @@ class PetProfileWindow(QWidget):
         # 右侧大立绘（粉色站垫由 paintEvent 绘制）。
         self._preview_label = QLabel(self)
         self._preview_label.setAlignment(Qt.AlignBottom | Qt.AlignHCenter)
-        self._preview_label.setGeometry(QRect(330, 110, 340, 300))
+        self._preview_label.setGeometry(_R(330, 110, 340, 300))
         self._preview_label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
 
         # 名牌 + 铅笔 + 改名钮。
@@ -358,25 +387,25 @@ class PetProfileWindow(QWidget):
             align=Qt.AlignCenter, name="profileName",
         )
         edit_button = QPushButton(self)
-        edit_icon = _pp_pixmap("edit_icon.png", 24, 25)
+        edit_icon = _pp_pixmap("edit_icon.png", 27, 28)
         if not edit_icon.isNull():
             edit_button.setIcon(QIcon(edit_icon))
-        edit_button.setIconSize(QSize(24, 25))
+        edit_button.setIconSize(QSize(27, 28))
         edit_button.setFlat(True)
         edit_button.setStyleSheet("QPushButton{border:none;background:transparent;}")
         edit_button.setCursor(Qt.PointingHandCursor)
-        edit_button.setGeometry(QRect(470, 420, 26, 27))
+        edit_button.setGeometry(_R(470, 420, 26, 27))
         edit_button.clicked.connect(self._open_name_dialog)
         self._edit_button = edit_button
         self._detail_widgets.append(edit_button)
         rename_button = QPushButton(self)
-        rename_icon = _pp_pixmap("rename_button.png", 71, 41)
+        rename_icon = _pp_pixmap("rename_button.png", 80, 46)
         rename_button.setIcon(QIcon(rename_icon))
-        rename_button.setIconSize(QSize(71, 41))
+        rename_button.setIconSize(QSize(80, 46))
         rename_button.setFlat(True)
         rename_button.setStyleSheet("QPushButton{border:none;background:transparent;}")
         rename_button.setCursor(Qt.PointingHandCursor)
-        rename_button.setGeometry(QRect(578, 412, 71, 41))
+        rename_button.setGeometry(_R(578, 412, 71, 41))
         rename_button.clicked.connect(self._open_name_dialog)
         self._detail_widgets.append(rename_button)
 
@@ -388,7 +417,7 @@ class PetProfileWindow(QWidget):
         self._exp_value = _label(self, "", 448, 464, 150, 24, size=15, color=_TEXT_SOFT)
         self._detail_widgets.append(self._exp_value)
         self._xp_bar = ArtBar("exp_bar.png", self)
-        self._xp_bar.setGeometry(QRect(602, 467, 167, 18))
+        self._xp_bar.setGeometry(_R(602, 467, 167, 18))
         self._detail_widgets.append(self._xp_bar)
 
         # 好感度行。
@@ -399,7 +428,7 @@ class PetProfileWindow(QWidget):
         self._aff_value = _label(self, "", 476, 512, 110, 24, size=15, color=_TEXT_SOFT)
         self._detail_widgets.append(self._aff_value)
         self._aff_bar = ArtBar("affection_bar.png", self)
-        self._aff_bar.setGeometry(QRect(590, 515, 167, 18))
+        self._aff_bar.setGeometry(_R(590, 515, 167, 18))
         self._detail_widgets.append(self._aff_bar)
         self._detail_widgets.append(_pixmap_label(self, "heart_icon_small.png", 748, 498, 46, 41))
 
@@ -418,12 +447,12 @@ class PetProfileWindow(QWidget):
         )
         self._detail_widgets.append(outfit_title)
         self._outfit_slots = (
-            QRect(288, 668, 236, 148), QRect(538, 668, 236, 148),
+            _R(288, 668, 236, 148), _R(538, 668, 236, 148),
         )
 
         # 锁定页部件（未拥有宠物）。
         self._locked_page = QWidget(self)
-        self._locked_page.setGeometry(QRect(300, 500, 470, 330))
+        self._locked_page.setGeometry(_R(300, 500, 470, 330))
         self._locked_page.setStyleSheet("background:transparent;")
         self._locked_hint = _label(
             self._locked_page, "", 10, 80, 450, 60, size=14, color=_TEXT_SOFT,
@@ -433,11 +462,11 @@ class PetProfileWindow(QWidget):
         self._locked_shop = QPushButton("去商店购买", self._locked_page)
         self._locked_shop.setObjectName("lockedShopButton")
         self._locked_shop.setCursor(Qt.PointingHandCursor)
-        self._locked_shop.setGeometry(QRect(135, 150, 200, 44))
+        self._locked_shop.setGeometry(_R(135, 150, 200, 44))
         self._locked_shop.clicked.connect(self._open_shop)
         self._locked_shop.setStyleSheet(
             "QPushButton{"
-            f"font-family:'{APP_FONT_FAMILY}';font-size:17px;"
+            f"font-family:'{APP_FONT_FAMILY}';font-size:19px;"
             "background:#f28f76;color:#ffffff;border:none;"
             "border-radius:22px;}"
             "QPushButton:hover{background:#ee7c60;}"
@@ -560,7 +589,7 @@ class PetProfileWindow(QWidget):
 
             preview = QLabel(card)
             preview.setAlignment(Qt.AlignCenter)
-            preview.setGeometry(QRect(10, 24, 96, 96))
+            preview.setGeometry(_R(10, 24, 96, 96))
             pixmap = QPixmap(_outfit_preview_path(pet_id, outfit) or "")
             if not pixmap.isNull():
                 preview.setPixmap(
@@ -594,7 +623,7 @@ class PetProfileWindow(QWidget):
                     f"去商店 · {outfit['price']}币", "#f28f76", card
                 )
                 button.clicked.connect(self._open_shop)
-            button.setGeometry(QRect(112, 104, 118, 37))
+            button.setGeometry(_R(112, 104, 118, 37))
 
             card.show()
             self._outfit_cards.append(card)
@@ -606,7 +635,7 @@ class PetProfileWindow(QWidget):
         button.setCursor(Qt.PointingHandCursor)
         button.setStyleSheet(
             "QPushButton{"
-            f"font-family:'{APP_FONT_FAMILY}';font-size:15px;"
+            f"font-family:'{APP_FONT_FAMILY}';font-size:17px;"
             f"background:{color};color:#ffffff;border:none;"
             "border-radius:18px;}"
         )
@@ -706,14 +735,14 @@ class PetProfileWindow(QWidget):
         if not self._background.isNull():
             painter.drawPixmap(0, 0, self._background)
         # 立绘下的粉色蕾丝站垫（素材无独立切图，按参考图同色绘制）。
-        mat = QRect(330, 372, 340, 84)
+        mat = _R(330, 372, 340, 84)
         painter.setPen(QColor(246, 205, 200))
         painter.setBrush(QColor(250, 222, 218, 235))
         painter.drawEllipse(mat)
         painter.setBrush(QColor(253, 236, 232, 235))
         painter.drawEllipse(mat.adjusted(14, 8, -14, -14))
         if not self._plaque.isNull():
-            painter.drawPixmap(7, 0, self._plaque)
+            painter.drawPixmap(round(7 * _S), 0, self._plaque)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
