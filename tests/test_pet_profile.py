@@ -76,5 +76,79 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual(snap["name"], "烟花")
 
 
+class ProfileWindowTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from PyQt5.QtWidgets import QApplication
+
+        cls.app = QApplication.instance() or QApplication([])
+
+    def _window(self, state=None):
+        from petpet.ui.pet_profile import PetProfileWindow
+
+        pet = SimpleNamespace(
+            state=state or _fresh_state(),
+            set_active_pet=Mock(return_value={"ok": True}),
+            update=Mock(),
+            say=Mock(),
+            home_scene_window=None,
+            open_shop=Mock(),
+        )
+        window = PetProfileWindow(pet, save_state=Mock())
+        self.addCleanup(window.close)
+        return window, pet
+
+    def test_shows_active_pet_details(self):
+        state = _fresh_state()
+        state["pet_name"] = "烟花"
+        window, _ = self._window(state)
+        self.assertIn("烟花", window._name_label.text())
+        self.assertEqual(len(window._outfit_cards), 2)
+
+    def test_paints_warm_cream_background(self):
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QColor
+
+        window, _ = self._window()
+        window.show()
+        self.app.processEvents()
+        image = window.grab().toImage()
+        base = QColor.fromRgba(image.pixel(10, window.height() // 2))
+        self.assertGreater(base.alpha(), 240)
+        self.assertGreater(base.red(), 240)
+        self.assertGreater(base.green(), 220)
+
+    def test_switch_to_unowned_pet_is_refused(self):
+        window, pet = self._window()
+        window._switch_pet("ice_cream")
+        pet.set_active_pet.assert_not_called()
+        self.assertIn("商店", window.status_label.text())
+
+    def test_switch_to_owned_pet_calls_setter_then_refreshes(self):
+        state = _fresh_state()
+        state["owned_pet_ids"] = ["lunch_meat", "ice_cream"]
+        window, pet = self._window(state)
+        window._switch_pet("ice_cream")
+        pet.set_active_pet.assert_called_once_with("ice_cream")
+        self.assertIn("冰淇淋", window._name_label.text())
+        self.assertEqual(window._outfit_cards, [])
+
+    def test_equip_owned_outfit_updates_state_and_saves(self):
+        state = _fresh_state()
+        state["owned_outfits"] = ["dinosaur_suit"]
+        window, pet = self._window(state)
+        window._apply_outfit("dinosaur_suit", equip=True)
+        self.assertEqual(state["equipped_outfit"], "dinosaur_suit")
+        pet.update.assert_called()
+
+    def test_unowned_pet_detail_shops_not_outfits(self):
+        window, pet = self._window()
+        window._select_pet("ice_cream")
+        pet.set_active_pet.assert_not_called()
+        self.assertEqual(window._outfit_cards, [])
+        self.assertTrue(window._locked_page.isVisibleTo(window)
+                        or window._locked_page.isVisible())
+
+
 if __name__ == "__main__":
     unittest.main()
