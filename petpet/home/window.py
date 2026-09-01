@@ -570,7 +570,6 @@ class HomeSceneWindow(QWidget):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.save()
-        print("A after save, clipping:", painter.hasClipping(), flush=True)
         painter.setRenderHint(QPainter.SmoothPixmapTransform)
         canvas = self.scene_canvas_rect()
         clip = QPainterPath()
@@ -578,7 +577,6 @@ class HomeSceneWindow(QWidget):
             QRectF(canvas), HOME_SCENE_CORNER_RADIUS, HOME_SCENE_CORNER_RADIUS
         )
         painter.setClipPath(clip)
-        print("B after setClip, clipping:", painter.hasClipping(), flush=True)
         painter.fillRect(canvas, QColor("#f3dfc4"))
         if not self.background.isNull():
             source = QRect(self._camera_x, 0, canvas.width(), canvas.height())
@@ -602,13 +600,9 @@ class HomeSceneWindow(QWidget):
         if self._menu_open:
             menu_labels = {"shop": "商店", "decorate": "装修", "exit": "退出"}
             for action, rect in self.menu_item_rects().items():
-                state = None
-                if action == self._pressed_button:
-                    state = "pressed"
-                elif action == self._hover_button:
-                    state = "hover"
                 self._draw_action_button(
-                    painter, rect, action, menu_labels[action], state=state
+                    painter, rect, action, menu_labels[action],
+                    state=self._button_state(f"menu:{action}"),
                 )
         if self._interaction_menu_open:
             interaction_labels = {
@@ -626,24 +620,20 @@ class HomeSceneWindow(QWidget):
                 )
                 if action in attention:
                     self._draw_attention_dot(painter, rect.topRight())
-        for name, rect in (
-            ("interaction_toggle", self.interaction_toggle_rect()),
-            ("menu_toggle", self.menu_toggle_rect()),
+        for name, state_key, rect in (
+            ("interaction_toggle", "toggle:interaction",
+             self.interaction_toggle_rect()),
+            ("menu_toggle", "toggle:menu", self.menu_toggle_rect()),
         ):
-            state = None
-            if name == self._pressed_button:
-                state = "pressed"
-            elif name == self._hover_button:
-                state = "hover"
             self._draw_action_button(
-                painter, rect, name, "", state=state
+                painter, rect, name, "",
+                state=self._button_state(state_key),
             )
         if self.interaction_header_needs_attention() and not self._interaction_menu_open:
             self._draw_attention_dot(
                 painter, self.interaction_toggle_rect().topRight()
             )
         painter.restore()
-        print("C after restore, clipping:", painter.hasClipping(), flush=True)
         if self.is_decorating():
             self._draw_decoration_panel(painter)
         painter.end()
