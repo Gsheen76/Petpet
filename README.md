@@ -6,7 +6,16 @@
   <img src="assets/runtime/pets/lunch_meat/desktop/poses/idle.png" width="280" alt="Pet陪它桌面小狗">
 </p>
 
-当前版本：`v1.6.2`
+当前版本：`v1.6.3`
+
+## v1.6.3 更新亮点
+
+- 家园交互全面提速：宠物注册表、墙面状态卡与家具变换全部缓存化，画一帧从约 100ms 降到约 2ms，点地移动、按钮点击、开小屋都立即可响应。
+- 胶囊按键手感升级：悬停放大+白洗+描边，按下缩小+灰黑，点击动作在反馈播放后触发，不再残留。
+- 冰淇淋家园走路影子改为**按画面帧实测**驱动——倾角与脚掌位置逐帧贴合身体，四向方向由数学保证正确；午餐肉保持原始扁平影子。
+- 修复卡片按钮的双重 save 泄漏（装饰面板不再被裁剪吞掉，层级覆盖恢复正常）。
+- 家园窗口空白处按住可拖动移动位置；不再强制置顶，点击其它窗口可正常覆盖。
+- 桌面小狗固定朝向（午餐肉朝右、冰淇淋面朝左），走动不再左右翻转；小屋视口调整为 700 宽，上弹菜单中心对齐圆形按钮。
 
 ## v1.6.2 更新亮点
 
@@ -30,7 +39,7 @@
 
 ## v1.6.0 发布
 
-完整资产通过 `scripts/release.ps1 -Version 1.6.2` 一键构建、校验并发布。
+完整资产通过 `scripts/release.ps1 -Version 1.6.3` 一键构建、校验并发布。
 
 支持平台：Windows 10/11、macOS Apple 芯片（arm64）
 
@@ -83,9 +92,9 @@
 | 平台 | 文件 |
 | --- | --- |
 | Windows 直接运行 | `Petpet.exe` |
-| Windows 便携包 | `Petpet-v1.6.2-windows.zip` |
-| macOS Apple 芯片 | `Petpet-v1.6.2-macOS-arm64.zip` |
-| 校验和 | `Petpet-v1.6.2-SHA256SUMS.txt` |
+| Windows 便携包 | `Petpet-v1.6.3-windows.zip` |
+| macOS Apple 芯片 | `Petpet-v1.6.3-macOS-arm64.zip` |
+| 校验和 | `Petpet-v1.6.3-SHA256SUMS.txt` |
 
 Windows 下载 ZIP 后解压并运行 `Petpet.exe`。直接下载的 `Petpet.exe` 也可以独立运行，程序不会弹出命令行窗口。
 
@@ -317,7 +326,7 @@ dist/Petpet.app
 发布前应先更新 `version.py`、`docs/RELEASE_NOTES_v<版本>.md` 和 README，并提交全部改动。在干净工作树中运行：
 
 ```powershell
-.\scripts\release.ps1 -Version 1.6.2
+.\scripts\release.ps1 -Version 1.6.3
 ```
 
 脚本会依次检查版本和工作树、运行全量测试、编译检查、构建并冒烟验证 Windows 版本、生成 Windows 便携包和 SHA256 校验文件，然后同步 `main`、创建或继续草稿 Release，并触发 macOS arm64 构建工作流。
@@ -325,8 +334,8 @@ dist/Petpet.app
 公开 Release 必须包含以下三项非空正式资产；校验和文件也会一并上传：
 
 - `Petpet.exe`
-- `Petpet-v1.6.2-windows.zip`
-- `Petpet-v1.6.2-macOS-arm64.zip`
+- `Petpet-v1.6.3-windows.zip`
+- `Petpet-v1.6.3-macOS-arm64.zip`
 
 中途失败时 Release 会保持草稿。修复问题后可以重复运行同一版本命令；脚本不会强推、覆盖已存在的标签或删除 worktree。已公开且完整的 Release 会先验证远端资产，避免重复修改。
 
