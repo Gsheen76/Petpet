@@ -59,8 +59,7 @@ class HomeSceneWindow(QWidget):
         self.state = pet.state
         self.save_state = save_state
         self.setWindowFlags(
-            Qt.FramelessWindowHint | Qt.Tool | Qt.WindowStaysOnTopHint |
-            Qt.WindowDoesNotAcceptFocus
+            Qt.FramelessWindowHint | Qt.Tool | Qt.WindowDoesNotAcceptFocus
         )
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WA_ShowWithoutActivating, True)
@@ -127,8 +126,10 @@ class HomeSceneWindow(QWidget):
         self._decoration_category = "all"
         self._menu_open = False
         self._interaction_menu_open = False
-        self._hover_action = None
-        self._pressed_action = None
+        self._hover_button = None
+        self._hover_button_prev = None
+        self._pressed_button = None
+        self._button_flash_until = 0.0
         self._last_pet_tick = time.monotonic()
         self._last_persisted_home_target = None
         self.setMouseTracking(True)
@@ -570,6 +571,7 @@ class HomeSceneWindow(QWidget):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.save()
+        print("A after save, clipping:", painter.hasClipping(), flush=True)
         painter.setRenderHint(QPainter.SmoothPixmapTransform)
         canvas = self.scene_canvas_rect()
         clip = QPainterPath()
@@ -577,6 +579,7 @@ class HomeSceneWindow(QWidget):
             QRectF(canvas), HOME_SCENE_CORNER_RADIUS, HOME_SCENE_CORNER_RADIUS
         )
         painter.setClipPath(clip)
+        print("B after setClip, clipping:", painter.hasClipping(), flush=True)
         painter.fillRect(canvas, QColor("#f3dfc4"))
         if not self.background.isNull():
             source = QRect(self._camera_x, 0, canvas.width(), canvas.height())
@@ -600,7 +603,14 @@ class HomeSceneWindow(QWidget):
         if self._menu_open:
             menu_labels = {"shop": "商店", "decorate": "装修", "exit": "退出"}
             for action, rect in self.menu_item_rects().items():
-                self._draw_action_button(painter, rect, action, menu_labels[action])
+                state = None
+                if action == self._pressed_button:
+                    state = "pressed"
+                elif action == self._hover_button:
+                    state = "hover"
+                self._draw_action_button(
+                    painter, rect, action, menu_labels[action], state=state
+                )
         if self._interaction_menu_open:
             interaction_labels = {
                 "pet": "抚摸",
@@ -610,28 +620,31 @@ class HomeSceneWindow(QWidget):
             }
             attention = self.interaction_actions_needing_attention()
             for action, rect in self.interaction_item_rects().items():
-                state = None
-                if action == self._pressed_action:
-                    state = "pressed"
-                elif action == self._hover_action:
-                    state = "hover"
+                state = self._button_state(f"item:{action}")
                 self._draw_action_button(
                     painter, rect, action, interaction_labels[action],
                     state=state,
                 )
                 if action in attention:
                     self._draw_attention_dot(painter, rect.topRight())
-        self._draw_action_button(
-            painter, self.interaction_toggle_rect(), "interaction_toggle", ""
-        )
-        self._draw_action_button(
-            painter, self.menu_toggle_rect(), "menu_toggle", ""
-        )
+        for name, rect in (
+            ("interaction_toggle", self.interaction_toggle_rect()),
+            ("menu_toggle", self.menu_toggle_rect()),
+        ):
+            state = None
+            if name == self._pressed_button:
+                state = "pressed"
+            elif name == self._hover_button:
+                state = "hover"
+            self._draw_action_button(
+                painter, rect, name, "", state=state
+            )
         if self.interaction_header_needs_attention() and not self._interaction_menu_open:
             self._draw_attention_dot(
                 painter, self.interaction_toggle_rect().topRight()
             )
         painter.restore()
+        print("C after restore, clipping:", painter.hasClipping(), flush=True)
         if self.is_decorating():
             self._draw_decoration_panel(painter)
         painter.end()
@@ -820,11 +833,11 @@ class HomeSceneWindow(QWidget):
                 if family.startswith(preferred):
                     font = QFont(family)
                     font.setBold(True)
-                    font.setPixelSize(17)
+                    font.setPixelSize(19)
                     return font
         font = QFont()
         font.setBold(True)
-        font.setPixelSize(17)
+        font.setPixelSize(19)
         return font
 
 
@@ -838,15 +851,18 @@ class HomeSceneWindow(QWidget):
             return
         painter.save()
         painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
-        painter.drawPixmap(rect, pixmap)
+        draw_rect = rect
+        if state == "hover":
+            draw_rect = rect.adjusted(-2, -2, 2, 2)
+        painter.drawPixmap(draw_rect, pixmap)
         if state == "pressed":
             painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor(120, 72, 50, 90))
-            painter.drawRoundedRect(rect, 14, 14)
+            painter.setBrush(QColor(120, 72, 50, 120))
+            painter.drawRoundedRect(draw_rect, 14, 14)
         elif state == "hover":
-            painter.setPen(QPen(QColor("#e8a06f"), 2))
-            painter.setBrush(Qt.NoBrush)
-            painter.drawRoundedRect(rect.adjusted(1, 1, -1, -1), 14, 14)
+            painter.setPen(QPen(QColor("#5f3a2a"), 2))
+            painter.setBrush(QColor(255, 252, 246, 90))
+            painter.drawRoundedRect(draw_rect.adjusted(1, 1, -1, -1), 14, 14)
         if label:
             painter.setFont(self._cute_button_font())
             painter.setPen(QColor("#9A5B3F"))
@@ -883,10 +899,10 @@ class HomeSceneWindow(QWidget):
         painter.setFont(font)
         painter.setPen(text)
         if state == "pressed":
-            painter.setBrush(QColor(120, 72, 50, 90))
+            painter.setBrush(QColor(120, 72, 50, 120))
             painter.drawRoundedRect(rect, 14, 14)
         elif state == "hover":
-            painter.setBrush(QColor(255, 255, 255, 70))
+            painter.setBrush(QColor(255, 252, 246, 110))
             painter.drawRoundedRect(rect, 14, 14)
         painter.drawText(rect, Qt.AlignCenter, label)
         painter.restore()
@@ -2116,17 +2132,45 @@ class HomeSceneWindow(QWidget):
         self.setCursor(Qt.ArrowCursor)
         return True
 
+    def _hit_scene_button(self, point):
+        """Return a hit key for any decorative scene button under point."""
+
+        if self.interaction_toggle_rect().contains(point):
+            return "toggle:interaction"
+        if self.menu_toggle_rect().contains(point):
+            return "toggle:menu"
+        if self._interaction_menu_open:
+            for action, rect in self.interaction_item_rects().items():
+                if rect.contains(point):
+                    return f"item:{action}"
+        if self._menu_open:
+            for action, rect in self.menu_item_rects().items():
+                if rect.contains(point):
+                    return f"menu:{action}"
+        return None
+
+    def _button_state(self, name):
+        now = time.monotonic()
+        if self._pressed_button == name and now < self._button_flash_until:
+            return "pressed"
+        if self._hover_button == name:
+            return "hover"
+        return None
+
     def mousePressEvent(self, event):
         if event.button() == Qt.RightButton:
             event.accept()
             return
         if event.button() != Qt.LeftButton:
             return
+        key = self._hit_scene_button(event.pos())
+        if key:
+            self._pressed_button = key
+            self._button_flash_until = time.monotonic() + 0.15
         if self._interaction_menu_open:
             for action, rect in self.interaction_item_rects().items():
                 if rect.contains(event.pos()):
-                    self._pressed_action = action
-                    self.update()
+                    self.trigger_home_interaction(action)
                     event.accept()
                     return
         if self.handle_scene_click(event.pos()):
@@ -2143,36 +2187,24 @@ class HomeSceneWindow(QWidget):
         event.accept()
 
     def mouseMoveEvent(self, event):
-        if self._interaction_menu_open:
-            hover = None
-            for action, rect in self.interaction_item_rects().items():
-                if rect.contains(event.pos()):
-                    hover = action
-                    break
-            if hover != self._hover_action:
-                self._hover_action = hover
-                self.update()
+        key = self._hit_scene_button(event.pos())
+        if key != self._hover_button:
+            self._hover_button = key
+            self.update()
         if self._editing_gesture is None:
             return
         self.update_furniture_gesture(event.pos())
 
     def leaveEvent(self, event):
-        if self._hover_action is not None:
-            self._hover_action = None
+        if self._hover_button is not None:
+            self._hover_button = None
             self.update()
         super().leaveEvent(event)
 
     def mouseReleaseEvent(self, event):
-        if self._pressed_action is not None:
-            action = self._pressed_action
-            self._pressed_action = None
+        if self._pressed_button is not None:
+            self._pressed_button = None
             self.update()
-            if self._interaction_menu_open:
-                rect = self.interaction_item_rects().get(action)
-                if rect is not None and rect.contains(event.pos()):
-                    self.trigger_home_interaction(action)
-            event.accept()
-            return
         if event.button() != Qt.LeftButton:
             return
         if self._pan_direction is not None:
