@@ -996,6 +996,11 @@ def apply_xp_bonus(state, amount):
     return effective
 
 
+def xp_to_next(level):
+    """经验升级曲线：从 L 升到 L+1 所需经验（桌面与面板共用）。"""
+    return int(100 * (int(level) ** 1.5))
+
+
 def record_xp(state, amount):
     """Record already-calculated XP without applying a second multiplier."""
     ensure_progression(state)

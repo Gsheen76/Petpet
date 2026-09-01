@@ -470,7 +470,7 @@ DEFAULT_STATE = {
 
 # XP needed to go from level L to L+1: 100 * L^1.5 (slowing curve)
 def xp_to_next(level):
-    return int(100 * (level ** 1.5))
+    return progression.xp_to_next(level)
 
 def load_state():
     try:

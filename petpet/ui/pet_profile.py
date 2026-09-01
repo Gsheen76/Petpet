@@ -32,11 +32,6 @@ def configure_name_dialog_factory(factory):
     _NAME_DIALOG_FACTORY = factory
 
 
-def _xp_to_next(level: int) -> int:
-    """经验升级曲线，与 pet.py 的 xp_to_next 保持同一公式。"""
-    return int(100 * (level ** 1.5))
-
-
 def pet_profile_snapshot(state: dict, pet_id: str) -> dict:
     """汇总一只宠物的展示数据；当前宠物读顶层 facade，其余读自身 profile。"""
     definition = pet_registry.pet_definition(pet_id)
@@ -56,7 +51,7 @@ def pet_profile_snapshot(state: dict, pet_id: str) -> dict:
             name = definition.get("default_name", pet_id)
     elif owned:
         # 非当前宠物：schema 填充名（等于当前门面名）视为未改名，回退物种默认名。
-        filler_name = app_state._pet_defaults(state).get("pet_name")
+        filler_name = app_state.default_pet_name(state)
         name = profile.get("name") or profile.get("pet_name")
         if (
             not (isinstance(name, str) and name.strip())
@@ -96,7 +91,7 @@ def pet_profile_snapshot(state: dict, pet_id: str) -> dict:
         "active": pet_id == active_id,
         "level": level,
         "xp": int(profile.get("xp") or 0),
-        "xp_next": _xp_to_next(level),
+        "xp_next": progression.xp_to_next(level),
         "affection_level": affection_level,
         "affection_points": affection_points,
         "affection_next": progression.affection_to_next(
@@ -125,6 +120,10 @@ QFrame#petRail {{ background: rgba(242, 143, 118, 0.10); border-radius: 16px; }}
 QLabel#petRailName {{ color: #6b5646; font-size: 14px; }}
 QLabel#activeBadge {{
     background: #f28f76; color: #ffffff; border-radius: 9px;
+    padding: 1px 9px; font-size: 12px;
+}}
+QLabel#lockBadge {{
+    background: #cfc4b8; color: #ffffff; border-radius: 9px;
     padding: 1px 9px; font-size: 12px;
 }}
 QPushButton#profileAvatarButton {{
@@ -177,12 +176,13 @@ def _circular_pixmap(path, size, grayscale=False):
 
 
 def _outfit_preview_path(pet_id, outfit):
-    """从宠物根目录拼出套装预览图的绝对路径。"""
-    avatar = pet_registry.pet_avatar_path(pet_id)
-    if not avatar:
+    """从桌面 idle 资产推导套装预览图的绝对路径（idle 是最终回退，必然存在）。"""
+    idle = pet_registry.pet_asset_path(pet_id, "desktop", "idle")
+    if not idle:
         return None
+    desktop_dir = os.path.dirname(os.path.dirname(idle))
     candidate = os.path.join(
-        os.path.dirname(avatar), "desktop", "outfits",
+        desktop_dir, "outfits",
         outfit.get("asset_folder", ""),
         outfit.get("preview_asset", "preview.png"),
     )
@@ -247,12 +247,16 @@ class PetProfileWindow(CozyProgressWindow):
             badge = QLabel("使用中")
             badge.setObjectName("activeBadge")
             badge.setAlignment(Qt.AlignCenter)
+            lock = QLabel("🔒 未拥有")
+            lock.setObjectName("lockBadge")
+            lock.setAlignment(Qt.AlignCenter)
 
             item_layout.addWidget(button)
             item_layout.addWidget(name)
             item_layout.addWidget(badge)
+            item_layout.addWidget(lock)
             layout.addWidget(item)
-            self._avatar_buttons[pet_id] = (button, badge)
+            self._avatar_buttons[pet_id] = (button, badge, lock)
         return rail
 
     def _build_detail_page(self):
@@ -348,7 +352,7 @@ class PetProfileWindow(CozyProgressWindow):
         active_id = state.get("active_pet_id", pet_registry.DEFAULT_PET_ID)
         snapshot = pet_profile_snapshot(state, self._selected_pet_id)
 
-        for pet_id, (button, badge) in self._avatar_buttons.items():
+        for pet_id, (button, badge, lock) in self._avatar_buttons.items():
             button.setProperty("selected", pet_id == self._selected_pet_id)
             style = button.style()
             style.unpolish(button)
@@ -362,6 +366,7 @@ class PetProfileWindow(CozyProgressWindow):
                 grayscale=not owned,
             )))
             badge.setVisible(pet_id == active_id)
+            lock.setVisible(not owned)
 
         if snapshot["owned"]:
             self._pages.setCurrentWidget(self._detail_page)
@@ -383,7 +388,9 @@ class PetProfileWindow(CozyProgressWindow):
         preview = QPixmap(snapshot.get("preview_path") or "")
         if preview.isNull():
             preview = QPixmap(snapshot.get("avatar_path") or "")
-        if not preview.isNull():
+        if preview.isNull():
+            self._preview_label.setPixmap(QPixmap())
+        else:
             self._preview_label.setPixmap(
                 preview.scaledToWidth(240, Qt.SmoothTransformation)
             )
@@ -408,7 +415,9 @@ class PetProfileWindow(CozyProgressWindow):
         preview = QPixmap(snapshot.get("preview_path") or "")
         if preview.isNull():
             preview = QPixmap(snapshot.get("avatar_path") or "")
-        if not preview.isNull():
+        if preview.isNull():
+            self._locked_preview.setPixmap(QPixmap())
+        else:
             grayscale = preview.toImage().convertToFormat(
                 QImage.Format_Grayscale8
             )
@@ -504,9 +513,12 @@ class PetProfileWindow(CozyProgressWindow):
         if not snapshot["owned"]:
             self.status_label.setText("还没有拥有这只宠物，去商店看看吧～")
             return
+        previous_selection = self._selected_pet_id
         self._selected_pet_id = pet_id
         result = self.pet.set_active_pet(pet_id)
         if isinstance(result, dict) and result.get("ok") is False:
+            self._selected_pet_id = previous_selection
+            self.refresh()
             self.status_label.setText(
                 result.get("message", "切换失败，稍后再试。")
             )
@@ -521,16 +533,15 @@ class PetProfileWindow(CozyProgressWindow):
             result = progression.equip_outfit(self.pet.state, outfit_id)
         else:
             result = progression.unequip_outfit(self.pet.state)
-        self._save_state(self.pet.state)
-        self.pet.update()
-        home = getattr(self.pet, "home_scene_window", None)
-        if home is not None:
-            try:
-                home.refresh_active_pet()
-            except (RuntimeError, AttributeError):
-                pass
+        if result.get("ok"):
+            self._save_state(self.pet.state)
+            self.pet.update()
+            home = getattr(self.pet, "home_scene_window", None)
+            refresh_home = getattr(home, "refresh_pet_assets", None)
+            if callable(refresh_home):
+                refresh_home()
         self.refresh()
-        self.status_label.setText(result.get("message", ""))
+        self.status_label.setText(result.get("message", "装扮状态没有改变。"))
 
     def _open_shop(self):
         opener = getattr(self.pet, "open_shop", None)

@@ -109,6 +109,11 @@ def _remember_facade(state: dict, fields) -> None:
     state[_FACADE_SNAPSHOT_KEY] = snapshot
 
 
+def default_pet_name(state: dict) -> str:
+    """当前门面使用的新 profile 填充名（判断"未改名"用）。"""
+    return str(_pet_defaults(state).get("pet_name"))
+
+
 def pet_profile(state: dict, pet_id: str) -> dict:
     """Return an independent normalized profile without changing the active pet."""
     if not isinstance(pet_id, str) or not pet_id:
