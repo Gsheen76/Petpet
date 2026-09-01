@@ -127,8 +127,11 @@ class HomeSceneWindow(QWidget):
         self._decoration_category = "all"
         self._menu_open = False
         self._interaction_menu_open = False
+        self._hover_action = None
+        self._pressed_action = None
         self._last_pet_tick = time.monotonic()
         self._last_persisted_home_target = None
+        self.setMouseTracking(True)
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._sync_scene)
         self._timer.start(33)
@@ -607,8 +610,14 @@ class HomeSceneWindow(QWidget):
             }
             attention = self.interaction_actions_needing_attention()
             for action, rect in self.interaction_item_rects().items():
+                state = None
+                if action == self._pressed_action:
+                    state = "pressed"
+                elif action == self._hover_action:
+                    state = "hover"
                 self._draw_action_button(
-                    painter, rect, action, interaction_labels[action]
+                    painter, rect, action, interaction_labels[action],
+                    state=state,
                 )
                 if action in attention:
                     self._draw_attention_dot(painter, rect.topRight())
@@ -819,15 +828,25 @@ class HomeSceneWindow(QWidget):
         return font
 
 
-    def _draw_action_button(self, painter, rect, name, label):
+    def _draw_action_button(self, painter, rect, name, label, state=None):
         """Draw one image button, with an optional runtime label overlay."""
         pixmap = self.action_button_pixmaps.get(name)
         if pixmap is None or pixmap.isNull():
-            self._draw_scene_button(painter, rect, label, variant="menu_item")
+            self._draw_scene_button(
+                painter, rect, label, variant="menu_item", state=state
+            )
             return
         painter.save()
         painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
         painter.drawPixmap(rect, pixmap)
+        if state == "pressed":
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor(120, 72, 50, 90))
+            painter.drawRoundedRect(rect, 14, 14)
+        elif state == "hover":
+            painter.setPen(QPen(QColor("#e8a06f"), 2))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawRoundedRect(rect.adjusted(1, 1, -1, -1), 14, 14)
         if label:
             painter.setFont(self._cute_button_font())
             painter.setPen(QColor("#9A5B3F"))
@@ -837,7 +856,8 @@ class HomeSceneWindow(QWidget):
             painter.drawText(text_rect, Qt.AlignCenter, label)
         painter.restore()
 
-    def _draw_scene_button(self, painter, rect, label, variant="primary"):
+    def _draw_scene_button(self, painter, rect, label, variant="primary",
+                           state=None):
         painter.save()
         painter.setPen(Qt.NoPen)
         painter.setBrush(QColor(78, 47, 36, 76))
@@ -862,6 +882,12 @@ class HomeSceneWindow(QWidget):
         font.setBold(variant == "menu_toggle")
         painter.setFont(font)
         painter.setPen(text)
+        if state == "pressed":
+            painter.setBrush(QColor(120, 72, 50, 90))
+            painter.drawRoundedRect(rect, 14, 14)
+        elif state == "hover":
+            painter.setBrush(QColor(255, 255, 255, 70))
+            painter.drawRoundedRect(rect, 14, 14)
         painter.drawText(rect, Qt.AlignCenter, label)
         painter.restore()
 
@@ -2096,6 +2122,13 @@ class HomeSceneWindow(QWidget):
             return
         if event.button() != Qt.LeftButton:
             return
+        if self._interaction_menu_open:
+            for action, rect in self.interaction_item_rects().items():
+                if rect.contains(event.pos()):
+                    self._pressed_action = action
+                    self.update()
+                    event.accept()
+                    return
         if self.handle_scene_click(event.pos()):
             event.accept()
             return
@@ -2110,11 +2143,36 @@ class HomeSceneWindow(QWidget):
         event.accept()
 
     def mouseMoveEvent(self, event):
+        if self._interaction_menu_open:
+            hover = None
+            for action, rect in self.interaction_item_rects().items():
+                if rect.contains(event.pos()):
+                    hover = action
+                    break
+            if hover != self._hover_action:
+                self._hover_action = hover
+                self.update()
         if self._editing_gesture is None:
             return
         self.update_furniture_gesture(event.pos())
 
+    def leaveEvent(self, event):
+        if self._hover_action is not None:
+            self._hover_action = None
+            self.update()
+        super().leaveEvent(event)
+
     def mouseReleaseEvent(self, event):
+        if self._pressed_action is not None:
+            action = self._pressed_action
+            self._pressed_action = None
+            self.update()
+            if self._interaction_menu_open:
+                rect = self.interaction_item_rects().get(action)
+                if rect is not None and rect.contains(event.pos()):
+                    self.trigger_home_interaction(action)
+            event.accept()
+            return
         if event.button() != Qt.LeftButton:
             return
         if self._pan_direction is not None:
