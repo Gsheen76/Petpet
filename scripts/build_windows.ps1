@@ -19,7 +19,7 @@ if (-not $dependenciesReady) {
 
 # Icons are committed assets; regenerate only when absent so builds do
 # not dirty the worktree with non-deterministic byte output.
-if (-not (Test-Path "assetsuntime\icons\icon-16.png")) {
+if (-not (Test-Path "assets\runtime\icons\icon-16.png")) {
     python tools\make_icons.py
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to generate icons (exit code $LASTEXITCODE)."
