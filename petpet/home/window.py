@@ -128,6 +128,7 @@ class HomeSceneWindow(QWidget):
         self._hover_button_prev = None
         self._pressed_button = None
         self._button_flash_until = 0.0
+        self._window_drag_offset = None
         self._last_pet_tick = time.monotonic()
         self._last_persisted_home_target = None
         self.setMouseTracking(True)
@@ -858,7 +859,7 @@ class HomeSceneWindow(QWidget):
             painter.setBrush(QColor(120, 72, 50, 120))
             painter.drawRoundedRect(draw_rect, 14, 14)
         elif state == "hover":
-            painter.setPen(QPen(QColor("#5f3a2a"), 2))
+            painter.setPen(QPen(QColor("#f28fb1"), 2))
             painter.setBrush(QColor(255, 252, 246, 90))
             painter.drawRoundedRect(draw_rect.adjusted(1, 1, -1, -1), 14, 14)
         if label:
@@ -2177,6 +2178,10 @@ class HomeSceneWindow(QWidget):
         if not self.is_decorating():
             if self.command_home_pet(event.pos()):
                 event.accept()
+                return
+            # 空白处按住可拖动整个小屋窗口
+            self._window_drag_offset = event.globalPos() - self.frameGeometry().topLeft()
+            event.accept()
             return
         if not self.begin_furniture_gesture(event.pos()):
             event.accept()
@@ -2189,6 +2194,9 @@ class HomeSceneWindow(QWidget):
         if key != self._hover_button:
             self._hover_button = key
             self.update()
+        if self._window_drag_offset is not None:
+            self.move(event.globalPos() - self._window_drag_offset)
+            return
         if self._editing_gesture is None:
             return
         self.update_furniture_gesture(event.pos())
@@ -2200,6 +2208,10 @@ class HomeSceneWindow(QWidget):
         super().leaveEvent(event)
 
     def mouseReleaseEvent(self, event):
+        if self._window_drag_offset is not None:
+            self._window_drag_offset = None
+            event.accept()
+            return
         if self._pressed_button is not None:
             self._pressed_button = None
             self.update()
