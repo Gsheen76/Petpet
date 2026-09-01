@@ -1,7 +1,7 @@
 # Petpet 项目交接文档
 
-**版本**：v1.6.1
-**日期**：2026-08-27
+**版本**：v1.6.3
+**日期**：2026-09-01
 **核心分支**：main（无待提交变更）
 
 ---
@@ -23,30 +23,54 @@
 ```
 D:\Agent_project\Petpet
 ├── pet.py                    # 程序入口、单实例、托盘、主窗口
-├── version.py                # 版本号（v1.6.1）
+├── version.py                # 版本号（v1.6.3）
 ├── petpet/
 │   ├── app/
 │   │   ├── fonts.py          # 全局字体（幼圆）
+│   │   ├── pets.py           # 宠物注册表（缓存化）
 │   │   ├── pet_window.py     # PetWindow：渲染/动画/资产切换/交互
 │   │   └── state.py          # 状态持久化
+│   ├── home/
+│   │   ├── window.py         # HomeSceneWindow：家园场景/交互按钮/影子/装饰面板
+│   │   ├── pet.py            # HomePetController：2.5D 移动/走路/睡觉状态机
+│   │   ├── rendering.py      # 状态卡渲染、精灵表裁剪
+│   │   └── geometry.py       # 视口/世界/地垫墙饰边界钳制
 │   ├── progression/
 │   │   ├── core.py           # 成就/商店/强化/宠物/货币逻辑
 │   │   └── ui.py             # 所有面板窗口（Shop/成就/记录/设置）— 核心视觉层
-│   └── ui/                   # 桌面渲染/装饰/装扮预览
+│   └── ui/                   # 桌面渲染/装饰/装扮预览/聊天/设置
 ├── assets/runtime/ui/shop/   # 商店素材（background.png, price_frame.png 等）
 └── tests/                    # pytest（offscreen + windows 平台双模式）
 ```
 
 ---
 
-## 3. 最近主要变更（v1.6.0 → v1.6.1）
+## 3. 最近主要变更（v1.6.1 → v1.6.3）
+
+### v1.6.3（当前）
 
 | 领域 | 内容 |
 |------|------|
-| **成就页重构** | 尺寸 850×960、商店同款背景、固定总览卡+19 项前缀筛选分栏（全部/days/pet/feed/…/level），脱离滚动区挂在 `_page_header` |
-| **窗口打开位置** | 所有 `CozyProgressWindow`（商店/成就/记录/设置）`show_near_pet()` → 屏幕正中央 + 滚动条清零，不再记忆拖拽/滚动位置 |
-| **页面头去重** | 成就页标题栏已有“暖心成就”，页面头仅保留提示文案 |
-| **版本号** | `version.py` → `1.6.1` |
+| **家园性能** | `load_pet_registry` 按 mtime 缓存；`current_pet_id` 记忆化；墙面状态卡按内容签名缓存；`home_decoration_transform` 纯读取不跑全量 ensure——paintEvent 从 ~100ms 降到 ~2ms |
+| **胶囊按键反馈** | 按下缩小 3px + 灰黑色块 100ms 后才触发动作（`_click_defer_timer` 延迟转发），反馈真正可见；悬停放大 3px + 粉描边 #f28fb1 + 白洗 |
+| **影子实测驱动** | 冰淇淋家园行走影子按当前帧 alpha 实测倾角与脚掌中心（`_ice_shadow_params`，QBuffer→BytesIO→PIL），四向方向数学保证正确；预加载消除首次卡顿 |
+| ** painter save 泄漏** | `_draw_action_button` 内两个 save 配一个 restore（编辑残留），泄漏导致装饰面板被裁剪吞掉+置顶错觉——已修 |
+| **菜单/圆形按钮键名匹配** | `_hit_scene_button` 存带前缀键（`menu:shop`/`toggle:interaction`），paint 拿裸名比较——恒 None 导致反馈不生效；已改为统一走 `_button_state(name)` |
+| **恐龙装拖拽动画** | 8 帧原色版接入 `outfits/dinosaur/drag`，套装感知播放，未装备回退共享 drag |
+| **喂食循环修复** | home 场景停了桌面 tick 导致 behavior="eat" 永不超时——`trigger_animation` 加 finished_callback 复位 behavior |
+| **睡觉亮度还原** | 恢复通道烘焙前的原始帧（git checkout ecbeee7~1） |
+| **NOACTIVATE 移除** | `Qt.WindowDoesNotAcceptFocus` 导致小屋窗口无法被其它程序覆盖——已删 |
+| **小屋可拖动** | 非装饰模式下空白处按住拖动整个小屋窗口（`_window_drag_offset`） |
+
+### v1.6.2
+
+| 领域 | 内容 |
+|------|------|
+| **面板统一** | 商店/成就/记录/设置/小游戏/聊天统一 850×960 + 暖色素材 + 屏幕居中 |
+| **成就筛选** | 合并为六大类（全部/互动/聊天/游戏/换装强化/成长），未来新前缀自动归"其它" |
+| **温暖记录** | 按小狗划分：总计页共有数值 + 每宠页签独立数据；时长改小时制 |
+| **设置页** | 三档偏好胶囊滑动选择；字体档位 小 20 / 中 24 / 大 26；移除聊天窗口大小设置 |
+| **聊天** | 头像 60px；字体全局幼圆；历史区透明；口播去"汪" |
 
 ---
 
@@ -69,12 +93,15 @@ D:\Agent_project\Petpet
 | 类 | 文件 | 职责 |
 |----|------|------|
 | `PetWindow` | `petpet/app/pet_window.py` | 主窗口、动画帧解码、宠物切换缓存 `switch_pet_assets` |
-| `ShopWindow` | `petpet/progression/ui.py:1619` | 商店四页、固定标签栏、page header、scroll body、CoinPillLabel |
-| `AchievementsWindow` | `petpet/progression/ui.py:1173` | 成就页、shop_theme、固定总览/筛选栏、前缀过滤 |
-| `RecordsWindow` | `petpet/progression/ui.py:1008` | 记录页 |
-| `CozyProgressWindow` | `petpet/progression/ui.py:829` | 无边框壳、标题栏/币量/关闭、shop_theme/title_image、背景绘制、`show_near_pet` 居中+滚动清零 |
-| `FeedbackButton` | `petpet/progression/ui.py:652` | 悬浮/按下叠加层、手型光标 |
-| `PurchasePopup` | `petpet/progression/ui.py:652` | 购买确认弹窗、商店背景裁切圆角 |
+| `ShopWindow` | `petpet/progression/ui.py` | 商店四页、固定标签栏、page header、scroll body、CoinPillLabel |
+| `AchievementsWindow` | `petpet/progression/ui.py` | 成就页、shop_theme、固定总览/筛选栏、前缀过滤 |
+| `RecordsWindow` | `petpet/progression/ui.py` | 记录页（shop_theme 850×960，按宠页签） |
+| `CozyProgressWindow` | `petpet/progression/ui.py` | 无边框壳、标题栏/币量/关闭、shop_theme/title_image、背景绘制、`show_near_pet` 居中+滚动清零 |
+| `FeedbackButton` | `petpet/progression/ui.py` | 悬浮/按下叠加层、手型光标 |
+| `PurchasePopup` | `petpet/progression/ui.py` | 购买确认弹窗、商店背景裁切圆角、Esc/遮罩关闭 |
+| `HomeSceneWindow` | `petpet/home/window.py` | 家园场景、交互按钮（实测影子/反馈）、装饰面板、窗口拖动 |
+| `HomePetController` | `petpet/home/pet.py` | 2.5D 移动/走路/睡觉/自主漫游（3 秒玩家指令闸门） |
+| `SettingsWindow` | `petpet/ui/settings.py` | 设置页（shop 背景 850×960、胶囊字体选择、无置顶） |
 
 ---
 
@@ -107,10 +134,10 @@ assets/runtime/ui/shop/
 | 单元测试（offscreen） | `$env:QT_QPA_PLATFORM='offscreen'; python -m pytest -q` |
 | Windows 平台渲染验证 | `python -X utf8 -c "…"`（见测试脚本，需真实桌面） |
 | 重启小狗（验证可见） | `Stop-Process` 旧 PID → `pythonw.exe pet.py` → `EnumWindows` 检查 `IsWindowVisible`；隐藏则二次启动召回 |
-| 版本发布 | 仅改 `version.py`，打 tag `vX.Y.Z` |
+| 版本发布 | 更新 `version.py` + README + 发布说明 → `scripts/release.ps1 -Version X.Y.Z` |
 
 **测试约束**：
-- `QT_QPA_PLATFORM=offscreen` 跑全量（~100s，658 passed）
+- `QT_QPA_PLATFORM=offscreen` 跑全量（~100s，667 passed）
 - Windows 平台截图需真实字体库（offscreen 无字体数据库，渲染会缺字）
 - `setPixmap` 会清空 `QLabel.text()` → 必须用 `PreservedTextLabel` 保留文本
 
@@ -120,30 +147,38 @@ assets/runtime/ui/shop/
 
 | 现象 | 原因 | 修复 |
 |------|------|------|
-| 重启后“完全没变化” | 进程活着但**所有窗口 `IsWindowVisible=0`** | 再起一遍实例触发单实例召回（`activate_existing_instance`） |
+| 重启后"完全没变化" | 进程活着但**所有窗口 `IsWindowVisible=0`** | 再起一遍实例触发单实例召回（`activate_existing_instance`） |
 | 价格签/徽章有残留底纹 | QSS `border-image` 与 `border` 互不覆盖 | 内联补 `border-image: none; background: transparent; border: 0;` |
 | `QLabel.setPixmap` 导致文字消失 | Qt 行为 | 用 `PreservedTextLabel` 存 `_stored_text` |
 | offscreen 下 `QFontDatabase.addApplicationFont` 崩 | 平台限制 | 仅在 `main()` 真实启动时调用 |
 | PowerShell `Set-Content -Encoding UTF8` 写 BOM → ast 解析失败 | PS 5.1 默认加 BOM | 用 `[System.IO.File]::WriteAllText(..., New-Object System.Text.UTF8Encoding($false))` 无 BOM 写入 |
+| paintEvent / Qt 槽内未捕获异常 | **PyQt5 对槽内异常直接终止进程**，无输出无 traceback | 所有槽/绘制函数加 try/except 或确保不抛 |
+| `sip.voidptr` 无 `asarray` / `bytes(ptr)` 无 size | PyQt5 constBits() 返回值不可直接用 | 用 `QBuffer`→`bytes(buffer.data())`→PIL，或 `ptr.setsize(n)` 后 `bytes(ptr)` |
+| `QPainterPath.addEllipse(QRect)` 原生段错误 | 本机 PyQt5 构建的 QRect 重载 bug | 传 `QRectF` 而非 `QRect` |
+| `QImage.mirrored()` 后 `constBits()` 尺寸异常 | 镜像后 stride 对齐变化 | 用 `QBuffer`→PNG→PIL 路径替代 |
+| 影子像素 diff 有大量变化 | 小狗动画帧在动，不是悬停效果 | 冻结动画定时器后再做像素 diff |
 
 ---
 
 ## 9. 待办 / 可迭代方向
 
-1. **成就筛选栏**：19 个按钮在窄屏可能换行，考虑双行 FlowLayout 或可横向滚动的 `QScrollArea`
-2. **动画缓存内存**：`_pet_assets_cache` 目前不释放，若宠物数量增多需 LRU/容量上限
-3. **弹窗无障碍**：`PurchasePopup` 目前仅鼠标点击关闭，可加 `Esc` / 点击遮罩关闭
+1. **发布脚本健壮化**：release.ps1 可加"自动停本机宠物进程"步骤，避免冒烟测试撞单实例锁
+2. **动画素材扩充**：冰淇淋走/吃/抚摸等动作用已跑通的"生成→导入→对色→接线"流水线批量补齐
+3. **长期记忆**：结构化记录用户信息并在对话中自然召回
 4. **CI**：GitHub Actions 跑 offscreen pytest + Windows self-hosted 跑渲染对比
 5. **打包**：PyInstaller / Nuitka 单文件 + 资源内嵌（当前需带 assets 目录）
 
 ---
 
-## 10. 关键联系人 / 文档
+## 10. 关键文档
 
-- **Obsidian 记录**：`D:\Github Desktop\My-Obsidian\项目\Petpet\开发记录\2026-08-25 商店圆角滚动上限与方圆体.md`（含每轮视觉变更细节、PID、截图引用）
-- **参考图包**：`C:\Users\sheen\Downloads\商店素材\`（原始 AI 生成素材备份）
+- **Obsidian 总档案**：`D:\Github Desktop\My-Obsidian\项目\Petpet\Petpet 总档案.md`
+- **Obsidian 开发记录**：`D:\Github Desktop\My-Obsidian\项目\Petpet\开发记录\2026-08-27 成就分类筛选与弹窗交互完善.md`（含 v1.6.1→v1.6.3 全部 46+ 轮迭代的完整细节）
+- **版本规划索引**：`D:\Github Desktop\My-Obsidian\项目\Petpet\发布系统\版本规划与发布索引.md`
+- **最新 Release**：https://github.com/Gsheen76/Petpet/releases/tag/v1.6.3
 
 ---
 
-> **核心原则**：视觉改动**必须**经历“offscreen 全量测试 → Windows 平台截图 → 精确重启（EnumWindows 验证可见） → Obsidian 记录”四步，方可视为完成。
+> **核心原则**：视觉改动**必须**经历"offscreen 全量测试 → Windows 平台截图 → 精确重启（EnumWindows 验证可见） → Obsidian 记录"四步，方可视为完成。
 > **切勿**在未验证可见性的情况下假设代码生效。
+> **注意**：PyQt5 槽/绘制事件内未捕获异常 = 无输出静默崩溃；影子像素 diff 必须冻结动画定时器。
