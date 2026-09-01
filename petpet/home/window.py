@@ -697,7 +697,7 @@ class HomeSceneWindow(QWidget):
         """Right toggle (menu), the pair centered under the item stacks."""
         canvas = self.scene_canvas_rect()
         width, height = HOME_TOGGLE_SIZE
-        stack_right = canvas.right() - 14 - 12
+        stack_right = canvas.right() - 14 - 17
         pair_width = 2 * width + 8
         right = stack_right - max(
             0, (HOME_BUTTON_SIZE[0] - pair_width) // 2
@@ -849,7 +849,7 @@ class HomeSceneWindow(QWidget):
             painter.setBrush(QColor(120, 72, 50, 120))
             painter.drawRoundedRect(draw_rect, 14, 14)
         elif state == "hover":
-            painter.setPen(QPen(QColor("#f28fb1"), 2))
+            painter.setPen(QPen(QColor("#f5c6aa"), 2))
             painter.setBrush(QColor(255, 252, 246, 90))
             painter.drawRoundedRect(draw_rect.adjusted(1, 1, -1, -1), 14, 14)
         if label:
