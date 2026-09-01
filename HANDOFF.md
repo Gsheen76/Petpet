@@ -52,7 +52,7 @@ D:\Agent_project\Petpet
 | 领域 | 内容 |
 |------|------|
 | **家园性能** | `load_pet_registry` 按 mtime 缓存；`current_pet_id` 记忆化；墙面状态卡按内容签名缓存；`home_decoration_transform` 纯读取不跑全量 ensure——paintEvent 从 ~100ms 降到 ~2ms |
-| **胶囊按键反馈** | 按下缩小 3px + 灰黑色块 100ms 后才触发动作（`_click_defer_timer` 延迟转发），反馈真正可见；悬停放大 3px + 粉描边 #f28fb1 + 白洗 |
+| **胶囊按键反馈** | 两段式：按下缩小 3px+灰黑块 40ms → 回弹原大小+悬浮描边/白洗 40ms → 80ms 时关闭菜单并触发动作（`_click_defer_timer`，总时长短于旧版单段 100ms）；悬停放大 3px + 描边 + 白洗 |
 | **影子实测驱动** | 冰淇淋家园行走影子按当前帧 alpha 实测倾角与脚掌中心（`_ice_shadow_params`，QBuffer→BytesIO→PIL），四向方向数学保证正确；预加载消除首次卡顿 |
 | ** painter save 泄漏** | `_draw_action_button` 内两个 save 配一个 restore（编辑残留），泄漏导致装饰面板被裁剪吞掉+置顶错觉——已修 |
 | **菜单/圆形按钮键名匹配** | `_hit_scene_button` 存带前缀键（`menu:shop`/`toggle:interaction`），paint 拿裸名比较——恒 None 导致反馈不生效；已改为统一走 `_button_state(name)` |

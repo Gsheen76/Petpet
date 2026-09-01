@@ -53,6 +53,11 @@ from petpet.home.rendering import *  # noqa: F401,F403
 class HomeSceneWindow(QWidget):
     """Fixed home board rendered behind the independent PetWindow."""
 
+    # 胶囊按键两段式按压反馈：前段缩小+变暗，后段回弹原大小+悬浮高亮；
+    # 总时长（含延迟触发动作）须保持短于旧版单段 100ms。
+    BUTTON_PRESS_FLASH_MS = 40
+    BUTTON_CLICK_DEFER_MS = 80
+
     def __init__(self, pet, save_state):
         super().__init__()
         self.pet = pet
@@ -128,6 +133,7 @@ class HomeSceneWindow(QWidget):
         self._hover_button = None
         self._hover_button_prev = None
         self._pressed_button = None
+        self._button_flash_phase_deadline = 0.0
         self._button_flash_until = 0.0
         self._button_flash_timer = QTimer(self)
         self._button_flash_timer.setSingleShot(True)
@@ -865,7 +871,8 @@ class HomeSceneWindow(QWidget):
             painter.setPen(Qt.NoPen)
             painter.setBrush(QColor(70, 42, 28, 150))
             painter.drawRoundedRect(draw_rect, 14, 14)
-        elif state == "hover":
+        elif state in ("hover", "recover"):
+            # recover：回弹到原大小，只借用悬浮的描边+白洗高亮。
             painter.setPen(QPen(QColor("#d9976b"), 3))
             painter.setBrush(QColor(255, 252, 246, 90))
             painter.drawRoundedRect(draw_rect.adjusted(1, 1, -1, -1), 14, 14)
@@ -907,7 +914,7 @@ class HomeSceneWindow(QWidget):
         if state == "pressed":
             painter.setBrush(QColor(70, 42, 28, 150))
             painter.drawRoundedRect(rect.adjusted(3, 3, -3, -3), 14, 14)
-        elif state == "hover":
+        elif state in ("hover", "recover"):
             painter.setPen(QPen(QColor("#d9976b"), 3))
             painter.setBrush(QColor(255, 252, 246, 110))
             painter.drawRoundedRect(rect, 14, 14)
@@ -2174,7 +2181,10 @@ class HomeSceneWindow(QWidget):
     def _button_state(self, name):
         now = time.monotonic()
         if self._pressed_button == name and now < self._button_flash_until:
-            return "pressed"
+            # 两段式反馈：前段缩小变暗，后段回弹原大小并套用悬浮高亮色。
+            if now < self._button_flash_phase_deadline:
+                return "pressed"
+            return "recover"
         if self._hover_button == name:
             return "hover"
         return None
@@ -2187,15 +2197,21 @@ class HomeSceneWindow(QWidget):
             return
         key = self._hit_scene_button(event.pos())
         if key:
+            now = time.monotonic()
             self._pressed_button = key
-            self._button_flash_until = time.monotonic() + 0.18
+            self._button_flash_phase_deadline = (
+                now + self.BUTTON_PRESS_FLASH_MS / 1000.0
+            )
+            self._button_flash_until = now + self.BUTTON_CLICK_DEFER_MS / 1000.0
             self.update()
-            self._button_flash_timer.start(200)
-            # Play the press effect first; the action fires ~160ms later so
-            # the shrink+tint feedback completes while the button is still
-            # on screen (menus stay open during the flash).
+            self._button_flash_timer.start(self.BUTTON_CLICK_DEFER_MS + 20)
+            # 场景定时器 33ms 一帧，相位边界未必恰好落在帧上；
+            # 在前段截止点主动补一次重绘，保证回弹段至少画出一帧。
+            QTimer.singleShot(self.BUTTON_PRESS_FLASH_MS, self.update)
+            # 按下先缩小变暗，再回弹原大小并显示悬浮高亮；两段播完
+            # 菜单才关闭、动作才触发（总 80ms，短于旧版单段 100ms）。
             self._deferred_click_point = event.pos()
-            self._click_defer_timer.start(100)
+            self._click_defer_timer.start(self.BUTTON_CLICK_DEFER_MS)
             event.accept()
             return
         if self.handle_scene_click(event.pos()):

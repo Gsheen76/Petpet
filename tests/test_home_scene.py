@@ -3,8 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from PyQt5.QtCore import QPoint, QPointF, QRect, QRectF, QSize, Qt
-from PyQt5.QtGui import QColor, QImage, QPainter, QPixmap
+from PyQt5.QtCore import QEvent, QPoint, QPointF, QRect, QRectF, QSize, Qt
+from PyQt5.QtGui import QColor, QImage, QPainter, QPixmap, QMouseEvent
 from PyQt5.QtWidgets import QApplication
 
 import home_scene
@@ -1966,6 +1966,59 @@ class HomeSceneAssetTests(unittest.TestCase):
         self.assertGreater(image.pixelColor(scene._panel_rect().center()).alpha(), 0)
         handle = scene.selection_handles("home_sofa")["rotate"].center().toPoint()
         self.assertGreater(image.pixelColor(handle).alpha(), 0)
+
+    def test_button_flash_runs_pressed_then_recover_within_shorter_total(self):
+        state = progression.ensure_progression({})
+        pet = SimpleNamespace(
+            state=state,
+            width=lambda: 190,
+            height=lambda: 220,
+            current_screen_rect=lambda: QRect(0, 0, 1920, 1080),
+        )
+        scene = home_scene.HomeSceneWindow(pet, Mock())
+        self.addCleanup(scene.close)
+        center = scene.interaction_toggle_rect().center()
+        press = QMouseEvent(
+            QEvent.MouseButtonPress,
+            QPoint(center.x(), center.y()),
+            Qt.LeftButton,
+            Qt.LeftButton,
+            Qt.NoModifier,
+        )
+        base = 10.0
+        with patch(
+            "petpet.home.window.time.monotonic", return_value=base
+        ):
+            scene.mousePressEvent(press)
+            self.assertEqual(
+                scene._button_state("toggle:interaction"), "pressed"
+            )
+            # 前段（缩小+变暗）须在 40ms 内结束并切入回弹段
+            with patch(
+                "petpet.home.window.time.monotonic",
+                return_value=base + 0.045,
+            ):
+                self.assertEqual(
+                    scene._button_state("toggle:interaction"), "recover"
+                )
+            # 回弹段（原大小+悬浮高亮）持续到总时长，总时长短于旧版 100ms
+            with patch(
+                "petpet.home.window.time.monotonic",
+                return_value=base + scene.BUTTON_CLICK_DEFER_MS / 1000.0 - 0.001,
+            ):
+                self.assertEqual(
+                    scene._button_state("toggle:interaction"), "recover"
+                )
+            with patch(
+                "petpet.home.window.time.monotonic",
+                return_value=base + 0.101,
+            ):
+                self.assertIsNone(scene._button_state("toggle:interaction"))
+        # 回弹段必须存在（总时长长于前段），且总反馈时长短于旧版单段 100ms
+        self.assertGreater(
+            scene.BUTTON_CLICK_DEFER_MS, scene.BUTTON_PRESS_FLASH_MS
+        )
+        self.assertLess(scene.BUTTON_CLICK_DEFER_MS, 100)
 
 
 if __name__ == "__main__":
