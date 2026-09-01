@@ -619,7 +619,7 @@ class HomeSceneWindow(QWidget):
             self._draw_scene_button(painter, self.left_view_button_rect(), "左移")
             self._draw_scene_button(painter, self.right_view_button_rect(), "右移")
         if self._menu_open:
-            menu_labels = {"shop": "商店", "decorate": "装修", "exit": "退出"}
+            menu_labels = {"shop": "商店", "pets": "宠物", "decorate": "装修", "exit": "退出"}
             for action, rect in self.menu_item_rects().items():
                 self._draw_action_button(
                     painter, rect, action, menu_labels[action],
@@ -741,7 +741,7 @@ class HomeSceneWindow(QWidget):
 
     def menu_item_rects(self):
         """Items stacked upward above the toggle pair."""
-        return self._stacked_item_rects(("shop", "decorate", "exit"))
+        return self._stacked_item_rects(("shop", "pets", "decorate", "exit"))
 
     def _stacked_item_rects(self, names):
         """Items stack upward, centered over their circular toggle."""
@@ -783,6 +783,9 @@ class HomeSceneWindow(QWidget):
 
     def shop_button_rect(self):
         return self.menu_item_rects()["shop"]
+
+    def pets_button_rect(self):
+        return self.menu_item_rects()["pets"]
 
     def interaction_button_rect(self):
         return self.interaction_toggle_rect()
@@ -1939,6 +1942,13 @@ class HomeSceneWindow(QWidget):
                 return True
             if self.shop_button_rect().contains(point):
                 opener = getattr(self.pet, "open_shop", None)
+                if callable(opener):
+                    opener()
+                self._menu_open = False
+                self.update()
+                return True
+            if self.pets_button_rect().contains(point):
+                opener = getattr(self.pet, "open_pet_profile", None)
                 if callable(opener):
                     opener()
                 self._menu_open = False

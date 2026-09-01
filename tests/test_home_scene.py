@@ -478,7 +478,7 @@ class HomeSceneAssetTests(unittest.TestCase):
 
         actions = scene.home_action_button_rects()
         self.assertNotIn("status", actions)
-        self.assertEqual(set(actions), {"shop", "decorate", "exit"})
+        self.assertEqual(set(actions), {"shop", "pets", "decorate", "exit"})
         toggle_center = scene.home_action_toggle_rect().center().x()
         self.assertTrue(
             all(
@@ -2023,3 +2023,38 @@ class HomeSceneAssetTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HomeMenuPetProfileTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from PyQt5.QtWidgets import QApplication
+
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_home_menu_includes_pet_profile_entry(self):
+        state = progression.ensure_progression({})
+        pet = SimpleNamespace(
+            state=state,
+            x=lambda: 400,
+            width=lambda: 190,
+            height=lambda: 220,
+            current_screen_rect=lambda: QRect(0, 0, 1920, 1080),
+            raise_=Mock(),
+            open_shop=Mock(),
+            open_pet_profile=Mock(),
+        )
+        scene = home_scene.HomeSceneWindow(pet, Mock())
+        self.addCleanup(scene.close)
+
+        rects = scene.menu_item_rects()
+        self.assertIn("pets", rects)
+
+        state["home_scene"]["enabled"] = True
+        self.assertTrue(
+            scene.handle_scene_click(scene.menu_toggle_rect().center())
+        )
+        self.assertTrue(scene._menu_open)
+        self.assertTrue(scene.handle_scene_click(rects["pets"].center()))
+        pet.open_pet_profile.assert_called_once_with()
+        self.assertFalse(scene._menu_open)
