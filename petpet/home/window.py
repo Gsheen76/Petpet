@@ -832,11 +832,11 @@ class HomeSceneWindow(QWidget):
                 if family.startswith(preferred):
                     font = QFont(family)
                     font.setBold(True)
-                    font.setPixelSize(19)
+                    font.setPixelSize(18)
                     return font
         font = QFont()
         font.setBold(True)
-        font.setPixelSize(19)
+        font.setPixelSize(18)
         return font
 
 
