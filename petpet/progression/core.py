@@ -1354,10 +1354,15 @@ def set_home_decoration_position(state, decoration_id, x, y):
 
 
 def home_decoration_transform(state, decoration_id):
-    ensure_progression(state)
+    # Pure getter used in paint loops; the caller-owned state is already
+    # ensured after load and every mutation, so skip the full normalize
+    # (it cost ~0.15s/s when called per furniture per frame).
+    transforms = state.get("home_decoration_transforms")
     if decoration_id not in HOME_DECORATION_DEFINITIONS:
         raise KeyError(decoration_id)
-    return dict(state["home_decoration_transforms"].get(
+    if not isinstance(transforms, dict):
+        transforms = {}
+    return dict(transforms.get(
         decoration_id, {"scale": 1.0, "rotation": 0.0}
     ))
 

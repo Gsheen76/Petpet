@@ -57,7 +57,20 @@ def _validate_definition(pet_id: str, definition: Any) -> dict[str, Any]:
     return definition
 
 
+_REGISTRY_CACHE: dict[str, object] = {}
+
+
 def load_pet_registry() -> dict[str, dict]:
+    # Parsing + path-validating every asset on each call cost >0.6s/s in
+    # the paint loop; cache until the manifest file actually changes.
+    try:
+        stat = os.stat(PETS_MANIFEST_PATH)
+        stamp = (stat.st_mtime_ns, stat.st_size)
+    except OSError:
+        stamp = None
+    cached = _REGISTRY_CACHE.get("registry")
+    if cached is not None and _REGISTRY_CACHE.get("stamp") == stamp:
+        return cached
     with open(PETS_MANIFEST_PATH, "r", encoding="utf-8") as manifest_file:
         manifest = json.load(manifest_file)
     if not isinstance(manifest, dict) or not manifest:
@@ -68,6 +81,8 @@ def load_pet_registry() -> dict[str, dict]:
     }
     if DEFAULT_PET_ID not in registry:
         raise ValueError(f"pet manifest must define {DEFAULT_PET_ID!r}")
+    _REGISTRY_CACHE["stamp"] = stamp
+    _REGISTRY_CACHE["registry"] = registry
     return registry
 
 

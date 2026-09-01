@@ -145,8 +145,34 @@ def home_status_card_value_rects(size=HOME_STATUS_CARD_SIZE):
     )
 
 
+_STATUS_CARD_CACHE: dict[str, object] = {}
+
+
 def render_home_status_card(state, size=HOME_STATUS_CARD_SIZE):
-    """Render a crisp, live wall card with only the pet name and three stats."""
+    """Render a crisp, live wall card; cached until its content changes."""
+
+    profile = None
+    pets = state.get("pets")
+    if isinstance(pets, dict):
+        profile = pets.get(state.get("active_pet_id"))
+    values = profile if isinstance(profile, dict) else state
+    signature = (
+        values.get("pet_name", state.get("pet_name", "")),
+        int(values.get("hunger", 0) or 0),
+        int(values.get("mood", 0) or 0),
+        int(values.get("energy", 0) or 0),
+        size,
+    )
+    cached = _STATUS_CARD_CACHE.get("pixmap")
+    if cached is not None and _STATUS_CARD_CACHE.get("signature") == signature:
+        return cached
+    pixmap = _render_status_card_uncached(state, size)
+    _STATUS_CARD_CACHE["signature"] = signature
+    _STATUS_CARD_CACHE["pixmap"] = pixmap
+    return pixmap
+
+
+def _render_status_card_uncached(state, size=HOME_STATUS_CARD_SIZE):
 
     width, height = (int(size[0]), int(size[1]))
     pixmap = QPixmap(

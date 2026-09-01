@@ -91,7 +91,8 @@ class HomeSceneWindow(QWidget):
                             home_pet_walk_source_rect(frame_index)
                         )
                         self._ice_shadow_params(
-                            cropped, frame_index, mirrored
+                            cropped, frame_index, mirrored,
+                            sheet_key="down" if sheet is self.home_pet_walk_down else "back",
                         )
         self._home_pet_asset_state = {
             "idle": HOME_PET_IDLE_PATH,
@@ -217,9 +218,16 @@ class HomeSceneWindow(QWidget):
 
     @property
     def current_pet_id(self):
-        return pet_definition(
-            self.state.get("active_pet_id", "lunch_meat")
-        )["id"]
+        # Memoized on the raw state value: pet switches go through
+        # refresh_pet_assets, which re-reads this once. Calling the
+        # registry (even stat-cached) per paint frame cost real time.
+        pet_id = self.state.get("active_pet_id", "lunch_meat")
+        cached = self.__dict__.get("_current_pet_id_memo")
+        if cached is not None and cached[0] == pet_id:
+            return cached[1]
+        resolved = pet_definition(pet_id)["id"]
+        self._current_pet_id_memo = (pet_id, resolved)
+        return resolved
 
     def _save_home_pet_position(self):
         serialized = serialize_home_pet_position(self.home_pet.position)
@@ -1178,6 +1186,7 @@ class HomeSceneWindow(QWidget):
                 spec_pixmap.copy(home_pet_walk_source_rect(frame_index)),
                 frame_index,
                 mirrored,
+                sheet_key="back" if use_back else "down",
             )
             # The shadow tracks the body; mirroring flips the art across
             # the center line, so the contact center flips with it.
@@ -1562,7 +1571,8 @@ class HomeSceneWindow(QWidget):
         )
         painter.restore()
 
-    def _ice_shadow_params(self, pixmap, frame_index, mirrored):
+    def _ice_shadow_params(self, pixmap, frame_index, mirrored,
+                           sheet_key=""):
         """Measure a walk frame's body lean and foot center (cached)."""
 
         import io
@@ -1571,7 +1581,7 @@ class HomeSceneWindow(QWidget):
         from PIL import Image as PILImage
         from PyQt5.QtCore import QBuffer, QIODevice
 
-        key = (frame_index, mirrored)
+        key = (sheet_key, frame_index, mirrored)
         cache = self.__dict__.setdefault("_ice_shadow_param_cache", {})
         if key in cache:
             return cache[key]
@@ -1638,6 +1648,7 @@ class HomeSceneWindow(QWidget):
                     render_spec.pixmap.copy(render_spec.source_rect),
                     render_spec.frame_index,
                     render_spec.mirrored,
+                    sheet_key="live",
                 )
                 contact = (foot_center_x, contact[1], contact[2])
             shadow = home_pet_shadow_rect(body, contact)
@@ -2177,14 +2188,14 @@ class HomeSceneWindow(QWidget):
         key = self._hit_scene_button(event.pos())
         if key:
             self._pressed_button = key
-            self._button_flash_until = time.monotonic() + 0.30
+            self._button_flash_until = time.monotonic() + 0.18
             self.update()
-            self._button_flash_timer.start(330)
+            self._button_flash_timer.start(200)
             # Play the press effect first; the action fires ~160ms later so
             # the shrink+tint feedback completes while the button is still
             # on screen (menus stay open during the flash).
             self._deferred_click_point = event.pos()
-            self._click_defer_timer.start(160)
+            self._click_defer_timer.start(100)
             event.accept()
             return
         if self.handle_scene_click(event.pos()):
