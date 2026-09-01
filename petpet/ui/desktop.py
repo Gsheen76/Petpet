@@ -475,6 +475,7 @@ class BubbleMenu(QWidget):
     """Soft candy-style action buttons with a warm growth card."""
     PRIMARY_ACTIONS = [
         ("💬", "聊天", "chat", "#ef8fa2"),
+        ("🐾", "宠物", "pet_profile", "#8fb7de"),
         ("🏠", "小屋", "home", "#cf9770"),
         ("🛍", "商店", "shop", "#e0a85f"),
         ("🤝", "互动", "interaction", "#72bf9b"),
@@ -496,7 +497,7 @@ class BubbleMenu(QWidget):
         ("↩", "返回", "back", "#79bd9a"),
         ("✕", "退出", "quit", "#df8f91"),
     ]
-    PAGE_COLUMNS = {"primary": 5, "interaction": 4, "more": 5}
+    PAGE_COLUMNS = {"primary": 6, "interaction": 4, "more": 5}
 
     @staticmethod
     def action_needs_attention(action, *, has_claimable,
@@ -527,7 +528,7 @@ class BubbleMenu(QWidget):
         self.setAttribute(Qt.WA_DeleteOnClose, True)
 
         # Larger hit targets with room for both icon and label.
-        self.W = 590 if self.page in ("primary", "more") else 470
+        self.W = 700 if self.page == "primary" else (590 if self.page == "more" else 470)
         self.H = 200 if self.page == "more" else 112
         self.resize(self.W, self.H)
         self._bubble_rects = []
@@ -753,6 +754,8 @@ class BubbleMenu(QWidget):
             pet.toggle_sleep()
         elif action == "settings":
             pet.open_settings()
+        elif action == "pet_profile":
+            pet.open_pet_profile()
         elif action == "records":
             pet.open_records()
         elif action == "achievements":

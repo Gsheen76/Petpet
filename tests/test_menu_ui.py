@@ -60,7 +60,10 @@ class MenuUiTests(unittest.TestCase):
     def test_primary_and_more_bubble_actions(self):
         self.assertEqual(
             [action for _, _, action, _ in pet.BubbleMenu.PRIMARY_ACTIONS],
-            ["chat", "home", "shop", "interaction", "more"],
+            [
+                "chat", "pet_profile", "home",
+                "shop", "interaction", "more",
+            ],
         )
         self.assertEqual(
             [action for _, _, action, _ in pet.BubbleMenu.MORE_ACTIONS],

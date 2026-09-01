@@ -226,6 +226,7 @@ class PetWindow(QWidget):
         self.records_win = None
         self.achievements_win = None
         self.shop_win = None
+        self.profile_win = None
         self.home_scene_window = None
         self.minigames_win = None
         self.parameter_tuner_win = None
@@ -2770,6 +2771,12 @@ class PetWindow(QWidget):
         if self.records_win is None:
             self.records_win = _dependency("RecordsWindow")(self, _dependency("save_state"))
         self.records_win.show_near_pet()
+
+    def open_pet_profile(self):
+        """Open the per-pet profile panel (art, name, affection, outfits)."""
+        if self.profile_win is None:
+            self.profile_win = _dependency("PetProfileWindow")(self, _dependency("save_state"))
+        self.profile_win.show_near_pet()
 
     def open_status(self):
         """Open the shared warm attribute card beside the active pet."""

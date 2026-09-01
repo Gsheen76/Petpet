@@ -97,6 +97,10 @@ import minigames
 from progression_ui import AchievementsWindow, RecordsWindow, ShopWindow
 from minigames import MiniGameHubWindow
 from home_scene import HomeSceneWindow
+from petpet.ui.pet_profile import (
+    PetProfileWindow,
+    configure_name_dialog_factory,
+)
 
 # Sound (optional — QtMultimedia may not be installed)
 try:
@@ -920,6 +924,9 @@ class StatsWindow(QWidget):
 
 
 desktop_ui.configure_dependency_resolver(lambda name: globals()[name])
+
+# 宠物详情面板的改名对话框定义在本模块，注入给包内窗口使用。
+configure_name_dialog_factory(PetNameEditDialog)
 
 _pet_interface_anchor_rect = desktop_ui.pet_interface_anchor_rect
 _pet_interface_anchor_visible = desktop_ui.pet_interface_anchor_visible

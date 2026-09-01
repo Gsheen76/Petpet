@@ -150,5 +150,32 @@ class ProfileWindowTests(unittest.TestCase):
                         or window._locked_page.isVisible())
 
 
+class BubbleMenuEntryTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from PyQt5.QtWidgets import QApplication
+
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_primary_page_has_pet_profile_action(self):
+        from petpet.ui.desktop import BubbleMenu
+
+        actions = [entry[2] for entry in BubbleMenu.PRIMARY_ACTIONS]
+        self.assertIn("pet_profile", actions)
+        self.assertLess(actions.index("pet_profile"), 3)
+        self.assertEqual(BubbleMenu.PAGE_COLUMNS["primary"], 6)
+
+    def test_dispatch_opens_pet_profile(self):
+        import pet
+
+        fake_pet = SimpleNamespace(open_pet_profile=Mock())
+        fake_menu = SimpleNamespace(pet=fake_pet, _close=Mock())
+
+        pet.BubbleMenu._run_action(fake_menu, "pet_profile")
+
+        fake_pet.open_pet_profile.assert_called_once_with()
+        fake_menu._close.assert_called_once_with()
+
+
 if __name__ == "__main__":
     unittest.main()
