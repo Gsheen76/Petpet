@@ -131,6 +131,10 @@ class HomeSceneWindow(QWidget):
         self._button_flash_timer = QTimer(self)
         self._button_flash_timer.setSingleShot(True)
         self._button_flash_timer.timeout.connect(self._expire_button_flash)
+        self._deferred_click_point = None
+        self._click_defer_timer = QTimer(self)
+        self._click_defer_timer.setSingleShot(True)
+        self._click_defer_timer.timeout.connect(self._fire_deferred_click)
         self._window_drag_offset = None
         self._last_pet_tick = time.monotonic()
         self._last_persisted_home_target = None
@@ -845,11 +849,13 @@ class HomeSceneWindow(QWidget):
         painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
         draw_rect = rect
         if state == "hover":
-            draw_rect = rect.adjusted(-2, -2, 2, 2)
+            draw_rect = rect.adjusted(-3, -3, 3, 3)
+        elif state == "pressed":
+            draw_rect = rect.adjusted(3, 3, -3, -3)
         painter.drawPixmap(draw_rect, pixmap)
         if state == "pressed":
             painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor(110, 62, 40, 165))
+            painter.setBrush(QColor(70, 42, 28, 150))
             painter.drawRoundedRect(draw_rect, 14, 14)
         elif state == "hover":
             painter.setPen(QPen(QColor("#d9976b"), 3))
@@ -891,8 +897,8 @@ class HomeSceneWindow(QWidget):
         painter.setFont(font)
         painter.setPen(text)
         if state == "pressed":
-            painter.setBrush(QColor(110, 62, 40, 165))
-            painter.drawRoundedRect(rect, 14, 14)
+            painter.setBrush(QColor(70, 42, 28, 150))
+            painter.drawRoundedRect(rect.adjusted(3, 3, -3, -3), 14, 14)
         elif state == "hover":
             painter.setPen(QPen(QColor("#d9976b"), 3))
             painter.setBrush(QColor(255, 252, 246, 110))
@@ -2142,6 +2148,13 @@ class HomeSceneWindow(QWidget):
                     return f"menu:{action}"
         return None
 
+    def _fire_deferred_click(self):
+        point = self._deferred_click_point
+        self._deferred_click_point = None
+        if point is None:
+            return
+        self.handle_scene_click(point)
+
     def _expire_button_flash(self):
         if time.monotonic() >= self._button_flash_until - 0.02:
             self._pressed_button = None
@@ -2167,12 +2180,13 @@ class HomeSceneWindow(QWidget):
             self._button_flash_until = time.monotonic() + 0.30
             self.update()
             self._button_flash_timer.start(330)
-        if self._interaction_menu_open:
-            for action, rect in self.interaction_item_rects().items():
-                if rect.contains(event.pos()):
-                    self.trigger_home_interaction(action)
-                    event.accept()
-                    return
+            # Play the press effect first; the action fires ~160ms later so
+            # the shrink+tint feedback completes while the button is still
+            # on screen (menus stay open during the flash).
+            self._deferred_click_point = event.pos()
+            self._click_defer_timer.start(160)
+            event.accept()
+            return
         if self.handle_scene_click(event.pos()):
             event.accept()
             return
