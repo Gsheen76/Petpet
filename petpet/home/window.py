@@ -128,6 +128,9 @@ class HomeSceneWindow(QWidget):
         self._hover_button_prev = None
         self._pressed_button = None
         self._button_flash_until = 0.0
+        self._button_flash_timer = QTimer(self)
+        self._button_flash_timer.setSingleShot(True)
+        self._button_flash_timer.timeout.connect(self._expire_button_flash)
         self._window_drag_offset = None
         self._last_pet_tick = time.monotonic()
         self._last_persisted_home_target = None
@@ -846,10 +849,10 @@ class HomeSceneWindow(QWidget):
         painter.drawPixmap(draw_rect, pixmap)
         if state == "pressed":
             painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor(120, 72, 50, 120))
+            painter.setBrush(QColor(110, 62, 40, 165))
             painter.drawRoundedRect(draw_rect, 14, 14)
         elif state == "hover":
-            painter.setPen(QPen(QColor("#f5c6aa"), 2))
+            painter.setPen(QPen(QColor("#d9976b"), 3))
             painter.setBrush(QColor(255, 252, 246, 90))
             painter.drawRoundedRect(draw_rect.adjusted(1, 1, -1, -1), 14, 14)
         if label:
@@ -888,9 +891,10 @@ class HomeSceneWindow(QWidget):
         painter.setFont(font)
         painter.setPen(text)
         if state == "pressed":
-            painter.setBrush(QColor(120, 72, 50, 120))
+            painter.setBrush(QColor(110, 62, 40, 165))
             painter.drawRoundedRect(rect, 14, 14)
         elif state == "hover":
+            painter.setPen(QPen(QColor("#d9976b"), 3))
             painter.setBrush(QColor(255, 252, 246, 110))
             painter.drawRoundedRect(rect, 14, 14)
         painter.drawText(rect, Qt.AlignCenter, label)
@@ -2138,6 +2142,11 @@ class HomeSceneWindow(QWidget):
                     return f"menu:{action}"
         return None
 
+    def _expire_button_flash(self):
+        if time.monotonic() >= self._button_flash_until - 0.02:
+            self._pressed_button = None
+            self.update()
+
     def _button_state(self, name):
         now = time.monotonic()
         if self._pressed_button == name and now < self._button_flash_until:
@@ -2155,7 +2164,9 @@ class HomeSceneWindow(QWidget):
         key = self._hit_scene_button(event.pos())
         if key:
             self._pressed_button = key
-            self._button_flash_until = time.monotonic() + 0.15
+            self._button_flash_until = time.monotonic() + 0.30
+            self.update()
+            self._button_flash_timer.start(330)
         if self._interaction_menu_open:
             for action, rect in self.interaction_item_rects().items():
                 if rect.contains(event.pos()):
@@ -2202,9 +2213,6 @@ class HomeSceneWindow(QWidget):
             self._window_drag_offset = None
             event.accept()
             return
-        if self._pressed_button is not None:
-            self._pressed_button = None
-            self.update()
         if event.button() != Qt.LeftButton:
             return
         if self._pan_direction is not None:
