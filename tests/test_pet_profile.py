@@ -133,7 +133,9 @@ class ProfileWindowTests(unittest.TestCase):
         window._switch_pet("ice_cream")
         pet.set_active_pet.assert_called_once_with("ice_cream")
         self.assertIn("冰淇淋", window._name_label.text())
-        self.assertEqual(window._outfit_cards, [])
+        # 冰淇凌已拥有但暂无套装 → 显示准备中占位。
+        self.assertEqual(len(window._outfit_cards), 1)
+        self.assertIn("准备中", window._outfit_cards[0].text())
 
     def test_equip_owned_outfit_updates_state_and_saves(self):
         state = _fresh_state()
