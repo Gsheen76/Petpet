@@ -362,6 +362,47 @@ class ProfileWindowShellTests(unittest.TestCase):
             self.assertIsNotNone(widget["button"], "每张套装卡须带装备按钮")
             self.assertFalse(widget["button"].icon().isNull())
 
+    def test_equip_button_equips_directly_not_shop(self):
+        state = _fresh_state()
+        state["owned_outfits"] = ["dinosaur_suit"]
+        window, pet = self._window(state)
+        window._show_tab("套装")
+        widget = next(
+            w for w in window._outfit_widgets
+            if w["outfit_id"] == "dinosaur_suit"
+        )
+        widget["button"].click()
+        self.assertEqual(state["equipped_outfit"], "dinosaur_suit",
+                         "点击装备应直接换装")
+        pet.open_shop.assert_not_called()
+        # 已装备 → 再点卸下。
+        window._show_tab("套装")
+        widget = next(
+            w for w in window._outfit_widgets
+            if w["outfit_id"] == "dinosaur_suit"
+        )
+        widget["button"].click()
+        self.assertIsNone(state["equipped_outfit"])
+
+    def test_outfit_button_below_card_centered(self):
+        window, _ = self._window()
+        window._show_tab("套装")
+        window.show()
+        self.app.processEvents()
+        widget = window._outfit_widgets[0]
+        button = widget["button"]
+        pixmap = widget["pixmap"]
+        host = window._outfit_host
+        btn_top = button.mapTo(host, button.rect().topLeft()).y()
+        card_bottom = (pixmap.mapTo(host, pixmap.rect().topLeft()).y()
+                       + pixmap.height())
+        # 按钮在卡图下方（参考图：卡下空白区）。
+        self.assertGreaterEqual(btn_top, card_bottom - 2)
+        # 水平居中于卡。
+        card_center = pixmap.mapTo(host, pixmap.rect().center()).x()
+        btn_center = button.mapTo(host, button.rect().center()).x()
+        self.assertLess(abs(btn_center - card_center), 6)
+
     def test_outfit_page_scrolls_vertically_only(self):
         window, _ = self._window()
         window._show_tab("套装")

@@ -722,7 +722,7 @@ class PetProfileWindow(QWidget):
             host = QWidget()
             host_layout = QVBoxLayout(host)
             host_layout.setContentsMargins(0, 0, 0, 0)
-            host_layout.setSpacing(0)
+            host_layout.setSpacing(4)
             pixmap_label = QLabel()
             pixmap_label.setAlignment(Qt.AlignCenter)
             art = QPixmap(art_path) if art_path else QPixmap()
@@ -733,6 +733,8 @@ class PetProfileWindow(QWidget):
                     Qt.KeepAspectRatio, Qt.SmoothTransformation,
                 ))
             host_layout.addWidget(pixmap_label)
+            # 装备按钮（第十二轮）：卡下方居中，点击直接换装/卸下；
+            # 按钮素材烘焙「装备」白字，卸下态用绿/橘同款回退字样。
             equip_asset = OUTFIT_EQUIP_BUTTON.get(outfit["id"])
             button = None
             if equip_asset:
@@ -750,16 +752,34 @@ class PetProfileWindow(QWidget):
                 button.setIconSize(QSize(
                     round(177 * _SX * _FIT), round(56 * _SY * _FIT),
                 ))
-                button.clicked.connect(self._open_shop)
-                host_layout.addWidget(
-                    button, 0, Qt.AlignHCenter,
+                button.clicked.connect(
+                    lambda _checked=False, oid=outfit["id"]: (
+                        self._toggle_outfit(oid)
+                    )
                 )
+                host_layout.addWidget(button, 0, Qt.AlignHCenter)
             self._outfit_layout.insertWidget(
                 self._outfit_layout.count() - 1, host,
             )
             self._outfit_widgets.append(
-                {"pixmap": pixmap_label, "button": button},
+                {"pixmap": pixmap_label, "button": button,
+                 "outfit_id": outfit["id"]},
             )
+
+    def _toggle_outfit(self, outfit_id):
+        """点击装备按钮：未装备→装备，已装备→卸下；保存并同步桌面/小屋。"""
+        if self.pet.state.get("equipped_outfit") == outfit_id:
+            result = progression.unequip_outfit(self.pet.state)
+        else:
+            result = progression.equip_outfit(self.pet.state, outfit_id)
+        if result.get("ok"):
+            self._save_state(self.pet.state)
+            self.pet.update()
+            home = getattr(self.pet, "home_scene_window", None)
+            refresh_home = getattr(home, "refresh_pet_assets", None)
+            if callable(refresh_home):
+                refresh_home()
+        self.refresh()
 
     def _open_shop(self):
         opener = getattr(self.pet, "open_shop", None)
