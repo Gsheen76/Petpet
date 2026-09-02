@@ -349,17 +349,9 @@ class PetProfileWindow(QWidget):
         _S = _resolve_scale(screen)
         self.setFixedSize(round(ART_W * _S), round(ART_H * _S))
         self._background = _pp_pixmap("background.png", self.width(), self.height())
-        # base_UI 原生 1201x1309 比页面高 5px：按宽度等比缩放，底部多出部分
-        # 被圆角裁剪切掉（其内容止于 y875，无视觉影响），避免纵向压扁素材。
-        # 用户定稿（第五轮）：素材原样绘制，不擦除不克隆。
-        base_path = _pp_asset("base_UI.png")
-        base_native = QPixmap(base_path) if base_path else QPixmap()
-        if not base_native.isNull():
-            self._base_ui = base_native.scaledToWidth(
-                self.width(), Qt.SmoothTransformation,
-            )
-        else:
-            self._base_ui = QPixmap()
+        # base_UI 已按用户指示撤下（第六轮）：其元素（标题横幅/X 圆钮/名字牌/
+        # 心气泡/描述胶囊）等新 UI 素材到位后逐个重接。关闭键暂以原位透明
+        # 覆盖层保底（悬停显洗色），新素材到位后重新定位。
         self._close_button = _CloseButton(self, self.close)
         self._close_button.geometry_from_art()
 
@@ -541,8 +533,6 @@ class PetProfileWindow(QWidget):
         painter.setClipPath(clip)
         if not self._background.isNull():
             painter.drawPixmap(0, 0, self._background)
-        if not self._base_ui.isNull():
-            painter.drawPixmap(0, 0, self._base_ui)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:

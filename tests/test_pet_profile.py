@@ -178,30 +178,6 @@ class ProfileWindowShellTests(unittest.TestCase):
         window._select_pet("ice_cream")
         pet.set_active_pet.assert_called_once_with("ice_cream")
 
-    def test_art_layers_rendered_unmodified(self):
-        """还原：顶部 X 与 base_UI 圆钮 X 均按素材原样可见（不擦除/不克隆）。"""
-        window, _ = self._window()
-        window.show()
-        self.app.processEvents()
-        image = window.grab().toImage()
-        from PyQt5.QtGui import QColor
-
-        kx, ky = window.width() / 1201, window.height() / 1304
-
-        def dark_x_pixels(x0, y0, x1, y1):
-            count = 0
-            for x in range(round(x0 * kx), round(x1 * kx), 2):
-                for y in range(round(y0 * ky), round(y1 * ky), 2):
-                    c = QColor.fromRgba(image.pixel(x, y))
-                    if c.alpha() > 100 and c.red() + c.green() + c.blue() < 560:
-                        count += 1
-            return count
-
-        upper = dark_x_pixels(1062, 8, 1176, 34)
-        lower = dark_x_pixels(1085, 32, 1155, 90)
-        self.assertGreater(upper, 5, "background 顶部 X 应还原可见")
-        self.assertGreater(lower, 20, "base_UI 圆钮 X 应还原可见")
-
     def test_pet_card_icons_enlarged_and_closer(self):
         from petpet.ui.pet_profile import PET_CARD_SIZE, PET_CARD_SLOTS
 
@@ -254,7 +230,7 @@ class ProfileWindowShellTests(unittest.TestCase):
         self.assertIn("Lv.", window._level_label.text())
         self.assertIn("好感度", window._affection_label.text())
 
-    def test_shell_renders_background_and_base_ui(self):
+    def test_shell_renders_background(self):
         window, _ = self._window()
         window.show()
         self.app.processEvents()
@@ -265,21 +241,25 @@ class ProfileWindowShellTests(unittest.TestCase):
         mid = QColor.fromRgba(image.pixel(window.width() // 2, 200))
         self.assertGreater(mid.alpha(), 240)
         self.assertGreater(mid.red(), 230)
-        # base_UI 右上圆钮区（艺术稿 x1080-1150, y32-100）应有非奶油内容；
-        # 采样坐标按实际缩放换算。
-        kx = window.width() / 1201
-        ky = window.height() / 1304
-        content = 0
-        for x in range(round(1080 * kx), round(1150 * kx), 4):
-            for y in range(round(32 * ky), round(100 * ky), 4):
+
+    def test_base_ui_layer_removed(self):
+        """base_UI 已撤：原横幅区（x390-1151 y30-120）应为纯奶油底。"""
+        window, _ = self._window()
+        window.show()
+        self.app.processEvents()
+        image = window.grab().toImage()
+        from PyQt5.QtGui import QColor
+
+        kx, ky = window.width() / 1201, window.height() / 1304
+        colored = 0
+        for x in range(round(500 * kx), round(900 * kx), 6):
+            for y in range(round(40 * ky), round(110 * ky), 6):
                 c = QColor.fromRgba(image.pixel(x, y))
                 if c.alpha() > 100 and (
-                    abs(c.red() - mid.red()) > 18
-                    or abs(c.green() - mid.green()) > 18
-                    or abs(c.blue() - mid.blue()) > 18
+                    c.red() - c.blue() > 45 or c.green() - c.blue() > 40
                 ):
-                    content += 1
-        self.assertGreater(content, 5, "base_UI 内容应可见于右上区域")
+                    colored += 1
+        self.assertLess(colored, 6, "原 base_UI 横幅区不应残留橙色元素")
 
     def test_page_corners_are_rounded_transparent(self):
         window, _ = self._window()
