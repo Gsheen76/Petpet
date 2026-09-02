@@ -51,7 +51,7 @@ D:\Agent_project\Petpet
 
 | 领域 | 内容 |
 |------|------|
-| **宠物详情面板** | **换新素材从零重建中（用户指示逐轮搭建）**：新素材在 `assets/runtime/ui/pet_profile_new/`（background 1201×1304 + base_UI 右侧骨架 + 装备按钮/宠物图标）。第六轮撤下 base_UI（`66f9ae6`）：base_UI 停止渲染（横幅/X 圆钮/名字牌/心气泡/描述胶囊随之移除，等用户新 UI 素材逐个重接），关闭键暂为原位透明覆盖保底；坑位：background 顶部是两个并排小标记不是 X；烘焙素材按键只做覆盖洗色勿动原画；保留：头像 180px 靠近、idle 动画、等级好感行、改名回调；此前：切换卡/改名键/idle 动画/两行数值（`225ef4c`），壳 0.7 比例 841×913 圆角 64、paintEvent 圆角裁剪 30px（`CORNER_RADIUS`）叠 background+base_UI、拖拽/居中入口沿用；`pet_profile_snapshot` 数据层与套装预览路径修复保留。旧艺术稿布局（`2e59452`）用户评估搁置，旧素材目录 `ui/pet_profile/` 暂留待清理。**长期规则：所有按键必须带悬停+点击两态反馈**（已入 AGENTS.md）。详见 Obsidian `宠物系统\宠物详情面板新素材重建记录` |
+| **宠物详情面板** | **换新素材从零重建中（用户指示逐轮搭建）**：新素材在 `assets/runtime/ui/pet_profile_new/`（background 1201×1304 + base_UI 右侧骨架 + 装备按钮/宠物图标）。第七轮分栏内容区（`a980eba`）：description_bg 分栏条（简介/套装两页可扩展，QSS 两态反馈）+ QScrollArea 内容页（简介：名字（初始名括注）/好感度/饱腹心情精力/性格；套装：outfit_strawberry/diansour 新素材卡）；close_button.png 放回原位（悬停放大白洗/按压两段反馈）；删悬浮名字/等级好感行/改名钮（对话框工厂接口保留）；坑位：_pp_pixmap 统一传艺术稿坐标内部 ×_S，传最终像素会双重缩放出幽灵图；保留：宠物卡/idle 动画；此前：切换卡/改名键/idle 动画/两行数值（`225ef4c`），壳 0.7 比例 841×913 圆角 64、paintEvent 圆角裁剪 30px（`CORNER_RADIUS`）叠 background+base_UI、拖拽/居中入口沿用；`pet_profile_snapshot` 数据层与套装预览路径修复保留。旧艺术稿布局（`2e59452`）用户评估搁置，旧素材目录 `ui/pet_profile/` 暂留待清理。**长期规则：所有按键必须带悬停+点击两态反馈**（已入 AGENTS.md）。详见 Obsidian `宠物系统\宠物详情面板新素材重建记录` |
 
 ### v1.6.3（当前）
 
@@ -143,7 +143,7 @@ assets/runtime/ui/shop/
 | 版本发布 | 更新 `version.py` + README + 发布说明 → `scripts/release.ps1 -Version X.Y.Z` |
 
 **测试约束**：
-- `QT_QPA_PLATFORM=offscreen` 跑全量（~80s，690 passed）
+- `QT_QPA_PLATFORM=offscreen` 跑全量（~80s，693 passed）
 - Windows 平台截图需真实字体库（offscreen 无字体数据库，渲染会缺字）
 - `setPixmap` 会清空 `QLabel.text()` → 必须用 `PreservedTextLabel` 保留文本
 
