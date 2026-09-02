@@ -1,22 +1,31 @@
-"""宠物详情面板：数据快照纯函数 + 空壳页面（新素材逐轮搭建中）。
+"""宠物详情面板：数据快照纯函数 + 新素材面板（逐轮搭建）。
 
-页面骨架（本轮）：background 原生尺寸 1201x1304，background + base_UI 两层，
-整页圆角裁剪（CORNER_RADIUS），无边框可拖拽。内容区按用户后续指示逐轮加入。
+页面骨架：background 原生尺寸 1201x1304（显示比例 0.7），background + base_UI
+两层，整页圆角裁剪（CORNER_RADIUS），无边框可拖拽。
+内容区（第三轮）：左栏宠物切换卡、待机动画、名字牌+改名、等级/好感两行。
 """
 
 from __future__ import annotations
 
+import io
+import json
 import os
 
-from PyQt5.QtCore import QRect, Qt, QTimer
-from PyQt5.QtGui import QColor, QPainter, QPainterPath, QPen, QPixmap
-from PyQt5.QtWidgets import QApplication, QWidget
+import numpy as np
+from PIL import Image as PILImage
+from PyQt5.QtCore import QRect, QSize, Qt, QTimer
+from PyQt5.QtGui import QColor, QIcon, QPainter, QPainterPath, QPixmap
+from PyQt5.QtWidgets import QApplication, QLabel, QPushButton, QWidget
 
+from petpet.app.fonts import APP_FONT_FAMILY
 from petpet.app import pets as pet_registry
 from petpet.app import state as app_state
 from petpet.progression import core as progression
 
 _NAME_DIALOG_FACTORY = None
+
+# 各宠物的头像框素材（图1 左栏卡；无素材的物种回退 avatar.png）。
+SPECIES_RAIL_ICON = {"lunch_meat": "pet_icon_1.png", "ice_cream": "pet_icon_2.png"}
 
 _ASSET_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
@@ -30,14 +39,37 @@ ART_W, ART_H = 1201, 1304
 DISPLAY_SCALE = 0.7
 _S = DISPLAY_SCALE
 
-# 整页圆角半径（用户定稿：比首版 30 更大）。
-CORNER_RADIUS = 50
+# 整页圆角半径（用户定稿：逐轮加大，当前 64）。
+CORNER_RADIUS = 64
 
 # 右上关闭按钮（base_UI 圆钮位已烘焙 X 图案，交互层克隆其像素做反馈）。
-CLOSE_BUTTON_AT = (1068, 16, 94, 94)
+# 用户定稿：比烘焙位下移；悬停只放大+白洗，不描边。
+CLOSE_BUTTON_AT = (1068, 30, 94, 94)
 CLOSE_KNOB_AT = (1076, 24, 78, 78)
 CLOSE_PRESS_FLASH_MS = 40
 CLOSE_CLICK_DEFER_MS = 80
+
+# 图1 左栏宠物卡（background 烘焙卡片 x85-334 y208-1089 内部两张）。
+PET_CARD_SLOTS = ((118, 258), (118, 592))    # 每卡左上角（pet_icon 150x150）
+PET_CARD_SIZE = (150, 150)
+PET_CARD_NAME_AT = (0, 152, 150, 28)         # 名字（相对卡，卡正下方居中）
+PET_CARD_TAG_AT = (25, 118, 100, 30)         # 使用中 pill（相对卡，头像内底部居中）
+
+# 图2 待机动画：垫 x437-975 y515-639，狗底部对齐垫，高约 350。
+IDLE_PREVIEW_RECT = (460, 230, 480, 390)
+IDLE_FRAME_HEIGHT = 360
+IDLE_FPS = 8
+
+# 图3 名字牌（base_UI 烘焙 x564-869 y620-679，改名红钮在牌右端）。
+NAME_PLATE_AT = (564, 620, 305, 59)
+NAME_LABEL_AT = (584, 626, 180, 47)
+RENAME_BUTTON_AT = (775, 624, 86, 52)
+
+# 图4 数值两行：background 已烘焙星/心图标（第一列 x~396 y696/752），
+# 文本放图标右侧；第一排等级，第二排好感。
+LEVEL_ROW_AT = (444, 688)
+AFFECTION_ROW_AT = (444, 744)
+ROW_TEXT_SIZE = (240, 40)
 
 
 def _R(x, y, w, h):
@@ -162,6 +194,59 @@ def _outfit_preview_path(pet_id, outfit):
     return candidate if os.path.isfile(candidate) else None
 
 
+def _grayscale_pixmap(path):
+    """灰阶化并保留 alpha（PIL+numpy 向量化；Format_Grayscale8 会把透明变黑）。"""
+    if not path or not os.path.isfile(path):
+        return QPixmap()
+    try:
+        img = PILImage.open(path).convert("RGBA")
+        arr = np.asarray(img)
+        gray = (
+            0.299 * arr[:, :, 0] + 0.587 * arr[:, :, 1] + 0.114 * arr[:, :, 2]
+        ).astype("uint8")
+        out = np.dstack([gray, gray, gray, arr[:, :, 3]])
+        buf = io.BytesIO()
+        PILImage.fromarray(out, "RGBA").save(buf, format="PNG")
+        pixmap = QPixmap()
+        pixmap.loadFromData(buf.getvalue())
+        return pixmap
+    except Exception:
+        return QPixmap(path)
+
+
+def _load_idle_frames(pet_id, height):
+    """加载桌面 idle 动画全部帧（等高缩放）；无动画回退空列表。"""
+    folder = pet_registry.pet_asset_path(pet_id, "desktop", "idle")
+    if not folder:
+        return []
+    desktop_dir = os.path.dirname(os.path.dirname(folder))
+    manifest_path = os.path.join(
+        desktop_dir, "animations", "manifest.json",
+    )
+    frames = []
+    try:
+        with open(manifest_path, encoding="utf-8") as fh:
+            manifest = json.load(fh)
+        anim = manifest.get("idle") or {}
+        rel = anim.get("folder")
+        if not rel:
+            return frames
+        frame_dir = os.path.join(desktop_dir, "animations", rel)
+        names = sorted(
+            name for name in os.listdir(frame_dir)
+            if name.endswith(".png")
+        )
+        for name in names:
+            pixmap = QPixmap(os.path.join(frame_dir, name))
+            if not pixmap.isNull():
+                frames.append(pixmap.scaledToHeight(
+                    round(height * _S), Qt.SmoothTransformation,
+                ))
+    except (OSError, ValueError):
+        return frames
+    return frames
+
+
 class _CloseButton(QWidget):
     """右上关闭钮：X 图案烘焙在 base_UI 里，本件克隆圆钮像素做反馈层。
 
@@ -207,9 +292,10 @@ class _CloseButton(QWidget):
             painter.setBrush(QColor(70, 42, 28, 120))
             painter.drawEllipse(rect)
         elif self.hovered or self._phase == "recover":
-            painter.setPen(QPen(QColor("#f28f76"), max(2, round(3 * _S))))
+            # 用户定稿：悬停不描边，只白洗提亮。
+            painter.setPen(Qt.NoPen)
             painter.setBrush(QColor(255, 252, 246, 70))
-            painter.drawEllipse(rect.adjusted(1, 1, -1, -1))
+            painter.drawEllipse(rect)
 
     def enterEvent(self, event):
         self.hovered = True
@@ -243,7 +329,7 @@ class _CloseButton(QWidget):
 
 
 class PetProfileWindow(QWidget):
-    """宠物详情空壳页：background + base_UI + 圆角；内容逐轮按指示加入。
+    """宠物详情面板：background + base_UI 圆角画布上的宠物内容区。
 
     所有按键加入时必须带悬停与点击反馈（AGENTS.md UI 约定）。
     """
@@ -255,6 +341,10 @@ class PetProfileWindow(QWidget):
             save_state if callable(save_state) else (lambda _state: None)
         )
         self._drag_offset = None
+        self._name_dialog = None
+        self._pet_cards = {}
+        self._idle_frames = []
+        self._idle_index = 0
 
         self.setWindowFlags(
             Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
@@ -289,8 +379,179 @@ class PetProfileWindow(QWidget):
         self._close_button = _CloseButton(self, knob, self.close)
         self._close_button.geometry_from_art()
 
+        self._build_content()
+        self._start_idle_animation()
+        self.refresh()
+
+    # ---- 内容区构建 ----
+
+    def _label(self, text, x, y, w, h, *, size=16, color="#6b5646",
+               bold=False, align=Qt.AlignLeft | Qt.AlignVCenter):
+        label = QLabel(text, self)
+        label.setAlignment(align)
+        label.setWordWrap(False)
+        style = (
+            f"font-family:'{APP_FONT_FAMILY}';font-size:{round(size * _S)}px;"
+            f"color:{color};background:transparent;"
+        )
+        if bold:
+            style += "font-weight:600;"
+        label.setStyleSheet(style)
+        label.setGeometry(_R(x, y, w, h))
+        return label
+
+    def _build_content(self):
+        # 图1：左栏宠物切换卡（pet_icon 素材 + 名字 + 使用中 pill）。
+        for index, pet_id in enumerate(pet_registry.load_pet_registry()):
+            if index >= len(PET_CARD_SLOTS):
+                break
+            card_x, card_y = PET_CARD_SLOTS[index]
+            button = QPushButton(self)
+            button.setFlat(True)
+            button.setStyleSheet("QPushButton{border:none;background:transparent;}")
+            button.setCursor(Qt.PointingHandCursor)
+            button.setGeometry(_R(card_x, card_y, *PET_CARD_SIZE))
+            button.clicked.connect(
+                lambda _checked=False, target=pet_id: self._select_pet(target)
+            )
+            tag = QLabel("使用中", self)
+            tag.setAlignment(Qt.AlignCenter)
+            tag.setStyleSheet(
+                "QLabel{"
+                f"font-family:'{APP_FONT_FAMILY}';font-size:{round(13 * _S)}px;"
+                "color:#ffffff;background:#f5a48f;border-radius:12px;"
+                "padding:1px 10px;}"
+            )
+            tx, ty, tw, th = PET_CARD_TAG_AT
+            tag.setGeometry(_R(card_x + tx, card_y + ty, tw, th))
+            tag.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+            nx, ny, nw, nh = PET_CARD_NAME_AT
+            name = self._label(
+                "", card_x + nx, card_y + ny, nw, nh,
+                size=17, bold=True, align=Qt.AlignCenter,
+            )
+            self._pet_cards[pet_id] = {
+                "button": button, "tag": tag, "name": name,
+            }
+
+        # 图2：待机动画位（垫上，底部对齐）。
+        self._idle_label = QLabel(self)
+        self._idle_label.setAlignment(Qt.AlignBottom | Qt.AlignHCenter)
+        self._idle_label.setGeometry(_R(*IDLE_PREVIEW_RECT))
+        self._idle_label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+
+        # 图3：名字 + 改名交互键（改名红钮已烘焙在 base_UI 牌右端）。
+        self._name_label = self._label(
+            "", *NAME_LABEL_AT, size=24, bold=True, align=Qt.AlignCenter,
+        )
+        self._rename_button = QPushButton(self)
+        self._rename_button.setFlat(True)
+        self._rename_button.setStyleSheet(
+            "QPushButton{border:none;background:transparent;}"
+        )
+        self._rename_button.setCursor(Qt.PointingHandCursor)
+        self._rename_button.setGeometry(_R(*RENAME_BUTTON_AT))
+        self._rename_button.clicked.connect(self._open_name_dialog)
+
+        # 图4：第一排等级、第二排好感（星/心图标已烘焙在 background，
+        # 文本放第一列图标右侧）。
+        lx, ly = LEVEL_ROW_AT
+        self._level_label = self._label(
+            "", lx, ly, *ROW_TEXT_SIZE, size=20, bold=True,
+        )
+        ax, ay = AFFECTION_ROW_AT
+        self._affection_label = self._label(
+            "", ax, ay, *ROW_TEXT_SIZE, size=20, bold=True,
+        )
+
+    def _start_idle_animation(self):
+        """加载当前宠物 idle 动画帧并按 8fps 循环播放。"""
+        self._idle_frames = _load_idle_frames(
+            self._active_pet_id(), IDLE_FRAME_HEIGHT,
+        )
+        self._idle_index = 0
+        if self._idle_frames:
+            self._idle_label.setPixmap(self._idle_frames[0])
+            if not hasattr(self, "_idle_timer") or self._idle_timer is None:
+                self._idle_timer = QTimer(self)
+                self._idle_timer.timeout.connect(self._advance_idle_frame)
+            self._idle_timer.start(round(1000 / IDLE_FPS))
+        else:
+            self._idle_timer = None
+
+    def _advance_idle_frame(self):
+        if not self._idle_frames:
+            return
+        self._idle_index = (self._idle_index + 1) % len(self._idle_frames)
+        self._idle_label.setPixmap(self._idle_frames[self._idle_index])
+
+    def _active_pet_id(self):
+        return str(self.pet.state.get(
+            "active_pet_id", pet_registry.DEFAULT_PET_ID,
+        ))
+
+    # ---- 数据刷新与交互 ----
+
     def refresh(self):
-        """预留：内容轮加入后在此刷新（当前壳无动态内容）。"""
+        state = self.pet.state
+        active_id = self._active_pet_id()
+        snapshot = pet_profile_snapshot(state, active_id)
+
+        owned_ids = set(state.get("owned_pet_ids") or ())
+        owned_ids.add(active_id)
+        for pet_id, card in self._pet_cards.items():
+            owned = pet_id in owned_ids
+            icon_name = SPECIES_RAIL_ICON.get(pet_id)
+            icon_path = (
+                _pp_asset(icon_name) if icon_name
+                else pet_registry.pet_avatar_path(pet_id)
+            )
+            if owned:
+                icon = QPixmap(icon_path) if icon_path else QPixmap()
+            else:
+                icon = _grayscale_pixmap(icon_path) if icon_path else QPixmap()
+            card["button"].setIcon(QIcon(icon))
+            card["button"].setIconSize(QSize(*[
+                round(value * _S) for value in PET_CARD_SIZE
+            ]))
+            card["tag"].setVisible(pet_id == active_id)
+            card["name"].setText(pet_profile_snapshot(state, pet_id)["name"])
+
+        self._name_label.setText(snapshot["name"])
+        self._level_label.setText(f"Lv.{snapshot['level']}")
+        self._affection_label.setText(f"好感度 Lv.{snapshot['affection_level']}")
+
+    def _select_pet(self, pet_id):
+        if pet_id == self._active_pet_id():
+            return
+        snapshot = pet_profile_snapshot(self.pet.state, pet_id)
+        if not snapshot["owned"]:
+            return
+        result = self.pet.set_active_pet(pet_id)
+        if isinstance(result, dict) and result.get("ok") is False:
+            return
+        self._start_idle_animation()
+        self.refresh()
+
+    def _open_name_dialog(self):
+        if _NAME_DIALOG_FACTORY is None:
+            return
+        snapshot = pet_profile_snapshot(self.pet.state, self._active_pet_id())
+        dialog = _NAME_DIALOG_FACTORY(
+            snapshot["name"], self._commit_name, self.window(),
+        )
+        self._name_dialog = dialog
+        dialog.exec_()
+        self._name_dialog = None
+
+    def _commit_name(self, new_name):
+        if not (isinstance(new_name, str) and new_name.strip()):
+            return
+        setter = getattr(self.pet, "set_pet_name", None)
+        if callable(setter):
+            setter(new_name.strip())
+        self._save_state(self.pet.state)
+        self.refresh()
 
     def show_near_pet(self):
         """面板在屏幕居中打开（与商店/成就/记录面板一致）。"""

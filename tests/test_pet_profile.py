@@ -106,6 +106,7 @@ class ProfileWindowShellTests(unittest.TestCase):
         pet = SimpleNamespace(
             state=state or _fresh_state(),
             set_active_pet=Mock(return_value={"ok": True}),
+            set_pet_name=Mock(),
             update=Mock(),
             say=Mock(),
             home_scene_window=None,
@@ -121,7 +122,7 @@ class ProfileWindowShellTests(unittest.TestCase):
         # 用户定稿：整体显示为 background 的 70%（1201x1304 → 841x913）。
         self.assertEqual((module.ART_W, module.ART_H), (1201, 1304))
         self.assertEqual(module.DISPLAY_SCALE, 0.7)
-        self.assertGreater(module.CORNER_RADIUS, 30, "圆角须比首版的 30 更大")
+        self.assertGreater(module.CORNER_RADIUS, 50, "圆角须比上一轮 50 更大")
         window, _ = self._window()
         self.assertEqual((window.width(), window.height()), (841, 913))
 
@@ -143,6 +144,7 @@ class ProfileWindowShellTests(unittest.TestCase):
         window.show()
         self.app.processEvents()
         button = window._close_button
+        # 用户定稿：悬停不再描边（描边已移除），但仍需 hover 态反馈。
         self.assertFalse(button.hovered)
         button.enterEvent(None)
         self.assertTrue(button.hovered, "悬停必须置 hover 态")
@@ -156,6 +158,72 @@ class ProfileWindowShellTests(unittest.TestCase):
         self.assertEqual(button._phase, "pressed", "按下须进入按压反馈段")
         QTest.qWait(200)
         self.assertFalse(window.isVisible(), "两段反馈播完后窗口应关闭")
+
+    def test_close_button_sits_below_base_ui_knob(self):
+        from petpet.ui.pet_profile import CLOSE_BUTTON_AT
+
+        # 用户定稿：按键往下移动一点（原 y=16）。
+        self.assertGreater(CLOSE_BUTTON_AT[1], 20)
+
+    # ---- 第三轮：内容区 ----
+
+    def test_switch_cards_in_left_panel_switch_pet(self):
+        state = _fresh_state()
+        state["owned_pet_ids"] = ["lunch_meat", "ice_cream"]
+        window, pet = self._window(state)
+        self.assertEqual(len(window._pet_cards), 2)
+        window._select_pet("ice_cream")
+        pet.set_active_pet.assert_called_once_with("ice_cream")
+        # Mock 不落盘：模拟真实 set_active_pet 后的状态再刷新验证。
+        state["active_pet_id"] = "ice_cream"
+        window.refresh()
+        self.assertTrue(window._pet_cards["ice_cream"]["tag"].isVisibleTo(window))
+        self.assertFalse(window._pet_cards["lunch_meat"]["tag"].isVisibleTo(window))
+
+    def test_switch_to_unowned_pet_is_refused(self):
+        window, pet = self._window()
+        window._select_pet("ice_cream")
+        pet.set_active_pet.assert_not_called()
+
+    def test_idle_animation_frames_loaded_and_playing(self):
+        from petpet.ui import pet_profile as module
+
+        window, _ = self._window()
+        self.assertTrue(window._idle_frames, "应加载桌面 idle 动画帧")
+        self.assertGreaterEqual(len(window._idle_frames), 8)
+        self.assertIsNotNone(window._idle_timer)
+        index = window._idle_index
+        window._advance_idle_frame()
+        self.assertEqual(window._idle_index, (index + 1) % len(window._idle_frames))
+
+    def test_name_plate_shows_name_and_rename_button(self):
+        from petpet.ui import pet_profile as module
+
+        calls = []
+
+        def factory(current, on_commit, parent):
+            calls.append(current)
+            return SimpleNamespace(exec_=Mock(
+                side_effect=lambda: on_commit("烟花")
+            ))
+
+        module.configure_name_dialog_factory(factory)
+        self.addCleanup(module.configure_name_dialog_factory, None)
+        state = _fresh_state()
+        window, pet = self._window(state)
+        self.assertTrue(window._name_label.text())
+        window._rename_button.click()
+        self.assertEqual(len(calls), 1)
+        pet.set_pet_name.assert_called_once_with("烟花")
+        # Mock 不落盘：模拟真实 set_pet_name 后的状态再刷新验证。
+        state["pet_name"] = "烟花"
+        window.refresh()
+        self.assertIn("烟花", window._name_label.text())
+
+    def test_level_and_affection_rows_show_values(self):
+        window, _ = self._window()
+        self.assertIn("Lv.", window._level_label.text())
+        self.assertIn("好感度", window._affection_label.text())
 
     def test_shell_renders_background_and_base_ui(self):
         window, _ = self._window()
