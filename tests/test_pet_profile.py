@@ -236,5 +236,120 @@ class ReviewFixRegressionTests(unittest.TestCase):
         self.assertTrue(window._preview_label.pixmap().isNull())
 
 
+class ArtNativeLayoutTests(unittest.TestCase):
+    """重设计布局：艺术稿原生 1201x1309 基准 + 未用素材接入。"""
+
+    @classmethod
+    def setUpClass(cls):
+        from PyQt5.QtWidgets import QApplication
+
+        cls.app = QApplication.instance() or QApplication([])
+
+    def _window(self, state=None):
+        from petpet.ui.pet_profile import PetProfileWindow
+
+        pet = SimpleNamespace(
+            state=state or _fresh_state(),
+            set_active_pet=Mock(return_value={"ok": True}),
+            update=Mock(),
+            say=Mock(),
+            home_scene_window=None,
+            open_shop=Mock(),
+        )
+        window = PetProfileWindow(pet, save_state=Mock())
+        self.addCleanup(window.close)
+        return window, pet
+
+    def test_window_base_matches_art_at_80_percent(self):
+        from petpet.ui import pet_profile as module
+
+        # 用户定稿：整体显示为艺术稿的 80%（1201x1309 → 961x1047）。
+        self.assertEqual((module.BASE_W, module.BASE_H), (961, 1047))
+        self.assertEqual(module.DISPLAY_SCALE, 0.8)
+
+    def test_resolve_scale_caps_at_display_scale_and_fits_small_screens(self):
+        from PyQt5.QtCore import QRect
+
+        from petpet.ui.pet_profile import _resolve_scale
+
+        # 大屏不超过 80% 显示比例。
+        self.assertLessEqual(_resolve_scale(QRect(0, 0, 2560, 1400)), 0.8)
+        # 无屏幕信息时回退显示比例。
+        self.assertEqual(_resolve_scale(None), 0.8)
+        # 1707x960 的屏上按高度收缩到放得下，且不高于下限。
+        s = _resolve_scale(QRect(0, 0, 1707, 960))
+        self.assertLessEqual(round(1309 * s), 960)
+        self.assertGreaterEqual(s, 0.55)
+
+    def test_key_widgets_stay_inside_window(self):
+        window, _ = self._window()
+        for widget in (
+            window._preview_label, window._name_label,
+            window._xp_bar, window._aff_bar, window._desc_label,
+        ):
+            self.assertTrue(window.rect().contains(widget.geometry()))
+
+    def test_pet_switch_cards_carry_badge_and_lock(self):
+        window, _ = self._window()
+        self.assertEqual(len(window._avatar_buttons), 2)
+        _, lunch_badge, lunch_lock = window._avatar_buttons["lunch_meat"]
+        _, ice_badge, ice_lock = window._avatar_buttons["ice_cream"]
+        self.assertTrue(lunch_badge.isVisibleTo(window))
+        self.assertFalse(lunch_lock.isVisibleTo(window))
+        self.assertFalse(ice_badge.isVisibleTo(window))
+        self.assertTrue(ice_lock.isVisibleTo(window))
+
+    def test_use_button_equips_selected_and_blocks_when_active(self):
+        state = _fresh_state()
+        window, pet = self._window(state)
+        self.assertFalse(window._use_button.isEnabled())
+
+        state["owned_pet_ids"] = ["lunch_meat", "ice_cream"]
+        window._select_pet("ice_cream")
+        self.assertTrue(window._use_button.isEnabled())
+        window._use_button.click()
+        pet.set_active_pet.assert_called_once_with("ice_cream")
+        # 模拟真实 set_active_pet 落盘后的状态，再确认按钮回到禁用。
+        state["active_pet_id"] = "ice_cream"
+        window.refresh()
+        self.assertFalse(window._use_button.isEnabled())
+
+    def test_outfit_area_renders_art_panel_and_buttons(self):
+        state = _fresh_state()
+        state["owned_outfits"] = ["dinosaur_suit"]
+        window, _ = self._window(state)
+        self.assertFalse(window._outfit_panel_label.pixmap().isNull())
+        # 已拥有未装备的套装卡 → 装备按钮带素材图标。
+        card = next(
+            card for card in window._outfit_cards
+            if hasattr(card, "_action_button")
+        )
+        button = getattr(card, "_action_button", None)
+        self.assertIsNotNone(button)
+        self.assertFalse(button.icon().isNull())
+
+    def test_info_rows_use_art_labels(self):
+        from petpet.ui import pet_profile as module
+
+        window, _ = self._window()
+        for asset in ("level_text.png", "exp_text.png", "affection_text.png"):
+            label = window._art_labels[asset]
+            self.assertFalse(label.pixmap().isNull(),
+                             f"{asset} 应作为信息行标签显示")
+
+
+    def test_outfit_snapshot_keeps_asset_paths(self):
+        """套装快照必须保留 asset_folder/preview_asset，否则预览路径解析为 None。"""
+        from petpet.ui.pet_profile import pet_profile_snapshot, _outfit_preview_path
+
+        snap = pet_profile_snapshot(_fresh_state(), "lunch_meat")
+        for outfit in snap["outfits"]:
+            self.assertTrue(outfit["asset_folder"], f"{outfit['id']} 缺 asset_folder")
+            self.assertEqual(outfit["preview_asset"], "preview.png")
+            path = _outfit_preview_path("lunch_meat", outfit)
+            self.assertIsNotNone(path, f"{outfit['id']} 预览图应存在")
+            self.assertTrue(os.path.isfile(path))
+
+
 if __name__ == "__main__":
     unittest.main()

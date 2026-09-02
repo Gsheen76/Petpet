@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import io
 import os
 
+import numpy as np
+from PIL import Image as PILImage
 from PyQt5.QtCore import QRect, QSize, Qt
-from PyQt5.QtGui import QColor, QIcon, QImage, QPainter, QPainterPath, QPixmap
+from PyQt5.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap
 from PyQt5.QtWidgets import QApplication, QLabel, QPushButton, QWidget
 
 from petpet.app.fonts import APP_FONT_FAMILY
@@ -20,30 +23,33 @@ _ASSET_DIR = os.path.join(
     "assets", "runtime", "ui", "pet_profile",
 )
 
-# 画布按素材艺术稿等比设计（艺术稿 1201x1309）。
-# 布局基准 800x872；_S 为统一放大系数，__init__ 里按屏幕高度自适应。
-BASE_W, BASE_H = 800, 872
-_S = 1.125
+# 画布基于素材原生尺寸（background.png 1201x1309）设计，布局坐标 = 艺术稿像素。
+# 整体显示比例：用户定稿为艺术稿的 80%（2026-09-01 "整体缩小 20%"）；
+# _S 为运行时缩放，屏幕放不下时在此基础上继续收缩。
+ART_W, ART_H = 1201, 1309
+DISPLAY_SCALE = 0.8
+BASE_W, BASE_H = round(ART_W * DISPLAY_SCALE), round(ART_H * DISPLAY_SCALE)
+_S = DISPLAY_SCALE
 
-
-def _R(x, y, w, h):
-    """布局基准坐标 → 实际画布几何。"""
-    return QRect(round(x * _S), round(y * _S), round(w * _S), round(h * _S))
-
-
-def _resolve_scale(screen_rect) -> float:
-    """按目标屏幕自适应：优先放大到 1.125，小屏按比例缩小，下限 0.72。"""
-    if screen_rect is None or screen_rect.width() <= 0:
-        return _S
-    by_h = (screen_rect.height() - 70) / BASE_H
-    by_w = (screen_rect.width() - 60) / BASE_W
-    return max(0.72, min(1.125, by_h, by_w))
-
-# 各物种的左栏卡头像素材（无素材的物种回退 avatar.png）。
+# 各物种的切换卡头像素材（无素材的物种回退 avatar.png）。
 SPECIES_RAIL_ICON = {"lunch_meat": "pet_icon_1.png", "ice_cream": "pet_icon_2.png"}
 
 _TEXT_BROWN = "#6b5646"
 _TEXT_SOFT = "#8a7361"
+
+
+def _R(x, y, w, h):
+    """艺术稿坐标 → 实际画布几何。"""
+    return QRect(round(x * _S), round(y * _S), round(w * _S), round(h * _S))
+
+
+def _resolve_scale(screen_rect) -> float:
+    """按目标屏幕自适应：默认艺术稿 80%，小屏按比例继续缩小，下限 0.55。"""
+    if screen_rect is None or screen_rect.width() <= 0:
+        return DISPLAY_SCALE
+    by_h = (screen_rect.height() - 40) / ART_H
+    by_w = (screen_rect.width() - 40) / ART_W
+    return max(0.55, min(DISPLAY_SCALE, by_h, by_w))
 
 
 def configure_name_dialog_factory(factory):
@@ -61,14 +67,14 @@ def _pp_asset(name):
 def _pp_pixmap(name, w=None, h=None, grayscale=False):
     """按需缩放的素材位图；缺失时返回空位图。"""
     path = _pp_asset(name)
-    pixmap = QPixmap(path) if path else QPixmap()
+    if not path:
+        return QPixmap()
+    pixmap = _grayscale_pixmap(path) if grayscale else QPixmap(path)
     if pixmap.isNull():
         return pixmap
-    if grayscale:
-        image = pixmap.toImage().convertToFormat(QImage.Format_Grayscale8)
-        pixmap = QPixmap.fromImage(image)
     if w and h:
-        pixmap = pixmap.scaled(w, h, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
+        pixmap = pixmap.scaled(round(w * _S), round(h * _S),
+                               Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
     return pixmap
 
 
@@ -117,6 +123,8 @@ def pet_profile_snapshot(state: dict, pet_id: str) -> dict:
             "icon": outfit.get("icon", ""),
             "price": int(outfit.get("price", 0)),
             "description": outfit.get("description", ""),
+            "asset_folder": outfit.get("asset_folder", ""),
+            "preview_asset": outfit.get("preview_asset", "preview.png"),
             "owned": outfit_id in owned_outfits,
             "equipped": equipped_outfit == outfit_id,
         })
@@ -158,42 +166,50 @@ def _outfit_preview_path(pet_id, outfit):
 
 
 def _grayscale_pixmap(path):
-    """灰阶化但保留 alpha 通道（Format_Grayscale8 会把透明变黑）。"""
-    pixmap = QPixmap(path)
-    if pixmap.isNull():
+    """灰阶化并保留 alpha 通道（Format_Grayscale8 会把透明变黑）。
+
+    PIL + numpy 向量化：亮度写回 RGB、alpha 原样保留，经 PNG 缓冲转回 QPixmap。
+    """
+    if not path or not os.path.isfile(path):
+        return QPixmap()
+    try:
+        img = PILImage.open(path).convert("RGBA")
+        arr = np.asarray(img)
+        gray = (
+            0.299 * arr[:, :, 0] + 0.587 * arr[:, :, 1] + 0.114 * arr[:, :, 2]
+        ).astype("uint8")
+        out = np.dstack([gray, gray, gray, arr[:, :, 3]])
+        buf = io.BytesIO()
+        PILImage.fromarray(out, "RGBA").save(buf, format="PNG")
+        pixmap = QPixmap()
+        pixmap.loadFromData(buf.getvalue())
         return pixmap
-    image = pixmap.toImage()
-    gray = image.convertToFormat(QImage.Format_Grayscale8)
-    result = gray.convertToFormat(QImage.Format_ARGB32)
-    # 把原图 alpha 逐像素拷回。
-    for y in range(result.height()):
-        for x in range(result.width()):
-            result.setPixel(x, y, (image.pixel(x, y) & 0xFF000000) | 0x00FFFFFF)
-    return QPixmap.fromImage(result)
+    except Exception:
+        return QPixmap(path)
 
 
 def _rounded_pixmap(path, w, h, radius, grayscale=False):
     """圆角卡片位图；路径缺失返回空位图。"""
-    output = QPixmap(w, h)
+    output = QPixmap(round(w * _S), round(h * _S))
     output.fill(Qt.transparent)
     if not path or not os.path.isfile(path):
         return output
-    source = QPixmap(path)
+    source = _grayscale_pixmap(path) if grayscale else QPixmap(path)
     if source.isNull():
         return output
-    if grayscale:
-        image = source.toImage().convertToFormat(QImage.Format_Grayscale8)
-        source = QPixmap.fromImage(image)
     painter = QPainter(output)
     painter.setRenderHint(QPainter.Antialiasing)
     clip = QPainterPath()
-    clip.addRoundedRect(0, 0, w, h, radius, radius)
+    clip.addRoundedRect(0, 0, output.width(), output.height(),
+                        radius * _S, radius * _S)
     painter.setClipPath(clip)
     scaled = source.scaled(
-        w, h, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation,
+        output.width(), output.height(),
+        Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation,
     )
     painter.drawPixmap(
-        (w - scaled.width()) // 2, (h - scaled.height()) // 2, scaled,
+        (output.width() - scaled.width()) // 2,
+        (output.height() - scaled.height()) // 2, scaled,
     )
     painter.end()
     return output
@@ -220,7 +236,6 @@ class ArtBar(QWidget):
         track_path = QPainterPath()
         track_path.addRoundedRect(0, 0, w, h, h / 2, h / 2)
         painter.setPen(Qt.NoPen)
-        painter.setBrush(Qt.NoBrush)
         # 轨迹槽：素材填充色的浅调（与艺术稿同族）。
         painter.setBrush(QColor(247, 233, 219))
         painter.drawPath(track_path)
@@ -257,17 +272,43 @@ def _label(parent, text, x, y, w, h, *, size=14, color=_TEXT_BROWN,
 
 def _pixmap_label(parent, asset, x, y, w, h, grayscale=False):
     label = QLabel(parent)
-    label.setPixmap(_pp_pixmap(
-        asset, round(w * _S), round(h * _S), grayscale=grayscale,
-    ))
+    label.setPixmap(_pp_pixmap(asset, w, h, grayscale=grayscale))
     label.setScaledContents(True)
     label.setGeometry(_R(x, y, w, h))
     label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
     return label
 
 
+# ---- 艺术稿布局表（1201x1309 原生像素） ----
+# 左栏 left_panel.png(297x1007) 的内部槽位（网格实测）：
+#   圆窗 Ø190 中心(148,150)；名牌 y300-362；改名小圆钮 y516-560；
+#   上胶囊 y712-762；下胶囊 y812-862。
+LEFT_PANEL_AT = (36, 150)
+AVATAR_CIRCLE = (53, 55, 190, 190)          # 圆窗（相对左栏）
+NAME_PLATE = (48, 298, 201, 66)              # 名牌（相对左栏）
+EDIT_BUTTON = (124, 514, 50, 50)             # 改名铅笔小圆钮（相对左栏）
+USE_BUTTON = (72, 710, 154, 52)              # 装备胶囊（相对左栏）
+RENAME_BUTTON = (96, 810, 106, 62)           # 改名钮素材位（相对左栏）
+
+SWITCH_CARD_AT = ((790, 170), (988, 170))    # 右上双宠切换卡（各 175x212）
+PREVIEW_AT = (390, 160, 390, 440)            # 右侧大立绘
+INFO_ROW_Y = (640, 712, 784)                 # 等级/经验/好感三行
+DESC_AT = (390, 876, 758, 72)                # 描述胶囊
+OUTFIT_PANEL_AT = (368, 968)                 # outfit_panel 783x314
+OUTFIT_CARD_REL = (43, 18)                   # 示例卡起点（相对 panel）
+OUTFIT_CARD_STEP = 140                       # 卡间距
+OUTFIT_SLOT_CIRCLE = (5, 0, 90, 90)          # 圆窗（相对卡）
+OUTFIT_SLOT_NAME = (-10, 122, 120, 28)       # 名字（相对卡）
+OUTFIT_SLOT_BUTTON = (8, 240, 84, 28)        # 按钮（相对卡）
+
+
+def _left_abs(x, y, w, h):
+    """左栏相对坐标 → 窗口坐标。"""
+    return (LEFT_PANEL_AT[0] + x, LEFT_PANEL_AT[1] + y, w, h)
+
+
 class PetProfileWindow(QWidget):
-    """宠物详情面板：艺术稿画布上的形象、昵称、好感度、套装与切换。"""
+    """宠物详情面板：艺术稿原生画布上的形象、昵称、好感度、套装与切换。"""
 
     def __init__(self, pet, save_state):
         super().__init__()
@@ -281,9 +322,11 @@ class PetProfileWindow(QWidget):
         self._drag_offset = None
         self._name_dialog = None
         self._avatar_buttons = {}
+        self._switch_card_names = {}
         self._outfit_cards = []
         self._detail_widgets = []
         self._locked_widgets = []
+        self._art_labels = {}
 
         self.setWindowFlags(
             Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
@@ -298,183 +341,217 @@ class PetProfileWindow(QWidget):
         except (RuntimeError, AttributeError):
             screen = None
         _S = _resolve_scale(screen)
-        self.setFixedSize(round(BASE_W * _S), round(BASE_H * _S))
+        self.setFixedSize(round(ART_W * _S), round(ART_H * _S))
         self._background = _pp_pixmap(
-            "background.png", self.width(), self.height(),
+            "background.png", ART_W, ART_H,
         )
-        # 标题木牌只在完整组合图里，裁其左上角区域叠加。
-        main_art = _pp_pixmap("main_panel.png")
-        if main_art.isNull():
-            self._plaque = QPixmap()
-        else:
-            self._plaque = main_art.copy(10, 0, 420, 150).scaled(
-                round(280 * _S), round(100 * _S),
-                Qt.IgnoreAspectRatio, Qt.SmoothTransformation,
-            )
 
         self._build_canvas()
         self.refresh()
 
-    # ---- 画布构建（绝对布局，坐标来自艺术稿等比换算） ----
+    # ---- 画布构建（绝对布局，坐标来自艺术稿） ----
 
     def _build_canvas(self):
-        # 副标题（title_text 实为「我的伙伴与套装」文案）。
-        _pixmap_label(self, "title_text.png", 40, 112, 175, 30)
+        # 标题（自绘木牌在 paintEvent）+ 副标题素材。
+        _pixmap_label(self, "title_text.png", 322, 56, 200, 34)
         close = QPushButton(self)
-        close.setIcon(QIcon(_pp_pixmap("close_button.png", 57, 53)))
-        close.setIconSize(QSize(57, 53))
+        close.setIcon(QIcon(_pp_pixmap("close_button.png", 64, 59)))
+        close.setIconSize(QSize(round(64 * _S), round(59 * _S)))
         close.setFlat(True)
         close.setStyleSheet("QPushButton{border:none;background:transparent;}")
         close.setCursor(Qt.PointingHandCursor)
-        close.setGeometry(_R(726, 12, 51, 47))
+        close.setGeometry(_R(1112, 20, 64, 59))
         close.clicked.connect(self.close)
 
-        # 左栏切换卡： species 头像 + 名字 + 使用中/未拥有 标签。
-        rail = _pixmap_label(self, "left_panel.png", 27, 128, 198, 675)
-        self._rail = rail
-        rail_bottom = 128 + 675
-        slot_y = (160, 372)
-        for index, pet_id in enumerate(pet_registry.load_pet_registry()):
-            if index >= len(slot_y):
-                # 满两席后不再放置卡位（当前仅两只宠物）。
-                break
-            button_y, name_y, tag_y = (
-                slot_y[index], slot_y[index] + 140, slot_y[index] + 166
-            )
-            button = QPushButton(self)
-            button.setObjectName("profileAvatarButton")
-            button.setFlat(True)
-            button.setStyleSheet(
-                "QPushButton{border:none;background:transparent;}"
-            )
-            button.setCursor(Qt.PointingHandCursor)
-            button.setGeometry(_R(66, button_y, 135, 135))
-            button.setIconSize(QSize(126, 126))
-            button.clicked.connect(
-                lambda _checked=False, target=pet_id: self._select_pet(target)
-            )
-            name = _label(
-                self, "", 27, name_y, 198, 22,
-                size=16, bold=True, align=Qt.AlignCenter,
-            )
-            badge = QLabel(self)
-            badge.setPixmap(_pp_pixmap("in_use_tag.png", 108, 35))
-            badge.setScaledContents(True)
-            badge.setAttribute(Qt.WA_TransparentForMouseEvents, True)
-            badge.setAlignment(Qt.AlignCenter)
-            badge.setGeometry(_R(72, tag_y, 108, 35))
-            lock = _label(
-                self, "🔒 未拥有", 27, tag_y, 198, 24,
-                size=12, color="#ffffff", align=Qt.AlignCenter, name="lockBadge",
-            )
-            lock.setStyleSheet(
-                f"font-family:'{APP_FONT_FAMILY}';font-size:12px;"
-                "color:#ffffff;background:#cfc4b8;border-radius:9px;"
-                "padding:1px 9px;"
-            )
-            self._avatar_buttons[pet_id] = (button, badge, lock)
+        # 左栏：圆窗头像 → 名牌 → 改名铅笔 → 装备胶囊 → 改名钮。
+        _pixmap_label(self, "left_panel.png", *LEFT_PANEL_AT, 297, 1007)
 
-        # 右侧大立绘（粉色站垫由 paintEvent 绘制）。
-        self._preview_label = QLabel(self)
-        self._preview_label.setAlignment(Qt.AlignBottom | Qt.AlignHCenter)
-        self._preview_label.setGeometry(_R(330, 110, 340, 300))
-        self._preview_label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        ax, ay, aw, ah = _left_abs(*AVATAR_CIRCLE)
+        self._avatar_stage = QLabel(self)
+        self._avatar_stage.setAlignment(Qt.AlignCenter)
+        self._avatar_stage.setGeometry(_R(ax, ay, aw, ah))
+        self._avatar_stage.setAttribute(Qt.WA_TransparentForMouseEvents, True)
 
-        # 名牌 + 铅笔 + 改名钮。
-        _pixmap_label(self, "name_plate.png", 300, 408, 266, 50)
+        nx, ny, nw, nh = _left_abs(*NAME_PLATE)
         self._name_label = _label(
-            self, "", 318, 414, 150, 38, size=24, bold=True,
+            self, "", nx + 8, ny + 8, nw - 16, nh - 16, size=26, bold=True,
             align=Qt.AlignCenter, name="profileName",
         )
+
+        ex, ey, ew, eh = _left_abs(*EDIT_BUTTON)
         edit_button = QPushButton(self)
-        edit_icon = _pp_pixmap("edit_icon.png", 27, 28)
+        edit_icon = _pp_pixmap("edit_icon.png", ew, eh)
         if not edit_icon.isNull():
             edit_button.setIcon(QIcon(edit_icon))
-        edit_button.setIconSize(QSize(27, 28))
+        edit_button.setIconSize(QSize(round(ew * _S), round(eh * _S)))
         edit_button.setFlat(True)
         edit_button.setStyleSheet("QPushButton{border:none;background:transparent;}")
         edit_button.setCursor(Qt.PointingHandCursor)
-        edit_button.setGeometry(_R(470, 420, 26, 27))
+        edit_button.setGeometry(_R(ex, ey, ew, eh))
         edit_button.clicked.connect(self._open_name_dialog)
         self._edit_button = edit_button
         self._detail_widgets.append(edit_button)
+
+        ux, uy, uw, uh = _left_abs(*USE_BUTTON)
+        use_button = QPushButton(self)
+        use_icon = _pp_pixmap("equip_button_orange.png", uw, uh)
+        if not use_icon.isNull():
+            use_button.setIcon(QIcon(use_icon))
+            use_button.setIconSize(QSize(round(uw * _S), round(uh * _S)))
+        use_button.setFlat(True)
+        use_button.setStyleSheet("QPushButton{border:none;background:transparent;}")
+        use_button.setCursor(Qt.PointingHandCursor)
+        use_button.setGeometry(_R(ux, uy, uw, uh))
+        use_button.clicked.connect(
+            lambda: self._switch_pet(self._selected_pet_id)
+        )
+        self._use_button = use_button
+        self._detail_widgets.append(use_button)
+
+        rx, ry, rw, rh = _left_abs(*RENAME_BUTTON)
         rename_button = QPushButton(self)
-        rename_icon = _pp_pixmap("rename_button.png", 80, 46)
-        rename_button.setIcon(QIcon(rename_icon))
-        rename_button.setIconSize(QSize(80, 46))
+        rename_icon = _pp_pixmap("rename_button.png", rw, rh)
+        if not rename_icon.isNull():
+            rename_button.setIcon(QIcon(rename_icon))
+            rename_button.setIconSize(QSize(round(rw * _S), round(rh * _S)))
         rename_button.setFlat(True)
         rename_button.setStyleSheet("QPushButton{border:none;background:transparent;}")
         rename_button.setCursor(Qt.PointingHandCursor)
-        rename_button.setGeometry(_R(578, 412, 71, 41))
+        rename_button.setGeometry(_R(rx, ry, rw, rh))
         rename_button.clicked.connect(self._open_name_dialog)
+        self._rename_button = rename_button
         self._detail_widgets.append(rename_button)
 
-        # 等级 / 经验行。
-        self._detail_widgets.append(_pixmap_label(self, "level_icon.png", 300, 466, 22, 22))
-        self._level_label = _label(self, "", 326, 464, 96, 24, size=15, name="profileLevel")
+        # 右上双宠切换卡：头像素材 + 使用中徽章/未拥有锁 + 名字。
+        for index, pet_id in enumerate(pet_registry.load_pet_registry()):
+            if index >= len(SWITCH_CARD_AT):
+                break
+            card_x, card_y = SWITCH_CARD_AT[index]
+            button = QPushButton(self)
+            button.setObjectName("profileAvatarButton")
+            button.setFlat(True)
+            button.setStyleSheet("QPushButton{border:none;background:transparent;}")
+            button.setCursor(Qt.PointingHandCursor)
+            button.setGeometry(_R(card_x + 28, card_y + 14, 118, 118))
+            button.setIconSize(QSize(112, 112))
+            button.clicked.connect(
+                lambda _checked=False, target=pet_id: self._select_pet(target)
+            )
+            badge = QLabel(self)
+            badge.setPixmap(_pp_pixmap("in_use_tag.png", 100, 32))
+            badge.setScaledContents(True)
+            badge.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+            badge.setAlignment(Qt.AlignCenter)
+            badge.setGeometry(_R(card_x + 37, card_y + 130, 100, 32))
+            lock = _label(
+                self, "未拥有", card_x + 30, card_y + 138, 114, 22,
+                size=13, color="#ffffff", align=Qt.AlignCenter, name="lockBadge",
+            )
+            lock.setStyleSheet(
+                f"font-family:'{APP_FONT_FAMILY}';font-size:13px;"
+                "color:#ffffff;background:#cfc4b8;border-radius:11px;"
+                "padding:1px 10px;"
+            )
+            name = _label(
+                self, "", card_x + 8, card_y + 172, 159, 28, size=17,
+                bold=True, align=Qt.AlignCenter,
+            )
+            self._switch_card_names[pet_id] = name
+            self._avatar_buttons[pet_id] = (button, badge, lock)
+
+        # 右侧大立绘（站垫由 paintEvent 绘制）。
+        self._preview_label = QLabel(self)
+        self._preview_label.setAlignment(Qt.AlignBottom | Qt.AlignHCenter)
+        self._preview_label.setGeometry(_R(*PREVIEW_AT))
+        self._preview_label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+
+        # 信息三行：烘焙标签素材 + 动态数值 + 艺术条。
+        row_specs = (
+            ("level_icon.png", "level_text.png", 66),
+            ("exp_icon.png", "exp_text.png", 200),
+            ("affection_icon.png", "affection_text.png", 158),
+        )
+        for row_y, (icon_asset, text_asset, text_w) in zip(INFO_ROW_Y, row_specs):
+            self._detail_widgets.append(
+                _pixmap_label(self, icon_asset, 396, row_y + 6, 30, 29)
+            )
+            art = _pixmap_label(self, text_asset, 444, row_y, text_w, 30)
+            self._art_labels[text_asset] = art
+            self._detail_widgets.append(art)
+
+        self._level_label = _label(
+            self, "", 700, INFO_ROW_Y[0], 140, 34, size=22, bold=True,
+            name="profileLevel",
+        )
         self._detail_widgets.append(self._level_label)
-        self._detail_widgets.append(_pixmap_label(self, "exp_icon.png", 424, 467, 20, 20))
-        self._exp_value = _label(self, "", 448, 464, 150, 24, size=15, color=_TEXT_SOFT)
+
+        self._exp_value = _label(
+            self, "", 700, INFO_ROW_Y[1], 150, 32, size=16, color=_TEXT_SOFT,
+        )
         self._detail_widgets.append(self._exp_value)
         self._xp_bar = ArtBar("exp_bar.png", self)
-        self._xp_bar.setGeometry(_R(602, 467, 167, 18))
+        self._xp_bar.setGeometry(_R(860, INFO_ROW_Y[1] + 5, 210, 22))
         self._detail_widgets.append(self._xp_bar)
 
-        # 好感度行。
-        self._detail_widgets.append(_pixmap_label(self, "affection_icon.png", 300, 514, 21, 20))
-        self._affection_label = _label(self, "", 324, 512, 128, 24, size=15, name="profileAffection")
+        self._affection_label = _label(
+            self, "", 700, INFO_ROW_Y[2], 150, 32, size=16, name="profileAffection",
+        )
         self._detail_widgets.append(self._affection_label)
-        self._detail_widgets.append(_pixmap_label(self, "affection_icon_2.png", 452, 515, 21, 20))
-        self._aff_value = _label(self, "", 476, 512, 110, 24, size=15, color=_TEXT_SOFT)
+        self._aff_value = _label(
+            self, "", 860, INFO_ROW_Y[2], 140, 32, size=16, color=_TEXT_SOFT,
+        )
         self._detail_widgets.append(self._aff_value)
         self._aff_bar = ArtBar("affection_bar.png", self)
-        self._aff_bar.setGeometry(_R(590, 515, 167, 18))
+        self._aff_bar.setGeometry(_R(1010, INFO_ROW_Y[2] + 5, 150, 22))
         self._detail_widgets.append(self._aff_bar)
-        self._detail_widgets.append(_pixmap_label(self, "heart_icon_small.png", 748, 498, 46, 41))
+        self._detail_widgets.append(
+            _pixmap_label(self, "heart_icon_small.png", 1170, INFO_ROW_Y[2] - 10, 54, 48)
+        )
 
-        # 介绍胶囊。
-        _pixmap_label(self, "description_bg.png", 300, 553, 485, 46)
+        # 描述胶囊。
+        _pixmap_label(self, "description_bg.png", *DESC_AT)
         self._desc_label = _label(
-            self, "", 315, 559, 455, 34, size=14, color=_TEXT_SOFT,
+            self, "", DESC_AT[0] + 18, DESC_AT[1] + 10,
+            DESC_AT[2] - 36, DESC_AT[3] - 20, size=16, color=_TEXT_SOFT,
             align=Qt.AlignCenter,
         )
         self._detail_widgets.append(self._desc_label)
 
-        # 套装区。
+        # 套装区：outfit_panel 底板 + 示例卡几何的动态卡。
+        self._outfit_panel_label = _pixmap_label(
+            self, "outfit_panel.png", *OUTFIT_PANEL_AT, 783, 314,
+        )
         outfit_title = _label(
-            self, "🐾 套装", 300, 634, 120, 26, size=17, bold=True,
-            name="sectionTitle",
+            self, "套装", OUTFIT_PANEL_AT[0] + 22, OUTFIT_PANEL_AT[1] + 10,
+            100, 28, size=18, bold=True, name="sectionTitle",
         )
         self._detail_widgets.append(outfit_title)
-        self._outfit_slots = (
-            _R(288, 668, 236, 148), _R(538, 668, 236, 148),
-        )
 
         # 锁定页部件（未拥有宠物）。
         self._locked_page = QWidget(self)
-        self._locked_page.setGeometry(_R(300, 500, 470, 330))
+        self._locked_page.setGeometry(_R(390, 620, 760, 340))
         self._locked_page.setStyleSheet("background:transparent;")
         self._locked_hint = _label(
-            self._locked_page, "", 10, 80, 450, 60, size=14, color=_TEXT_SOFT,
+            self._locked_page, "", 20, 60, 720, 120, size=17, color=_TEXT_SOFT,
             align=Qt.AlignCenter,
         )
         self._locked_hint.setWordWrap(True)
         self._locked_shop = QPushButton("去商店购买", self._locked_page)
         self._locked_shop.setObjectName("lockedShopButton")
         self._locked_shop.setCursor(Qt.PointingHandCursor)
-        self._locked_shop.setGeometry(_R(135, 150, 200, 44))
+        self._locked_shop.setGeometry(_R(280, 200, 200, 48))
         self._locked_shop.clicked.connect(self._open_shop)
         self._locked_shop.setStyleSheet(
             "QPushButton{"
-            f"font-family:'{APP_FONT_FAMILY}';font-size:19px;"
+            f"font-family:'{APP_FONT_FAMILY}';font-size:20px;"
             "background:#f28f76;color:#ffffff;border:none;"
-            "border-radius:22px;}"
+            "border-radius:24px;}"
             "QPushButton:hover{background:#ee7c60;}"
         )
 
         # 底部状态行。
         self.status_label = _label(
-            self, "", 40, 838, 720, 26, size=14, color="#a06b5e",
+            self, "", 36, 1224, 1129, 30, size=15, color="#a06b5e",
             align=Qt.AlignCenter, name="status",
         )
 
@@ -485,7 +562,8 @@ class PetProfileWindow(QWidget):
         active_id = state.get("active_pet_id", pet_registry.DEFAULT_PET_ID)
         snapshot = pet_profile_snapshot(state, self._selected_pet_id)
 
-        for pet_id, (button, badge, lock) in self._avatar_buttons.items():
+        for pet_id, parts in self._avatar_buttons.items():
+            button, badge, lock = parts
             owned = (
                 pet_id == active_id
                 or pet_id in (state.get("owned_pet_ids") or ())
@@ -496,15 +574,57 @@ class PetProfileWindow(QWidget):
                 else pet_registry.pet_avatar_path(pet_id)
             )
             button.setIcon(QIcon(_rounded_pixmap(
-                icon_path, 96, 96, 20, grayscale=not owned,
+                icon_path, 112, 112, 56, grayscale=not owned,
             )))
             badge.setVisible(pet_id == active_id)
             lock.setVisible(not owned)
+            name = self._switch_card_names.get(pet_id)
+            if name is not None:
+                pet_snapshot = pet_profile_snapshot(state, pet_id)
+                name.setText(pet_snapshot["name"])
+
+        # 左栏圆窗显示选中宠物头像；装备按钮只在「选中≠当前且已拥有」时可点。
+        icon_name = SPECIES_RAIL_ICON.get(snapshot["id"])
+        stage_path = (
+            _pp_asset(icon_name) if icon_name
+            else snapshot.get("avatar_path")
+        )
+        if snapshot["owned"]:
+            self._avatar_stage.setPixmap(_rounded_pixmap(
+                stage_path, 176, 176, 88,
+            ))
+        else:
+            self._avatar_stage.setPixmap(_rounded_pixmap(
+                stage_path, 176, 176, 88, grayscale=True,
+            ))
+        self._use_button.setEnabled(
+            snapshot["owned"] and snapshot["id"] != active_id
+        )
+        if not self._use_button.isEnabled():
+            self._use_button.setCursor(Qt.ArrowCursor)
+        else:
+            self._use_button.setCursor(Qt.PointingHandCursor)
 
         if snapshot["owned"]:
             self._show_detail(snapshot)
         else:
             self._show_locked(snapshot)
+
+    def _load_preview_pixmap(self, snapshot, height_px, grayscale=False):
+        """立绘位图：优先桌面 idle，回退头像；grayscale 用于锁定页。"""
+        path = snapshot.get("preview_path") or ""
+        if not os.path.isfile(path):
+            path = snapshot.get("avatar_path") or ""
+        if not os.path.isfile(path):
+            return QPixmap()
+        if grayscale:
+            pixmap = _grayscale_pixmap(path)
+        else:
+            pixmap = QPixmap(path)
+        if pixmap.isNull():
+            return QPixmap()
+        return pixmap.scaledToHeight(round(height_px * _S),
+                                      Qt.SmoothTransformation)
 
     def _show_detail(self, snapshot):
         for widget in self._locked_widgets:
@@ -513,19 +633,11 @@ class PetProfileWindow(QWidget):
             widget.setVisible(True)
         self._locked_page.setVisible(False)
 
-        preview = QPixmap(snapshot.get("preview_path") or "")
-        if preview.isNull():
-            preview = QPixmap(snapshot.get("avatar_path") or "")
-        if preview.isNull():
-            self._preview_label.setPixmap(QPixmap())
-        else:
-            self._preview_label.setPixmap(
-                preview.scaledToHeight(330, Qt.SmoothTransformation)
-            )
+        self._preview_label.setPixmap(self._load_preview_pixmap(snapshot, 430))
         self._name_label.setText(snapshot["name"])
         self._level_label.setText(f"Lv.{snapshot['level']}")
         self._exp_value.setText(
-            f"经验 {snapshot['xp']} / {snapshot['xp_next']}"
+            f"{snapshot['xp']} / {snapshot['xp_next']}"
         )
         self._xp_bar.set_ratio(snapshot["xp"], snapshot["xp_next"])
         self._affection_label.setText(f"好感度 Lv.{snapshot['affection_level']}")
@@ -546,18 +658,9 @@ class PetProfileWindow(QWidget):
         self._locked_page.setVisible(True)
         self._clear_outfits()
 
-        preview = QPixmap(snapshot.get("preview_path") or "")
-        if preview.isNull():
-            preview = QPixmap(snapshot.get("avatar_path") or "")
-        if preview.isNull():
-            self._preview_label.setPixmap(QPixmap())
-        else:
-            self._preview_label.setPixmap(
-                _grayscale_pixmap(snapshot.get("preview_path")
-                                  or snapshot.get("avatar_path")).scaledToHeight(
-                    280, Qt.SmoothTransformation
-                )
-            )
+        self._preview_label.setPixmap(
+            self._load_preview_pixmap(snapshot, 400, grayscale=True)
+        )
         self._name_label.setText(snapshot["name"])
         self._locked_hint.setText(
             f"{snapshot['description']}\n"
@@ -575,7 +678,8 @@ class PetProfileWindow(QWidget):
         if not snapshot["outfits"]:
             empty = _label(
                 self, "这只宠物的套装正在准备中，敬请期待～",
-                300, 730, 470, 30, size=14, color=_TEXT_SOFT,
+                OUTFIT_PANEL_AT[0] + 120, OUTFIT_PANEL_AT[1] + 150,
+                540, 30, size=16, color=_TEXT_SOFT,
                 align=Qt.AlignCenter,
             )
             self._outfit_cards.append(empty)
@@ -583,50 +687,72 @@ class PetProfileWindow(QWidget):
             return
 
         pet_id = snapshot["id"]
-        for slot, outfit in zip(self._outfit_slots, snapshot["outfits"]):
+        base_x = OUTFIT_PANEL_AT[0] + OUTFIT_CARD_REL[0]
+        base_y = OUTFIT_PANEL_AT[1] + OUTFIT_CARD_REL[1]
+        for index, outfit in enumerate(snapshot["outfits"]):
             card = QWidget(self)
-            card.setGeometry(slot)
+            card_x = base_x + index * OUTFIT_CARD_STEP
+            card.setGeometry(_R(card_x, base_y, 100, 268))
+            card.setToolTip(outfit["description"])
 
             preview = QLabel(card)
             preview.setAlignment(Qt.AlignCenter)
-            preview.setGeometry(_R(10, 24, 96, 96))
+            sx, sy, sw, sh = OUTFIT_SLOT_CIRCLE
+            preview.setGeometry(_R(sx, sy, sw, sh))
             pixmap = QPixmap(_outfit_preview_path(pet_id, outfit) or "")
             if not pixmap.isNull():
                 preview.setPixmap(
-                    pixmap.scaledToHeight(88, Qt.SmoothTransformation)
+                    pixmap.scaledToHeight(round(84 * _S), Qt.SmoothTransformation)
                 )
             preview.setAttribute(Qt.WA_TransparentForMouseEvents, True)
 
             name = _label(
-                card, f"{outfit['icon']} {outfit['name']}",
-                112, 18, 118, 24, size=15, bold=True,
+                card, outfit["name"],
+                OUTFIT_SLOT_NAME[0], OUTFIT_SLOT_NAME[1],
+                OUTFIT_SLOT_NAME[2], OUTFIT_SLOT_NAME[3],
+                size=15, bold=True, align=Qt.AlignCenter,
             )
-            desc = _label(
-                card, outfit["description"], 112, 44, 118, 56,
-                size=11, color=_TEXT_SOFT, align=Qt.AlignLeft | Qt.AlignTop,
-            )
-            desc.setWordWrap(True)
+            name.setAttribute(Qt.WA_TransparentForMouseEvents, True)
 
             if outfit["equipped"]:
-                button = self._pill_button("卸下", "#8fbf7f", card)
+                button = self._art_button(
+                    "equip_button_green.png", "卸下", "#8fbf7f", card
+                )
                 button.clicked.connect(
                     lambda _checked=False: self._apply_outfit(equip=False)
                 )
             elif outfit["owned"]:
-                button = self._pill_button("装备", "#f49a8a", card)
+                button = self._art_button(
+                    "equip_button_orange.png", "装备", "#f49a8a", card
+                )
                 button.clicked.connect(
                     lambda _checked=False, oid=outfit["id"]:
                         self._apply_outfit(oid, equip=True)
                 )
             else:
                 button = self._pill_button(
-                    f"去商店 · {outfit['price']}币", "#f28f76", card
+                    f"商店·{outfit['price']}币", "#f28f76", card
                 )
                 button.clicked.connect(self._open_shop)
-            button.setGeometry(_R(112, 104, 118, 37))
-
+            bx, by, bw, bh = OUTFIT_SLOT_BUTTON
+            button.setGeometry(_R(bx, by, bw, bh))
+            card._action_button = button
             card.show()
             self._outfit_cards.append(card)
+
+    def _art_button(self, asset, fallback_text, fallback_color, parent):
+        """素材贴图按钮（装备/卸下），无字素材时回退胶囊。"""
+        bx, by, bw, bh = OUTFIT_SLOT_BUTTON
+        icon = _pp_pixmap(asset, bw, bh)
+        button = QPushButton(parent)
+        button.setCursor(Qt.PointingHandCursor)
+        if icon.isNull():
+            return self._pill_button(fallback_text, fallback_color, parent)
+        button.setFlat(True)
+        button.setStyleSheet("QPushButton{border:none;background:transparent;}")
+        button.setIcon(QIcon(icon))
+        button.setIconSize(QSize(round(bw * _S), round(bh * _S)))
+        return button
 
     def _pill_button(self, text, color, parent):
         # 注意：Qt 样式表里裸声明与规则块混用会导致规则被丢弃，
@@ -635,9 +761,9 @@ class PetProfileWindow(QWidget):
         button.setCursor(Qt.PointingHandCursor)
         button.setStyleSheet(
             "QPushButton{"
-            f"font-family:'{APP_FONT_FAMILY}';font-size:17px;"
+            f"font-family:'{APP_FONT_FAMILY}';font-size:13px;"
             f"background:{color};color:#ffffff;border:none;"
-            "border-radius:18px;}"
+            "border-radius:14px;}"
         )
         return button
 
@@ -651,10 +777,11 @@ class PetProfileWindow(QWidget):
         active_id = self.pet.state.get(
             "active_pet_id", pet_registry.DEFAULT_PET_ID
         )
-        if pet_id != active_id:
-            self._switch_pet(pet_id)
-            return
         self.refresh()
+        if pet_id != active_id:
+            self.status_label.setText(
+                f"已选中 {snapshot['name']}，点左下「装备」让它陪你了～"
+            )
 
     def _switch_pet(self, pet_id):
         snapshot = pet_profile_snapshot(self.pet.state, pet_id)
@@ -734,15 +861,27 @@ class PetProfileWindow(QWidget):
         painter.setRenderHint(QPainter.Antialiasing)
         if not self._background.isNull():
             painter.drawPixmap(0, 0, self._background)
+        # 标题木牌（艺术稿无独立切图，按素材同族配色绘制）。
+        rect = _R(36, 14, 264, 92)
+        painter.setPen(QPen(QColor(232, 178, 122), 3))
+        painter.setBrush(QColor(250, 233, 205, 255))
+        painter.drawRoundedRect(rect, 26, 26)
+        painter.setPen(QPen(QColor(232, 178, 122, 160), 2, Qt.DashLine))
+        painter.drawRoundedRect(rect.adjusted(6, 6, -6, -6), 20, 20)
+        painter.setPen(QColor(_TEXT_BROWN))
+        font = painter.font()
+        font.setFamily(APP_FONT_FAMILY)
+        font.setBold(True)
+        font.setPixelSize(max(1, round(34 * _S)))
+        painter.setFont(font)
+        painter.drawText(rect, Qt.AlignCenter, "宠物")
         # 立绘下的粉色蕾丝站垫（素材无独立切图，按参考图同色绘制）。
-        mat = _R(330, 372, 340, 84)
+        mat = _R(400, 548, 370, 70)
         painter.setPen(QColor(246, 205, 200))
         painter.setBrush(QColor(250, 222, 218, 235))
         painter.drawEllipse(mat)
         painter.setBrush(QColor(253, 236, 232, 235))
-        painter.drawEllipse(mat.adjusted(14, 8, -14, -14))
-        if not self._plaque.isNull():
-            painter.drawPixmap(round(7 * _S), 0, self._plaque)
+        painter.drawEllipse(mat.adjusted(16, 8, -16, -12))
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
