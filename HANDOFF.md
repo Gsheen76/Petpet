@@ -51,7 +51,7 @@ D:\Agent_project\Petpet
 
 | 领域 | 内容 |
 |------|------|
-| **宠物详情面板** | **换新素材从零重建中（用户指示逐轮搭建）**：新素材在 `assets/runtime/ui/pet_profile_new/`（background 1201×1304 + base_UI 右侧骨架 + 装备按钮/宠物图标）。第十二轮直接换装（`c15c6d1`）：套装装备按钮移到卡图下方居中（参考图样式），点击 `_toggle_outfit` **直接换装/卸下**（equip/unequip + 存档 + 桌面/小屋同步），不再跳商店；此前：好感进度条补装、_MiniBar 渐变精细化、名字居中 42、冰淇淋卡 y431；坑位：测试几何断言前须 show()+processEvents()+mapTo(host)（布局未激活时 geometry 全 0）；此前：切换卡/改名键/idle 动画/两行数值（`225ef4c`），壳 0.7 比例 841×913 圆角 64、paintEvent 圆角裁剪 30px（`CORNER_RADIUS`）叠 background+base_UI、拖拽/居中入口沿用；`pet_profile_snapshot` 数据层与套装预览路径修复保留。旧艺术稿布局（`2e59452`）用户评估搁置，旧素材目录 `ui/pet_profile/` 暂留待清理。**长期规则：所有按键必须带悬停+点击两态反馈**（已入 AGENTS.md）。详见 Obsidian `宠物系统\宠物详情面板新素材重建记录` |
+| **宠物详情面板** | **换新素材从零重建中（用户指示逐轮搭建）**：新素材在 `assets/runtime/ui/pet_profile_new/`（background 1201×1304 + base_UI 右侧骨架 + 装备按钮/宠物图标）。第十三轮按钮入卡（`013f58a`）：装备按钮改为卡图 QLabel 子控件绝对定位（卡内底部居中，参考图样式），套装卡放大 540×346；换装链路不变（`_toggle_outfit` 直接换装/卸下+存档+桌面/小屋同步，商店 0 调用）；坑位：几何断言须 show()+processEvents() 后取值（布局未激活时全 0），按钮为 QLabel 子控件时 geometry 相对卡图；此前：好感条补装/渐变精细化、名字居中 42、统一 850×960；此前：切换卡/改名键/idle 动画/两行数值（`225ef4c`），壳 0.7 比例 841×913 圆角 64、paintEvent 圆角裁剪 30px（`CORNER_RADIUS`）叠 background+base_UI、拖拽/居中入口沿用；`pet_profile_snapshot` 数据层与套装预览路径修复保留。旧艺术稿布局（`2e59452`）用户评估搁置，旧素材目录 `ui/pet_profile/` 暂留待清理。**长期规则：所有按键必须带悬停+点击两态反馈**（已入 AGENTS.md）。详见 Obsidian `宠物系统\宠物详情面板新素材重建记录` |
 
 ### v1.6.3（当前）
 
