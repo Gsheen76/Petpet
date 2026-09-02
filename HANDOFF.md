@@ -51,7 +51,7 @@ D:\Agent_project\Petpet
 
 | 领域 | 内容 |
 |------|------|
-| **宠物详情面板** | **换新素材从零重建中（用户指示逐轮搭建）**：新素材在 `assets/runtime/ui/pet_profile_new/`（background 1201×1304 + base_UI 右侧骨架 + 装备按钮/宠物图标）。第九轮模块化与微调（`90fff0d`）：简介改模块化分节（名字大标题+『等级』『好感度』『属性』『性格』珊瑚节标，新增等级/经验，段间距解决堆叠）、全字加粗放大（30/24/23）、套装页去文字只留放大图卡（385×246）、分栏胶囊化（radius=半高、26 号加粗）；微调：冰淇淋卡 y501、两卡 x113、X 键 y49、idle 右移 5px；此前：统一 850×960、头像两态反馈、close_button 素材反馈；此前：切换卡/改名键/idle 动画/两行数值（`225ef4c`），壳 0.7 比例 841×913 圆角 64、paintEvent 圆角裁剪 30px（`CORNER_RADIUS`）叠 background+base_UI、拖拽/居中入口沿用；`pet_profile_snapshot` 数据层与套装预览路径修复保留。旧艺术稿布局（`2e59452`）用户评估搁置，旧素材目录 `ui/pet_profile/` 暂留待清理。**长期规则：所有按键必须带悬停+点击两态反馈**（已入 AGENTS.md）。详见 Obsidian `宠物系统\宠物详情面板新素材重建记录` |
+| **宠物详情面板** | **换新素材从零重建中（用户指示逐轮搭建）**：新素材在 `assets/runtime/ui/pet_profile_new/`（background 1201×1304 + base_UI 右侧骨架 + 装备按钮/宠物图标）。第十轮进度条与纵向套装（`cb402d5`）：简介页重构为分节 Widget——等级经验条+三属性条（_MiniBar 奶油槽/珊瑚填充）、字体再放大（34/27/26）；套装页改 QVBoxLayout 纵排大卡（500×320）横向滚动禁用；**存量 bug：快照给 affection_to_next 传字典被兜底成 1 → 好感上限恒显 /30**，改传等级数（20+N*10 封顶 200）+回归测试；微调：冰淇淋卡 y451、两卡 x123、X 键 y39；此前：统一 850×960、胶囊分栏、头像/close 两态反馈；此前：切换卡/改名键/idle 动画/两行数值（`225ef4c`），壳 0.7 比例 841×913 圆角 64、paintEvent 圆角裁剪 30px（`CORNER_RADIUS`）叠 background+base_UI、拖拽/居中入口沿用；`pet_profile_snapshot` 数据层与套装预览路径修复保留。旧艺术稿布局（`2e59452`）用户评估搁置，旧素材目录 `ui/pet_profile/` 暂留待清理。**长期规则：所有按键必须带悬停+点击两态反馈**（已入 AGENTS.md）。详见 Obsidian `宠物系统\宠物详情面板新素材重建记录` |
 
 ### v1.6.3（当前）
 
@@ -143,7 +143,7 @@ assets/runtime/ui/shop/
 | 版本发布 | 更新 `version.py` + README + 发布说明 → `scripts/release.ps1 -Version X.Y.Z` |
 
 **测试约束**：
-- `QT_QPA_PLATFORM=offscreen` 跑全量（~80s，699 passed）
+- `QT_QPA_PLATFORM=offscreen` 跑全量（~80s，701 passed）
 - Windows 平台截图需真实字体库（offscreen 无字体数据库，渲染会缺字）
 - `setPixmap` 会清空 `QLabel.text()` → 必须用 `PreservedTextLabel` 保留文本
 
