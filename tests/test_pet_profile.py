@@ -201,34 +201,64 @@ class ProfileWindowShellTests(unittest.TestCase):
         window._advance_idle_frame()
         self.assertEqual(window._idle_index, (index + 1) % len(window._idle_frames))
 
-    def test_name_plate_shows_name_and_rename_button(self):
-        from petpet.ui import pet_profile as module
+    def test_intro_tab_shows_name_affection_attributes_personality(self):
+        from petpet.ui.pet_profile import pet_profile_snapshot
 
-        calls = []
-
-        def factory(current, on_commit, parent):
-            calls.append(current)
-            return SimpleNamespace(exec_=Mock(
-                side_effect=lambda: on_commit("烟花")
-            ))
-
-        module.configure_name_dialog_factory(factory)
-        self.addCleanup(module.configure_name_dialog_factory, None)
         state = _fresh_state()
-        window, pet = self._window(state)
-        self.assertTrue(window._name_label.text())
-        window._rename_button.click()
-        self.assertEqual(len(calls), 1)
-        pet.set_pet_name.assert_called_once_with("烟花")
-        # Mock 不落盘：模拟真实 set_pet_name 后的状态再刷新验证。
         state["pet_name"] = "烟花"
-        window.refresh()
-        self.assertIn("烟花", window._name_label.text())
+        window, _ = self._window(state)
+        intro = window._intro_label
+        html = intro.text()
+        self.assertIn("烟花", html)
+        self.assertIn("午餐肉", html, "初始名应写在括号里")
+        self.assertIn("好感度", html)
+        for word in ("饱腹", "心情", "精力"):
+            self.assertIn(word, html, f"属性值应含 {word}")
+        self.assertIn("陪伴小狗", html, "性格介绍应来自 registry description")
 
-    def test_level_and_affection_rows_show_values(self):
+        # 未改名 → 直接显示初始名，不出现括号对。
+        state2 = _fresh_state()
+        state2["pet_name"] = "午餐肉"
+        window2, _ = self._window(state2)
+        html2 = window2._intro_label.text()
+        self.assertIn("午餐肉", html2)
+        self.assertNotIn("（午餐肉）", html2)
+
+    def test_tabs_switch_between_intro_and_outfits(self):
+        from PyQt5.QtTest import QTest
+
         window, _ = self._window()
-        self.assertIn("Lv.", window._level_label.text())
-        self.assertIn("好感度", window._affection_label.text())
+        self.assertTrue(window._intro_page.isVisibleTo(window))
+        QTest.mouseClick(window._tab_buttons["套装"], Qt.LeftButton)
+        self.assertTrue(window._outfit_page.isVisibleTo(window))
+        self.assertFalse(window._intro_page.isVisibleTo(window))
+        QTest.mouseClick(window._tab_buttons["简介"], Qt.LeftButton)
+        self.assertTrue(window._intro_page.isVisibleTo(window))
+
+    def test_outfit_tab_shows_art_for_each_outfit(self):
+        window, _ = self._window()
+        window._show_tab("套装")
+        self.assertEqual(len(window._outfit_widgets), 2)
+        for widget in window._outfit_widgets:
+            self.assertFalse(widget["pixmap"].pixmap().isNull(),
+                             "套装应使用新素材图")
+
+    def test_content_pages_live_in_scroll_areas(self):
+        window, _ = self._window()
+        from PyQt5.QtWidgets import QScrollArea
+
+        for page in (window._intro_page, window._outfit_page):
+            self.assertIsInstance(page, QScrollArea, "内容页须是滚动区")
+
+    def test_close_button_uses_art_asset(self):
+        from petpet.ui.pet_profile import CLOSE_BUTTON_AT
+
+        window, _ = self._window()
+        self.assertFalse(window._close_button._art.isNull(),
+                         "关闭键应使用 close_button.png 素材")
+        # 「之前的位置」= 原 base_UI 圆钮位（约 x1082-1160 y22-94）。
+        self.assertGreater(CLOSE_BUTTON_AT[0], 1050)
+        self.assertLess(CLOSE_BUTTON_AT[0], 1110)
 
     def test_shell_renders_background(self):
         window, _ = self._window()
