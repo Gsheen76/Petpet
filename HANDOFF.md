@@ -51,7 +51,7 @@ D:\Agent_project\Petpet
 
 | 领域 | 内容 |
 |------|------|
-| **宠物详情面板** | **换新素材从零重建中（用户指示逐轮搭建）**：新素材在 `assets/runtime/ui/pet_profile_new/`（background 1201×1304 + base_UI 右侧骨架 + 装备按钮/宠物图标）。第五轮素材还原（`f48f4f8`）：background/base_UI 原样绘制（X 不擦不克隆），关闭键=透明覆盖层（悬停白洗/按压暗洗两段反馈）——坑位：烘焙素材按键只做覆盖洗色勿动原画；第四轮保留：头像 180px 靠近、删卡名/使用中、字号放大；此前：切换卡/改名键/idle 动画/两行数值（`225ef4c`），壳 0.7 比例 841×913 圆角 64、paintEvent 圆角裁剪 30px（`CORNER_RADIUS`）叠 background+base_UI、拖拽/居中入口沿用；`pet_profile_snapshot` 数据层与套装预览路径修复保留。旧艺术稿布局（`2e59452`）用户评估搁置，旧素材目录 `ui/pet_profile/` 暂留待清理。**长期规则：所有按键必须带悬停+点击两态反馈**（已入 AGENTS.md）。详见 Obsidian `宠物系统\宠物详情面板新素材重建记录` |
+| **宠物详情面板** | **换新素材从零重建中（用户指示逐轮搭建）**：新素材在 `assets/runtime/ui/pet_profile_new/`（background 1201×1304 + base_UI 右侧骨架 + 装备按钮/宠物图标）。第六轮撤下 base_UI（`66f9ae6`）：base_UI 停止渲染（横幅/X 圆钮/名字牌/心气泡/描述胶囊随之移除，等用户新 UI 素材逐个重接），关闭键暂为原位透明覆盖保底；坑位：background 顶部是两个并排小标记不是 X；烘焙素材按键只做覆盖洗色勿动原画；保留：头像 180px 靠近、idle 动画、等级好感行、改名回调；此前：切换卡/改名键/idle 动画/两行数值（`225ef4c`），壳 0.7 比例 841×913 圆角 64、paintEvent 圆角裁剪 30px（`CORNER_RADIUS`）叠 background+base_UI、拖拽/居中入口沿用；`pet_profile_snapshot` 数据层与套装预览路径修复保留。旧艺术稿布局（`2e59452`）用户评估搁置，旧素材目录 `ui/pet_profile/` 暂留待清理。**长期规则：所有按键必须带悬停+点击两态反馈**（已入 AGENTS.md）。详见 Obsidian `宠物系统\宠物详情面板新素材重建记录` |
 
 ### v1.6.3（当前）
 
