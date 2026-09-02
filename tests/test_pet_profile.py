@@ -116,26 +116,24 @@ class ProfileWindowShellTests(unittest.TestCase):
         self.addCleanup(window.close)
         return window, pet
 
-    def test_window_size_is_background_at_70_percent(self):
+    def test_window_size_matches_unified_panel_size(self):
         from petpet.ui import pet_profile as module
 
-        # 用户定稿：整体显示为 background 的 70%（1201x1304 → 841x913）。
+        # 用户定稿：与其他常驻面板统一 850x960（艺术稿 1201x1304 非等比铺满）。
         self.assertEqual((module.ART_W, module.ART_H), (1201, 1304))
-        self.assertEqual(module.DISPLAY_SCALE, 0.7)
-        self.assertGreater(module.CORNER_RADIUS, 50, "圆角须比上一轮 50 更大")
+        self.assertEqual((module.UNIFIED_W, module.UNIFIED_H), (850, 960))
         window, _ = self._window()
-        self.assertEqual((window.width(), window.height()), (841, 913))
+        self.assertEqual((window.width(), window.height()), (850, 960))
 
-    def test_resolve_scale_caps_at_display_scale_and_fits_small_screens(self):
+    def test_resolve_scale_fits_small_screens(self):
         from PyQt5.QtCore import QRect
 
         from petpet.ui.pet_profile import _resolve_scale
 
-        self.assertLessEqual(_resolve_scale(QRect(0, 0, 2560, 1440)), 0.7)
-        self.assertEqual(_resolve_scale(None), 0.7)
-        s = _resolve_scale(QRect(0, 0, 1280, 860))
-        self.assertLessEqual(round(1304 * s), 860)
-        self.assertGreaterEqual(s, 0.55)
+        self.assertEqual(_resolve_scale(None), 1.0)
+        factor = _resolve_scale(QRect(0, 0, 1280, 860))
+        self.assertLessEqual(round(960 * factor), 860)
+        self.assertGreaterEqual(factor, 0.55)
 
     def test_close_button_has_hover_and_press_feedback(self):
         from PyQt5.QtTest import QTest
@@ -256,9 +254,21 @@ class ProfileWindowShellTests(unittest.TestCase):
         window, _ = self._window()
         self.assertFalse(window._close_button._art.isNull(),
                          "关闭键应使用 close_button.png 素材")
-        # 「之前的位置」= 原 base_UI 圆钮位（约 x1082-1160 y22-94）。
-        self.assertGreater(CLOSE_BUTTON_AT[0], 1050)
-        self.assertLess(CLOSE_BUTTON_AT[0], 1110)
+        # 用户定稿（第八轮）：往下移动（原 y=23 → 现在 > 50）。
+        self.assertGreater(CLOSE_BUTTON_AT[1], 50)
+
+    def test_pet_card_icons_have_hover_and_press_feedback(self):
+        window, _ = self._window()
+        for card in window._pet_cards.values():
+            qss = card["button"].styleSheet()
+            self.assertIn(":hover", qss, "头像按钮必须有悬停态")
+            self.assertIn(":pressed", qss, "头像按钮必须有按压态")
+
+    def test_ice_cream_card_sits_higher_than_before(self):
+        from petpet.ui.pet_profile import PET_CARD_SLOTS
+
+        # 用户定稿：冰淇淋头型上移 → 卡位从 y=547 上移 ≥14px。
+        self.assertLessEqual(PET_CARD_SLOTS[1][1], 533)
 
     def test_shell_renders_background(self):
         window, _ = self._window()

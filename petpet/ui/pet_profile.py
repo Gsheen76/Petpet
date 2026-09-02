@@ -34,24 +34,27 @@ _ASSET_DIR = os.path.join(
     "assets", "runtime", "ui", "pet_profile_new",
 )
 
-# 页面尺寸 = background.png 原生大小；布局坐标 = 该画布像素。
-# DISPLAY_SCALE 为整体显示比例（用户定稿：2026-09-01 缩小 30%）；
-# _S 为运行时缩放：默认显示比例，屏幕放不下时继续收缩（下限 0.55）。
+# 页面布局坐标 = background.png 艺术稿像素（1201x1304）。
+# 显示：与其他常驻面板统一 850x960（用户定稿，第八轮）——艺术稿按
+# 宽高各自比例非等比铺满（横向 0.708 / 纵向 0.736，差 4% 不可察觉）；
+# 小屏放不下时按等比因子整体收缩（下限 0.55），保持 850:960 比例。
 ART_W, ART_H = 1201, 1304
-DISPLAY_SCALE = 0.7
-_S = DISPLAY_SCALE
+UNIFIED_W, UNIFIED_H = 850, 960
+_SX = UNIFIED_W / ART_W
+_SY = UNIFIED_H / ART_H
+_FIT = 1.0
 
 # 整页圆角半径（用户定稿：逐轮加大，当前 64）。
 CORNER_RADIUS = 64
 
-# 右上关闭按钮（close_button.png 素材，放回原 base_UI 圆钮位）。
-CLOSE_BUTTON_AT = (1083, 23, 76, 70)
+# 右上关闭按钮（close_button.png 素材；第八轮用户定稿：往下移动）。
+CLOSE_BUTTON_AT = (1083, 64, 76, 70)
 CLOSE_PRESS_FLASH_MS = 40
 CLOSE_CLICK_DEFER_MS = 80
 
 # 图1 左栏宠物卡（background 烘焙卡片 x85-334 y208-1089 内部两张）。
-# 用户定稿（第四轮）：头像放大到 180、两卡靠近；卡下名字与「使用中」pill 删除。
-PET_CARD_SLOTS = ((103, 243), (103, 547))
+# 冰淇淋卡位上移（头型上移，第八轮）。
+PET_CARD_SLOTS = ((103, 243), (103, 531))
 PET_CARD_SIZE = (180, 180)
 
 # 图2 待机动画：垫 x437-975 y515-639，狗底部对齐垫，高约 350。
@@ -76,17 +79,18 @@ OUTFIT_CARD_SIZE = (330, 210)
 
 
 def _R(x, y, w, h):
-    """艺术稿坐标 → 实际画布几何。"""
-    return QRect(round(x * _S), round(y * _S), round(w * _S), round(h * _S))
+    """艺术稿坐标 → 实际画布几何（横纵各自缩放铺满统一尺寸）。"""
+    return QRect(round(x * _SX * _FIT), round(y * _SY * _FIT),
+                 round(w * _SX * _FIT), round(h * _SY * _FIT))
 
 
 def _resolve_scale(screen_rect) -> float:
-    """按目标屏幕自适应：上限显示比例，小屏按比例收缩，下限 0.55。"""
+    """小屏等比收缩因子：上限 1.0（即统一 850x960），下限 0.55。"""
     if screen_rect is None or screen_rect.width() <= 0:
-        return DISPLAY_SCALE
-    by_h = (screen_rect.height() - 40) / ART_H
-    by_w = (screen_rect.width() - 40) / ART_W
-    return max(0.55, min(DISPLAY_SCALE, by_h, by_w))
+        return 1.0
+    by_h = (screen_rect.height() - 40) / UNIFIED_H
+    by_w = (screen_rect.width() - 40) / UNIFIED_W
+    return max(0.55, min(1.0, by_h, by_w))
 
 
 def configure_name_dialog_factory(factory):
@@ -108,7 +112,7 @@ def _pp_pixmap(name, w=None, h=None):
     if pixmap.isNull():
         return pixmap
     if w and h:
-        pixmap = pixmap.scaled(round(w * _S), round(h * _S),
+        pixmap = pixmap.scaled(round(w * _SX * _FIT), round(h * _SY * _FIT),
                                Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
     return pixmap
 
@@ -249,7 +253,7 @@ def _load_idle_frames(pet_id, height):
             pixmap = QPixmap(os.path.join(frame_dir, name))
             if not pixmap.isNull():
                 frames.append(pixmap.scaledToHeight(
-                    round(height * _S), Qt.SmoothTransformation,
+                    round(height * _SX * _FIT), Qt.SmoothTransformation,
                 ))
     except (OSError, ValueError):
         return frames
@@ -355,15 +359,15 @@ class PetProfileWindow(QWidget):
         )
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WA_StyledBackground, True)
-        global _S
+        global _FIT
         screen = None
         rect = getattr(pet, "current_screen_rect", None)
         try:
             screen = rect() if callable(rect) else None
         except (RuntimeError, AttributeError):
             screen = None
-        _S = _resolve_scale(screen)
-        self.setFixedSize(round(ART_W * _S), round(ART_H * _S))
+        _FIT = _resolve_scale(screen)
+        self.setFixedSize(round(UNIFIED_W * _FIT), round(UNIFIED_H * _FIT))
         self._background = _pp_pixmap("background.png", ART_W, ART_H)
         # base_UI 已按用户指示撤下（第六轮）；第七轮：新 UI 素材逐个接入。
         self._close_button = _CloseButton(
@@ -383,7 +387,7 @@ class PetProfileWindow(QWidget):
         label.setAlignment(align)
         label.setWordWrap(False)
         style = (
-            f"font-family:'{APP_FONT_FAMILY}';font-size:{round(size * _S)}px;"
+            f"font-family:'{APP_FONT_FAMILY}';font-size:{round(size * _SX * _FIT)}px;"
             f"color:{color};background:transparent;"
         )
         if bold:
@@ -408,7 +412,14 @@ class PetProfileWindow(QWidget):
             card_x, card_y = PET_CARD_SLOTS[index]
             button = QPushButton(self)
             button.setFlat(True)
-            button.setStyleSheet("QPushButton{border:none;background:transparent;}")
+            # 头像两态反馈（用户定稿，第八轮）：悬停白洗+珊瑚描边、按压压暗。
+            button.setStyleSheet(
+                "QPushButton{border:none;background:transparent;"
+                "border-radius:26px;}"
+                "QPushButton:hover{background:rgba(255,252,246,140);"
+                "border:2px solid rgba(242,143,118,190);}"
+                "QPushButton:pressed{background:rgba(70,42,28,70);}"
+            )
             button.setCursor(Qt.PointingHandCursor)
             button.setGeometry(_R(card_x, card_y, *PET_CARD_SIZE))
             button.clicked.connect(
@@ -446,7 +457,7 @@ class PetProfileWindow(QWidget):
 
     def _tab_qss(self):
         """分栏按钮样式：选中珊瑚、悬停白洗、按压压暗（两态反馈必备）。"""
-        font_px = round(20 * _S)
+        font_px = round(24 * _SX * _FIT)
         return (
             "QPushButton{"
             f"font-family:'{APP_FONT_FAMILY}';font-size:{font_px}px;"
@@ -477,7 +488,7 @@ class PetProfileWindow(QWidget):
         self._intro_label.setWordWrap(True)
         self._intro_label.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
         self._intro_label.setStyleSheet(
-            f"font-family:'{APP_FONT_FAMILY}';font-size:{round(21 * _S)}px;"
+            f"font-family:'{APP_FONT_FAMILY}';font-size:{round(26 * _SX * _FIT)}px;"
             "color:#6b5646;background:transparent;padding:6px;"
         )
         scroll.setWidget(self._intro_label)
@@ -551,7 +562,7 @@ class PetProfileWindow(QWidget):
                 icon = _grayscale_pixmap(icon_path) if icon_path else QPixmap()
             card["button"].setIcon(QIcon(icon))
             card["button"].setIconSize(QSize(*[
-                round(value * _S) for value in PET_CARD_SIZE
+                round(value * _SX * _FIT) for value in PET_CARD_SIZE
             ]))
 
         self._refresh_intro(snapshot)
@@ -563,8 +574,8 @@ class PetProfileWindow(QWidget):
             name_part = snapshot["default_name"]
         else:
             name_part = f"{snapshot['name']}（{snapshot['default_name']}）"
-        px = round(21 * _S)
-        small_px = round(19 * _S)
+        px = round(26 * _SX * _FIT)
+        small_px = round(23 * _SX * _FIT)
         color = "#6b5646"
         soft = "#8a7361"
         self._intro_label.setText(
@@ -607,14 +618,14 @@ class PetProfileWindow(QWidget):
             if not art.isNull():
                 w, h = OUTFIT_CARD_SIZE
                 pixmap_label.setPixmap(art.scaled(
-                    round(w * _S), round(h * _S),
+                    round(w * _SX * _FIT), round(h * _SY * _FIT),
                     Qt.KeepAspectRatio, Qt.SmoothTransformation,
                 ))
             name_label = QLabel(outfit["name"])
             name_label.setAlignment(Qt.AlignCenter)
             name_label.setStyleSheet(
                 f"font-family:'{APP_FONT_FAMILY}';"
-                f"font-size:{round(17 * _S)}px;font-weight:600;"
+                f"font-size:{round(20 * _SX * _FIT)}px;font-weight:600;"
                 "color:#6b5646;background:transparent;"
             )
             layout.addWidget(pixmap_label)
@@ -656,7 +667,7 @@ class PetProfileWindow(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         clip = QPainterPath()
-        radius = CORNER_RADIUS * _S
+        radius = CORNER_RADIUS * _SX * _FIT
         clip.addRoundedRect(0, 0, self.width(), self.height(),
                             radius, radius)
         painter.setClipPath(clip)
