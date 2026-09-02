@@ -51,7 +51,7 @@ D:\Agent_project\Petpet
 
 | 领域 | 内容 |
 |------|------|
-| **宠物详情面板** | **换新素材从零重建中（用户指示逐轮搭建）**：新素材在 `assets/runtime/ui/pet_profile_new/`（background 1201×1304 + base_UI 右侧骨架 + 装备按钮/宠物图标）。第十一轮好感条与装备按钮（`7104292`）：好感节进度条补装（第十轮漏加）+ _MiniBar 精细化（渐变填充/高光/描边，高 18）、名字居中放大（42）、冰淇淋卡 y431、套装装备按钮 equip_button_green/orange（恐龙绿/草莓橘，烘焙「装备」字，悬停白洗/按压压暗，点击跳商店，映射 OUTFIT_EQUIP_BUTTON）；坑位：壳重写会丢 _open_shop 等回调，接按钮前先 grep；此前：统一 850×960、纵向套装、好感上限 bug 修复；此前：切换卡/改名键/idle 动画/两行数值（`225ef4c`），壳 0.7 比例 841×913 圆角 64、paintEvent 圆角裁剪 30px（`CORNER_RADIUS`）叠 background+base_UI、拖拽/居中入口沿用；`pet_profile_snapshot` 数据层与套装预览路径修复保留。旧艺术稿布局（`2e59452`）用户评估搁置，旧素材目录 `ui/pet_profile/` 暂留待清理。**长期规则：所有按键必须带悬停+点击两态反馈**（已入 AGENTS.md）。详见 Obsidian `宠物系统\宠物详情面板新素材重建记录` |
+| **宠物详情面板** | **换新素材从零重建中（用户指示逐轮搭建）**：新素材在 `assets/runtime/ui/pet_profile_new/`（background 1201×1304 + base_UI 右侧骨架 + 装备按钮/宠物图标）。第十二轮直接换装（`c15c6d1`）：套装装备按钮移到卡图下方居中（参考图样式），点击 `_toggle_outfit` **直接换装/卸下**（equip/unequip + 存档 + 桌面/小屋同步），不再跳商店；此前：好感进度条补装、_MiniBar 渐变精细化、名字居中 42、冰淇淋卡 y431；坑位：测试几何断言前须 show()+processEvents()+mapTo(host)（布局未激活时 geometry 全 0）；此前：切换卡/改名键/idle 动画/两行数值（`225ef4c`），壳 0.7 比例 841×913 圆角 64、paintEvent 圆角裁剪 30px（`CORNER_RADIUS`）叠 background+base_UI、拖拽/居中入口沿用；`pet_profile_snapshot` 数据层与套装预览路径修复保留。旧艺术稿布局（`2e59452`）用户评估搁置，旧素材目录 `ui/pet_profile/` 暂留待清理。**长期规则：所有按键必须带悬停+点击两态反馈**（已入 AGENTS.md）。详见 Obsidian `宠物系统\宠物详情面板新素材重建记录` |
 
 ### v1.6.3（当前）
 
@@ -143,7 +143,7 @@ assets/runtime/ui/shop/
 | 版本发布 | 更新 `version.py` + README + 发布说明 → `scripts/release.ps1 -Version X.Y.Z` |
 
 **测试约束**：
-- `QT_QPA_PLATFORM=offscreen` 跑全量（~80s，705 passed）
+- `QT_QPA_PLATFORM=offscreen` 跑全量（~80s，707 passed）
 - Windows 平台截图需真实字体库（offscreen 无字体数据库，渲染会缺字）
 - `setPixmap` 会清空 `QLabel.text()` → 必须用 `PreservedTextLabel` 保留文本
 
