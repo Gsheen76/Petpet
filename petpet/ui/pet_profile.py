@@ -15,8 +15,8 @@ import numpy as np
 from PIL import Image as PILImage
 from PyQt5.QtCore import QRect, QSize, Qt, QTimer
 from PyQt5.QtGui import QColor, QIcon, QPainter, QPainterPath, QPixmap
-from PyQt5.QtWidgets import (QApplication, QHBoxLayout, QLabel,
-                             QPushButton, QScrollArea, QStackedWidget,
+from PyQt5.QtWidgets import (QApplication, QLabel, QPushButton,
+                             QScrollArea, QStackedWidget, QVBoxLayout,
                              QWidget)
 
 from petpet.app.fonts import APP_FONT_FAMILY
@@ -48,13 +48,13 @@ _FIT = 1.0
 CORNER_RADIUS = 64
 
 # 右上关闭按钮（close_button.png 素材；第八轮用户定稿：往下移动）。
-CLOSE_BUTTON_AT = (1083, 49, 76, 70)
+CLOSE_BUTTON_AT = (1083, 39, 76, 70)
 CLOSE_PRESS_FLASH_MS = 40
 CLOSE_CLICK_DEFER_MS = 80
 
 # 图1 左栏宠物卡（background 烘焙卡片 x85-334 y208-1089 内部两张）。
 # 冰淇淋卡位上移（头型上移，第八轮）。
-PET_CARD_SLOTS = ((113, 243), (113, 501))
+PET_CARD_SLOTS = ((123, 243), (123, 451))
 PET_CARD_SIZE = (180, 180)
 
 # 图2 待机动画：垫 x437-975 y515-639，狗底部对齐垫，高约 350。
@@ -75,7 +75,7 @@ OUTFIT_ART = {
     "strawberry_suit": "outfit_strawberry.png",
     "dinosaur_suit": "outfit_diansour.png",
 }
-OUTFIT_CARD_SIZE = (385, 246)
+OUTFIT_CARD_SIZE = (500, 320)
 
 
 def _R(x, y, w, h):
@@ -181,9 +181,8 @@ def pet_profile_snapshot(state: dict, pet_id: str) -> dict:
         "xp_next": progression.xp_to_next(level),
         "affection_level": affection_level,
         "affection_points": affection_points,
-        "affection_next": progression.affection_to_next(
-            {"affection_level": affection_level}
-        ),
+        # 注意：传等级数（传字典会被 _safe_int 兜底成 1 → 上限恒 30）。
+        "affection_next": progression.affection_to_next(affection_level),
         "avatar_path": pet_registry.pet_avatar_path(pet_id),
         "preview_path": pet_registry.pet_asset_path(pet_id, "desktop", "idle"),
         "hunger": int(profile.get("hunger") or 0),
@@ -258,6 +257,40 @@ def _load_idle_frames(pet_id, height):
     except (OSError, ValueError):
         return frames
     return frames
+
+
+class _MiniBar(QWidget):
+    """简介进度条：奶油槽 + 珊瑚填充（等级经验与三属性共用）。"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._value = 0
+        self._maximum = 1
+        self.setFixedHeight(max(6, round(14 * _SY * _FIT)))
+
+    def set_ratio(self, value, maximum):
+        self._value = max(0, int(value))
+        self._maximum = max(1, int(maximum))
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        w, h = self.width(), self.height()
+        radius = h / 2
+        track = QPainterPath()
+        track.addRoundedRect(0, 0, w, h, radius, radius)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor("#efe0cb"))
+        painter.drawPath(track)
+        frac = max(0.0, min(1.0, self._value / self._maximum))
+        if frac <= 0:
+            return
+        fill_w = max(int(w * frac), h)
+        fill = QPainterPath()
+        fill.addRoundedRect(0, 0, fill_w, h, radius, radius)
+        painter.setBrush(QColor("#f5a48f"))
+        painter.drawPath(fill)
 
 
 class _CloseButton(QWidget):
@@ -483,28 +516,76 @@ class PetProfileWindow(QWidget):
         )
 
     def _build_intro_page(self):
+        """简介页（第十轮）：分节标签 + 数值 + 进度条（等级经验与三属性）。"""
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet(self._scroll_qss())
-        self._intro_label = QLabel()
-        self._intro_label.setWordWrap(True)
-        self._intro_label.setAlignment(Qt.AlignTop | Qt.AlignLeft)
-        self._intro_label.setStyleSheet(
-            f"font-family:'{APP_FONT_FAMILY}';font-size:{round(24 * _SX * _FIT)}px;"
-            "font-weight:600;color:#6b5646;background:transparent;"
-            "padding:4px 10px;"
+        host = QWidget()
+        layout = QVBoxLayout(host)
+        layout.setContentsMargins(12, 6, 12, 6)
+        layout.setSpacing(2)
+        k = _SX * _FIT
+
+        def styled_label(size, color, weight=600):
+            label = QLabel()
+            label.setWordWrap(True)
+            label.setStyleSheet(
+                f"font-family:'{APP_FONT_FAMILY}';font-size:{round(size * k)}px;"
+                f"font-weight:{weight};color:{color};background:transparent;"
+            )
+            return label
+
+        self._intro_label = styled_label(34, "#6b5646", 700)
+        layout.addWidget(self._intro_label)
+        layout.addSpacing(6)
+
+        self._intro_sections = {}
+        self._level_bar = None
+        self._attr_bars = {}
+        sections = (
+            ("等级", "level"),
+            ("好感度", "affection"),
+            ("属性", "attrs"),
         )
-        scroll.setWidget(self._intro_label)
+        self._intro_heads = {}
+        for title, key in sections:
+            head = styled_label(27, "#c96f52")
+            head.setText(f"『{title}』")
+            layout.addWidget(head)
+            self._intro_heads[key] = head
+            value = styled_label(26, "#6b5646")
+            layout.addWidget(value)
+            self._intro_sections[key] = value
+            if key == "level":
+                self._level_bar = _MiniBar()
+                layout.addWidget(self._level_bar)
+            elif key == "attrs":
+                for attr in ("hunger", "mood", "energy"):
+                    bar = _MiniBar()
+                    layout.addWidget(bar)
+                    self._attr_bars[attr] = bar
+            layout.addSpacing(10)
+        # 性格（无进度条）。
+        head = styled_label(27, "#c96f52")
+        head.setText("『性格』")
+        layout.addWidget(head)
+        self._intro_heads["personality"] = head
+        self._intro_sections["personality"] = styled_label(26, "#8a7361")
+        layout.addWidget(self._intro_sections["personality"])
+        layout.addStretch(1)
+        scroll.setWidget(host)
         return scroll
 
     def _build_outfit_page(self):
+        """套装页（第十轮）：大卡纵排，只上下滚动。"""
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setStyleSheet(self._scroll_qss())
         self._outfit_host = QWidget()
-        self._outfit_layout = QHBoxLayout(self._outfit_host)
+        self._outfit_layout = QVBoxLayout(self._outfit_host)
         self._outfit_layout.setContentsMargins(8, 8, 8, 8)
-        self._outfit_layout.setSpacing(16)
+        self._outfit_layout.setSpacing(14)
         self._outfit_layout.addStretch(1)
         scroll.setWidget(self._outfit_host)
         return scroll
@@ -572,41 +653,28 @@ class PetProfileWindow(QWidget):
         self._refresh_outfits(snapshot)
 
     def _refresh_intro(self, snapshot):
-        """简介页（第九轮模块化）：名字/等级/好感度/属性/性格 各自成节。"""
+        """简介页（第十轮）：分节数值 + 进度条（等级经验与三属性）。"""
         if snapshot["name"] == snapshot["default_name"]:
             name_part = snapshot["default_name"]
         else:
             name_part = f"{snapshot['name']}（{snapshot['default_name']}）"
-        k = _SX * _FIT
-        title_px = round(30 * k)
-        label_px = round(24 * k)
-        body_px = round(23 * k)
-        label = f"color:#c96f52"
-        body = f"color:#6b5646"
-
-        def section(title, value_html):
-            return (
-                f"<p style='margin:14px 0 2px;font-size:{label_px}px;"
-                f"{label}'>『{title}』</p>"
-                f"<p style='margin:2px 0 6px;font-size:{body_px}px;"
-                f"{body}'>{value_html}</p>"
-            )
-
-        html = (
-            f"<div style='line-height:1.55'>"
-            f"<p style='margin:4px 0 2px;font-size:{title_px}px;"
-            f"font-weight:700;color:#6b5646'>{name_part}</p>"
-            + section("等级", f"Lv.{snapshot['level']}　经验 "
-                      f"{snapshot['xp']} / {snapshot['xp_next']}")
-            + section("好感度", f"Lv.{snapshot['affection_level']}　"
-                      f"{snapshot['affection_points']} / "
-                      f"{snapshot['affection_next']}")
-            + section("属性", f"饱腹 {snapshot['hunger']}　"
-                      f"心情 {snapshot['mood']}　精力 {snapshot['energy']}")
-            + section("性格", snapshot["description"])
-            + "</div>"
+        self._intro_label.setText(name_part)
+        self._intro_sections["level"].setText(
+            f"Lv.{snapshot['level']}　经验 {snapshot['xp']} / "
+            f"{snapshot['xp_next']}"
         )
-        self._intro_label.setText(html)
+        self._level_bar.set_ratio(snapshot["xp"], snapshot["xp_next"])
+        self._intro_sections["affection"].setText(
+            f"Lv.{snapshot['affection_level']}　"
+            f"{snapshot['affection_points']} / {snapshot['affection_next']}"
+        )
+        self._intro_sections["attrs"].setText(
+            f"饱腹 {snapshot['hunger']}　心情 {snapshot['mood']}　"
+            f"精力 {snapshot['energy']}"
+        )
+        for key in ("hunger", "mood", "energy"):
+            self._attr_bars[key].set_ratio(snapshot[key], 100)
+        self._intro_sections["personality"].setText(snapshot["description"])
 
     def _refresh_outfits(self, snapshot):
         """套装页（第九轮）：只放大图卡，不加文字。"""

@@ -199,11 +199,18 @@ class ProfileWindowShellTests(unittest.TestCase):
         window._advance_idle_frame()
         self.assertEqual(window._idle_index, (index + 1) % len(window._idle_frames))
 
+    def _intro_text(self, window):
+        parts = [window._intro_label.text()]
+        for key, value in window._intro_sections.items():
+            head = window._intro_heads[key]
+            parts.append(f"{head.text()} {value.text()}")
+        return "\n".join(parts)
+
     def test_intro_tab_shows_name_affection_attributes_personality(self):
         state = _fresh_state()
         state["pet_name"] = "烟花"
         window, _ = self._window(state)
-        html = window._intro_label.text()
+        html = self._intro_text(window)
         self.assertIn("烟花", html)
         self.assertIn("午餐肉", html, "初始名应写在括号里")
         self.assertIn("好感度", html)
@@ -215,7 +222,7 @@ class ProfileWindowShellTests(unittest.TestCase):
         state2 = _fresh_state()
         state2["pet_name"] = "午餐肉"
         window2, _ = self._window(state2)
-        html2 = window2._intro_label.text()
+        html2 = self._intro_text(window2)
         self.assertIn("午餐肉", html2)
         self.assertNotIn("（午餐肉）", html2)
 
@@ -251,8 +258,8 @@ class ProfileWindowShellTests(unittest.TestCase):
         window, _ = self._window()
         self.assertFalse(window._close_button._art.isNull(),
                          "关闭键应使用 close_button.png 素材")
-        # 用户定稿（第九轮）：y64 上移 15px → y=49。
-        self.assertAlmostEqual(CLOSE_BUTTON_AT[1], 49, delta=2)
+        # 用户定稿（第十轮）：y49 再上移 10px → y=39。
+        self.assertAlmostEqual(CLOSE_BUTTON_AT[1], 39, delta=2)
 
     def test_pet_card_icons_have_hover_and_press_feedback(self):
         window, _ = self._window()
@@ -260,14 +267,6 @@ class ProfileWindowShellTests(unittest.TestCase):
             qss = card["button"].styleSheet()
             self.assertIn(":hover", qss, "头像按钮必须有悬停态")
             self.assertIn(":pressed", qss, "头像按钮必须有按压态")
-
-    def test_pet_card_positions_round_nine(self):
-        from petpet.ui.pet_profile import PET_CARD_SLOTS
-
-        # 第九轮：两卡右移 10px（x=113），冰淇淋再上移 30px（y=501）。
-        self.assertEqual(PET_CARD_SLOTS[0][0], 113)
-        self.assertEqual(PET_CARD_SLOTS[1][0], 113)
-        self.assertAlmostEqual(PET_CARD_SLOTS[1][1], 501, delta=2)
 
     def test_tab_buttons_are_pill_shaped(self):
         from petpet.ui.pet_profile import TAB_SLOTS
@@ -286,12 +285,11 @@ class ProfileWindowShellTests(unittest.TestCase):
         state = _fresh_state()
         state["pet_name"] = "烟花"
         window, _ = self._window(state)
-        html = window._intro_label.text()
-        # 模块化分节：大标题（名字）+ 等级 / 好感度 / 属性 / 性格 各自成段。
-        self.assertIn("烟花", html)
-        for section in ("等级", "好感度", "属性", "性格"):
-            self.assertIn(f"『{section}』", html)
-        self.assertGreaterEqual(html.count("<p"), 5, "分节应各自成段")
+        html = self._intro_text(window)
+        # 模块化分节：大标题（名字）+ 等级 / 好感度 / 属性 / 性格 各节标签。
+        self.assertIn("烟花", window._intro_label.text())
+        for key in ("level", "affection", "attrs", "personality"):
+            self.assertIn(key, window._intro_sections)
         self.assertIn("经验", html, "介绍应更详细（含经验）")
 
     def test_outfit_page_has_no_text(self):
@@ -301,10 +299,51 @@ class ProfileWindowShellTests(unittest.TestCase):
             self.assertEqual(set(widget.keys()), {"pixmap"},
                              "套装卡只保留图，文字按指示去除")
 
-    def test_outfit_cards_enlarged(self):
-        from petpet.ui.pet_profile import OUTFIT_CARD_SIZE
+    def test_affection_next_follows_level(self):
+        """好感度上限必须随等级变化（曾因传字典被兜底成恒 30）。"""
+        from petpet.ui.pet_profile import pet_profile_snapshot
 
-        self.assertGreaterEqual(OUTFIT_CARD_SIZE[0], 375, "套装卡须放大")
+        state = _fresh_state()
+        profile = state.setdefault("pets", {}).setdefault("ice_cream", {})
+        state["owned_pet_ids"] = ["lunch_meat", "ice_cream"]
+        state["active_pet_id"] = "ice_cream"
+        state["affection_level"] = 3
+        state["affection_points"] = 12
+        snap = pet_profile_snapshot(state, "ice_cream")
+        self.assertEqual(snap["affection_next"], 50, "Lv.3 上限应为 20+3*10=50")
+
+    def test_intro_has_progress_bars(self):
+        window, _ = self._window()
+        self.assertIsNotNone(window._level_bar, "等级节须有经验进度条")
+        for key in ("hunger", "mood", "energy"):
+            self.assertIn(key, window._attr_bars, f"属性 {key} 须有进度条")
+        self.assertEqual(window._level_bar._maximum, 100)
+        self.assertEqual(window._attr_bars["hunger"]._value, 80)
+
+    def test_outfit_page_scrolls_vertically_only(self):
+        window, _ = self._window()
+        window._show_tab("套装")
+        window.show()
+        self.app.processEvents()
+        self.assertEqual(
+            window._outfit_page.horizontalScrollBar().maximum(), 0,
+            "套装页不得出现横向滚动",
+        )
+        self.assertGreater(
+            window._outfit_page.verticalScrollBar().maximum(), 0,
+            "套装页应为上下滚动",
+        )
+
+    def test_round_ten_positions(self):
+        from petpet.ui.pet_profile import (
+            CLOSE_BUTTON_AT, OUTFIT_CARD_SIZE, PET_CARD_SLOTS,
+        )
+
+        self.assertAlmostEqual(PET_CARD_SLOTS[1][1], 451, delta=2,
+                               msg="冰淇淋再上移 50px")
+        self.assertEqual(PET_CARD_SLOTS[0][0], 123, "两卡再右移 10px")
+        self.assertAlmostEqual(CLOSE_BUTTON_AT[1], 39, delta=2, msg="X 再上移 10px")
+        self.assertGreaterEqual(OUTFIT_CARD_SIZE[0], 490, "套装卡继续放大")
 
     def test_shell_renders_background(self):
         window, _ = self._window()
