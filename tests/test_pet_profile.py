@@ -119,8 +119,8 @@ class ProfileWindowShellTests(unittest.TestCase):
     def test_window_size_matches_unified_panel_size(self):
         from petpet.ui import pet_profile as module
 
-        # 用户定稿：与其他常驻面板统一 850x960（艺术稿 1201x1304 非等比铺满）。
-        self.assertEqual((module.ART_W, module.ART_H), (1201, 1304))
+        # 用户定稿：与其他常驻面板统一 850x960（艺术稿 1085x1663 非等比铺满）。
+        self.assertEqual((module.ART_W, module.ART_H), (1085, 1663))
         self.assertEqual((module.UNIFIED_W, module.UNIFIED_H), (850, 960))
         window, _ = self._window()
         self.assertEqual((window.width(), window.height()), (850, 960))
@@ -170,18 +170,18 @@ class ProfileWindowShellTests(unittest.TestCase):
         state["owned_pet_ids"] = ["lunch_meat", "ice_cream"]
         window, pet = self._window(state)
         self.assertEqual(len(window._pet_cards), 2)
-        # 名字与「使用中」pill 已按用户指示删除，卡片只保留头像按钮。
+        # 十四轮：卡片含头像按钮 + 名字 + 使用中 pill（恢复参考图设计）。
         for card in window._pet_cards.values():
-            self.assertEqual(set(card.keys()), {"button"})
+            self.assertEqual(set(card.keys()), {"button", "tag", "name"})
         window._select_pet("ice_cream")
         pet.set_active_pet.assert_called_once_with("ice_cream")
 
     def test_pet_card_icons_enlarged_and_closer(self):
         from petpet.ui.pet_profile import PET_CARD_SIZE, PET_CARD_SLOTS
 
-        self.assertGreaterEqual(PET_CARD_SIZE[0], 180, "头像须放大")
+        self.assertGreaterEqual(PET_CARD_SIZE[0], 160, "头像保持放大")
         gap = PET_CARD_SLOTS[1][1] - PET_CARD_SLOTS[0][1]
-        self.assertLessEqual(gap, 310, "两卡须更靠近")
+        self.assertLessEqual(gap, 400, "两卡间距符合参考图")
 
     def test_switch_to_unowned_pet_is_refused(self):
         window, pet = self._window()
@@ -278,7 +278,7 @@ class ProfileWindowShellTests(unittest.TestCase):
         # 胶囊半径 = 槽高一半。
         th = TAB_SLOTS["简介"][3]
         self.assertAlmostEqual(
-            window._tab_buttons["简介"].height(), round(th * 960 / 1304), delta=3,
+            window._tab_buttons["简介"].height(), round(th * 960 / 1663), delta=3,
         )
 
     def test_intro_is_modular_sections(self):
@@ -346,8 +346,9 @@ class ProfileWindowShellTests(unittest.TestCase):
     def test_ice_cream_card_raised_again(self):
         from petpet.ui.pet_profile import PET_CARD_SLOTS
 
-        # 第十一轮：冰淇淋再上移（y451 → ~431）。
-        self.assertLessEqual(PET_CARD_SLOTS[1][1], 433)
+        # 十四轮新 rail 布局：卡2 y702（参考图比例），卡1 y322。
+        self.assertEqual(PET_CARD_SLOTS[1][1], 680)
+        self.assertEqual(PET_CARD_SLOTS[0][1], 300)
 
     def test_outfit_cards_have_equip_buttons(self):
         window, _ = self._window()
@@ -418,17 +419,6 @@ class ProfileWindowShellTests(unittest.TestCase):
             window._outfit_page.verticalScrollBar().maximum(), 0,
             "套装页应为上下滚动",
         )
-
-    def test_round_ten_positions(self):
-        from petpet.ui.pet_profile import (
-            CLOSE_BUTTON_AT, OUTFIT_CARD_SIZE, PET_CARD_SLOTS,
-        )
-
-        self.assertLessEqual(PET_CARD_SLOTS[1][1], 433,
-                             msg="冰淇淋第十/十一轮累计上移")
-        self.assertEqual(PET_CARD_SLOTS[0][0], 123, "两卡再右移 10px")
-        self.assertAlmostEqual(CLOSE_BUTTON_AT[1], 39, delta=2, msg="X 再上移 10px")
-        self.assertGreaterEqual(OUTFIT_CARD_SIZE[0], 540, "套装卡继续放大")
 
     def test_shell_renders_background(self):
         window, _ = self._window()

@@ -34,11 +34,10 @@ _ASSET_DIR = os.path.join(
     "assets", "runtime", "ui", "pet_profile_new",
 )
 
-# 页面布局坐标 = background.png 艺术稿像素（1201x1304）。
-# 显示：与其他常驻面板统一 850x960（用户定稿，第八轮）——艺术稿按
-# 宽高各自比例非等比铺满（横向 0.708 / 纵向 0.736，差 4% 不可察觉）；
+# 页面布局坐标 = new_background.png 艺术稿像素（1085x1663，第十四轮换装）。
+# 显示：与其他常驻面板统一 850x960——艺术稿按宽高各自比例非等比铺满；
 # 小屏放不下时按等比因子整体收缩（下限 0.55），保持 850:960 比例。
-ART_W, ART_H = 1201, 1304
+ART_W, ART_H = 1085, 1663
 UNIFIED_W, UNIFIED_H = 850, 960
 _SX = UNIFIED_W / ART_W
 _SY = UNIFIED_H / ART_H
@@ -47,35 +46,45 @@ _FIT = 1.0
 # 整页圆角半径（用户定稿：逐轮加大，当前 64）。
 CORNER_RADIUS = 64
 
-# 右上关闭按钮（close_button.png 素材；第八轮用户定稿：往下移动）。
-CLOSE_BUTTON_AT = (1083, 39, 76, 70)
+# 右上关闭按钮（close_button.png 素材；花形钮位随新背景右上角）。
+CLOSE_BUTTON_AT = (952, 38, 110, 100)
 CLOSE_PRESS_FLASH_MS = 40
 CLOSE_CLICK_DEFER_MS = 80
 
-# 图1 左栏宠物卡（background 烘焙卡片 x85-334 y208-1089 内部两张）。
-# 冰淇淋卡位上移（头型上移，第八轮）。
-PET_CARD_SLOTS = ((123, 243), (123, 431))
-PET_CARD_SIZE = (180, 180)
+# 图1 左栏：宠物头像列表 rail（250x1326 素材，纯背景板无烘焙槽）+
+# 程序布局双卡槽（坐标按参考图反推到 art 比例）。
+RAIL_AT = (56, 150, 250, 1240)
+RAIL_TITLE_AT = (86, 208, 300, 42)           # 「我的伙伴与套装」小节标题
+PET_CARD_SLOTS = ((98, 300), (98, 680))      # 每卡头像左上（rail 内 art 坐标）
+PET_CARD_SIZE = (166, 166)
+PET_CARD_NAME_AT = (-20, 170, 206, 36)       # 名字（相对卡，卡下，略宽于卡居中）
+PET_CARD_TAG_AT = (12, 118, 142, 34)         # 使用中 pill（相对卡，卡内底部）
 
-# 图2 待机动画：垫 x437-975 y515-639，狗底部对齐垫，高约 350。
-IDLE_PREVIEW_RECT = (465, 230, 480, 390)
-IDLE_FRAME_HEIGHT = 360
+# 图2 待机动画：新背景粉垫 x340-940 y480-640（虚线圆中心 ~640,400）。
+IDLE_PREVIEW_RECT = (415, 190, 450, 445)
+IDLE_FRAME_HEIGHT = 420
 IDLE_FPS = 8
 
-# 分栏（description_bg）：待机动画正下方；两页「简介 / 套装」，更多页后续加。
-TAB_BAR_AT = (336, 660, 728, 69)
+# 图3 名字牌（rename_bg 323x63）+ 改名钮（change_name 94x55）：
+# 垫正下方横排居中——牌 300 宽 + 改名钮 84 宽，组合居中于垫（中心 640）。
+NAME_PLATE_AT = (470, 664, 300, 58)
+NAME_LABEL_AT = (492, 670, 176, 46)
+RENAME_BUTTON_AT = (782, 670, 84, 48)
+
+# 分栏（description_bg）：名字牌下方；两页「简介 / 套装」。
+TAB_BAR_AT = (330, 756, 728, 69)
 TAB_SLOTS = {
-    "简介": (396, 672, 140, 46),
-    "套装": (546, 672, 140, 46),
+    "简介": (390, 768, 140, 46),
+    "套装": (540, 768, 140, 46),
 }
-CONTENT_AT = (336, 748, 728, 456)
+CONTENT_AT = (330, 850, 728, 650)
 
 # 套装素材（新 art 直接按套装 id 映射；未映射回退 idle 预览路径）。
 OUTFIT_ART = {
     "strawberry_suit": "outfit_strawberry.png",
     "dinosaur_suit": "outfit_diansour.png",
 }
-OUTFIT_CARD_SIZE = (540, 346)
+OUTFIT_CARD_SIZE = (620, 400)
 
 # 套装装备按钮素材（绿=恐龙、橘=草莓，第十一轮）。
 OUTFIT_EQUIP_BUTTON = {
@@ -420,7 +429,9 @@ class PetProfileWindow(QWidget):
             screen = None
         _FIT = _resolve_scale(screen)
         self.setFixedSize(round(UNIFIED_W * _FIT), round(UNIFIED_H * _FIT))
-        self._background = _pp_pixmap("background.png", ART_W, ART_H)
+        self._background = _pp_pixmap("new_background.png", ART_W, ART_H)
+        # 头像列表 rail（宠物系统独立背景板，叠加在背景左侧）。
+        self._rail = _pp_pixmap("宠物头像列表.png", RAIL_AT[2], RAIL_AT[3])
         # base_UI 已按用户指示撤下（第六轮）；第七轮：新 UI 素材逐个接入。
         self._close_button = _CloseButton(
             self, _pp_pixmap("close_button.png"), self.close,
@@ -459,17 +470,21 @@ class PetProfileWindow(QWidget):
         return label
 
     def _build_content(self):
-        # 图1：左栏宠物切换卡（pet_icon 素材；名字/使用中已按用户指示删除）。
+        # 图1：左栏「我的伙伴与套装」标题 + rail 上双宠切换卡
+        # （头像 + 卡下名字 + 卡内底部「使用中」pill，恢复自参考图）。
+        self._rail_title = self._label(
+            "我的伙伴与套装", *RAIL_TITLE_AT, size=24, bold=True,
+        )
         for index, pet_id in enumerate(pet_registry.load_pet_registry()):
             if index >= len(PET_CARD_SLOTS):
                 break
             card_x, card_y = PET_CARD_SLOTS[index]
             button = QPushButton(self)
             button.setFlat(True)
-            # 头像两态反馈（用户定稿，第八轮）：悬停白洗+珊瑚描边、按压压暗。
+            # 头像两态反馈：悬停白洗+珊瑚描边、按压压暗。
             button.setStyleSheet(
                 "QPushButton{border:none;background:transparent;"
-                "border-radius:26px;}"
+                "border-radius:30px;}"
                 "QPushButton:hover{background:rgba(255,252,246,140);"
                 "border:2px solid rgba(242,143,118,190);}"
                 "QPushButton:pressed{background:rgba(70,42,28,70);}"
@@ -479,13 +494,56 @@ class PetProfileWindow(QWidget):
             button.clicked.connect(
                 lambda _checked=False, target=pet_id: self._select_pet(target)
             )
-            self._pet_cards[pet_id] = {"button": button}
+            # 卡内底部「使用中」pill。
+            tag = QLabel("使用中", self)
+            tag.setAlignment(Qt.AlignCenter)
+            tag.setStyleSheet(
+                "QLabel{"
+                f"font-family:'{APP_FONT_FAMILY}';font-size:{round(15 * _SX * _FIT)}px;"
+                "font-weight:600;color:#c96f52;background:#fdf0d8;"
+                "border-radius:12px;padding:1px 8px;}"
+            )
+            tx, ty, tw, th = PET_CARD_TAG_AT
+            tag.setGeometry(_R(card_x + tx, card_y + ty, tw, th))
+            tag.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+            # 卡下名字。
+            nx, ny, nw, nh = PET_CARD_NAME_AT
+            name = self._label(
+                "", card_x + nx, card_y + ny, nw, nh,
+                size=22, bold=True, align=Qt.AlignCenter,
+            )
+            self._pet_cards[pet_id] = {
+                "button": button, "tag": tag, "name": name,
+            }
 
         # 图2：待机动画位（垫上，底部对齐）。
         self._idle_label = QLabel(self)
         self._idle_label.setAlignment(Qt.AlignBottom | Qt.AlignHCenter)
         self._idle_label.setGeometry(_R(*IDLE_PREVIEW_RECT))
         self._idle_label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+
+        # 图3：名字牌（rename_bg）+ 名字 + 改名钮（change_name 素材）。
+        self._pixmap_label("rename_bg.png", *NAME_PLATE_AT)
+        self._name_label = self._label(
+            "", *NAME_LABEL_AT, size=30, bold=True, align=Qt.AlignCenter,
+        )
+        self._rename_button = QPushButton(self)
+        self._rename_button.setFlat(True)
+        self._rename_button.setStyleSheet(
+            "QPushButton{border:none;background:transparent;}"
+            "QPushButton:hover{background:rgba(255,252,246,110);"
+            "border-radius:18px;}"
+            "QPushButton:pressed{background:rgba(70,42,28,70);"
+            "border-radius:18px;}"
+        )
+        self._rename_button.setCursor(Qt.PointingHandCursor)
+        self._rename_button.setGeometry(_R(*RENAME_BUTTON_AT))
+        self._rename_button.setIcon(QIcon(_pp_asset("change_name.png")))
+        self._rename_button.setIconSize(QSize(
+            round(RENAME_BUTTON_AT[2] * _SX * _FIT),
+            round(RENAME_BUTTON_AT[3] * _SY * _FIT),
+        ))
+        self._rename_button.clicked.connect(self._open_name_dialog)
 
         # 分栏（description_bg 素材）+ 内容页（滚动区承载，超出可滚）。
         self._pixmap_label("description_bg.png", *TAB_BAR_AT)
@@ -674,6 +732,10 @@ class PetProfileWindow(QWidget):
             card["button"].setIconSize(QSize(*[
                 round(value * _SX * _FIT) for value in PET_CARD_SIZE
             ]))
+            card["tag"].setVisible(pet_id == active_id)
+            card["name"].setText(
+                pet_profile_snapshot(state, pet_id)["name"]
+            )
 
         self._refresh_intro(snapshot)
         self._refresh_outfits(snapshot)
@@ -788,6 +850,26 @@ class PetProfileWindow(QWidget):
         if callable(opener):
             opener()
 
+    def _open_name_dialog(self):
+        if _NAME_DIALOG_FACTORY is None:
+            return
+        snapshot = pet_profile_snapshot(self.pet.state, self._active_pet_id())
+        dialog = _NAME_DIALOG_FACTORY(
+            snapshot["name"], self._commit_name, self.window(),
+        )
+        self._name_dialog = dialog
+        dialog.exec_()
+        self._name_dialog = None
+
+    def _commit_name(self, new_name):
+        if not (isinstance(new_name, str) and new_name.strip()):
+            return
+        setter = getattr(self.pet, "set_pet_name", None)
+        if callable(setter):
+            setter(new_name.strip())
+        self._save_state(self.pet.state)
+        self.refresh()
+
     def _select_pet(self, pet_id):
         if pet_id == self._active_pet_id():
             return
@@ -824,6 +906,8 @@ class PetProfileWindow(QWidget):
         painter.setClipPath(clip)
         if not self._background.isNull():
             painter.drawPixmap(0, 0, self._background)
+        if not self._rail.isNull():
+            painter.drawPixmap(_R(*RAIL_AT).topLeft(), self._rail)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
