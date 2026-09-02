@@ -7,6 +7,9 @@ from unittest.mock import Mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PyQt5.QtCore import QEvent, QPoint, Qt
+from PyQt5.QtGui import QMouseEvent
+
 from petpet.app import state as app_state
 from petpet.progression import core as progression
 
@@ -112,23 +115,47 @@ class ProfileWindowShellTests(unittest.TestCase):
         self.addCleanup(window.close)
         return window, pet
 
-    def test_window_size_matches_background_native(self):
+    def test_window_size_is_background_at_70_percent(self):
         from petpet.ui import pet_profile as module
 
+        # 用户定稿：整体显示为 background 的 70%（1201x1304 → 841x913）。
         self.assertEqual((module.ART_W, module.ART_H), (1201, 1304))
+        self.assertEqual(module.DISPLAY_SCALE, 0.7)
+        self.assertGreater(module.CORNER_RADIUS, 30, "圆角须比首版的 30 更大")
         window, _ = self._window()
-        self.assertEqual((window.width(), window.height()), (1201, 1304))
+        self.assertEqual((window.width(), window.height()), (841, 913))
 
-    def test_resolve_scale_caps_at_one_and_fits_small_screens(self):
+    def test_resolve_scale_caps_at_display_scale_and_fits_small_screens(self):
         from PyQt5.QtCore import QRect
 
         from petpet.ui.pet_profile import _resolve_scale
 
-        self.assertLessEqual(_resolve_scale(QRect(0, 0, 2560, 1440)), 1.0)
-        self.assertEqual(_resolve_scale(None), 1.0)
-        s = _resolve_scale(QRect(0, 0, 1707, 960))
-        self.assertLessEqual(round(1304 * s), 960)
+        self.assertLessEqual(_resolve_scale(QRect(0, 0, 2560, 1440)), 0.7)
+        self.assertEqual(_resolve_scale(None), 0.7)
+        s = _resolve_scale(QRect(0, 0, 1280, 860))
+        self.assertLessEqual(round(1304 * s), 860)
         self.assertGreaterEqual(s, 0.55)
+
+    def test_close_button_has_hover_and_press_feedback(self):
+        from PyQt5.QtTest import QTest
+
+        window, _ = self._window()
+        window.show()
+        self.app.processEvents()
+        button = window._close_button
+        self.assertFalse(button.hovered)
+        button.enterEvent(None)
+        self.assertTrue(button.hovered, "悬停必须置 hover 态")
+        button.leaveEvent(None)
+        self.assertFalse(button.hovered)
+
+        button.mousePressEvent(
+            QMouseEvent(QEvent.MouseButtonPress, QPoint(10, 10),
+                        Qt.LeftButton, Qt.LeftButton, Qt.NoModifier)
+        )
+        self.assertEqual(button._phase, "pressed", "按下须进入按压反馈段")
+        QTest.qWait(200)
+        self.assertFalse(window.isVisible(), "两段反馈播完后窗口应关闭")
 
     def test_shell_renders_background_and_base_ui(self):
         window, _ = self._window()
@@ -141,10 +168,13 @@ class ProfileWindowShellTests(unittest.TestCase):
         mid = QColor.fromRgba(image.pixel(window.width() // 2, 200))
         self.assertGreater(mid.alpha(), 240)
         self.assertGreater(mid.red(), 230)
-        # base_UI 右上圆钮区（约 x1080-1151, y30-100）应有非奶油内容。
+        # base_UI 右上圆钮区（艺术稿 x1080-1150, y32-100）应有非奶油内容；
+        # 采样坐标按实际缩放换算。
+        kx = window.width() / 1201
+        ky = window.height() / 1304
         content = 0
-        for x in range(1080, 1150, 6):
-            for y in range(32, 100, 6):
+        for x in range(round(1080 * kx), round(1150 * kx), 4):
+            for y in range(round(32 * ky), round(100 * ky), 4):
                 c = QColor.fromRgba(image.pixel(x, y))
                 if c.alpha() > 100 and (
                     abs(c.red() - mid.red()) > 18

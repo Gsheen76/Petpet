@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import os
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QPainter, QPainterPath, QPixmap
+from PyQt5.QtCore import QRect, Qt, QTimer
+from PyQt5.QtGui import QColor, QPainter, QPainterPath, QPen, QPixmap
 from PyQt5.QtWidgets import QApplication, QWidget
 
 from petpet.app import pets as pet_registry
@@ -24,21 +24,34 @@ _ASSET_DIR = os.path.join(
 )
 
 # 页面尺寸 = background.png 原生大小；布局坐标 = 该画布像素。
-# _S 为运行时缩放：默认 1:1，屏幕放不下时整体收缩（下限 0.55）。
+# DISPLAY_SCALE 为整体显示比例（用户定稿：2026-09-01 缩小 30%）；
+# _S 为运行时缩放：默认显示比例，屏幕放不下时继续收缩（下限 0.55）。
 ART_W, ART_H = 1201, 1304
-_S = 1.0
+DISPLAY_SCALE = 0.7
+_S = DISPLAY_SCALE
 
-# 整页圆角半径（与 base_UI 卡片圆角语言一致）。
-CORNER_RADIUS = 30
+# 整页圆角半径（用户定稿：比首版 30 更大）。
+CORNER_RADIUS = 50
+
+# 右上关闭按钮（base_UI 圆钮位已烘焙 X 图案，交互层克隆其像素做反馈）。
+CLOSE_BUTTON_AT = (1068, 16, 94, 94)
+CLOSE_KNOB_AT = (1076, 24, 78, 78)
+CLOSE_PRESS_FLASH_MS = 40
+CLOSE_CLICK_DEFER_MS = 80
+
+
+def _R(x, y, w, h):
+    """艺术稿坐标 → 实际画布几何。"""
+    return QRect(round(x * _S), round(y * _S), round(w * _S), round(h * _S))
 
 
 def _resolve_scale(screen_rect) -> float:
-    """按目标屏幕自适应：上限 1:1，小屏按比例收缩，下限 0.55。"""
+    """按目标屏幕自适应：上限显示比例，小屏按比例收缩，下限 0.55。"""
     if screen_rect is None or screen_rect.width() <= 0:
-        return 1.0
+        return DISPLAY_SCALE
     by_h = (screen_rect.height() - 40) / ART_H
     by_w = (screen_rect.width() - 40) / ART_W
-    return max(0.55, min(1.0, by_h, by_w))
+    return max(0.55, min(DISPLAY_SCALE, by_h, by_w))
 
 
 def configure_name_dialog_factory(factory):
@@ -149,6 +162,86 @@ def _outfit_preview_path(pet_id, outfit):
     return candidate if os.path.isfile(candidate) else None
 
 
+class _CloseButton(QWidget):
+    """右上关闭钮：X 图案烘焙在 base_UI 里，本件克隆圆钮像素做反馈层。
+
+    悬停：放大 + 白洗 + 珊瑚描边（突出）；按下：两段式——缩小变暗 →
+    回弹+高亮 → 关闭（与家园胶囊按键同节奏，常量 CLOSE_*_MS）。
+    """
+
+    def __init__(self, parent, knob_pixmap, on_activate):
+        super().__init__(parent)
+        self._knob = knob_pixmap
+        self._on_activate = on_activate
+        self.hovered = False
+        self._phase = None  # None | "pressed" | "recover"
+        self._timer = QTimer(self)
+        self._timer.setSingleShot(True)
+        self._timer.timeout.connect(self._advance_phase)
+        self.setCursor(Qt.PointingHandCursor)
+
+    def geometry_from_art(self):
+        self.setGeometry(_R(*CLOSE_BUTTON_AT))
+
+    def _knob_rect(self):
+        """当前状态下圆钮的绘制区（按钮矩形内居中，按相位缩放）。"""
+        full = QRect(0, 0, self.width(), self.height())
+        inset_x = (full.width() - round(CLOSE_KNOB_AT[2] * _S)) // 2
+        inset_y = (full.height() - round(CLOSE_KNOB_AT[3] * _S)) // 2
+        rect = full.adjusted(inset_x, inset_y, -inset_x, -inset_y)
+        if self.hovered and self._phase is None:
+            rect = rect.adjusted(-3, -3, 3, 3)
+        elif self._phase == "pressed":
+            rect = rect.adjusted(4, 4, -4, -4)
+        return rect
+
+    def paintEvent(self, event):
+        if self._knob.isNull():
+            return
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        rect = self._knob_rect()
+        painter.drawPixmap(rect, self._knob)
+        if self._phase == "pressed":
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor(70, 42, 28, 120))
+            painter.drawEllipse(rect)
+        elif self.hovered or self._phase == "recover":
+            painter.setPen(QPen(QColor("#f28f76"), max(2, round(3 * _S))))
+            painter.setBrush(QColor(255, 252, 246, 70))
+            painter.drawEllipse(rect.adjusted(1, 1, -1, -1))
+
+    def enterEvent(self, event):
+        self.hovered = True
+        self.update()
+
+    def leaveEvent(self, event):
+        self.hovered = False
+        self.update()
+
+    def mousePressEvent(self, event):
+        if event.button() != Qt.LeftButton:
+            return
+        event.accept()
+        self._phase = "pressed"
+        self._timer.start(CLOSE_PRESS_FLASH_MS + 20)
+        self.update()
+
+    def _advance_phase(self):
+        if self._phase == "pressed":
+            self._phase = "recover"
+            self._timer.start(
+                CLOSE_CLICK_DEFER_MS - CLOSE_PRESS_FLASH_MS + 20
+            )
+            self.update()
+            return
+        self._phase = None
+        self.update()
+        activate = self._on_activate
+        if callable(activate):
+            activate()
+
+
 class PetProfileWindow(QWidget):
     """宠物详情空壳页：background + base_UI + 圆角；内容逐轮按指示加入。
 
@@ -181,13 +274,20 @@ class PetProfileWindow(QWidget):
         # base_UI 原生 1201x1309 比页面高 5px：按宽度等比缩放，底部多出部分
         # 被圆角裁剪切掉（其内容止于 y875，无视觉影响），避免纵向压扁素材。
         base_path = _pp_asset("base_UI.png")
-        if base_path:
-            base = QPixmap(base_path).scaledToWidth(
+        base_native = QPixmap(base_path) if base_path else QPixmap()
+        if not base_native.isNull():
+            self._base_ui = base_native.scaledToWidth(
                 self.width(), Qt.SmoothTransformation,
             )
-            self._base_ui = base
+            knob = base_native.copy(
+                CLOSE_KNOB_AT[0], CLOSE_KNOB_AT[1],
+                CLOSE_KNOB_AT[2], CLOSE_KNOB_AT[3],
+            )
         else:
             self._base_ui = QPixmap()
+            knob = QPixmap()
+        self._close_button = _CloseButton(self, knob, self.close)
+        self._close_button.geometry_from_art()
 
     def refresh(self):
         """预留：内容轮加入后在此刷新（当前壳无动态内容）。"""
