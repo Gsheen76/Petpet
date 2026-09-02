@@ -17,7 +17,7 @@ from PyQt5.QtCore import QRect, QSize, Qt, QTimer
 from PyQt5.QtGui import QColor, QIcon, QPainter, QPainterPath, QPixmap
 from PyQt5.QtWidgets import (QApplication, QHBoxLayout, QLabel,
                              QPushButton, QScrollArea, QStackedWidget,
-                             QVBoxLayout, QWidget)
+                             QWidget)
 
 from petpet.app.fonts import APP_FONT_FAMILY
 from petpet.app import pets as pet_registry
@@ -48,17 +48,17 @@ _FIT = 1.0
 CORNER_RADIUS = 64
 
 # 右上关闭按钮（close_button.png 素材；第八轮用户定稿：往下移动）。
-CLOSE_BUTTON_AT = (1083, 64, 76, 70)
+CLOSE_BUTTON_AT = (1083, 49, 76, 70)
 CLOSE_PRESS_FLASH_MS = 40
 CLOSE_CLICK_DEFER_MS = 80
 
 # 图1 左栏宠物卡（background 烘焙卡片 x85-334 y208-1089 内部两张）。
 # 冰淇淋卡位上移（头型上移，第八轮）。
-PET_CARD_SLOTS = ((103, 243), (103, 531))
+PET_CARD_SLOTS = ((113, 243), (113, 501))
 PET_CARD_SIZE = (180, 180)
 
 # 图2 待机动画：垫 x437-975 y515-639，狗底部对齐垫，高约 350。
-IDLE_PREVIEW_RECT = (460, 230, 480, 390)
+IDLE_PREVIEW_RECT = (465, 230, 480, 390)
 IDLE_FRAME_HEIGHT = 360
 IDLE_FPS = 8
 
@@ -75,7 +75,7 @@ OUTFIT_ART = {
     "strawberry_suit": "outfit_strawberry.png",
     "dinosaur_suit": "outfit_diansour.png",
 }
-OUTFIT_CARD_SIZE = (330, 210)
+OUTFIT_CARD_SIZE = (385, 246)
 
 
 def _R(x, y, w, h):
@@ -456,13 +456,15 @@ class PetProfileWindow(QWidget):
         self._show_tab("简介")
 
     def _tab_qss(self):
-        """分栏按钮样式：选中珊瑚、悬停白洗、按压压暗（两态反馈必备）。"""
-        font_px = round(24 * _SX * _FIT)
+        """分栏按钮：胶囊形（第九轮），选中珊瑚、悬停白洗、按压压暗。"""
+        font_px = round(26 * _SX * _FIT)
+        th = TAB_SLOTS["简介"][3]
+        radius = max(8, round(th * _SY * _FIT / 2))
         return (
             "QPushButton{"
             f"font-family:'{APP_FONT_FAMILY}';font-size:{font_px}px;"
-            "color:#6b5646;background:transparent;border:none;"
-            "border-radius:20px;}"
+            f"font-weight:600;color:#6b5646;background:transparent;"
+            f"border:none;border-radius:{radius}px;padding:0 14px;}}"
             "QPushButton:hover{background:rgba(255,252,246,150);}"
             "QPushButton:pressed{background:rgba(70,42,28,70);}"
             "QPushButton:checked{background:#f5a48f;color:#ffffff;}"
@@ -486,10 +488,11 @@ class PetProfileWindow(QWidget):
         scroll.setStyleSheet(self._scroll_qss())
         self._intro_label = QLabel()
         self._intro_label.setWordWrap(True)
-        self._intro_label.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
+        self._intro_label.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         self._intro_label.setStyleSheet(
-            f"font-family:'{APP_FONT_FAMILY}';font-size:{round(26 * _SX * _FIT)}px;"
-            "color:#6b5646;background:transparent;padding:6px;"
+            f"font-family:'{APP_FONT_FAMILY}';font-size:{round(24 * _SX * _FIT)}px;"
+            "font-weight:600;color:#6b5646;background:transparent;"
+            "padding:4px 10px;"
         )
         scroll.setWidget(self._intro_label)
         return scroll
@@ -569,33 +572,44 @@ class PetProfileWindow(QWidget):
         self._refresh_outfits(snapshot)
 
     def _refresh_intro(self, snapshot):
-        """简介页：名字（初始名括注）→ 好感度 → 属性值 → 性格介绍。"""
+        """简介页（第九轮模块化）：名字/等级/好感度/属性/性格 各自成节。"""
         if snapshot["name"] == snapshot["default_name"]:
             name_part = snapshot["default_name"]
         else:
             name_part = f"{snapshot['name']}（{snapshot['default_name']}）"
-        px = round(26 * _SX * _FIT)
-        small_px = round(23 * _SX * _FIT)
-        color = "#6b5646"
-        soft = "#8a7361"
-        self._intro_label.setText(
-            f"<div style='line-height:1.7'>"
-            f"<p style='margin:2px 0'><span style='font-size:{px}px;"
-            f"font-weight:600;color:{color}'>{name_part}</span></p>"
-            f"<p style='margin:2px 0;font-size:{small_px}px;color:{color}'>"
-            f"好感度 Lv.{snapshot['affection_level']}"
-            f"（{snapshot['affection_points']} / "
-            f"{snapshot['affection_next']}）</p>"
-            f"<p style='margin:2px 0;font-size:{small_px}px;color:{color}'>"
-            f"饱腹 {snapshot['hunger']} · 心情 {snapshot['mood']} · "
-            f"精力 {snapshot['energy']}</p>"
-            f"<p style='margin:8px 0 2px;font-size:{small_px}px;"
-            f"color:{soft}'>{snapshot['description']}</p>"
-            f"</div>"
+        k = _SX * _FIT
+        title_px = round(30 * k)
+        label_px = round(24 * k)
+        body_px = round(23 * k)
+        label = f"color:#c96f52"
+        body = f"color:#6b5646"
+
+        def section(title, value_html):
+            return (
+                f"<p style='margin:14px 0 2px;font-size:{label_px}px;"
+                f"{label}'>『{title}』</p>"
+                f"<p style='margin:2px 0 6px;font-size:{body_px}px;"
+                f"{body}'>{value_html}</p>"
+            )
+
+        html = (
+            f"<div style='line-height:1.55'>"
+            f"<p style='margin:4px 0 2px;font-size:{title_px}px;"
+            f"font-weight:700;color:#6b5646'>{name_part}</p>"
+            + section("等级", f"Lv.{snapshot['level']}　经验 "
+                      f"{snapshot['xp']} / {snapshot['xp_next']}")
+            + section("好感度", f"Lv.{snapshot['affection_level']}　"
+                      f"{snapshot['affection_points']} / "
+                      f"{snapshot['affection_next']}")
+            + section("属性", f"饱腹 {snapshot['hunger']}　"
+                      f"心情 {snapshot['mood']}　精力 {snapshot['energy']}")
+            + section("性格", snapshot["description"])
+            + "</div>"
         )
+        self._intro_label.setText(html)
 
     def _refresh_outfits(self, snapshot):
-        """套装页：当前宠物套装卡（新素材图 + 名称）。"""
+        """套装页（第九轮）：只放大图卡，不加文字。"""
         while self._outfit_layout.count() > 1:
             item = self._outfit_layout.takeAt(0)
             widget = item.widget()
@@ -608,10 +622,6 @@ class PetProfileWindow(QWidget):
             art_path = _pp_asset(art_name) if art_name else None
             if not art_path:
                 art_path = _outfit_preview_path(pet_id, outfit)
-            card = QWidget()
-            layout = QVBoxLayout(card)
-            layout.setContentsMargins(0, 0, 0, 0)
-            layout.setSpacing(4)
             pixmap_label = QLabel()
             pixmap_label.setAlignment(Qt.AlignCenter)
             art = QPixmap(art_path) if art_path else QPixmap()
@@ -621,21 +631,10 @@ class PetProfileWindow(QWidget):
                     round(w * _SX * _FIT), round(h * _SY * _FIT),
                     Qt.KeepAspectRatio, Qt.SmoothTransformation,
                 ))
-            name_label = QLabel(outfit["name"])
-            name_label.setAlignment(Qt.AlignCenter)
-            name_label.setStyleSheet(
-                f"font-family:'{APP_FONT_FAMILY}';"
-                f"font-size:{round(20 * _SX * _FIT)}px;font-weight:600;"
-                "color:#6b5646;background:transparent;"
-            )
-            layout.addWidget(pixmap_label)
-            layout.addWidget(name_label)
             self._outfit_layout.insertWidget(
-                self._outfit_layout.count() - 1, card,
+                self._outfit_layout.count() - 1, pixmap_label,
             )
-            self._outfit_widgets.append(
-                {"pixmap": pixmap_label, "name": name_label},
-            )
+            self._outfit_widgets.append({"pixmap": pixmap_label})
 
     def _select_pet(self, pet_id):
         if pet_id == self._active_pet_id():
