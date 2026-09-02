@@ -49,11 +49,15 @@ CLOSE_KNOB_AT = (1076, 24, 78, 78)
 CLOSE_PRESS_FLASH_MS = 40
 CLOSE_CLICK_DEFER_MS = 80
 
+# 页面顶部有两个烘焙 X（background 顶部 y8-34 一个、base_UI 圆钮一个）。
+# 用户定稿：只保留下方 base_UI 圆钮上的交互 X；顶部的用奶油底色盖掉，
+# base_UI 原位圆钮在克隆交互副本后整体擦透明（避免与下移副本成双影）。
+UPPER_X_ERASE_AT = (1052, 2, 134, 38)
+
 # 图1 左栏宠物卡（background 烘焙卡片 x85-334 y208-1089 内部两张）。
-PET_CARD_SLOTS = ((118, 258), (118, 592))    # 每卡左上角（pet_icon 150x150）
-PET_CARD_SIZE = (150, 150)
-PET_CARD_NAME_AT = (0, 152, 150, 28)         # 名字（相对卡，卡正下方居中）
-PET_CARD_TAG_AT = (25, 118, 100, 30)         # 使用中 pill（相对卡，头像内底部居中）
+# 用户定稿（第四轮）：头像放大到 180、两卡靠近；卡下名字与「使用中」pill 删除。
+PET_CARD_SLOTS = ((103, 243), (103, 547))
+PET_CARD_SIZE = (180, 180)
 
 # 图2 待机动画：垫 x437-975 y515-639，狗底部对齐垫，高约 350。
 IDLE_PREVIEW_RECT = (460, 230, 480, 390)
@@ -62,14 +66,14 @@ IDLE_FPS = 8
 
 # 图3 名字牌（base_UI 烘焙 x564-869 y620-679，改名红钮在牌右端）。
 NAME_PLATE_AT = (564, 620, 305, 59)
-NAME_LABEL_AT = (584, 626, 180, 47)
+NAME_LABEL_AT = (584, 624, 180, 51)
 RENAME_BUTTON_AT = (775, 624, 86, 52)
 
 # 图4 数值两行：background 已烘焙星/心图标（第一列 x~396 y696/752），
 # 文本放图标右侧；第一排等级，第二排好感。
-LEVEL_ROW_AT = (444, 688)
-AFFECTION_ROW_AT = (444, 744)
-ROW_TEXT_SIZE = (240, 40)
+LEVEL_ROW_AT = (444, 684)
+AFFECTION_ROW_AT = (444, 740)
+ROW_TEXT_SIZE = (260, 46)
 
 
 def _R(x, y, w, h):
@@ -361,17 +365,35 @@ class PetProfileWindow(QWidget):
         _S = _resolve_scale(screen)
         self.setFixedSize(round(ART_W * _S), round(ART_H * _S))
         self._background = _pp_pixmap("background.png", self.width(), self.height())
+        # 顶部多余 X（用户定稿保留下方那个）：background 顶部的 X 用奶油底色盖掉。
+        if not self._background.isNull():
+            painter = QPainter(self._background)
+            ex, ey, ew, eh = UPPER_X_ERASE_AT
+            painter.fillRect(
+                QRect(round(ex * _S), round(ey * _S),
+                      round(ew * _S), round(eh * _S)),
+                QColor(254, 246, 234),
+            )
+            painter.end()
         # base_UI 原生 1201x1309 比页面高 5px：按宽度等比缩放，底部多出部分
         # 被圆角裁剪切掉（其内容止于 y875，无视觉影响），避免纵向压扁素材。
         base_path = _pp_asset("base_UI.png")
         base_native = QPixmap(base_path) if base_path else QPixmap()
         if not base_native.isNull():
-            self._base_ui = base_native.scaledToWidth(
-                self.width(), Qt.SmoothTransformation,
-            )
             knob = base_native.copy(
                 CLOSE_KNOB_AT[0], CLOSE_KNOB_AT[1],
                 CLOSE_KNOB_AT[2], CLOSE_KNOB_AT[3],
+            )
+            # 原位圆钮擦透明：只留下移后的交互副本，避免双影。
+            erase = QPainter(base_native)
+            erase.setCompositionMode(QPainter.CompositionMode_Clear)
+            kx, ky, kw, kh = CLOSE_KNOB_AT
+            erase.fillRect(
+                QRect(kx - 4, ky - 4, kw + 8, kh + 8), Qt.transparent,
+            )
+            erase.end()
+            self._base_ui = base_native.scaledToWidth(
+                self.width(), Qt.SmoothTransformation,
             )
         else:
             self._base_ui = QPixmap()
@@ -401,7 +423,7 @@ class PetProfileWindow(QWidget):
         return label
 
     def _build_content(self):
-        # 图1：左栏宠物切换卡（pet_icon 素材 + 名字 + 使用中 pill）。
+        # 图1：左栏宠物切换卡（pet_icon 素材；名字/使用中已按用户指示删除）。
         for index, pet_id in enumerate(pet_registry.load_pet_registry()):
             if index >= len(PET_CARD_SLOTS):
                 break
@@ -414,25 +436,7 @@ class PetProfileWindow(QWidget):
             button.clicked.connect(
                 lambda _checked=False, target=pet_id: self._select_pet(target)
             )
-            tag = QLabel("使用中", self)
-            tag.setAlignment(Qt.AlignCenter)
-            tag.setStyleSheet(
-                "QLabel{"
-                f"font-family:'{APP_FONT_FAMILY}';font-size:{round(13 * _S)}px;"
-                "color:#ffffff;background:#f5a48f;border-radius:12px;"
-                "padding:1px 10px;}"
-            )
-            tx, ty, tw, th = PET_CARD_TAG_AT
-            tag.setGeometry(_R(card_x + tx, card_y + ty, tw, th))
-            tag.setAttribute(Qt.WA_TransparentForMouseEvents, True)
-            nx, ny, nw, nh = PET_CARD_NAME_AT
-            name = self._label(
-                "", card_x + nx, card_y + ny, nw, nh,
-                size=17, bold=True, align=Qt.AlignCenter,
-            )
-            self._pet_cards[pet_id] = {
-                "button": button, "tag": tag, "name": name,
-            }
+            self._pet_cards[pet_id] = {"button": button}
 
         # 图2：待机动画位（垫上，底部对齐）。
         self._idle_label = QLabel(self)
@@ -442,7 +446,7 @@ class PetProfileWindow(QWidget):
 
         # 图3：名字 + 改名交互键（改名红钮已烘焙在 base_UI 牌右端）。
         self._name_label = self._label(
-            "", *NAME_LABEL_AT, size=24, bold=True, align=Qt.AlignCenter,
+            "", *NAME_LABEL_AT, size=30, bold=True, align=Qt.AlignCenter,
         )
         self._rename_button = QPushButton(self)
         self._rename_button.setFlat(True)
@@ -457,11 +461,11 @@ class PetProfileWindow(QWidget):
         # 文本放第一列图标右侧）。
         lx, ly = LEVEL_ROW_AT
         self._level_label = self._label(
-            "", lx, ly, *ROW_TEXT_SIZE, size=20, bold=True,
+            "", lx, ly, *ROW_TEXT_SIZE, size=26, bold=True,
         )
         ax, ay = AFFECTION_ROW_AT
         self._affection_label = self._label(
-            "", ax, ay, *ROW_TEXT_SIZE, size=20, bold=True,
+            "", ax, ay, *ROW_TEXT_SIZE, size=26, bold=True,
         )
 
     def _start_idle_animation(self):
@@ -514,8 +518,6 @@ class PetProfileWindow(QWidget):
             card["button"].setIconSize(QSize(*[
                 round(value * _S) for value in PET_CARD_SIZE
             ]))
-            card["tag"].setVisible(pet_id == active_id)
-            card["name"].setText(pet_profile_snapshot(state, pet_id)["name"])
 
         self._name_label.setText(snapshot["name"])
         self._level_label.setText(f"Lv.{snapshot['level']}")

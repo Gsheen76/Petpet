@@ -172,13 +172,42 @@ class ProfileWindowShellTests(unittest.TestCase):
         state["owned_pet_ids"] = ["lunch_meat", "ice_cream"]
         window, pet = self._window(state)
         self.assertEqual(len(window._pet_cards), 2)
+        # 名字与「使用中」pill 已按用户指示删除，卡片只保留头像按钮。
+        for card in window._pet_cards.values():
+            self.assertEqual(set(card.keys()), {"button"})
         window._select_pet("ice_cream")
         pet.set_active_pet.assert_called_once_with("ice_cream")
-        # Mock 不落盘：模拟真实 set_active_pet 后的状态再刷新验证。
-        state["active_pet_id"] = "ice_cream"
-        window.refresh()
-        self.assertTrue(window._pet_cards["ice_cream"]["tag"].isVisibleTo(window))
-        self.assertFalse(window._pet_cards["lunch_meat"]["tag"].isVisibleTo(window))
+
+    def test_only_one_x_knob_rendered(self):
+        """background 顶部 X 与 base_UI 原位圆钮须被擦除，只留下移后的交互圆钮。"""
+        window, _ = self._window()
+        window.show()
+        self.app.processEvents()
+        image = window.grab().toImage()
+        from PyQt5.QtGui import QColor
+
+        kx, ky = window.width() / 1201, window.height() / 1304
+
+        def dark_x_pixels(x0, y0, x1, y1):
+            count = 0
+            for x in range(round(x0 * kx), round(x1 * kx), 2):
+                for y in range(round(y0 * ky), round(y1 * ky), 2):
+                    c = QColor.fromRgba(image.pixel(x, y))
+                    if c.alpha() > 100 and c.red() + c.green() + c.blue() < 560:
+                        count += 1
+            return count
+
+        upper = dark_x_pixels(1062, 8, 1176, 34)
+        lower = dark_x_pixels(1080, 40, 1150, 112)
+        self.assertLess(upper, 6, "background 顶部 X 应被擦除")
+        self.assertGreater(lower, 20, "保留下方的交互圆钮 X")
+
+    def test_pet_card_icons_enlarged_and_closer(self):
+        from petpet.ui.pet_profile import PET_CARD_SIZE, PET_CARD_SLOTS
+
+        self.assertGreaterEqual(PET_CARD_SIZE[0], 180, "头像须放大")
+        gap = PET_CARD_SLOTS[1][1] - PET_CARD_SLOTS[0][1]
+        self.assertLessEqual(gap, 310, "两卡须更靠近")
 
     def test_switch_to_unowned_pet_is_refused(self):
         window, pet = self._window()
