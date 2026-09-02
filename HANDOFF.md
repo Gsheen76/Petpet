@@ -51,7 +51,7 @@ D:\Agent_project\Petpet
 
 | 领域 | 内容 |
 |------|------|
-| **宠物详情面板** | **换新素材从零重建中（用户指示逐轮搭建）**：新素材在 `assets/runtime/ui/pet_profile_new/`（background 1201×1304 + base_UI 右侧骨架 + 装备按钮/宠物图标）。本轮已落**空壳页**：窗口=background 原生尺寸（小屏 `_resolve_scale` 收缩）、paintEvent 圆角裁剪 30px（`CORNER_RADIUS`）叠 background+base_UI、拖拽/居中入口沿用；`pet_profile_snapshot` 数据层与套装预览路径修复保留。旧艺术稿布局（`2e59452`）用户评估搁置，旧素材目录 `ui/pet_profile/` 暂留待清理。**长期规则：所有按键必须带悬停+点击两态反馈**（已入 AGENTS.md）。详见 Obsidian `宠物系统\宠物详情面板新素材重建记录` |
+| **宠物详情面板** | **换新素材从零重建中（用户指示逐轮搭建）**：新素材在 `assets/runtime/ui/pet_profile_new/`（background 1201×1304 + base_UI 右侧骨架 + 装备按钮/宠物图标）。空壳页已两轮定稿（`f4fb704`）：显示比例 0.7（841×913）、圆角 50、右上 X 关闭键带悬停放大白洗/两段按压反馈、paintEvent 圆角裁剪 30px（`CORNER_RADIUS`）叠 background+base_UI、拖拽/居中入口沿用；`pet_profile_snapshot` 数据层与套装预览路径修复保留。旧艺术稿布局（`2e59452`）用户评估搁置，旧素材目录 `ui/pet_profile/` 暂留待清理。**长期规则：所有按键必须带悬停+点击两态反馈**（已入 AGENTS.md）。详见 Obsidian `宠物系统\宠物详情面板新素材重建记录` |
 
 ### v1.6.3（当前）
 
@@ -143,7 +143,7 @@ assets/runtime/ui/shop/
 | 版本发布 | 更新 `version.py` + README + 发布说明 → `scripts/release.ps1 -Version X.Y.Z` |
 
 **测试约束**：
-- `QT_QPA_PLATFORM=offscreen` 跑全量（~80s，681 passed）
+- `QT_QPA_PLATFORM=offscreen` 跑全量（~80s，682 passed）
 - Windows 平台截图需真实字体库（offscreen 无字体数据库，渲染会缺字）
 - `setPixmap` 会清空 `QLabel.text()` → 必须用 `PreservedTextLabel` 保留文本
 
