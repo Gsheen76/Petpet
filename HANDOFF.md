@@ -51,7 +51,7 @@ D:\Agent_project\Petpet
 
 | 领域 | 内容 |
 |------|------|
-| **宠物详情面板** | **换新素材从零重建中（用户指示逐轮搭建）**：新素材在 `assets/runtime/ui/pet_profile_new/`（background 1201×1304 + base_UI 右侧骨架 + 装备按钮/宠物图标）。第三轮内容区已接（`225ef4c`）：左栏宠物切换卡（点击切换/使用中 pill/未拥有灰阶）、idle 动画 8fps 循环、名字牌+改名交互键、等级/好感两行；壳定稿：0.7 比例（841×913）、圆角 64、X 键去描边下移两段反馈、paintEvent 圆角裁剪 30px（`CORNER_RADIUS`）叠 background+base_UI、拖拽/居中入口沿用；`pet_profile_snapshot` 数据层与套装预览路径修复保留。旧艺术稿布局（`2e59452`）用户评估搁置，旧素材目录 `ui/pet_profile/` 暂留待清理。**长期规则：所有按键必须带悬停+点击两态反馈**（已入 AGENTS.md）。详见 Obsidian `宠物系统\宠物详情面板新素材重建记录` |
+| **宠物详情面板** | **换新素材从零重建中（用户指示逐轮搭建）**：新素材在 `assets/runtime/ui/pet_profile_new/`（background 1201×1304 + base_UI 右侧骨架 + 装备按钮/宠物图标）。第四轮减法放大已落（`a5a1c25`）：单 X（顶部烘焙 X 奶油盖除+原位圆钮擦透明，只留下方交互钮）、头像 180px 两卡靠近、卡下名字与使用中 pill 删除、名字 30/等级好感 26 字号；此前：切换卡/改名键/idle 动画/两行数值（`225ef4c`），壳 0.7 比例 841×913 圆角 64、paintEvent 圆角裁剪 30px（`CORNER_RADIUS`）叠 background+base_UI、拖拽/居中入口沿用；`pet_profile_snapshot` 数据层与套装预览路径修复保留。旧艺术稿布局（`2e59452`）用户评估搁置，旧素材目录 `ui/pet_profile/` 暂留待清理。**长期规则：所有按键必须带悬停+点击两态反馈**（已入 AGENTS.md）。详见 Obsidian `宠物系统\宠物详情面板新素材重建记录` |
 
 ### v1.6.3（当前）
 
@@ -143,7 +143,7 @@ assets/runtime/ui/shop/
 | 版本发布 | 更新 `version.py` + README + 发布说明 → `scripts/release.ps1 -Version X.Y.Z` |
 
 **测试约束**：
-- `QT_QPA_PLATFORM=offscreen` 跑全量（~80s，688 passed）
+- `QT_QPA_PLATFORM=offscreen` 跑全量（~80s，690 passed）
 - Windows 平台截图需真实字体库（offscreen 无字体数据库，渲染会缺字）
 - `setPixmap` 会清空 `QLabel.text()` → 必须用 `PreservedTextLabel` 保留文本
 
