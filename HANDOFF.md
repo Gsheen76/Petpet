@@ -51,7 +51,7 @@ D:\Agent_project\Petpet
 
 | 领域 | 内容 |
 |------|------|
-| **宠物详情面板** | 新窗口 `petpet/ui/pet_profile.py`（快照函数 + `PetProfileWindow`）：左右分栏，左栏头像切换（未拥有灰阶、active「使用中」徽章），右栏立绘/改名/等级经验条/好感度进度条/介绍/套装卡；套装面板内装备/卸下（未拥有跳商店）；改名复用 `PetNameEditDialog`（经 `configure_name_dialog_factory` 注入，类在根模块 pet.py）。入口：右键气泡菜单 primary 第二位「宠物」（列数 5→6，画布 590→700）+ 家园上拉菜单「宠物」项。规格与决策见 Obsidian `宠物系统\宠物详情面板设计/实施计划/实施记录` |
+| **宠物详情面板** | 新窗口 `petpet/ui/pet_profile.py`，**布局按艺术稿原生坐标重设计（提交 `2e59452`）**：`ART_W/H=1201×1309` 布局基准 + `DISPLAY_SCALE=0.8`（窗口 961×1047，小屏 `_resolve_scale` 收缩）。左列（left_panel）：圆窗头像→名牌动态名+铅笔改名→橙色「装备」钮（选中≠当前且已拥有才可点，语义=设为当前使用）→改名钮。右列：自绘标题牌+立绘+蕾丝站垫、右上双宠切换卡（pet_icon 素材+in_use_tag/灰阶锁，点击仅选中）、信息三行（烘焙标签素材+ArtBar）、描述胶囊、**outfit_panel 底板**承载套装卡（equip_button_orange 装备/green 卸下/珊瑚胶囊跳商店）。入口：右键气泡菜单「宠物」+ 家园菜单「宠物」。坑位：`main_panel.png` 是素材拼贴展示图不是界面合成稿（定位靠网格逐格+模板匹配）；`pet_profile_snapshot` 曾丢 `asset_folder/preview_asset` 致套装预览恒空（已修+回归测试）。详见 Obsidian `宠物系统\宠物详情面板布局重设计实施记录` |
 
 ### v1.6.3（当前）
 
@@ -143,7 +143,7 @@ assets/runtime/ui/shop/
 | 版本发布 | 更新 `version.py` + README + 发布说明 → `scripts/release.ps1 -Version X.Y.Z` |
 
 **测试约束**：
-- `QT_QPA_PLATFORM=offscreen` 跑全量（~100s，667 passed）
+- `QT_QPA_PLATFORM=offscreen` 跑全量（~80s，692 passed）
 - Windows 平台截图需真实字体库（offscreen 无字体数据库，渲染会缺字）
 - `setPixmap` 会清空 `QLabel.text()` → 必须用 `PreservedTextLabel` 保留文本
 
