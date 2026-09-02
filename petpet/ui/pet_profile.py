@@ -75,7 +75,7 @@ OUTFIT_ART = {
     "strawberry_suit": "outfit_strawberry.png",
     "dinosaur_suit": "outfit_diansour.png",
 }
-OUTFIT_CARD_SIZE = (500, 320)
+OUTFIT_CARD_SIZE = (540, 346)
 
 # 套装装备按钮素材（绿=恐龙、橘=草莓，第十一轮）。
 OUTFIT_EQUIP_BUTTON = {
@@ -719,10 +719,6 @@ class PetProfileWindow(QWidget):
             art_path = _pp_asset(art_name) if art_name else None
             if not art_path:
                 art_path = _outfit_preview_path(pet_id, outfit)
-            host = QWidget()
-            host_layout = QVBoxLayout(host)
-            host_layout.setContentsMargins(0, 0, 0, 0)
-            host_layout.setSpacing(4)
             pixmap_label = QLabel()
             pixmap_label.setAlignment(Qt.AlignCenter)
             art = QPixmap(art_path) if art_path else QPixmap()
@@ -732,13 +728,12 @@ class PetProfileWindow(QWidget):
                     round(w * _SX * _FIT), round(h * _SY * _FIT),
                     Qt.KeepAspectRatio, Qt.SmoothTransformation,
                 ))
-            host_layout.addWidget(pixmap_label)
-            # 装备按钮（第十二轮）：卡下方居中，点击直接换装/卸下；
-            # 按钮素材烘焙「装备」白字，卸下态用绿/橘同款回退字样。
+            # 装备按钮（第十三轮）：叠在卡内底部居中（参考图样式），
+            # 点击直接换装/卸下；素材烘焙「装备」白字。
             equip_asset = OUTFIT_EQUIP_BUTTON.get(outfit["id"])
             button = None
-            if equip_asset:
-                button = QPushButton(host)
+            if equip_asset and not pixmap_label.pixmap().isNull():
+                button = QPushButton(pixmap_label)
                 button.setCursor(Qt.PointingHandCursor)
                 button.setFlat(True)
                 button.setStyleSheet(
@@ -748,18 +743,25 @@ class PetProfileWindow(QWidget):
                     "QPushButton:pressed{background:rgba(70,42,28,70);"
                     "border-radius:16px;}"
                 )
+                btn_w = round(168 * _SX * _FIT)
+                btn_h = round(53 * _SY * _FIT)
+                button.setFixedSize(btn_w, btn_h)
                 button.setIcon(QIcon(_pp_asset(equip_asset)))
-                button.setIconSize(QSize(
-                    round(177 * _SX * _FIT), round(56 * _SY * _FIT),
-                ))
+                button.setIconSize(QSize(btn_w, btn_h))
+                # 压在卡内底部：底边距卡底 12 艺术稿 px，水平居中。
+                pm = pixmap_label.pixmap()
+                button.move(
+                    (pm.width() - btn_w) // 2,
+                    pm.height() - btn_h - round(12 * _SY * _FIT),
+                )
                 button.clicked.connect(
                     lambda _checked=False, oid=outfit["id"]: (
                         self._toggle_outfit(oid)
                     )
                 )
-                host_layout.addWidget(button, 0, Qt.AlignHCenter)
+                button.show()
             self._outfit_layout.insertWidget(
-                self._outfit_layout.count() - 1, host,
+                self._outfit_layout.count() - 1, pixmap_label,
             )
             self._outfit_widgets.append(
                 {"pixmap": pixmap_label, "button": button,

@@ -384,7 +384,9 @@ class ProfileWindowShellTests(unittest.TestCase):
         widget["button"].click()
         self.assertIsNone(state["equipped_outfit"])
 
-    def test_outfit_button_below_card_centered(self):
+    def test_outfit_button_inside_card_bottom(self):
+        from petpet.ui.pet_profile import OUTFIT_CARD_SIZE
+
         window, _ = self._window()
         window._show_tab("套装")
         window.show()
@@ -392,16 +394,16 @@ class ProfileWindowShellTests(unittest.TestCase):
         widget = window._outfit_widgets[0]
         button = widget["button"]
         pixmap = widget["pixmap"]
-        host = window._outfit_host
-        btn_top = button.mapTo(host, button.rect().topLeft()).y()
-        card_bottom = (pixmap.mapTo(host, pixmap.rect().topLeft()).y()
-                       + pixmap.height())
-        # 按钮在卡图下方（参考图：卡下空白区）。
-        self.assertGreaterEqual(btn_top, card_bottom - 2)
-        # 水平居中于卡。
-        card_center = pixmap.mapTo(host, pixmap.rect().center()).x()
-        btn_center = button.mapTo(host, button.rect().center()).x()
-        self.assertLess(abs(btn_center - card_center), 6)
+        # 按钮是卡图的子控件，绝对定位在卡内底部居中（参考图样式）。
+        self.assertIs(button.parentWidget(), pixmap)
+        pm = pixmap.pixmap()
+        geo = button.geometry()
+        self.assertGreater(geo.y() + geo.height(), pm.height() * 0.7,
+                           "按钮应压在卡内底部")
+        self.assertLess(geo.y() + geo.height(), pm.height(),
+                        "按钮底边应在卡内")
+        self.assertLess(abs(geo.center().x() - pm.width() // 2), 6,
+                        "按钮水平居中")
 
     def test_outfit_page_scrolls_vertically_only(self):
         window, _ = self._window()
@@ -426,7 +428,7 @@ class ProfileWindowShellTests(unittest.TestCase):
                              msg="冰淇淋第十/十一轮累计上移")
         self.assertEqual(PET_CARD_SLOTS[0][0], 123, "两卡再右移 10px")
         self.assertAlmostEqual(CLOSE_BUTTON_AT[1], 39, delta=2, msg="X 再上移 10px")
-        self.assertGreaterEqual(OUTFIT_CARD_SIZE[0], 490, "套装卡继续放大")
+        self.assertGreaterEqual(OUTFIT_CARD_SIZE[0], 540, "套装卡继续放大")
 
     def test_shell_renders_background(self):
         window, _ = self._window()
