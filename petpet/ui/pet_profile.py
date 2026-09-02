@@ -42,17 +42,11 @@ _S = DISPLAY_SCALE
 # 整页圆角半径（用户定稿：逐轮加大，当前 64）。
 CORNER_RADIUS = 64
 
-# 右上关闭按钮（base_UI 圆钮位已烘焙 X 图案，交互层克隆其像素做反馈）。
-# 用户定稿：比烘焙位下移；悬停只放大+白洗，不描边。
-CLOSE_BUTTON_AT = (1068, 30, 94, 94)
-CLOSE_KNOB_AT = (1076, 24, 78, 78)
+# 右上关闭按钮：X 圆钮烘焙在 base_UI 原位（还原，不擦不克隆），
+# 交互层为纯透明覆盖，反馈只用半透明洗色（悬停白洗、按压暗洗）。
+CLOSE_BUTTON_AT = (1082, 22, 78, 79)
 CLOSE_PRESS_FLASH_MS = 40
 CLOSE_CLICK_DEFER_MS = 80
-
-# 页面顶部有两个烘焙 X（background 顶部 y8-34 一个、base_UI 圆钮一个）。
-# 用户定稿：只保留下方 base_UI 圆钮上的交互 X；顶部的用奶油底色盖掉，
-# base_UI 原位圆钮在克隆交互副本后整体擦透明（避免与下移副本成双影）。
-UPPER_X_ERASE_AT = (1052, 2, 134, 38)
 
 # 图1 左栏宠物卡（background 烘焙卡片 x85-334 y208-1089 内部两张）。
 # 用户定稿（第四轮）：头像放大到 180、两卡靠近；卡下名字与「使用中」pill 删除。
@@ -252,15 +246,14 @@ def _load_idle_frames(pet_id, height):
 
 
 class _CloseButton(QWidget):
-    """右上关闭钮：X 图案烘焙在 base_UI 里，本件克隆圆钮像素做反馈层。
+    """右上关闭钮：X 图案原样烘焙在 base_UI 里（还原），本件是纯透明覆盖。
 
-    悬停：放大 + 白洗 + 珊瑚描边（突出）；按下：两段式——缩小变暗 →
-    回弹+高亮 → 关闭（与家园胶囊按键同节奏，常量 CLOSE_*_MS）。
+    悬停：白洗提亮；按下：两段式——暗洗 → 回弹白洗 → 关闭
+    （与家园胶囊按键同节奏，常量 CLOSE_*_MS）。不克隆/移动/擦除原画。
     """
 
-    def __init__(self, parent, knob_pixmap, on_activate):
+    def __init__(self, parent, on_activate):
         super().__init__(parent)
-        self._knob = knob_pixmap
         self._on_activate = on_activate
         self.hovered = False
         self._phase = None  # None | "pressed" | "recover"
@@ -272,33 +265,24 @@ class _CloseButton(QWidget):
     def geometry_from_art(self):
         self.setGeometry(_R(*CLOSE_BUTTON_AT))
 
-    def _knob_rect(self):
-        """当前状态下圆钮的绘制区（按钮矩形内居中，按相位缩放）。"""
+    def _overlay_rect(self):
+        """洗色椭圆范围（按钮内居中，按压时略收缩）。"""
         full = QRect(0, 0, self.width(), self.height())
-        inset_x = (full.width() - round(CLOSE_KNOB_AT[2] * _S)) // 2
-        inset_y = (full.height() - round(CLOSE_KNOB_AT[3] * _S)) // 2
-        rect = full.adjusted(inset_x, inset_y, -inset_x, -inset_y)
-        if self.hovered and self._phase is None:
-            rect = rect.adjusted(-3, -3, 3, 3)
-        elif self._phase == "pressed":
-            rect = rect.adjusted(4, 4, -4, -4)
+        rect = full.adjusted(8, 8, -8, -8)
+        if self._phase == "pressed":
+            rect = rect.adjusted(3, 3, -3, -3)
         return rect
 
     def paintEvent(self, event):
-        if self._knob.isNull():
-            return
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        rect = self._knob_rect()
-        painter.drawPixmap(rect, self._knob)
+        rect = self._overlay_rect()
+        painter.setPen(Qt.NoPen)
         if self._phase == "pressed":
-            painter.setPen(Qt.NoPen)
             painter.setBrush(QColor(70, 42, 28, 120))
             painter.drawEllipse(rect)
         elif self.hovered or self._phase == "recover":
-            # 用户定稿：悬停不描边，只白洗提亮。
-            painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor(255, 252, 246, 70))
+            painter.setBrush(QColor(255, 252, 246, 80))
             painter.drawEllipse(rect)
 
     def enterEvent(self, event):
@@ -365,40 +349,18 @@ class PetProfileWindow(QWidget):
         _S = _resolve_scale(screen)
         self.setFixedSize(round(ART_W * _S), round(ART_H * _S))
         self._background = _pp_pixmap("background.png", self.width(), self.height())
-        # 顶部多余 X（用户定稿保留下方那个）：background 顶部的 X 用奶油底色盖掉。
-        if not self._background.isNull():
-            painter = QPainter(self._background)
-            ex, ey, ew, eh = UPPER_X_ERASE_AT
-            painter.fillRect(
-                QRect(round(ex * _S), round(ey * _S),
-                      round(ew * _S), round(eh * _S)),
-                QColor(254, 246, 234),
-            )
-            painter.end()
         # base_UI 原生 1201x1309 比页面高 5px：按宽度等比缩放，底部多出部分
         # 被圆角裁剪切掉（其内容止于 y875，无视觉影响），避免纵向压扁素材。
+        # 用户定稿（第五轮）：素材原样绘制，不擦除不克隆。
         base_path = _pp_asset("base_UI.png")
         base_native = QPixmap(base_path) if base_path else QPixmap()
         if not base_native.isNull():
-            knob = base_native.copy(
-                CLOSE_KNOB_AT[0], CLOSE_KNOB_AT[1],
-                CLOSE_KNOB_AT[2], CLOSE_KNOB_AT[3],
-            )
-            # 原位圆钮擦透明：只留下移后的交互副本，避免双影。
-            erase = QPainter(base_native)
-            erase.setCompositionMode(QPainter.CompositionMode_Clear)
-            kx, ky, kw, kh = CLOSE_KNOB_AT
-            erase.fillRect(
-                QRect(kx - 4, ky - 4, kw + 8, kh + 8), Qt.transparent,
-            )
-            erase.end()
             self._base_ui = base_native.scaledToWidth(
                 self.width(), Qt.SmoothTransformation,
             )
         else:
             self._base_ui = QPixmap()
-            knob = QPixmap()
-        self._close_button = _CloseButton(self, knob, self.close)
+        self._close_button = _CloseButton(self, self.close)
         self._close_button.geometry_from_art()
 
         self._build_content()

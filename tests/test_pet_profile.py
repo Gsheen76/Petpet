@@ -178,8 +178,8 @@ class ProfileWindowShellTests(unittest.TestCase):
         window._select_pet("ice_cream")
         pet.set_active_pet.assert_called_once_with("ice_cream")
 
-    def test_only_one_x_knob_rendered(self):
-        """background 顶部 X 与 base_UI 原位圆钮须被擦除，只留下移后的交互圆钮。"""
+    def test_art_layers_rendered_unmodified(self):
+        """还原：顶部 X 与 base_UI 圆钮 X 均按素材原样可见（不擦除/不克隆）。"""
         window, _ = self._window()
         window.show()
         self.app.processEvents()
@@ -198,9 +198,9 @@ class ProfileWindowShellTests(unittest.TestCase):
             return count
 
         upper = dark_x_pixels(1062, 8, 1176, 34)
-        lower = dark_x_pixels(1080, 40, 1150, 112)
-        self.assertLess(upper, 6, "background 顶部 X 应被擦除")
-        self.assertGreater(lower, 20, "保留下方的交互圆钮 X")
+        lower = dark_x_pixels(1085, 32, 1155, 90)
+        self.assertGreater(upper, 5, "background 顶部 X 应还原可见")
+        self.assertGreater(lower, 20, "base_UI 圆钮 X 应还原可见")
 
     def test_pet_card_icons_enlarged_and_closer(self):
         from petpet.ui.pet_profile import PET_CARD_SIZE, PET_CARD_SLOTS
