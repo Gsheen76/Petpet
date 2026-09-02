@@ -14,7 +14,7 @@ import os
 import numpy as np
 from PIL import Image as PILImage
 from PyQt5.QtCore import QRect, QSize, Qt, QTimer
-from PyQt5.QtGui import QColor, QIcon, QPainter, QPainterPath, QPixmap
+from PyQt5.QtGui import QColor, QIcon, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap
 from PyQt5.QtWidgets import (QApplication, QLabel, QPushButton,
                              QScrollArea, QStackedWidget, QVBoxLayout,
                              QWidget)
@@ -54,7 +54,7 @@ CLOSE_CLICK_DEFER_MS = 80
 
 # 图1 左栏宠物卡（background 烘焙卡片 x85-334 y208-1089 内部两张）。
 # 冰淇淋卡位上移（头型上移，第八轮）。
-PET_CARD_SLOTS = ((123, 243), (123, 451))
+PET_CARD_SLOTS = ((123, 243), (123, 431))
 PET_CARD_SIZE = (180, 180)
 
 # 图2 待机动画：垫 x437-975 y515-639，狗底部对齐垫，高约 350。
@@ -76,6 +76,12 @@ OUTFIT_ART = {
     "dinosaur_suit": "outfit_diansour.png",
 }
 OUTFIT_CARD_SIZE = (500, 320)
+
+# 套装装备按钮素材（绿=恐龙、橘=草莓，第十一轮）。
+OUTFIT_EQUIP_BUTTON = {
+    "dinosaur_suit": "equip_button_green.png",
+    "strawberry_suit": "equip_button_orange.png",
+}
 
 
 def _R(x, y, w, h):
@@ -260,13 +266,13 @@ def _load_idle_frames(pet_id, height):
 
 
 class _MiniBar(QWidget):
-    """简介进度条：奶油槽 + 珊瑚填充（等级经验与三属性共用）。"""
+    """简介进度条：深奶油槽 + 珊瑚渐变填充 + 高光带（第十一轮精细化）。"""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._value = 0
         self._maximum = 1
-        self.setFixedHeight(max(6, round(14 * _SY * _FIT)))
+        self.setFixedHeight(max(8, round(18 * _SY * _FIT)))
 
     def set_ratio(self, value, maximum):
         self._value = max(0, int(value))
@@ -280,17 +286,30 @@ class _MiniBar(QWidget):
         radius = h / 2
         track = QPainterPath()
         track.addRoundedRect(0, 0, w, h, radius, radius)
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor("#efe0cb"))
+        painter.setPen(QPen(QColor(232, 197, 158), max(1, h // 16)))
+        painter.setBrush(QColor("#f6ead8"))
         painter.drawPath(track)
         frac = max(0.0, min(1.0, self._value / self._maximum))
         if frac <= 0:
             return
         fill_w = max(int(w * frac), h)
+        inset = max(1, h // 10)
         fill = QPainterPath()
-        fill.addRoundedRect(0, 0, fill_w, h, radius, radius)
-        painter.setBrush(QColor("#f5a48f"))
+        fill.addRoundedRect(inset, inset, fill_w - inset * 2, h - inset * 2,
+                            radius - inset, radius - inset)
+        grad = QLinearGradient(0, 0, 0, h)
+        grad.setColorAt(0, QColor("#f9b39c"))
+        grad.setColorAt(1, QColor("#ef8a70"))
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(grad)
         painter.drawPath(fill)
+        highlight = QPainterPath()
+        hl_h = (h - inset * 4) * 0.42
+        highlight.addRoundedRect(inset * 2, inset * 2,
+                                 max(0.0, fill_w - inset * 4), hl_h,
+                                 hl_h / 2, hl_h / 2)
+        painter.setBrush(QColor(255, 255, 255, 90))
+        painter.drawPath(highlight)
 
 
 class _CloseButton(QWidget):
@@ -407,6 +426,8 @@ class PetProfileWindow(QWidget):
             self, _pp_pixmap("close_button.png"), self.close,
         )
         self._close_button.geometry_from_art()
+        # 套装装备按钮素材映射（绿=恐龙、橘=草莓），测试与刷新共用。
+        self._outfit_button_assets = dict(OUTFIT_EQUIP_BUTTON)
 
         self._build_content()
         self._start_idle_animation()
@@ -535,12 +556,14 @@ class PetProfileWindow(QWidget):
             )
             return label
 
-        self._intro_label = styled_label(34, "#6b5646", 700)
+        self._intro_label = styled_label(42, "#6b5646", 700)
+        self._intro_label.setAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
         layout.addWidget(self._intro_label)
         layout.addSpacing(6)
 
         self._intro_sections = {}
         self._level_bar = None
+        self._affection_bar = None
         self._attr_bars = {}
         sections = (
             ("等级", "level"),
@@ -559,6 +582,9 @@ class PetProfileWindow(QWidget):
             if key == "level":
                 self._level_bar = _MiniBar()
                 layout.addWidget(self._level_bar)
+            elif key == "affection":
+                self._affection_bar = _MiniBar()
+                layout.addWidget(self._affection_bar)
             elif key == "attrs":
                 for attr in ("hunger", "mood", "energy"):
                     bar = _MiniBar()
@@ -668,6 +694,9 @@ class PetProfileWindow(QWidget):
             f"Lv.{snapshot['affection_level']}　"
             f"{snapshot['affection_points']} / {snapshot['affection_next']}"
         )
+        self._affection_bar.set_ratio(
+            snapshot["affection_points"], snapshot["affection_next"]
+        )
         self._intro_sections["attrs"].setText(
             f"饱腹 {snapshot['hunger']}　心情 {snapshot['mood']}　"
             f"精力 {snapshot['energy']}"
@@ -690,6 +719,10 @@ class PetProfileWindow(QWidget):
             art_path = _pp_asset(art_name) if art_name else None
             if not art_path:
                 art_path = _outfit_preview_path(pet_id, outfit)
+            host = QWidget()
+            host_layout = QVBoxLayout(host)
+            host_layout.setContentsMargins(0, 0, 0, 0)
+            host_layout.setSpacing(0)
             pixmap_label = QLabel()
             pixmap_label.setAlignment(Qt.AlignCenter)
             art = QPixmap(art_path) if art_path else QPixmap()
@@ -699,10 +732,39 @@ class PetProfileWindow(QWidget):
                     round(w * _SX * _FIT), round(h * _SY * _FIT),
                     Qt.KeepAspectRatio, Qt.SmoothTransformation,
                 ))
+            host_layout.addWidget(pixmap_label)
+            equip_asset = OUTFIT_EQUIP_BUTTON.get(outfit["id"])
+            button = None
+            if equip_asset:
+                button = QPushButton(host)
+                button.setCursor(Qt.PointingHandCursor)
+                button.setFlat(True)
+                button.setStyleSheet(
+                    "QPushButton{border:none;background:transparent;}"
+                    "QPushButton:hover{background:rgba(255,252,246,90);"
+                    "border-radius:16px;}"
+                    "QPushButton:pressed{background:rgba(70,42,28,70);"
+                    "border-radius:16px;}"
+                )
+                button.setIcon(QIcon(_pp_asset(equip_asset)))
+                button.setIconSize(QSize(
+                    round(177 * _SX * _FIT), round(56 * _SY * _FIT),
+                ))
+                button.clicked.connect(self._open_shop)
+                host_layout.addWidget(
+                    button, 0, Qt.AlignHCenter,
+                )
             self._outfit_layout.insertWidget(
-                self._outfit_layout.count() - 1, pixmap_label,
+                self._outfit_layout.count() - 1, host,
             )
-            self._outfit_widgets.append({"pixmap": pixmap_label})
+            self._outfit_widgets.append(
+                {"pixmap": pixmap_label, "button": button},
+            )
+
+    def _open_shop(self):
+        opener = getattr(self.pet, "open_shop", None)
+        if callable(opener):
+            opener()
 
     def _select_pet(self, pet_id):
         if pet_id == self._active_pet_id():

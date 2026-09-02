@@ -292,12 +292,12 @@ class ProfileWindowShellTests(unittest.TestCase):
             self.assertIn(key, window._intro_sections)
         self.assertIn("经验", html, "介绍应更详细（含经验）")
 
-    def test_outfit_page_has_no_text(self):
+    def test_outfit_page_has_no_text_labels(self):
         window, _ = self._window()
         window._show_tab("套装")
         for widget in window._outfit_widgets:
-            self.assertEqual(set(widget.keys()), {"pixmap"},
-                             "套装卡只保留图，文字按指示去除")
+            self.assertNotIn("name", widget,
+                             "套装卡不加文字标签（按钮素材自带『装备』字）")
 
     def test_affection_next_follows_level(self):
         """好感度上限必须随等级变化（曾因传字典被兜底成恒 30）。"""
@@ -315,10 +315,52 @@ class ProfileWindowShellTests(unittest.TestCase):
     def test_intro_has_progress_bars(self):
         window, _ = self._window()
         self.assertIsNotNone(window._level_bar, "等级节须有经验进度条")
+        self.assertIsNotNone(window._affection_bar, "好感节须有进度条")
         for key in ("hunger", "mood", "energy"):
             self.assertIn(key, window._attr_bars, f"属性 {key} 须有进度条")
         self.assertEqual(window._level_bar._maximum, 100)
         self.assertEqual(window._attr_bars["hunger"]._value, 80)
+
+    def test_progress_bar_art_style(self):
+        from PyQt5.QtGui import QColor
+
+        window, _ = self._window()
+        # 精细样式：槽奶油圆角、填充珊瑚渐变端色、右端圆头。
+        painter_img = window._attr_bars["hunger"].grab().toImage()
+        w, h = painter_img.width(), painter_img.height()
+        fill = QColor.fromRgba(painter_img.pixel(int(w * 0.5), h // 2))
+        self.assertGreater(fill.red(), 200, "填充应为珊瑚系")
+        self.assertLess(fill.green(), 200)
+
+    def test_intro_name_is_centered_and_large(self):
+        window, _ = self._window()
+        # 居中
+        self.assertEqual(
+            window._intro_label.alignment() & Qt.AlignHCenter, Qt.AlignHCenter,
+        )
+        # 字号放大（艺术稿 42 → 实显 ~30px）
+        size = int(window._intro_label.styleSheet()
+                   .split("font-size:")[1].split("px")[0])
+        self.assertGreaterEqual(size, 28)
+
+    def test_ice_cream_card_raised_again(self):
+        from petpet.ui.pet_profile import PET_CARD_SLOTS
+
+        # 第十一轮：冰淇淋再上移（y451 → ~431）。
+        self.assertLessEqual(PET_CARD_SLOTS[1][1], 433)
+
+    def test_outfit_cards_have_equip_buttons(self):
+        window, _ = self._window()
+        window._show_tab("套装")
+        self.assertEqual(len(window._outfit_widgets), 2)
+        # 恐龙=绿、草莓=橘：按钮素材映射正确。
+        mapping = window._outfit_button_assets
+        self.assertEqual(mapping.get("dinosaur_suit"), "equip_button_green.png")
+        self.assertEqual(mapping.get("strawberry_suit"),
+                         "equip_button_orange.png")
+        for widget in window._outfit_widgets:
+            self.assertIsNotNone(widget["button"], "每张套装卡须带装备按钮")
+            self.assertFalse(widget["button"].icon().isNull())
 
     def test_outfit_page_scrolls_vertically_only(self):
         window, _ = self._window()
@@ -339,8 +381,8 @@ class ProfileWindowShellTests(unittest.TestCase):
             CLOSE_BUTTON_AT, OUTFIT_CARD_SIZE, PET_CARD_SLOTS,
         )
 
-        self.assertAlmostEqual(PET_CARD_SLOTS[1][1], 451, delta=2,
-                               msg="冰淇淋再上移 50px")
+        self.assertLessEqual(PET_CARD_SLOTS[1][1], 433,
+                             msg="冰淇淋第十/十一轮累计上移")
         self.assertEqual(PET_CARD_SLOTS[0][0], 123, "两卡再右移 10px")
         self.assertAlmostEqual(CLOSE_BUTTON_AT[1], 39, delta=2, msg="X 再上移 10px")
         self.assertGreaterEqual(OUTFIT_CARD_SIZE[0], 490, "套装卡继续放大")
