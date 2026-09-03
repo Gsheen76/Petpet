@@ -10,6 +10,16 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt5.QtCore import QEvent, QPoint, Qt
 from PyQt5.QtGui import QMouseEvent
 
+
+def _mouse_press(x, y):
+    return QMouseEvent(QEvent.MouseButtonPress, QPoint(x, y),
+                       Qt.LeftButton, Qt.LeftButton, Qt.NoModifier)
+
+
+def _mouse_release(x, y):
+    return QMouseEvent(QEvent.MouseButtonRelease, QPoint(x, y),
+                       Qt.LeftButton, Qt.NoButton, Qt.NoModifier)
+
 from petpet.app import state as app_state
 from petpet.progression import core as progression
 
@@ -258,11 +268,22 @@ class ProfileWindowShellTests(unittest.TestCase):
         self.assertAlmostEqual(CLOSE_BUTTON_AT[1], 44, delta=3)
 
     def test_pet_card_icons_have_hover_and_press_feedback(self):
+        from petpet.ui.pet_profile import _AvatarButton
+
         window, _ = self._window()
         for card in window._pet_cards.values():
-            qss = card["button"].styleSheet()
-            self.assertIn(":hover", qss, "头像按钮必须有悬停态")
-            self.assertIn(":pressed", qss, "头像按钮必须有按压态")
+            button = card["button"]
+            self.assertIsInstance(button, _AvatarButton,
+                                  "头像按钮为自绘件（整幅绘制不裁切）")
+            # 悬停态置位 → 描边绘制分支。
+            button.enterEvent(None)
+            self.assertTrue(button._hovered)
+            button.leaveEvent(None)
+            self.assertFalse(button._hovered)
+            button.mousePressEvent(_mouse_press(5, 5))
+            self.assertTrue(button._pressed, "按压态必须有反馈")
+            button.mouseReleaseEvent(_mouse_release(5, 5))
+            self.assertFalse(button._pressed)
 
     def test_tab_buttons_are_pill_shaped(self):
         from petpet.ui.pet_profile import TAB_SLOTS

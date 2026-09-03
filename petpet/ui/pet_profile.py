@@ -13,7 +13,7 @@ import os
 
 import numpy as np
 from PIL import Image as PILImage
-from PyQt5.QtCore import QRect, QSize, Qt, QTimer
+from PyQt5.QtCore import QRect, QSize, Qt, QTimer, pyqtSignal
 from PyQt5.QtGui import QColor, QFont, QIcon, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap
 from PyQt5.QtWidgets import (QApplication, QLabel, QPushButton,
                              QScrollArea, QStackedWidget, QVBoxLayout,
@@ -359,6 +359,78 @@ class _MiniBar(QWidget):
         painter.drawPath(highlight)
 
 
+class _AvatarButton(QWidget):
+    """宠物头像按钮：整幅绘制不裁切；悬停=圆角正方形珊瑚描边+白洗，
+    按压=暗洗+描边（贴合素材的绝对圆角方形，不受 QSS padding 影响）。"""
+
+    clicked = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._pixmap = QPixmap()
+        self._hovered = False
+        self._pressed = False
+        self.setCursor(Qt.PointingHandCursor)
+
+    def set_pixmap(self, pixmap):
+        self._pixmap = pixmap
+        self.update()
+
+    def enterEvent(self, event):
+        self._hovered = True
+        self.update()
+
+    def leaveEvent(self, event):
+        self._hovered = False
+        self._pressed = False
+        self.update()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._pressed = True
+            self.update()
+            event.accept()
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton and self._pressed:
+            self._pressed = False
+            self.update()
+            inside = self.rect().contains(event.pos())
+            if inside:
+                self.clicked.emit()
+            event.accept()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        w, h = self.width(), self.height()
+        # 头像整幅等比居中（不裁切）。
+        if not self._pixmap.isNull():
+            scaled = self._pixmap.scaled(
+                w, h, Qt.KeepAspectRatio, Qt.SmoothTransformation,
+            )
+            painter.drawPixmap(
+                (w - scaled.width()) // 2, (h - scaled.height()) // 2, scaled,
+            )
+        # 反馈：圆角正方形描边（边长 = 按钮方形），悬停/按压变色。
+        radius = max(6, round(18 * _SX * _FIT))
+        pen_w = max(2, round(3 * _SX * _FIT))
+        if self._pressed:
+            painter.setPen(QPen(QColor("#e8714f"), pen_w))
+            painter.setBrush(QColor(70, 42, 28, 60))
+            painter.drawRoundedRect(
+                pen_w // 2, pen_w // 2, w - pen_w, h - pen_w, radius, radius,
+            )
+        elif self._hovered:
+            painter.setBrush(QColor(255, 252, 246, 90))
+            painter.drawRoundedRect(0, 0, w, h, radius, radius)
+            painter.setPen(QPen(QColor("#f28f76"), pen_w))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawRoundedRect(
+                pen_w // 2, pen_w // 2, w - pen_w, h - pen_w, radius, radius,
+            )
+
+
 class _ArtButton(QWidget):
     """素材图标按钮（第十九/二十一轮泛化）：悬浮放大+白洗，点击缩小→
     还原后触发回调（两段式，节奏 CLOSE_*_MS）。用于关闭/改名等贴图键。"""
@@ -522,17 +594,10 @@ class PetProfileWindow(QWidget):
             if index >= len(PET_CARD_SLOTS):
                 break
             card_x, card_y = PET_CARD_SLOTS[index]
-            button = QPushButton(self)
-            button.setFlat(True)
-            # 头像两态反馈：悬停白洗+珊瑚描边、按压压暗。
-            button.setStyleSheet(
-                "QPushButton{border:none;background:transparent;"
-                "border-radius:30px;}"
-                "QPushButton:hover{background:rgba(255,252,246,140);"
-                "border:2px solid rgba(242,143,118,190);}"
-                "QPushButton:pressed{background:rgba(70,42,28,70);}"
-            )
-            button.setCursor(Qt.PointingHandCursor)
+            # 头像按钮（第二十三轮重写）：直接绘制整幅头像（修复 QPushButton
+            # icon+padding 机制造成的显示不完整），反馈为贴合素材的
+            # 圆角正方形描边（悬停珊瑚）+ 暗洗（按压）。
+            button = _AvatarButton(self)
             button.setGeometry(_R(card_x, card_y, *PET_CARD_SIZE))
             button.clicked.connect(
                 lambda _checked=False, target=pet_id: self._select_pet(target)
@@ -738,10 +803,7 @@ class PetProfileWindow(QWidget):
                 icon = QPixmap(icon_path) if icon_path else QPixmap()
             else:
                 icon = _grayscale_pixmap(icon_path) if icon_path else QPixmap()
-            card["button"].setIcon(QIcon(icon))
-            card["button"].setIconSize(QSize(*[
-                round(value * _SX * _FIT) for value in PET_CARD_SIZE
-            ]))
+            card["button"].set_pixmap(icon)
             if card.get("tag") is not None:
                 card["tag"].setVisible(pet_id == active_id)
 
