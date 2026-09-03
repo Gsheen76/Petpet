@@ -47,15 +47,15 @@ _FIT = 1.0
 CORNER_RADIUS = 64
 
 # 右上关闭按钮（close_button.png 素材；花形钮位随新背景右上角）。
-CLOSE_BUTTON_AT = (970, 55, 74, 67)
+CLOSE_BUTTON_AT = (970, 44, 74, 67)
 CLOSE_PRESS_FLASH_MS = 40
 CLOSE_CLICK_DEFER_MS = 80
 
 # 图1 左栏：宠物头像列表 rail（250x1326 素材，纯背景板无烘焙槽）+
 # 程序布局双卡槽（坐标按参考图反推到 art 比例）。
-RAIL_AT = (64, 230, 200, 992)
+RAIL_AT = (51, 230, 200, 992)
 RAIL_TITLE_AT = (24, 182, 320, 46)           # 「我的伙伴」（rail 正上方，加粗）
-PET_CARD_SLOTS = ((102, 257), (102, 470))      # 每卡头像左上（烟花上移80、奶油上移200、右移10，显示px 换算）
+PET_CARD_SLOTS = ((76, 272), (76, 470))      # 每卡头像左上（烟花上移80、奶油上移200、右移10，显示px 换算）
 PET_CARD_SIZE = (150, 150)
 PET_CARD_NAME_AT = (-20, 156, 190, 36)       # 名字（相对卡，卡下，略宽于卡居中）
 PET_CARD_TAG_AT = (12, 118, 142, 34)         # 使用中 pill（已按指示停用）
@@ -67,9 +67,9 @@ IDLE_FPS = 8
 
 # 图3 名字牌（rename_bg 323x63）+ 改名钮（change_name 94x55）：
 # 垫正下方居中，两素材均放大 50%（第十五轮后续）；改名钮放牌内右端。
-NAME_PLATE_AT = (410, 585, 360, 70)
-NAME_LABEL_AT = (432, 592, 208, 56)
-RENAME_BUTTON_AT = (650, 589, 112, 64)
+NAME_PLATE_AT = (440, 585, 360, 70)
+NAME_ART_AT = (452, 588, 205, 64)
+RENAME_BUTTON_AT = (672, 588, 112, 64)
 
 # 分栏（description_bg）：名字牌下方；两页「简介 / 套装」。
 TAB_BAR_AT = (305, 684, 728, 69)
@@ -277,17 +277,25 @@ def _load_idle_frames(pet_id, height):
 class _ArtTitle(QWidget):
     """宠物风格艺术字标题：粗体棕字 + 白描边 + 底部浅影（形似「宠物」牌匾字）。"""
 
-    def __init__(self, text, parent=None):
+    def __init__(self, text, parent=None, font_px=38):
         super().__init__(parent)
         self._text = text
+        self._font_px = font_px
         self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+
+    def setText(self, text):
+        self._text = text
+        self.update()
+
+    def text(self):
+        return self._text
 
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         font = QFont(APP_FONT_FAMILY)
         font.setBold(True)
-        font.setPixelSize(max(1, round(38 * _SX * _FIT)))
+        font.setPixelSize(max(1, round(self._font_px * _SX * _FIT)))
         painter.setFont(font)
         # 底部浅影
         painter.setPen(QColor(240, 205, 170))
@@ -304,12 +312,56 @@ class _ArtTitle(QWidget):
         painter.drawText(self.rect(), Qt.AlignCenter, self._text)
 
 
-class _CloseButton(QWidget):
-    """右上关闭钮：close_button.png 素材（自有像素，可自由缩放/洗色）。
+class _MiniBar(QWidget):
+    """简介进度条：深奶油槽 + 珊瑚渐变填充 + 高光带（第二十一轮恢复）。"""
 
-    悬停：放大 + 白洗；按下：两段式——缩小变暗 → 回弹白洗 → 关闭
-    （与家园胶囊按键同节奏，常量 CLOSE_*_MS）。
-    """
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._value = 0
+        self._maximum = 1
+        self.setFixedHeight(max(8, round(18 * _SY * _FIT)))
+
+    def set_ratio(self, value, maximum):
+        self._value = max(0, int(value))
+        self._maximum = max(1, int(maximum))
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        w, h = self.width(), self.height()
+        radius = h / 2
+        track = QPainterPath()
+        track.addRoundedRect(0, 0, w, h, radius, radius)
+        painter.setPen(QPen(QColor(232, 197, 158), max(1, h // 16)))
+        painter.setBrush(QColor("#f6ead8"))
+        painter.drawPath(track)
+        frac = max(0.0, min(1.0, self._value / self._maximum))
+        if frac <= 0:
+            return
+        fill_w = max(int(w * frac), h)
+        inset = max(1, h // 10)
+        fill = QPainterPath()
+        fill.addRoundedRect(inset, inset, fill_w - inset * 2, h - inset * 2,
+                            radius - inset, radius - inset)
+        grad = QLinearGradient(0, 0, 0, h)
+        grad.setColorAt(0, QColor("#f9b39c"))
+        grad.setColorAt(1, QColor("#ef8a70"))
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(grad)
+        painter.drawPath(fill)
+        highlight = QPainterPath()
+        hl_h = (h - inset * 4) * 0.42
+        highlight.addRoundedRect(inset * 2, inset * 2,
+                                 max(0.0, fill_w - inset * 4), hl_h,
+                                 hl_h / 2, hl_h / 2)
+        painter.setBrush(QColor(255, 255, 255, 90))
+        painter.drawPath(highlight)
+
+
+class _ArtButton(QWidget):
+    """素材图标按钮（第十九/二十一轮泛化）：悬浮放大+白洗，点击缩小→
+    还原后触发回调（两段式，节奏 CLOSE_*_MS）。用于关闭/改名等贴图键。"""
 
     def __init__(self, parent, art, on_activate):
         super().__init__(parent)
@@ -322,8 +374,8 @@ class _CloseButton(QWidget):
         self._timer.timeout.connect(self._advance_phase)
         self.setCursor(Qt.PointingHandCursor)
 
-    def geometry_from_art(self):
-        self.setGeometry(_R(*CLOSE_BUTTON_AT))
+    def set_art_rect(self, art_rect):
+        self.setGeometry(_R(*art_rect))
 
     def _art_rect(self):
         """素材绘制区（按钮内居中，按状态缩放）。"""
@@ -416,10 +468,10 @@ class PetProfileWindow(QWidget):
         # 头像列表 rail（宠物系统独立背景板，叠加在背景左侧）。
         self._rail = _pp_pixmap("宠物头像列表.png", RAIL_AT[2], RAIL_AT[3])
         # base_UI 已按用户指示撤下（第六轮）；第七轮：新 UI 素材逐个接入。
-        self._close_button = _CloseButton(
+        self._close_button = _ArtButton(
             self, _pp_pixmap("close_button.png"), self.close,
         )
-        self._close_button.geometry_from_art()
+        self._close_button.set_art_rect(CLOSE_BUTTON_AT)
         # 套装装备按钮素材映射（绿=恐龙、橘=草莓），测试与刷新共用。
         self._outfit_button_assets = dict(OUTFIT_EQUIP_BUTTON)
 
@@ -487,28 +539,15 @@ class PetProfileWindow(QWidget):
         self._idle_label.setGeometry(_R(*IDLE_PREVIEW_RECT))
         self._idle_label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
 
-        # 图3：名字牌（rename_bg）+ 名字 + 改名钮（change_name 素材）。
+        # 图3：名字牌（rename_bg）+ 艺术字名字 + 改名钮（change_name 素材，
+        # 第二十一轮：与关闭键同款 _ArtButton 交互——悬浮放大/点击缩小还原）。
         self._pixmap_label("rename_bg.png", *NAME_PLATE_AT)
-        self._name_label = self._label(
-            "", *NAME_LABEL_AT, size=30, bold=True, align=Qt.AlignCenter,
+        self._name_label = _ArtTitle("", self, font_px=34)
+        self._name_label.setGeometry(_R(*NAME_ART_AT))
+        self._rename_button = _ArtButton(
+            self, _pp_pixmap("change_name.png"), self._open_name_dialog,
         )
-        self._rename_button = QPushButton(self)
-        self._rename_button.setFlat(True)
-        self._rename_button.setStyleSheet(
-            "QPushButton{border:none;background:transparent;}"
-            "QPushButton:hover{background:rgba(255,252,246,110);"
-            "border-radius:18px;}"
-            "QPushButton:pressed{background:rgba(70,42,28,70);"
-            "border-radius:18px;}"
-        )
-        self._rename_button.setCursor(Qt.PointingHandCursor)
-        self._rename_button.setGeometry(_R(*RENAME_BUTTON_AT))
-        self._rename_button.setIcon(QIcon(_pp_asset("change_name.png")))
-        self._rename_button.setIconSize(QSize(
-            round(RENAME_BUTTON_AT[2] * _SX * _FIT),
-            round(RENAME_BUTTON_AT[3] * _SY * _FIT),
-        ))
-        self._rename_button.clicked.connect(self._open_name_dialog)
+        self._rename_button.set_art_rect(RENAME_BUTTON_AT)
 
         # 分栏（description_bg 素材）+ 内容页（滚动区承载，超出可滚）。
         self._pixmap_label("description_bg.png", *TAB_BAR_AT)
@@ -567,7 +606,7 @@ class PetProfileWindow(QWidget):
         host = QWidget()
         layout = QVBoxLayout(host)
         layout.setContentsMargins(12, 6, 12, 6)
-        layout.setSpacing(2)
+        layout.setSpacing(4)
         k = _SX * _FIT
 
         def styled_label(size, color, weight=600):
@@ -581,12 +620,15 @@ class PetProfileWindow(QWidget):
 
         # 第十九轮：删名字大标题与全部进度条；字体统一商店琥珀色 #a8742c。
         self._intro_sections = {}
+        self._intro_heads = {}
+        self._level_bar = None
+        self._affection_bar = None
+        self._attr_bars = {}
         sections = (
             ("等级", "level"),
             ("好感度", "affection"),
             ("属性", "attrs"),
         )
-        self._intro_heads = {}
         for title, key in sections:
             head = styled_label(27, "#d29a38")
             head.setText(f"『{title}』")
@@ -595,7 +637,19 @@ class PetProfileWindow(QWidget):
             value = styled_label(26, "#a8742c")
             layout.addWidget(value)
             self._intro_sections[key] = value
-            layout.addSpacing(10)
+            # 进度条（第二十一轮恢复）：等级=经验、好感=好感值、属性=三项。
+            if key == "level":
+                self._level_bar = _MiniBar()
+                layout.addWidget(self._level_bar)
+            elif key == "affection":
+                self._affection_bar = _MiniBar()
+                layout.addWidget(self._affection_bar)
+            else:
+                for attr in ("hunger", "mood", "energy"):
+                    bar = _MiniBar()
+                    layout.addWidget(bar)
+                    self._attr_bars[attr] = bar
+            layout.addSpacing(24)
         # 性格。
         head = styled_label(27, "#d29a38")
         head.setText("『性格』")
@@ -696,10 +750,16 @@ class PetProfileWindow(QWidget):
             f"Lv.{snapshot['affection_level']}　"
             f"{snapshot['affection_points']} / {snapshot['affection_next']}"
         )
+        self._affection_bar.set_ratio(
+            snapshot["affection_points"], snapshot["affection_next"]
+        )
+        self._level_bar.set_ratio(snapshot["xp"], snapshot["xp_next"])
         self._intro_sections["attrs"].setText(
             f"饱腹 {snapshot['hunger']}　心情 {snapshot['mood']}　"
             f"精力 {snapshot['energy']}"
         )
+        for key in ("hunger", "mood", "energy"):
+            self._attr_bars[key].set_ratio(snapshot[key], 100)
         self._intro_sections["personality"].setText(snapshot["description"])
 
     def _refresh_outfits(self, snapshot):

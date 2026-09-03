@@ -252,10 +252,10 @@ class ProfileWindowShellTests(unittest.TestCase):
         window, _ = self._window()
         self.assertFalse(window._close_button._art.isNull(),
                          "关闭键应使用 close_button.png 素材")
-        # 第十九轮：X 缩小（74x67）并居花钮中心（y≈55）。
+        # 第十九轮：X 缩小（74x67）；第二十一轮：略微上移（y≈44）。
         self.assertLessEqual(CLOSE_BUTTON_AT[2], 80)
         self.assertLessEqual(CLOSE_BUTTON_AT[3], 72)
-        self.assertAlmostEqual(CLOSE_BUTTON_AT[1], 55, delta=3)
+        self.assertAlmostEqual(CLOSE_BUTTON_AT[1], 44, delta=3)
 
     def test_pet_card_icons_have_hover_and_press_feedback(self):
         window, _ = self._window()
@@ -308,18 +308,14 @@ class ProfileWindowShellTests(unittest.TestCase):
         snap = pet_profile_snapshot(state, "ice_cream")
         self.assertEqual(snap["affection_next"], 50, "Lv.3 上限应为 20+3*10=50")
 
-    def test_intro_has_no_progress_bars(self):
-        """第十九轮：简介里的进度条按指示删去。"""
-        window, _ = self._window()
-        self.assertFalse(hasattr(window, "_level_bar"))
-        self.assertFalse(hasattr(window, "_affection_bar"))
-        self.assertFalse(hasattr(window, "_attr_bars"))
-
     def test_intro_name_removed_and_name_plate_filled(self):
-        """第十九轮：简介名字标题删去；小狗名字写进改名条牌（此前为空）。"""
+        """第二十一轮：简介名字删去；名字以艺术字形式写在改名条上。"""
+        from petpet.ui.pet_profile import _ArtTitle
+
         state = _fresh_state()
         state["pet_name"] = "烟花"
         window, _ = self._window(state)
+        self.assertIsInstance(window._name_label, _ArtTitle)
         self.assertEqual(window._name_label.text(), "烟花")
 
     def test_rail_title_is_art_text(self):
@@ -335,15 +331,15 @@ class ProfileWindowShellTests(unittest.TestCase):
         # 第二十轮：标题左移（x54→24）。
         self.assertAlmostEqual(RAIL_TITLE_AT[0], 24, delta=2)
 
-    def test_card_positions_round_nineteen(self):
-        from petpet.ui.pet_profile import PET_CARD_SLOTS
+    def test_card_positions_round_twenty_one(self):
+        from petpet.ui.pet_profile import PET_CARD_SLOTS, RAIL_AT
 
-        # 第十九轮：烟花上移 80、奶油上移 200、双卡右移 10（显示 px 换算）。
-        self.assertAlmostEqual(PET_CARD_SLOTS[0][1], 257, delta=3,
-                               msg="烟花上移 20 显示px")
-        self.assertAlmostEqual(PET_CARD_SLOTS[1][1], 470, delta=3,
-                               msg="奶油下移 20 显示px")
-        self.assertEqual(PET_CARD_SLOTS[0][0], 102, "双卡右移 10 显示px")
+        # 第二十一轮：右移还原并随 rail 左移 10 显示px（x76 保框内对齐）、
+        # 午餐肉卡下移 10 显示px（y272）。
+        self.assertEqual(PET_CARD_SLOTS[0][0], 76)
+        self.assertAlmostEqual(PET_CARD_SLOTS[0][1], 272, delta=3)
+        self.assertAlmostEqual(PET_CARD_SLOTS[1][1], 470, delta=3)
+        self.assertEqual(RAIL_AT[0], 51)
 
     def test_outfit_cards_have_equip_buttons(self):
         window, _ = self._window()
