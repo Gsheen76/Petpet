@@ -69,7 +69,7 @@ IDLE_FPS = 8
 # 垫正下方居中，两素材均放大 50%（第十五轮后续）；改名钮放牌内右端。
 NAME_PLATE_AT = (440, 585, 360, 70)
 NAME_ART_AT = (452, 588, 205, 64)
-RENAME_BUTTON_AT = (672, 588, 112, 64)
+RENAME_BUTTON_AT = (668, 588, 113, 66)   # 原生 94x55 × 1.2 等比（不被压扁）
 
 # 分栏（description_bg）：名字牌下方；两页「简介 / 套装」。
 TAB_BAR_AT = (305, 684, 728, 69)
@@ -392,7 +392,16 @@ class _ArtButton(QWidget):
         painter.setRenderHint(QPainter.Antialiasing)
         rect = self._art_rect()
         if not self._art.isNull():
-            painter.drawPixmap(rect, self._art)
+            # 保持素材原比例居中绘制（缩放交互不压扁素材）。
+            scaled = self._art.scaled(
+                rect.width(), rect.height(),
+                Qt.KeepAspectRatio, Qt.SmoothTransformation,
+            )
+            painter.drawPixmap(
+                rect.x() + (rect.width() - scaled.width()) // 2,
+                rect.y() + (rect.height() - scaled.height()) // 2,
+                scaled,
+            )
         painter.setPen(Qt.NoPen)
         if self._phase == "pressed":
             painter.setBrush(QColor(70, 42, 28, 120))
