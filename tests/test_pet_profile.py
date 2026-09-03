@@ -170,9 +170,10 @@ class ProfileWindowShellTests(unittest.TestCase):
         state["owned_pet_ids"] = ["lunch_meat", "ice_cream"]
         window, pet = self._window(state)
         self.assertEqual(len(window._pet_cards), 2)
-        # 十四轮：卡片含头像按钮 + 名字 + 使用中 pill（恢复参考图设计）。
+        # 二十轮：卡下名字删去，卡片只剩头像按钮（tag 已停用为 None）。
         for card in window._pet_cards.values():
-            self.assertEqual(set(card.keys()), {"button", "tag", "name"})
+            self.assertNotIn("name", card)
+            self.assertIsNone(card["tag"])
         window._select_pet("ice_cream")
         pet.set_active_pet.assert_called_once_with("ice_cream")
 
@@ -328,13 +329,21 @@ class ProfileWindowShellTests(unittest.TestCase):
         self.assertIsInstance(window._rail_title, _ArtTitle)
         self.assertEqual(window._rail_title._text, "我的伙伴")
 
+    def test_card_positions_round_twenty(self):
+        from petpet.ui.pet_profile import RAIL_TITLE_AT
+
+        # 第二十轮：标题左移（x54→24）。
+        self.assertAlmostEqual(RAIL_TITLE_AT[0], 24, delta=2)
+
     def test_card_positions_round_nineteen(self):
         from petpet.ui.pet_profile import PET_CARD_SLOTS
 
         # 第十九轮：烟花上移 80、奶油上移 200、双卡右移 10（显示 px 换算）。
-        self.assertAlmostEqual(PET_CARD_SLOTS[0][1], 287, delta=3)
-        self.assertAlmostEqual(PET_CARD_SLOTS[1][1], 440, delta=3)
-        self.assertEqual(PET_CARD_SLOTS[0][0], 89)
+        self.assertAlmostEqual(PET_CARD_SLOTS[0][1], 257, delta=3,
+                               msg="烟花上移 20 显示px")
+        self.assertAlmostEqual(PET_CARD_SLOTS[1][1], 470, delta=3,
+                               msg="奶油下移 20 显示px")
+        self.assertEqual(PET_CARD_SLOTS[0][0], 102, "双卡右移 10 显示px")
 
     def test_outfit_cards_have_equip_buttons(self):
         window, _ = self._window()

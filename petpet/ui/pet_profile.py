@@ -54,8 +54,8 @@ CLOSE_CLICK_DEFER_MS = 80
 # 图1 左栏：宠物头像列表 rail（250x1326 素材，纯背景板无烘焙槽）+
 # 程序布局双卡槽（坐标按参考图反推到 art 比例）。
 RAIL_AT = (64, 230, 200, 992)
-RAIL_TITLE_AT = (54, 182, 320, 46)           # 「我的伙伴」（rail 正上方，加粗）
-PET_CARD_SLOTS = ((89, 287), (89, 440))      # 每卡头像左上（烟花上移80、奶油上移200、右移10，显示px 换算）
+RAIL_TITLE_AT = (24, 182, 320, 46)           # 「我的伙伴」（rail 正上方，加粗）
+PET_CARD_SLOTS = ((102, 257), (102, 470))      # 每卡头像左上（烟花上移80、奶油上移200、右移10，显示px 换算）
 PET_CARD_SIZE = (150, 150)
 PET_CARD_NAME_AT = (-20, 156, 190, 36)       # 名字（相对卡，卡下，略宽于卡居中）
 PET_CARD_TAG_AT = (12, 118, 142, 34)         # 使用中 pill（已按指示停用）
@@ -478,15 +478,8 @@ class PetProfileWindow(QWidget):
             )
             # 「使用中」pill 已按用户指示停用（PET_CARD_TAG_AT 保留备用）。
             tag = None
-            # 卡下名字。
-            nx, ny, nw, nh = PET_CARD_NAME_AT
-            name = self._label(
-                "", card_x + nx, card_y + ny, nw, nh,
-                size=22, bold=True, align=Qt.AlignCenter,
-            )
-            self._pet_cards[pet_id] = {
-                "button": button, "tag": tag, "name": name,
-            }
+            # 卡下名字已按用户指示删去（PET_CARD_NAME_AT 保留备用）。
+            self._pet_cards[pet_id] = {"button": button, "tag": tag}
 
         # 图2：待机动画位（垫上，底部对齐）。
         self._idle_label = QLabel(self)
@@ -688,9 +681,6 @@ class PetProfileWindow(QWidget):
             ]))
             if card.get("tag") is not None:
                 card["tag"].setVisible(pet_id == active_id)
-            card["name"].setText(
-                pet_profile_snapshot(state, pet_id)["name"]
-            )
 
         self._refresh_intro(snapshot)
         self._refresh_outfits(snapshot)
