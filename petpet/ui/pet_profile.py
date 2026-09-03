@@ -14,7 +14,7 @@ import os
 import numpy as np
 from PIL import Image as PILImage
 from PyQt5.QtCore import QRect, QSize, Qt, QTimer
-from PyQt5.QtGui import QColor, QIcon, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap
+from PyQt5.QtGui import QColor, QFont, QIcon, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap
 from PyQt5.QtWidgets import (QApplication, QLabel, QPushButton,
                              QScrollArea, QStackedWidget, QVBoxLayout,
                              QWidget)
@@ -47,7 +47,7 @@ _FIT = 1.0
 CORNER_RADIUS = 64
 
 # 右上关闭按钮（close_button.png 素材；花形钮位随新背景右上角）。
-CLOSE_BUTTON_AT = (952, 38, 110, 100)
+CLOSE_BUTTON_AT = (970, 55, 74, 67)
 CLOSE_PRESS_FLASH_MS = 40
 CLOSE_CLICK_DEFER_MS = 80
 
@@ -55,7 +55,7 @@ CLOSE_CLICK_DEFER_MS = 80
 # 程序布局双卡槽（坐标按参考图反推到 art 比例）。
 RAIL_AT = (64, 230, 200, 992)
 RAIL_TITLE_AT = (54, 182, 320, 46)           # 「我的伙伴」（rail 正上方，加粗）
-PET_CARD_SLOTS = ((76, 408), (76, 742))      # 每卡头像左上（rail 内 art 坐标）
+PET_CARD_SLOTS = ((89, 287), (89, 440))      # 每卡头像左上（烟花上移80、奶油上移200、右移10，显示px 换算）
 PET_CARD_SIZE = (150, 150)
 PET_CARD_NAME_AT = (-20, 156, 190, 36)       # 名字（相对卡，卡下，略宽于卡居中）
 PET_CARD_TAG_AT = (12, 118, 142, 34)         # 使用中 pill（已按指示停用）
@@ -67,9 +67,9 @@ IDLE_FPS = 8
 
 # 图3 名字牌（rename_bg 323x63）+ 改名钮（change_name 94x55）：
 # 垫正下方居中，两素材均放大 50%（第十五轮后续）；改名钮放牌内右端。
-NAME_PLATE_AT = (365, 578, 450, 87)
-NAME_LABEL_AT = (399, 590, 280, 64)
-RENAME_BUTTON_AT = (679, 586, 126, 72)
+NAME_PLATE_AT = (410, 585, 360, 70)
+NAME_LABEL_AT = (432, 592, 208, 56)
+RENAME_BUTTON_AT = (650, 589, 112, 64)
 
 # 分栏（description_bg）：名字牌下方；两页「简介 / 套装」。
 TAB_BAR_AT = (305, 684, 728, 69)
@@ -274,51 +274,34 @@ def _load_idle_frames(pet_id, height):
     return frames
 
 
-class _MiniBar(QWidget):
-    """简介进度条：深奶油槽 + 珊瑚渐变填充 + 高光带（第十一轮精细化）。"""
+class _ArtTitle(QWidget):
+    """宠物风格艺术字标题：粗体棕字 + 白描边 + 底部浅影（形似「宠物」牌匾字）。"""
 
-    def __init__(self, parent=None):
+    def __init__(self, text, parent=None):
         super().__init__(parent)
-        self._value = 0
-        self._maximum = 1
-        self.setFixedHeight(max(8, round(18 * _SY * _FIT)))
-
-    def set_ratio(self, value, maximum):
-        self._value = max(0, int(value))
-        self._maximum = max(1, int(maximum))
-        self.update()
+        self._text = text
+        self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
 
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        w, h = self.width(), self.height()
-        radius = h / 2
-        track = QPainterPath()
-        track.addRoundedRect(0, 0, w, h, radius, radius)
-        painter.setPen(QPen(QColor(232, 197, 158), max(1, h // 16)))
-        painter.setBrush(QColor("#f6ead8"))
-        painter.drawPath(track)
-        frac = max(0.0, min(1.0, self._value / self._maximum))
-        if frac <= 0:
-            return
-        fill_w = max(int(w * frac), h)
-        inset = max(1, h // 10)
-        fill = QPainterPath()
-        fill.addRoundedRect(inset, inset, fill_w - inset * 2, h - inset * 2,
-                            radius - inset, radius - inset)
-        grad = QLinearGradient(0, 0, 0, h)
-        grad.setColorAt(0, QColor("#f9b39c"))
-        grad.setColorAt(1, QColor("#ef8a70"))
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(grad)
-        painter.drawPath(fill)
-        highlight = QPainterPath()
-        hl_h = (h - inset * 4) * 0.42
-        highlight.addRoundedRect(inset * 2, inset * 2,
-                                 max(0.0, fill_w - inset * 4), hl_h,
-                                 hl_h / 2, hl_h / 2)
-        painter.setBrush(QColor(255, 255, 255, 90))
-        painter.drawPath(highlight)
+        font = QFont(APP_FONT_FAMILY)
+        font.setBold(True)
+        font.setPixelSize(max(1, round(38 * _SX * _FIT)))
+        painter.setFont(font)
+        # 底部浅影
+        painter.setPen(QColor(240, 205, 170))
+        painter.drawText(self.rect().adjusted(0, 3, 0, 3),
+                         Qt.AlignCenter, self._text)
+        # 白描边（多向偏移）
+        painter.setPen(QColor(255, 252, 246))
+        for dx, dy in ((-2, 0), (2, 0), (0, -2), (0, 2),
+                       (-2, -2), (2, -2), (-2, 2), (2, 2)):
+            painter.drawText(self.rect().adjusted(dx, dy, dx, dy),
+                             Qt.AlignCenter, self._text)
+        # 主体棕字
+        painter.setPen(QColor("#9a5b3f"))
+        painter.drawText(self.rect(), Qt.AlignCenter, self._text)
 
 
 class _CloseButton(QWidget):
@@ -472,9 +455,8 @@ class PetProfileWindow(QWidget):
     def _build_content(self):
         # 图1：左栏「我的伙伴与套装」标题 + rail 上双宠切换卡
         # （头像 + 卡下名字 + 卡内底部「使用中」pill，恢复自参考图）。
-        self._rail_title = self._label(
-            "我的伙伴", *RAIL_TITLE_AT, size=28, bold=True,
-        )
+        self._rail_title = _ArtTitle("我的伙伴", self)
+        self._rail_title.setGeometry(_R(*RAIL_TITLE_AT))
         for index, pet_id in enumerate(pet_registry.load_pet_registry()):
             if index >= len(PET_CARD_SLOTS):
                 break
@@ -604,15 +586,8 @@ class PetProfileWindow(QWidget):
             )
             return label
 
-        self._intro_label = styled_label(42, "#6b5646", 700)
-        self._intro_label.setAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
-        layout.addWidget(self._intro_label)
-        layout.addSpacing(6)
-
+        # 第十九轮：删名字大标题与全部进度条；字体统一商店琥珀色 #a8742c。
         self._intro_sections = {}
-        self._level_bar = None
-        self._affection_bar = None
-        self._attr_bars = {}
         sections = (
             ("等级", "level"),
             ("好感度", "affection"),
@@ -620,31 +595,20 @@ class PetProfileWindow(QWidget):
         )
         self._intro_heads = {}
         for title, key in sections:
-            head = styled_label(27, "#c96f52")
+            head = styled_label(27, "#d29a38")
             head.setText(f"『{title}』")
             layout.addWidget(head)
             self._intro_heads[key] = head
-            value = styled_label(26, "#6b5646")
+            value = styled_label(26, "#a8742c")
             layout.addWidget(value)
             self._intro_sections[key] = value
-            if key == "level":
-                self._level_bar = _MiniBar()
-                layout.addWidget(self._level_bar)
-            elif key == "affection":
-                self._affection_bar = _MiniBar()
-                layout.addWidget(self._affection_bar)
-            elif key == "attrs":
-                for attr in ("hunger", "mood", "energy"):
-                    bar = _MiniBar()
-                    layout.addWidget(bar)
-                    self._attr_bars[attr] = bar
             layout.addSpacing(10)
-        # 性格（无进度条）。
-        head = styled_label(27, "#c96f52")
+        # 性格。
+        head = styled_label(27, "#d29a38")
         head.setText("『性格』")
         layout.addWidget(head)
         self._intro_heads["personality"] = head
-        self._intro_sections["personality"] = styled_label(26, "#8a7361")
+        self._intro_sections["personality"] = styled_label(26, "#a8742c")
         layout.addWidget(self._intro_sections["personality"])
         layout.addStretch(1)
         scroll.setWidget(host)
@@ -732,30 +696,20 @@ class PetProfileWindow(QWidget):
         self._refresh_outfits(snapshot)
 
     def _refresh_intro(self, snapshot):
-        """简介页（第十轮）：分节数值 + 进度条（等级经验与三属性）。"""
-        if snapshot["name"] == snapshot["default_name"]:
-            name_part = snapshot["default_name"]
-        else:
-            name_part = f"{snapshot['name']}（{snapshot['default_name']}）"
-        self._intro_label.setText(name_part)
+        """简介页（第十九轮）：分节数值；名字在名字牌，进度条已删。"""
+        self._name_label.setText(snapshot["name"])
         self._intro_sections["level"].setText(
             f"Lv.{snapshot['level']}　经验 {snapshot['xp']} / "
             f"{snapshot['xp_next']}"
         )
-        self._level_bar.set_ratio(snapshot["xp"], snapshot["xp_next"])
         self._intro_sections["affection"].setText(
             f"Lv.{snapshot['affection_level']}　"
             f"{snapshot['affection_points']} / {snapshot['affection_next']}"
-        )
-        self._affection_bar.set_ratio(
-            snapshot["affection_points"], snapshot["affection_next"]
         )
         self._intro_sections["attrs"].setText(
             f"饱腹 {snapshot['hunger']}　心情 {snapshot['mood']}　"
             f"精力 {snapshot['energy']}"
         )
-        for key in ("hunger", "mood", "energy"):
-            self._attr_bars[key].set_ratio(snapshot[key], 100)
         self._intro_sections["personality"].setText(snapshot["description"])
 
     def _refresh_outfits(self, snapshot):

@@ -200,7 +200,7 @@ class ProfileWindowShellTests(unittest.TestCase):
         self.assertEqual(window._idle_index, (index + 1) % len(window._idle_frames))
 
     def _intro_text(self, window):
-        parts = [window._intro_label.text()]
+        parts = []
         for key, value in window._intro_sections.items():
             head = window._intro_heads[key]
             parts.append(f"{head.text()} {value.text()}")
@@ -211,20 +211,13 @@ class ProfileWindowShellTests(unittest.TestCase):
         state["pet_name"] = "烟花"
         window, _ = self._window(state)
         html = self._intro_text(window)
-        self.assertIn("烟花", html)
-        self.assertIn("午餐肉", html, "初始名应写在括号里")
+        # 第十九轮：名字只显示在改名条牌上，简介内不再重复。
+        self.assertEqual(window._name_label.text(), "烟花")
+        self.assertNotIn("烟花", html)
         self.assertIn("好感度", html)
         for word in ("饱腹", "心情", "精力"):
             self.assertIn(word, html, f"属性值应含 {word}")
         self.assertIn("陪伴小狗", html, "性格介绍应来自 registry description")
-
-        # 未改名 → 直接显示初始名，不出现括号对。
-        state2 = _fresh_state()
-        state2["pet_name"] = "午餐肉"
-        window2, _ = self._window(state2)
-        html2 = self._intro_text(window2)
-        self.assertIn("午餐肉", html2)
-        self.assertNotIn("（午餐肉）", html2)
 
     def test_tabs_switch_between_intro_and_outfits(self):
         from PyQt5.QtTest import QTest
@@ -258,8 +251,10 @@ class ProfileWindowShellTests(unittest.TestCase):
         window, _ = self._window()
         self.assertFalse(window._close_button._art.isNull(),
                          "关闭键应使用 close_button.png 素材")
-        # 用户定稿（第十轮）：y49 再上移 10px → y=39。
-        self.assertAlmostEqual(CLOSE_BUTTON_AT[1], 39, delta=2)
+        # 第十九轮：X 缩小（74x67）并居花钮中心（y≈55）。
+        self.assertLessEqual(CLOSE_BUTTON_AT[2], 80)
+        self.assertLessEqual(CLOSE_BUTTON_AT[3], 72)
+        self.assertAlmostEqual(CLOSE_BUTTON_AT[1], 55, delta=3)
 
     def test_pet_card_icons_have_hover_and_press_feedback(self):
         window, _ = self._window()
@@ -286,8 +281,8 @@ class ProfileWindowShellTests(unittest.TestCase):
         state["pet_name"] = "烟花"
         window, _ = self._window(state)
         html = self._intro_text(window)
-        # 模块化分节：大标题（名字）+ 等级 / 好感度 / 属性 / 性格 各节标签。
-        self.assertIn("烟花", window._intro_label.text())
+        # 模块化分节：等级 / 好感度 / 属性 / 性格 各节标签（第十九轮删名字标题）。
+        self.assertNotIn("烟花", window._name_label.styleSheet())
         for key in ("level", "affection", "attrs", "personality"):
             self.assertIn(key, window._intro_sections)
         self.assertIn("经验", html, "介绍应更详细（含经验）")
@@ -312,43 +307,34 @@ class ProfileWindowShellTests(unittest.TestCase):
         snap = pet_profile_snapshot(state, "ice_cream")
         self.assertEqual(snap["affection_next"], 50, "Lv.3 上限应为 20+3*10=50")
 
-    def test_intro_has_progress_bars(self):
+    def test_intro_has_no_progress_bars(self):
+        """第十九轮：简介里的进度条按指示删去。"""
         window, _ = self._window()
-        self.assertIsNotNone(window._level_bar, "等级节须有经验进度条")
-        self.assertIsNotNone(window._affection_bar, "好感节须有进度条")
-        for key in ("hunger", "mood", "energy"):
-            self.assertIn(key, window._attr_bars, f"属性 {key} 须有进度条")
-        self.assertEqual(window._level_bar._maximum, 100)
-        self.assertEqual(window._attr_bars["hunger"]._value, 80)
+        self.assertFalse(hasattr(window, "_level_bar"))
+        self.assertFalse(hasattr(window, "_affection_bar"))
+        self.assertFalse(hasattr(window, "_attr_bars"))
 
-    def test_progress_bar_art_style(self):
-        from PyQt5.QtGui import QColor
+    def test_intro_name_removed_and_name_plate_filled(self):
+        """第十九轮：简介名字标题删去；小狗名字写进改名条牌（此前为空）。"""
+        state = _fresh_state()
+        state["pet_name"] = "烟花"
+        window, _ = self._window(state)
+        self.assertEqual(window._name_label.text(), "烟花")
+
+    def test_rail_title_is_art_text(self):
+        from petpet.ui.pet_profile import _ArtTitle
 
         window, _ = self._window()
-        # 精细样式：槽奶油圆角、填充珊瑚渐变端色、右端圆头。
-        painter_img = window._attr_bars["hunger"].grab().toImage()
-        w, h = painter_img.width(), painter_img.height()
-        fill = QColor.fromRgba(painter_img.pixel(int(w * 0.5), h // 2))
-        self.assertGreater(fill.red(), 200, "填充应为珊瑚系")
-        self.assertLess(fill.green(), 200)
+        self.assertIsInstance(window._rail_title, _ArtTitle)
+        self.assertEqual(window._rail_title._text, "我的伙伴")
 
-    def test_intro_name_is_centered_and_large(self):
-        window, _ = self._window()
-        # 居中
-        self.assertEqual(
-            window._intro_label.alignment() & Qt.AlignHCenter, Qt.AlignHCenter,
-        )
-        # 字号放大（艺术稿 42 → 实显 ~30px）
-        size = int(window._intro_label.styleSheet()
-                   .split("font-size:")[1].split("px")[0])
-        self.assertGreaterEqual(size, 28)
-
-    def test_ice_cream_card_raised_again(self):
+    def test_card_positions_round_nineteen(self):
         from petpet.ui.pet_profile import PET_CARD_SLOTS
 
-        # 十四轮新 rail 布局：卡2 y702（参考图比例），卡1 y322。
-        self.assertEqual(PET_CARD_SLOTS[1][1], 742)
-        self.assertEqual(PET_CARD_SLOTS[0][1], 408)
+        # 第十九轮：烟花上移 80、奶油上移 200、双卡右移 10（显示 px 换算）。
+        self.assertAlmostEqual(PET_CARD_SLOTS[0][1], 287, delta=3)
+        self.assertAlmostEqual(PET_CARD_SLOTS[1][1], 440, delta=3)
+        self.assertEqual(PET_CARD_SLOTS[0][0], 89)
 
     def test_outfit_cards_have_equip_buttons(self):
         window, _ = self._window()
