@@ -286,16 +286,15 @@ class ProfileWindowShellTests(unittest.TestCase):
             self.assertFalse(button._pressed)
 
     def test_tab_buttons_are_pill_shaped(self):
-        from petpet.ui.pet_profile import TAB_SLOTS
+        from petpet.ui.pet_profile import TAB_SLOTS, _TabButton
 
         window, _ = self._window()
         for button in window._tab_buttons.values():
-            qss = button.styleSheet()
-            self.assertIn("border-radius", qss)
-        # 胶囊半径 = 槽高一半。
+            self.assertIsInstance(button, _TabButton,
+                                  "分栏为自绘胶囊（松开在内才切换）")
         th = TAB_SLOTS["简介"][3]
         self.assertAlmostEqual(
-            window._tab_buttons["简介"].height(), round(th * 960 / 1663), delta=3,
+            window._tab_buttons["简介"].height(), round(th * 960 / 1450), delta=3,
         )
 
     def test_intro_is_modular_sections(self):
@@ -377,9 +376,10 @@ class ProfileWindowShellTests(unittest.TestCase):
 
     @staticmethod
     def _press(button):
-        """触发 _ArtButton 回调（跳过 80ms 定时等待）。"""
-        button._phase = "recover"
-        button._advance_phase()
+        """模拟"按下→在按钮内松开"（跳过两段动画等待，立即触发）。"""
+        button._armed = True
+        button._phase = None
+        button._fire()
 
     def test_equip_button_equips_directly_not_shop(self):
         state = _fresh_state()

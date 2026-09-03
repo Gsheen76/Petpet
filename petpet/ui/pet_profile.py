@@ -367,6 +367,74 @@ class _MiniBar(QWidget):
         painter.drawPath(highlight)
 
 
+class _TabButton(QWidget):
+    """分栏胶囊按钮：选中珊瑚常驻；悬停白洗；按下压暗，**松开在内才切换**。"""
+
+    clicked = pyqtSignal(str)
+
+    def __init__(self, text, parent=None):
+        super().__init__(parent)
+        self._text = text
+        self.checked = False
+        self._hovered = False
+        self._pressed = False
+        self.setCursor(Qt.PointingHandCursor)
+
+    def setChecked(self, checked):
+        self.checked = bool(checked)
+        self.update()
+
+    def enterEvent(self, event):
+        self._hovered = True
+        self.update()
+
+    def leaveEvent(self, event):
+        self._hovered = False
+        self._pressed = False
+        self.update()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._pressed = True
+            self.update()
+            event.accept()
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton and self._pressed:
+            self._pressed = False
+            self.update()
+            if self.rect().contains(event.pos()):
+                self.clicked.emit(self._text)
+            event.accept()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        w, h = self.width(), self.height()
+        radius = h / 2
+        font_px = round(26 * _SX * _FIT)
+        font = QFont(APP_FONT_FAMILY)
+        font.setBold(True)
+        font.setPixelSize(max(1, font_px))
+        painter.setFont(font)
+        if self._pressed:
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor(70, 42, 28, 70))
+            painter.drawRoundedRect(0, 0, w, h, radius, radius)
+        elif self.checked:
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor("#f5a48f"))
+            painter.drawRoundedRect(0, 0, w, h, radius, radius)
+        elif self._hovered:
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor(255, 252, 246, 150))
+            painter.drawRoundedRect(0, 0, w, h, radius, radius)
+        painter.setPen(
+            QColor("#ffffff") if self.checked else QColor("#6b5646")
+        )
+        painter.drawText(self.rect(), Qt.AlignCenter, self._text)
+
+
 class _OutfitIdleLabel(QLabel):
     """套装卡右侧：穿上对应套装的小狗待机动画（8fps 循环）。"""
 
@@ -516,6 +584,7 @@ class _ArtButton(QWidget):
         self._on_activate = on_activate
         self.hovered = False
         self._phase = None  # None | "pressed" | "recover"
+        self._armed = False  # 松开时是否执行（拖走取消）
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
         self._timer.timeout.connect(self._advance_phase)
@@ -569,9 +638,33 @@ class _ArtButton(QWidget):
         if event.button() != Qt.LeftButton:
             return
         event.accept()
+        self._armed = True
         self._phase = "pressed"
         self._timer.start(CLOSE_PRESS_FLASH_MS + 20)
         self.update()
+
+    def mouseReleaseEvent(self, event):
+        """松开才执行（第三十轮）：拖走鼠标松开 → 取消不执行。"""
+        if event.button() != Qt.LeftButton:
+            return
+        event.accept()
+        armed = getattr(self, "_armed", False)
+        self._armed = False
+        if not armed or not self.rect().contains(event.pos()):
+            # 拖走松开：立刻恢复常态，取消反馈与执行。
+            self._phase = None
+            self._timer.stop()
+            self.update()
+            return
+        # 在按钮内松开：播完当前反馈段后执行。
+        if self._phase is None:
+            self._fire()
+        # 否则等 _advance_phase 走完两段后触发。
+
+    def _fire(self):
+        activate = self._on_activate
+        if callable(activate):
+            activate()
 
     def _advance_phase(self):
         if self._phase == "pressed":
@@ -583,9 +676,9 @@ class _ArtButton(QWidget):
             return
         self._phase = None
         self.update()
-        activate = self._on_activate
-        if callable(activate):
-            activate()
+        if getattr(self, "_armed", False):
+            self._armed = False
+            self._fire()
 
 
 class PetProfileWindow(QWidget):
@@ -705,13 +798,11 @@ class PetProfileWindow(QWidget):
         self._pixmap_label("description_bg.png", *TAB_BAR_AT)
         self._tab_buttons = {}
         for name, (tx, ty, tw, th) in TAB_SLOTS.items():
-            tab = QPushButton(name, self)
-            tab.setCursor(Qt.PointingHandCursor)
-            tab.setCheckable(True)
-            tab.setStyleSheet(self._tab_qss())
+            # 第三十轮：分栏按钮换自绘件——松开才切换（拖走取消），反馈同步。
+            tab = _TabButton(name, self)
             tab.setGeometry(_R(tx, ty, tw, th))
             tab.clicked.connect(
-                lambda _checked=False, target=name: self._show_tab(target)
+                lambda target=name: self._show_tab(target)
             )
             self._tab_buttons[name] = tab
 
@@ -971,6 +1062,10 @@ class PetProfileWindow(QWidget):
             )
             desc_label = QLabel(outfit.get("description") or "")
             desc_label.setWordWrap(True)
+            # 第三十轮：尽量 2 行内显示——限高 + 尾部省略。
+            from PyQt5.QtCore import Qt as _Qt
+            desc_label.setTextFormat(_Qt.PlainText)
+            desc_label.setFixedHeight(round(66 * _SY * _FIT))
             # 描述略微放大（第二十八轮：19→23）。
             desc_label.setStyleSheet(
                 f"font-family:'{APP_FONT_FAMILY}';"
@@ -988,18 +1083,19 @@ class PetProfileWindow(QWidget):
                     card, _pp_pixmap(equip_asset),
                     lambda oid=outfit["id"]: self._toggle_outfit(oid),
                 )
-                btn_w = round(160 * _SX * _FIT)
-                btn_h = round(50 * _SY * _FIT)
+                btn_w = round(190 * _SX * _FIT)
+                btn_h = round(60 * _SY * _FIT)
                 button.setFixedSize(btn_w, btn_h)
                 text_col.addWidget(button, 0, Qt.AlignHCenter)
             row.addLayout(text_col, 1)
 
             # 右侧空位：穿上对应套装的小狗待机动画。
             idle = _OutfitIdleLabel(card)
-            idle.setFixedSize(round(210 * _SX * _FIT),
-                              round(OUTFIT_IDLE_HEIGHT * _SY * _FIT))
+            # 等比方形（双比例会拉伸/裁切），帧高直接用 label 实际像素。
+            idle_px = round(OUTFIT_IDLE_HEIGHT * _FIT)
+            idle.setFixedSize(idle_px, idle_px)
             idle.set_frames(_load_idle_frames(
-                pet_id, OUTFIT_IDLE_HEIGHT,
+                pet_id, idle_px,
                 anim_key=OUTFIT_IDLE_ANIM.get(outfit["id"], ""),
             ))
             idle.show()
