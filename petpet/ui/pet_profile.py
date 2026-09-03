@@ -15,9 +15,9 @@ import numpy as np
 from PIL import Image as PILImage
 from PyQt5.QtCore import QRect, QSize, Qt, QTimer, pyqtSignal
 from PyQt5.QtGui import QColor, QFont, QIcon, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap
-from PyQt5.QtWidgets import (QApplication, QLabel, QPushButton,
-                             QScrollArea, QStackedWidget, QVBoxLayout,
-                             QWidget)
+from PyQt5.QtWidgets import (QApplication, QHBoxLayout, QLabel,
+                             QPushButton, QScrollArea, QStackedWidget,
+                             QVBoxLayout, QWidget)
 
 from petpet.app.fonts import APP_FONT_FAMILY
 from petpet.app import pets as pet_registry
@@ -73,12 +73,12 @@ NAME_ART_AT = (478, 588, 220, 64)   # 居中于牌内可用区（左缘~按钮�
 RENAME_BUTTON_AT = (700, 588, 113, 66)   # 原生 94x55 × 1.2 等比（不被压扁）
 
 # 分栏（description_bg）：名字牌下方；两页「简介 / 套装」。
-TAB_BAR_AT = (305, 684, 728, 69)
+TAB_BAR_AT = (279, 684, 728, 69)
 TAB_SLOTS = {
-    "简介": (365, 696, 140, 46),
-    "套装": (515, 696, 140, 46),
+    "简介": (339, 696, 140, 46),
+    "套装": (489, 696, 140, 46),
 }
-CONTENT_AT = (305, 778, 728, 600)
+CONTENT_AT = (279, 778, 728, 587)
 
 # 套装素材（新 art 直接按套装 id 映射；未映射回退 idle 预览路径）。
 OUTFIT_ART = {
@@ -680,6 +680,8 @@ class PetProfileWindow(QWidget):
 
         self._content = _FramedStack(self)
         self._content.setGeometry(_R(*CONTENT_AT))
+        # 内容页留出框内边距：滚动条落在虚线框内部而不是框线上。
+        self._content.setContentsMargins(10, 10, 10, 10)
         self._intro_page = self._build_intro_page()
         self._outfit_page = self._build_outfit_page()
         self._content.addWidget(self._intro_page)
@@ -703,12 +705,14 @@ class PetProfileWindow(QWidget):
         )
 
     def _scroll_qss(self):
+        """商店同款滚动条样式（progression/ui PANEL_STYLE）。"""
         return (
-            "QScrollArea{border:none;background:transparent;}"
-            "QScrollArea>QWidget>QWidget{background:transparent;}"
-            "QScrollBar:vertical{background:#f3e4d2;width:8px;border-radius:4px;}"
-            "QScrollBar::handle:vertical{background:#e0b48c;border-radius:4px;"
-            "min-height:30px;}"
+            "QScrollArea{border:0;background:transparent;}"
+            "QScrollArea>QWidget>QWidget{background:transparent;border:0;}"
+            "QScrollBar:vertical{background:transparent;width:11px;"
+            "margin:4px 0;}"
+            "QScrollBar::handle:vertical{background:#e8bfa8;"
+            "border-radius:5px;min-height:38px;}"
             "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{"
             "height:0;width:0;}"
         )
@@ -784,11 +788,22 @@ class PetProfileWindow(QWidget):
         scroll.setStyleSheet(self._scroll_qss())
         self._outfit_host = QWidget()
         self._outfit_layout = QVBoxLayout(self._outfit_host)
-        self._outfit_layout.setContentsMargins(8, 8, 8, 8)
-        self._outfit_layout.setSpacing(14)
+        self._outfit_layout.setContentsMargins(8, 10, 14, 10)
+        self._outfit_layout.setSpacing(12)
         self._outfit_layout.addStretch(1)
         scroll.setWidget(self._outfit_host)
         return scroll
+
+    def _outfit_card_qss(self):
+        """套装卡：商店同款暖底圆角卡（虚线边 + 奶油渐变）。"""
+        return (
+            'QWidget[outfitCardRole="true"]{'
+            f"font-family:'{APP_FONT_FAMILY}';"
+            "background:qlineargradient(x1:0,y1:0,x2:0,y2:1,"
+            "stop:0 #fffcf6, stop:1 #faecd9);"
+            "border:2px dashed #e8bfa8;border-radius:18px;"
+            "}"
+        )
 
     def _show_tab(self, name):
         """切换分栏（并同步选中态）。"""
@@ -877,7 +892,7 @@ class PetProfileWindow(QWidget):
         self._intro_sections["personality"].setText(snapshot["description"])
 
     def _refresh_outfits(self, snapshot):
-        """套装页（第九轮）：只放大图卡，不加文字。"""
+        """套装页（第二十七轮）：商店同款横版卡（左图右文+卡内装备钮）。"""
         while self._outfit_layout.count() > 1:
             item = self._outfit_layout.takeAt(0)
             widget = item.widget()
@@ -885,62 +900,74 @@ class PetProfileWindow(QWidget):
                 widget.deleteLater()
         self._outfit_widgets = []
         pet_id = snapshot["id"]
+        card_h = round(215 * _SY * _FIT)
         for outfit in snapshot["outfits"]:
             art_name = OUTFIT_ART.get(outfit["id"])
             art_path = _pp_asset(art_name) if art_name else None
             if not art_path:
                 art_path = _outfit_preview_path(pet_id, outfit)
+            card = QWidget()
+            card.setProperty("outfitCardRole", True)
+            card.setStyleSheet(self._outfit_card_qss())
+            card.setMinimumHeight(card_h)
+            row = QHBoxLayout(card)
+            row.setContentsMargins(12, 8, 12, 8)
+            row.setSpacing(12)
+
             pixmap_label = QLabel()
             pixmap_label.setAlignment(Qt.AlignCenter)
             art = QPixmap(art_path) if art_path else QPixmap()
             if not art.isNull():
-                w, h = OUTFIT_CARD_SIZE
-                pixmap_label.setPixmap(art.scaled(
-                    round(w * _SX * _FIT), round(h * _SY * _FIT),
-                    Qt.KeepAspectRatio, Qt.SmoothTransformation,
+                pixmap_label.setPixmap(art.scaledToHeight(
+                    card_h - 16, Qt.SmoothTransformation,
                 ))
-            # 装备按钮（第十三轮）：叠在卡内底部居中（参考图样式），
-            # 点击直接换装/卸下；素材烘焙「装备」白字。
+            row.addWidget(pixmap_label)
+
+            text_col = QVBoxLayout()
+            text_col.setContentsMargins(0, 6, 0, 6)
+            text_col.setSpacing(4)
+            name_label = QLabel(outfit["name"])
+            name_label.setStyleSheet(
+                f"font-family:'{APP_FONT_FAMILY}';"
+                f"font-size:{round(26 * _SX * _FIT)}px;font-weight:600;"
+                "color:#a8742c;background:transparent;border:0;"
+            )
+            desc_label = QLabel(outfit.get("description") or "")
+            desc_label.setWordWrap(True)
+            desc_label.setStyleSheet(
+                f"font-family:'{APP_FONT_FAMILY}';"
+                f"font-size:{round(19 * _SX * _FIT)}px;"
+                "color:#b08a5e;background:transparent;border:0;"
+            )
+            text_col.addWidget(name_label)
+            text_col.addWidget(desc_label)
+            text_col.addStretch(1)
+            row.addLayout(text_col, 1)
+
+            # 装备按钮：卡内右下（商店购买按钮位），_ArtButton 直接换装。
             equip_asset = OUTFIT_EQUIP_BUTTON.get(outfit["id"])
             button = None
-            if equip_asset and not pixmap_label.pixmap().isNull():
-                button = QPushButton(pixmap_label)
-                button.setCursor(Qt.PointingHandCursor)
-                button.setFlat(True)
-                button.setStyleSheet(
-                    "QPushButton{border:none;background:transparent;}"
-                    "QPushButton:hover{background:rgba(255,252,246,90);"
-                    "border-radius:16px;}"
-                    "QPushButton:pressed{background:rgba(70,42,28,70);"
-                    "border-radius:16px;}"
+            if equip_asset and not art.isNull():
+                holder = QWidget()
+                holder.setFixedWidth(round(190 * _SX * _FIT))
+                v = QVBoxLayout(holder)
+                v.setContentsMargins(0, 0, 0, 4)
+                v.addStretch(1)
+                button = _ArtButton(
+                    holder, _pp_pixmap(equip_asset),
+                    lambda oid=outfit["id"]: self._toggle_outfit(oid),
                 )
-                btn_w = round(168 * _SX * _FIT)
-                btn_h = round(53 * _SY * _FIT)
-                button.setFixedSize(btn_w, btn_h)
-                button.setIcon(QIcon(_pp_asset(equip_asset)))
-                button.setIconSize(QSize(btn_w, btn_h))
-                # 压在卡内底部，水平对齐描述文字块中心（参考图：
-                # 文字在卡右侧 42%-98%，中心 ~70% 卡宽）。
-                pm = pixmap_label.pixmap()
-                text_center = round(pm.width() * 0.70)
-                button.move(
-                    text_center - btn_w // 2,
-                    pm.height() - btn_h - round(14 * _SY * _FIT),
-                )
-                button.clicked.connect(
-                    lambda _checked=False, oid=outfit["id"]: (
-                        self._toggle_outfit(oid)
-                    )
-                )
-                button.show()
+                button.set_art_rect((0, 0, 190, 60))
+                v.addWidget(button)
+                row.addWidget(holder, 0, Qt.AlignBottom)
+
             self._outfit_layout.insertWidget(
-                self._outfit_layout.count() - 1, pixmap_label,
+                self._outfit_layout.count() - 1, card,
             )
             self._outfit_widgets.append(
                 {"pixmap": pixmap_label, "button": button,
                  "outfit_id": outfit["id"]},
             )
-
     def _toggle_outfit(self, outfit_id):
         """点击装备按钮：未装备→装备，已装备→卸下；保存并同步桌面/小屋。"""
         if self.pet.state.get("equipped_outfit") == outfit_id:

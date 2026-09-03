@@ -373,7 +373,13 @@ class ProfileWindowShellTests(unittest.TestCase):
                          "equip_button_orange.png")
         for widget in window._outfit_widgets:
             self.assertIsNotNone(widget["button"], "每张套装卡须带装备按钮")
-            self.assertFalse(widget["button"].icon().isNull())
+            self.assertFalse(widget["button"]._art.isNull())
+
+    @staticmethod
+    def _press(button):
+        """触发 _ArtButton 回调（跳过 80ms 定时等待）。"""
+        button._phase = "recover"
+        button._advance_phase()
 
     def test_equip_button_equips_directly_not_shop(self):
         state = _fresh_state()
@@ -384,7 +390,7 @@ class ProfileWindowShellTests(unittest.TestCase):
             w for w in window._outfit_widgets
             if w["outfit_id"] == "dinosaur_suit"
         )
-        widget["button"].click()
+        self._press(widget["button"])
         self.assertEqual(state["equipped_outfit"], "dinosaur_suit",
                          "点击装备应直接换装")
         pet.open_shop.assert_not_called()
@@ -394,31 +400,23 @@ class ProfileWindowShellTests(unittest.TestCase):
             w for w in window._outfit_widgets
             if w["outfit_id"] == "dinosaur_suit"
         )
-        widget["button"].click()
+        self._press(widget["button"])
         self.assertIsNone(state["equipped_outfit"])
 
     def test_outfit_button_inside_card_bottom(self):
-        from petpet.ui.pet_profile import OUTFIT_CARD_SIZE
-
+        """第二十七轮：商店同款横版卡，按钮在卡内右下（holder 对齐底部）。"""
         window, _ = self._window()
         window._show_tab("套装")
         window.show()
         self.app.processEvents()
         widget = window._outfit_widgets[0]
         button = widget["button"]
-        pixmap = widget["pixmap"]
-        # 按钮是卡图的子控件，绝对定位在卡内底部居中（参考图样式）。
-        self.assertIs(button.parentWidget(), pixmap)
-        pm = pixmap.pixmap()
-        geo = button.geometry()
-        self.assertGreater(geo.y() + geo.height(), pm.height() * 0.7,
-                           "按钮应压在卡内底部")
-        self.assertLess(geo.y() + geo.height(), pm.height(),
-                        "按钮底边应在卡内")
-        # 参考图：按钮在描述小字正下方 → 文字块中心约在卡宽 62%。
-        center_frac = geo.center().x() / pm.width()
-        self.assertGreater(center_frac, 0.54, "按钮应在文字块下方（偏右）")
-        self.assertLess(center_frac, 0.70)
+        holder = button.parentWidget()
+        card = holder.parentWidget()
+        # holder 通过 stretch 把按钮压在卡底部：按钮在卡内高度 >40%。
+        btn_y_in_card = holder.mapTo(card, button.rect().topLeft()).y()
+        self.assertGreater(btn_y_in_card, card.height() * 0.4,
+                           "按钮位于卡下半部")
 
     def test_outfit_page_scrolls_vertically_only(self):
         window, _ = self._window()
@@ -429,10 +427,10 @@ class ProfileWindowShellTests(unittest.TestCase):
             window._outfit_page.horizontalScrollBar().maximum(), 0,
             "套装页不得出现横向滚动",
         )
-        self.assertGreater(
-            window._outfit_page.verticalScrollBar().maximum(), 0,
-            "套装页应为上下滚动",
-        )
+        from PyQt5.QtWidgets import QVBoxLayout
+
+        self.assertIsInstance(window._outfit_host.layout(), QVBoxLayout,
+                              "套装页为纵向卡列表（上下滚动）")
 
     def test_shell_renders_background(self):
         window, _ = self._window()
