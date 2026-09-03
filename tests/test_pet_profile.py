@@ -164,6 +164,11 @@ class ProfileWindowShellTests(unittest.TestCase):
                         Qt.LeftButton, Qt.LeftButton, Qt.NoModifier)
         )
         self.assertEqual(button._phase, "pressed", "按下须进入按压反馈段")
+        # 第三十一轮：松开在内才执行——补 release 事件。
+        button.mouseReleaseEvent(
+            QMouseEvent(QEvent.MouseButtonRelease, QPoint(10, 10),
+                        Qt.LeftButton, Qt.NoButton, Qt.NoModifier)
+        )
         QTest.qWait(200)
         self.assertFalse(window.isVisible(), "两段反馈播完后窗口应关闭")
 
@@ -378,8 +383,9 @@ class ProfileWindowShellTests(unittest.TestCase):
     def _press(button):
         """模拟"按下→在按钮内松开"（跳过两段动画等待，立即触发）。"""
         button._armed = True
+        button._pending_fire = True
         button._phase = None
-        button._fire()
+        button._advance_phase()
 
     def test_equip_button_equips_directly_not_shop(self):
         state = _fresh_state()

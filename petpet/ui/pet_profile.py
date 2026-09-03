@@ -584,7 +584,8 @@ class _ArtButton(QWidget):
         self._on_activate = on_activate
         self.hovered = False
         self._phase = None  # None | "pressed" | "recover"
-        self._armed = False  # 松开时是否执行（拖走取消）
+        self._armed = False      # 按下中（拖走取消判定）
+        self._pending_fire = False  # 已在按钮内松开，待动画播完执行
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
         self._timer.timeout.connect(self._advance_phase)
@@ -620,11 +621,13 @@ class _ArtButton(QWidget):
             )
         painter.setPen(Qt.NoPen)
         if self._phase == "pressed":
-            painter.setBrush(QColor(70, 42, 28, 120))
-            painter.drawRoundedRect(rect, 12, 12)
+            # 压暗洗只盖住素材实际范围（KeepAspectRatio 后的 scaled 尺寸），
+            # 且更淡（第三十一轮：alpha 120→80）。
+            painter.setBrush(QColor(70, 42, 28, 80))
+            painter.drawRoundedRect(scaled.rect(), 10, 10)
         elif self.hovered or self._phase == "recover":
             painter.setBrush(QColor(255, 252, 246, 80))
-            painter.drawRoundedRect(rect, 12, 12)
+            painter.drawRoundedRect(scaled.rect(), 10, 10)
 
     def enterEvent(self, event):
         self.hovered = True
@@ -644,22 +647,23 @@ class _ArtButton(QWidget):
         self.update()
 
     def mouseReleaseEvent(self, event):
-        """松开才执行（第三十轮）：拖走鼠标松开 → 取消不执行。"""
+        """松开才执行：按钮内松开 → 待发；拖走松开 → 取消。"""
         if event.button() != Qt.LeftButton:
             return
         event.accept()
-        armed = getattr(self, "_armed", False)
+        armed = self._armed
         self._armed = False
         if not armed or not self.rect().contains(event.pos()):
             # 拖走松开：立刻恢复常态，取消反馈与执行。
+            self._pending_fire = False
             self._phase = None
             self._timer.stop()
             self.update()
             return
-        # 在按钮内松开：播完当前反馈段后执行。
+        # 在按钮内松开：动画播完后触发。
+        self._pending_fire = True
         if self._phase is None:
-            self._fire()
-        # 否则等 _advance_phase 走完两段后触发。
+            self._advance_phase()
 
     def _fire(self):
         activate = self._on_activate
@@ -676,8 +680,8 @@ class _ArtButton(QWidget):
             return
         self._phase = None
         self.update()
-        if getattr(self, "_armed", False):
-            self._armed = False
+        if self._pending_fire:
+            self._pending_fire = False
             self._fire()
 
 
@@ -1062,10 +1066,8 @@ class PetProfileWindow(QWidget):
             )
             desc_label = QLabel(outfit.get("description") or "")
             desc_label.setWordWrap(True)
-            # 第三十轮：尽量 2 行内显示——限高 + 尾部省略。
-            from PyQt5.QtCore import Qt as _Qt
-            desc_label.setTextFormat(_Qt.PlainText)
-            desc_label.setFixedHeight(round(66 * _SY * _FIT))
+            # 第三十一轮：按文字实测高度校验——若超过 2 行则加宽文字列
+            # （row.addLayout 的 stretch 参数动态分配），确保恰好 2 行容下。
             # 描述略微放大（第二十八轮：19→23）。
             desc_label.setStyleSheet(
                 f"font-family:'{APP_FONT_FAMILY}';"
@@ -1100,6 +1102,24 @@ class PetProfileWindow(QWidget):
             ))
             idle.show()
             row.addWidget(idle, 0, Qt.AlignBottom)
+
+            # 第三十一轮：行宽自适应——文字列实际可用宽 = 卡宽-图-动画-边距，
+            # 若描述实测超 2 行，加高卡让文字放宽后两行完整显示。
+            from PyQt5.QtGui import QFontMetrics
+            fm = QFontMetrics(desc_label.font())
+            text_w = max(200, card.width() - pixmap_label.width()
+                         - idle.width() - round(60 * _SX * _FIT))
+            lines_needed = 0
+            remaining = outfit.get("description") or ""
+            while remaining and lines_needed < 4:
+                chunk = fm.elidedText(remaining, Qt.ElideNone, text_w)
+                if not chunk:
+                    break
+                lines_needed += 1
+                remaining = remaining[len(chunk):]
+            if lines_needed > 2:
+                extra = (lines_needed - 2) * fm.lineSpacing()
+                card.setMinimumHeight(card_h + extra)
 
             self._outfit_layout.insertWidget(
                 self._outfit_layout.count() - 1, card,
