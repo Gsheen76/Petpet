@@ -53,12 +53,12 @@ CLOSE_CLICK_DEFER_MS = 80
 
 # 图1 左栏：宠物头像列表 rail（250x1326 素材，纯背景板无烘焙槽）+
 # 程序布局双卡槽（坐标按参考图反推到 art 比例）。
-RAIL_AT = (30, 230, 200, 992)
-RAIL_TITLE_AT = (60, 278, 300, 42)           # 「我的伙伴与套装」小节标题
-PET_CARD_SLOTS = ((62, 408), (62, 742))      # 每卡头像左上（rail 内 art 坐标）
-PET_CARD_SIZE = (133, 133)
-PET_CARD_NAME_AT = (-20, 170, 206, 36)       # 名字（相对卡，卡下，略宽于卡居中）
-PET_CARD_TAG_AT = (12, 118, 142, 34)         # 使用中 pill（相对卡，卡内底部）
+RAIL_AT = (64, 230, 200, 992)
+RAIL_TITLE_AT = (54, 182, 320, 46)           # 「我的伙伴」（rail 正上方，加粗）
+PET_CARD_SLOTS = ((76, 408), (76, 742))      # 每卡头像左上（rail 内 art 坐标）
+PET_CARD_SIZE = (150, 150)
+PET_CARD_NAME_AT = (-20, 156, 190, 36)       # 名字（相对卡，卡下，略宽于卡居中）
+PET_CARD_TAG_AT = (12, 118, 142, 34)         # 使用中 pill（已按指示停用）
 
 # 图2 待机动画：粉垫 x340-940 y430-570（虚线圆中心 ~640,360）。
 IDLE_PREVIEW_RECT = (415, 140, 450, 430)
@@ -67,17 +67,17 @@ IDLE_FPS = 8
 
 # 图3 名字牌（rename_bg 323x63）+ 改名钮（change_name 94x55）：
 # 垫正下方居中，两素材均放大 50%（第十五轮后续）；改名钮放牌内右端。
-NAME_PLATE_AT = (390, 578, 450, 87)
-NAME_LABEL_AT = (424, 590, 280, 64)
-RENAME_BUTTON_AT = (704, 586, 126, 72)
+NAME_PLATE_AT = (365, 578, 450, 87)
+NAME_LABEL_AT = (399, 590, 280, 64)
+RENAME_BUTTON_AT = (679, 586, 126, 72)
 
 # 分栏（description_bg）：名字牌下方；两页「简介 / 套装」。
-TAB_BAR_AT = (330, 684, 728, 69)
+TAB_BAR_AT = (305, 684, 728, 69)
 TAB_SLOTS = {
-    "简介": (390, 696, 140, 46),
-    "套装": (540, 696, 140, 46),
+    "简介": (365, 696, 140, 46),
+    "套装": (515, 696, 140, 46),
 }
-CONTENT_AT = (330, 778, 728, 600)
+CONTENT_AT = (305, 778, 728, 600)
 
 # 套装素材（新 art 直接按套装 id 映射；未映射回退 idle 预览路径）。
 OUTFIT_ART = {
@@ -473,7 +473,7 @@ class PetProfileWindow(QWidget):
         # 图1：左栏「我的伙伴与套装」标题 + rail 上双宠切换卡
         # （头像 + 卡下名字 + 卡内底部「使用中」pill，恢复自参考图）。
         self._rail_title = self._label(
-            "我的伙伴与套装", *RAIL_TITLE_AT, size=24, bold=True,
+            "我的伙伴", *RAIL_TITLE_AT, size=28, bold=True,
         )
         for index, pet_id in enumerate(pet_registry.load_pet_registry()):
             if index >= len(PET_CARD_SLOTS):
@@ -494,18 +494,8 @@ class PetProfileWindow(QWidget):
             button.clicked.connect(
                 lambda _checked=False, target=pet_id: self._select_pet(target)
             )
-            # 卡内底部「使用中」pill。
-            tag = QLabel("使用中", self)
-            tag.setAlignment(Qt.AlignCenter)
-            tag.setStyleSheet(
-                "QLabel{"
-                f"font-family:'{APP_FONT_FAMILY}';font-size:{round(15 * _SX * _FIT)}px;"
-                "font-weight:600;color:#c96f52;background:#fdf0d8;"
-                "border-radius:12px;padding:1px 8px;}"
-            )
-            tx, ty, tw, th = PET_CARD_TAG_AT
-            tag.setGeometry(_R(card_x + tx, card_y + ty, tw, th))
-            tag.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+            # 「使用中」pill 已按用户指示停用（PET_CARD_TAG_AT 保留备用）。
+            tag = None
             # 卡下名字。
             nx, ny, nw, nh = PET_CARD_NAME_AT
             name = self._label(
@@ -732,7 +722,8 @@ class PetProfileWindow(QWidget):
             card["button"].setIconSize(QSize(*[
                 round(value * _SX * _FIT) for value in PET_CARD_SIZE
             ]))
-            card["tag"].setVisible(pet_id == active_id)
+            if card.get("tag") is not None:
+                card["tag"].setVisible(pet_id == active_id)
             card["name"].setText(
                 pet_profile_snapshot(state, pet_id)["name"]
             )
@@ -810,11 +801,13 @@ class PetProfileWindow(QWidget):
                 button.setFixedSize(btn_w, btn_h)
                 button.setIcon(QIcon(_pp_asset(equip_asset)))
                 button.setIconSize(QSize(btn_w, btn_h))
-                # 压在卡内底部（第十六轮：右移 25、上移 14）。
+                # 压在卡内底部，水平对齐描述文字块中心（参考图：
+                # 文字在卡右侧 42%-98%，中心 ~70% 卡宽）。
                 pm = pixmap_label.pixmap()
+                text_center = round(pm.width() * 0.70)
                 button.move(
-                    (pm.width() - btn_w) // 2 + round(25 * _SX * _FIT),
-                    pm.height() - btn_h - round(26 * _SY * _FIT),
+                    text_center - btn_w // 2,
+                    pm.height() - btn_h - round(14 * _SY * _FIT),
                 )
                 button.clicked.connect(
                     lambda _checked=False, oid=outfit["id"]: (

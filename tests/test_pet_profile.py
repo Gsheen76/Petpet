@@ -403,8 +403,10 @@ class ProfileWindowShellTests(unittest.TestCase):
                            "按钮应压在卡内底部")
         self.assertLess(geo.y() + geo.height(), pm.height(),
                         "按钮底边应在卡内")
-        self.assertLess(abs(geo.center().x() - pm.width() // 2), 40,
-                        "按钮水平近中（第十六轮右移 25）")
+        # 参考图：按钮在描述小字正下方 → 文字块中心约在卡宽 62%。
+        center_frac = geo.center().x() / pm.width()
+        self.assertGreater(center_frac, 0.54, "按钮应在文字块下方（偏右）")
+        self.assertLess(center_frac, 0.70)
 
     def test_outfit_page_scrolls_vertically_only(self):
         window, _ = self._window()
