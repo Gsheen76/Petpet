@@ -98,7 +98,7 @@ OUTFIT_IDLE_ANIM = {
     "dinosaur_suit": "idle_dinosaur",
     "strawberry_suit": "idle_strawberry",
 }
-OUTFIT_IDLE_HEIGHT = 200
+OUTFIT_IDLE_HEIGHT = 160   # 第二十九轮：缩小 20%（200×0.8）
 
 
 def _R(x, y, w, h):
