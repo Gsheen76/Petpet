@@ -53,10 +53,10 @@ CLOSE_CLICK_DEFER_MS = 80
 
 # 图1 左栏：宠物头像列表 rail（250x1326 素材，纯背景板无烘焙槽）+
 # 程序布局双卡槽（坐标按参考图反推到 art 比例）。
-RAIL_AT = (56, 130, 250, 1090)
-RAIL_TITLE_AT = (86, 182, 300, 42)           # 「我的伙伴与套装」小节标题
-PET_CARD_SLOTS = ((98, 262), (98, 592))      # 每卡头像左上（rail 内 art 坐标）
-PET_CARD_SIZE = (166, 166)
+RAIL_AT = (30, 230, 200, 992)
+RAIL_TITLE_AT = (60, 278, 300, 42)           # 「我的伙伴与套装」小节标题
+PET_CARD_SLOTS = ((62, 408), (62, 742))      # 每卡头像左上（rail 内 art 坐标）
+PET_CARD_SIZE = (133, 133)
 PET_CARD_NAME_AT = (-20, 170, 206, 36)       # 名字（相对卡，卡下，略宽于卡居中）
 PET_CARD_TAG_AT = (12, 118, 142, 34)         # 使用中 pill（相对卡，卡内底部）
 
@@ -66,10 +66,10 @@ IDLE_FRAME_HEIGHT = 410
 IDLE_FPS = 8
 
 # 图3 名字牌（rename_bg 323x63）+ 改名钮（change_name 94x55）：
-# 垫正下方横排居中——牌 300 宽 + 改名钮 84 宽，组合居中于垫（中心 640）。
-NAME_PLATE_AT = (470, 590, 300, 58)
-NAME_LABEL_AT = (492, 596, 176, 46)
-RENAME_BUTTON_AT = (782, 596, 84, 48)
+# 垫正下方居中，两素材均放大 50%（第十五轮后续）；改名钮放牌内右端。
+NAME_PLATE_AT = (390, 578, 450, 87)
+NAME_LABEL_AT = (424, 590, 280, 64)
+RENAME_BUTTON_AT = (704, 586, 126, 72)
 
 # 分栏（description_bg）：名字牌下方；两页「简介 / 套装」。
 TAB_BAR_AT = (330, 684, 728, 69)
@@ -810,11 +810,11 @@ class PetProfileWindow(QWidget):
                 button.setFixedSize(btn_w, btn_h)
                 button.setIcon(QIcon(_pp_asset(equip_asset)))
                 button.setIconSize(QSize(btn_w, btn_h))
-                # 压在卡内底部：底边距卡底 12 艺术稿 px，水平居中。
+                # 压在卡内底部（第十六轮：右移 25、上移 14）。
                 pm = pixmap_label.pixmap()
                 button.move(
-                    (pm.width() - btn_w) // 2,
-                    pm.height() - btn_h - round(12 * _SY * _FIT),
+                    (pm.width() - btn_w) // 2 + round(25 * _SX * _FIT),
+                    pm.height() - btn_h - round(26 * _SY * _FIT),
                 )
                 button.clicked.connect(
                     lambda _checked=False, oid=outfit["id"]: (

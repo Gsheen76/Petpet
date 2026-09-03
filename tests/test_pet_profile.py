@@ -179,9 +179,9 @@ class ProfileWindowShellTests(unittest.TestCase):
     def test_pet_card_icons_enlarged_and_closer(self):
         from petpet.ui.pet_profile import PET_CARD_SIZE, PET_CARD_SLOTS
 
-        self.assertGreaterEqual(PET_CARD_SIZE[0], 160, "头像保持放大")
+        self.assertGreaterEqual(PET_CARD_SIZE[0], 130, "头像随 rail 缩小")
         gap = PET_CARD_SLOTS[1][1] - PET_CARD_SLOTS[0][1]
-        self.assertLessEqual(gap, 400, "两卡间距符合参考图")
+        self.assertLessEqual(gap, 360, "两卡间距符合参考图")
 
     def test_switch_to_unowned_pet_is_refused(self):
         window, pet = self._window()
@@ -347,8 +347,8 @@ class ProfileWindowShellTests(unittest.TestCase):
         from petpet.ui.pet_profile import PET_CARD_SLOTS
 
         # 十四轮新 rail 布局：卡2 y702（参考图比例），卡1 y322。
-        self.assertEqual(PET_CARD_SLOTS[1][1], 592)
-        self.assertEqual(PET_CARD_SLOTS[0][1], 262)
+        self.assertEqual(PET_CARD_SLOTS[1][1], 742)
+        self.assertEqual(PET_CARD_SLOTS[0][1], 408)
 
     def test_outfit_cards_have_equip_buttons(self):
         window, _ = self._window()
@@ -403,8 +403,8 @@ class ProfileWindowShellTests(unittest.TestCase):
                            "按钮应压在卡内底部")
         self.assertLess(geo.y() + geo.height(), pm.height(),
                         "按钮底边应在卡内")
-        self.assertLess(abs(geo.center().x() - pm.width() // 2), 6,
-                        "按钮水平居中")
+        self.assertLess(abs(geo.center().x() - pm.width() // 2), 40,
+                        "按钮水平近中（第十六轮右移 25）")
 
     def test_outfit_page_scrolls_vertically_only(self):
         window, _ = self._window()
