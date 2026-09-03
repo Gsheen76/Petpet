@@ -120,7 +120,7 @@ class ProfileWindowShellTests(unittest.TestCase):
         from petpet.ui import pet_profile as module
 
         # 用户定稿：与其他常驻面板统一 850x960（艺术稿 1085x1663 非等比铺满）。
-        self.assertEqual((module.ART_W, module.ART_H), (1085, 1663))
+        self.assertEqual((module.ART_W, module.ART_H), (1085, 1450))
         self.assertEqual((module.UNIFIED_W, module.UNIFIED_H), (850, 960))
         window, _ = self._window()
         self.assertEqual((window.width(), window.height()), (850, 960))
@@ -347,8 +347,8 @@ class ProfileWindowShellTests(unittest.TestCase):
         from petpet.ui.pet_profile import PET_CARD_SLOTS
 
         # 十四轮新 rail 布局：卡2 y702（参考图比例），卡1 y322。
-        self.assertEqual(PET_CARD_SLOTS[1][1], 680)
-        self.assertEqual(PET_CARD_SLOTS[0][1], 300)
+        self.assertEqual(PET_CARD_SLOTS[1][1], 592)
+        self.assertEqual(PET_CARD_SLOTS[0][1], 262)
 
     def test_outfit_cards_have_equip_buttons(self):
         window, _ = self._window()

@@ -34,10 +34,10 @@ _ASSET_DIR = os.path.join(
     "assets", "runtime", "ui", "pet_profile_new",
 )
 
-# 页面布局坐标 = new_background.png 艺术稿像素（1085x1663，第十四轮换装）。
+# 页面布局坐标 = new_background.png 艺术稿像素（1085x1450，第十五轮原比例版）。
 # 显示：与其他常驻面板统一 850x960——艺术稿按宽高各自比例非等比铺满；
 # 小屏放不下时按等比因子整体收缩（下限 0.55），保持 850:960 比例。
-ART_W, ART_H = 1085, 1663
+ART_W, ART_H = 1085, 1450
 UNIFIED_W, UNIFIED_H = 850, 960
 _SX = UNIFIED_W / ART_W
 _SY = UNIFIED_H / ART_H
@@ -53,31 +53,31 @@ CLOSE_CLICK_DEFER_MS = 80
 
 # 图1 左栏：宠物头像列表 rail（250x1326 素材，纯背景板无烘焙槽）+
 # 程序布局双卡槽（坐标按参考图反推到 art 比例）。
-RAIL_AT = (56, 150, 250, 1240)
-RAIL_TITLE_AT = (86, 208, 300, 42)           # 「我的伙伴与套装」小节标题
-PET_CARD_SLOTS = ((98, 300), (98, 680))      # 每卡头像左上（rail 内 art 坐标）
+RAIL_AT = (56, 130, 250, 1090)
+RAIL_TITLE_AT = (86, 182, 300, 42)           # 「我的伙伴与套装」小节标题
+PET_CARD_SLOTS = ((98, 262), (98, 592))      # 每卡头像左上（rail 内 art 坐标）
 PET_CARD_SIZE = (166, 166)
 PET_CARD_NAME_AT = (-20, 170, 206, 36)       # 名字（相对卡，卡下，略宽于卡居中）
 PET_CARD_TAG_AT = (12, 118, 142, 34)         # 使用中 pill（相对卡，卡内底部）
 
-# 图2 待机动画：新背景粉垫 x340-940 y480-640（虚线圆中心 ~640,400）。
-IDLE_PREVIEW_RECT = (415, 190, 450, 445)
-IDLE_FRAME_HEIGHT = 420
+# 图2 待机动画：粉垫 x340-940 y430-570（虚线圆中心 ~640,360）。
+IDLE_PREVIEW_RECT = (415, 140, 450, 430)
+IDLE_FRAME_HEIGHT = 410
 IDLE_FPS = 8
 
 # 图3 名字牌（rename_bg 323x63）+ 改名钮（change_name 94x55）：
 # 垫正下方横排居中——牌 300 宽 + 改名钮 84 宽，组合居中于垫（中心 640）。
-NAME_PLATE_AT = (470, 664, 300, 58)
-NAME_LABEL_AT = (492, 670, 176, 46)
-RENAME_BUTTON_AT = (782, 670, 84, 48)
+NAME_PLATE_AT = (470, 590, 300, 58)
+NAME_LABEL_AT = (492, 596, 176, 46)
+RENAME_BUTTON_AT = (782, 596, 84, 48)
 
 # 分栏（description_bg）：名字牌下方；两页「简介 / 套装」。
-TAB_BAR_AT = (330, 756, 728, 69)
+TAB_BAR_AT = (330, 684, 728, 69)
 TAB_SLOTS = {
-    "简介": (390, 768, 140, 46),
-    "套装": (540, 768, 140, 46),
+    "简介": (390, 696, 140, 46),
+    "套装": (540, 696, 140, 46),
 }
-CONTENT_AT = (330, 850, 728, 650)
+CONTENT_AT = (330, 778, 728, 600)
 
 # 套装素材（新 art 直接按套装 id 映射；未映射回退 idle 预览路径）。
 OUTFIT_ART = {
