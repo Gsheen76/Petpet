@@ -621,13 +621,19 @@ class _ArtButton(QWidget):
                 scaled,
             )
         painter.setPen(Qt.NoPen)
+        # 洗色位置 = 素材实际绘制位置（scaled 在按钮内居中后的矩形）。
+        art_pos = QRect(
+            rect.x() + (rect.width() - scaled.width()) // 2,
+            rect.y() + (rect.height() - scaled.height()) // 2,
+            scaled.width(), scaled.height(),
+        )
         if self._phase == "pressed":
             # 黑闪保持 alpha 80，盖素材实际范围，按住期间持续显示。
             painter.setBrush(QColor(70, 42, 28, 80))
-            painter.drawRoundedRect(scaled.rect(), 10, 10)
+            painter.drawRoundedRect(art_pos, 10, 10)
         elif self.hovered:
             painter.setBrush(QColor(255, 252, 246, 80))
-            painter.drawRoundedRect(scaled.rect(), 10, 10)
+            painter.drawRoundedRect(art_pos, 10, 10)
 
     def enterEvent(self, event):
         self.hovered = True
@@ -804,7 +810,7 @@ class PetProfileWindow(QWidget):
         self._content = _FramedStack(self)
         self._content.setGeometry(_R(*CONTENT_AT))
         # 内容页留出框内边距：滚动条落在虚线框内部而不是框线上。
-        self._content.setContentsMargins(10, 10, 10, 10)
+        self._content.setContentsMargins(4, 4, 4, 4)
         self._intro_page = self._build_intro_page()
         self._outfit_page = self._build_outfit_page()
         self._content.addWidget(self._intro_page)
@@ -1039,10 +1045,15 @@ class PetProfileWindow(QWidget):
 
             pixmap_label = QLabel()
             pixmap_label.setAlignment(Qt.AlignCenter)
+            # 图定框等比（防按高缩放过宽挤爆文字行）。
+            pixmap_label.setFixedSize(
+                round(150 * _SX * _FIT), round((card_h - 16) * _SY * _FIT),
+            )
             art = QPixmap(art_path) if art_path else QPixmap()
             if not art.isNull():
-                pixmap_label.setPixmap(art.scaledToHeight(
-                    card_h - 16, Qt.SmoothTransformation,
+                pixmap_label.setPixmap(art.scaled(
+                    pixmap_label.width(), pixmap_label.height(),
+                    Qt.KeepAspectRatio, Qt.SmoothTransformation,
                 ))
             row.addWidget(pixmap_label)
 
@@ -1057,9 +1068,11 @@ class PetProfileWindow(QWidget):
             )
             desc_label = QLabel(outfit.get("description") or "")
             desc_label.setWordWrap(True)
-            # 第三十一轮：按文字实测高度校验——若超过 2 行则加宽文字列
-            # （row.addLayout 的 stretch 参数动态分配），确保恰好 2 行容下。
-            # 描述略微放大（第二十八轮：19→23）。
+            # 第三十二轮：文字列加宽用控件 min-width（不能给装了控件的
+            # layout 做 text_host 包装——reparent 链会同步销毁按钮）。
+            name_label.setMinimumWidth(round(280 * _SX * _FIT))
+            desc_label.setMinimumWidth(round(280 * _SX * _FIT))
+            # 描述字号（第二十八轮：19→23）。
             desc_label.setStyleSheet(
                 f"font-family:'{APP_FONT_FAMILY}';"
                 f"font-size:{round(23 * _SX * _FIT)}px;"
@@ -1085,7 +1098,8 @@ class PetProfileWindow(QWidget):
             # 右侧空位：穿上对应套装的小狗待机动画。
             idle = _OutfitIdleLabel(card)
             # 等比方形（双比例会拉伸/裁切），帧高直接用 label 实际像素。
-            idle_px = round(OUTFIT_IDLE_HEIGHT * _FIT)
+            # 第三十二轮：框 150px（随卡内空间收紧）。
+            idle_px = round(130 * _FIT)
             idle.setFixedSize(idle_px, idle_px)
             idle.set_frames(_load_idle_frames(
                 pet_id, idle_px,

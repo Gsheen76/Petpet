@@ -414,8 +414,20 @@ class ProfileWindowShellTests(unittest.TestCase):
         window._show_tab("套装")
         window.show()
         self.app.processEvents()
+        from PyQt5.QtTest import QTest
         widget = window._outfit_widgets[0]
         button = widget["button"]
+        # deleteLater 在事件循环中生效：强制跑两轮事件后再取最终引用。
+        QTest.qWait(50)
+        self.app.processEvents()
+        for _ in range(3):
+            try:
+                int(button.winId())
+                break
+            except RuntimeError:
+                widget = window._outfit_widgets[0]
+                button = widget["button"]
+                self.app.processEvents()
         card = button.parentWidget()
         btn_y = button.mapTo(card, button.rect().topLeft()).y()
         self.assertGreater(btn_y, card.height() * 0.35,
