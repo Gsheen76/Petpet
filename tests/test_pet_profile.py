@@ -404,19 +404,17 @@ class ProfileWindowShellTests(unittest.TestCase):
         self.assertIsNone(state["equipped_outfit"])
 
     def test_outfit_button_inside_card_bottom(self):
-        """第二十七轮：商店同款横版卡，按钮在卡内右下（holder 对齐底部）。"""
+        """第二十八轮：按钮在描述小字正下方（文字列内，卡下半部）。"""
         window, _ = self._window()
         window._show_tab("套装")
         window.show()
         self.app.processEvents()
         widget = window._outfit_widgets[0]
         button = widget["button"]
-        holder = button.parentWidget()
-        card = holder.parentWidget()
-        # holder 通过 stretch 把按钮压在卡底部：按钮在卡内高度 >40%。
-        btn_y_in_card = holder.mapTo(card, button.rect().topLeft()).y()
-        self.assertGreater(btn_y_in_card, card.height() * 0.4,
-                           "按钮位于卡下半部")
+        card = button.parentWidget()
+        btn_y = button.mapTo(card, button.rect().topLeft()).y()
+        self.assertGreater(btn_y, card.height() * 0.35,
+                           "按钮位于描述文字下方（卡下半部）")
 
     def test_outfit_page_scrolls_vertically_only(self):
         window, _ = self._window()

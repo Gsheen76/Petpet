@@ -93,6 +93,13 @@ OUTFIT_EQUIP_BUTTON = {
     "strawberry_suit": "equip_button_orange.png",
 }
 
+# 套装专属待机动画（manifest 动画键）：卡右侧播放穿上套装的小狗。
+OUTFIT_IDLE_ANIM = {
+    "dinosaur_suit": "idle_dinosaur",
+    "strawberry_suit": "idle_strawberry",
+}
+OUTFIT_IDLE_HEIGHT = 200
+
 
 def _R(x, y, w, h):
     """艺术稿坐标 → 实际画布几何（横纵各自缩放铺满统一尺寸）。"""
@@ -242,8 +249,8 @@ def _grayscale_pixmap(path):
         return QPixmap(path)
 
 
-def _load_idle_frames(pet_id, height):
-    """加载桌面 idle 动画全部帧（等高缩放）；无动画回退空列表。"""
+def _load_idle_frames(pet_id, height, anim_key="idle"):
+    """加载指定桌面动画全部帧（等高缩放）；缺动画回退空列表。"""
     folder = pet_registry.pet_asset_path(pet_id, "desktop", "idle")
     if not folder:
         return []
@@ -255,7 +262,7 @@ def _load_idle_frames(pet_id, height):
     try:
         with open(manifest_path, encoding="utf-8") as fh:
             manifest = json.load(fh)
-        anim = manifest.get("idle") or {}
+        anim = manifest.get(anim_key) or {}
         rel = anim.get("folder")
         if not rel:
             return frames
@@ -358,6 +365,36 @@ class _MiniBar(QWidget):
                                  hl_h / 2, hl_h / 2)
         painter.setBrush(QColor(255, 255, 255, 90))
         painter.drawPath(highlight)
+
+
+class _OutfitIdleLabel(QLabel):
+    """套装卡右侧：穿上对应套装的小狗待机动画（8fps 循环）。"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAlignment(Qt.AlignBottom | Qt.AlignHCenter)
+        self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self._frames = []
+        self._index = 0
+        self._timer = QTimer(self)
+        self._timer.setSingleShot(False)
+        self._timer.timeout.connect(self._advance)
+
+    def set_frames(self, frames):
+        self._frames = frames
+        self._index = 0
+        if frames:
+            self.setPixmap(frames[0])
+            self._timer.start(round(1000 / IDLE_FPS))
+        else:
+            self._timer.stop()
+            self.setPixmap(QPixmap())
+
+    def _advance(self):
+        if not self._frames:
+            return
+        self._index = (self._index + 1) % len(self._frames)
+        self.setPixmap(self._frames[self._index])
 
 
 class _FramedStack(QStackedWidget):
@@ -925,7 +962,7 @@ class PetProfileWindow(QWidget):
 
             text_col = QVBoxLayout()
             text_col.setContentsMargins(0, 6, 0, 6)
-            text_col.setSpacing(4)
+            text_col.setSpacing(6)
             name_label = QLabel(outfit["name"])
             name_label.setStyleSheet(
                 f"font-family:'{APP_FONT_FAMILY}';"
@@ -934,39 +971,46 @@ class PetProfileWindow(QWidget):
             )
             desc_label = QLabel(outfit.get("description") or "")
             desc_label.setWordWrap(True)
+            # 描述略微放大（第二十八轮：19→23）。
             desc_label.setStyleSheet(
                 f"font-family:'{APP_FONT_FAMILY}';"
-                f"font-size:{round(19 * _SX * _FIT)}px;"
+                f"font-size:{round(23 * _SX * _FIT)}px;"
                 "color:#b08a5e;background:transparent;border:0;"
             )
             text_col.addWidget(name_label)
             text_col.addWidget(desc_label)
             text_col.addStretch(1)
-            row.addLayout(text_col, 1)
-
-            # 装备按钮：卡内右下（商店购买按钮位），_ArtButton 直接换装。
+            # 装备按钮（第二十八轮）：描述小字正下方空出处。
             equip_asset = OUTFIT_EQUIP_BUTTON.get(outfit["id"])
             button = None
             if equip_asset and not art.isNull():
-                holder = QWidget()
-                holder.setFixedWidth(round(190 * _SX * _FIT))
-                v = QVBoxLayout(holder)
-                v.setContentsMargins(0, 0, 0, 4)
-                v.addStretch(1)
                 button = _ArtButton(
-                    holder, _pp_pixmap(equip_asset),
+                    card, _pp_pixmap(equip_asset),
                     lambda oid=outfit["id"]: self._toggle_outfit(oid),
                 )
-                button.set_art_rect((0, 0, 190, 60))
-                v.addWidget(button)
-                row.addWidget(holder, 0, Qt.AlignBottom)
+                btn_w = round(160 * _SX * _FIT)
+                btn_h = round(50 * _SY * _FIT)
+                button.setFixedSize(btn_w, btn_h)
+                text_col.addWidget(button, 0, Qt.AlignHCenter)
+            row.addLayout(text_col, 1)
+
+            # 右侧空位：穿上对应套装的小狗待机动画。
+            idle = _OutfitIdleLabel(card)
+            idle.setFixedSize(round(210 * _SX * _FIT),
+                              round(OUTFIT_IDLE_HEIGHT * _SY * _FIT))
+            idle.set_frames(_load_idle_frames(
+                pet_id, OUTFIT_IDLE_HEIGHT,
+                anim_key=OUTFIT_IDLE_ANIM.get(outfit["id"], ""),
+            ))
+            idle.show()
+            row.addWidget(idle, 0, Qt.AlignBottom)
 
             self._outfit_layout.insertWidget(
                 self._outfit_layout.count() - 1, card,
             )
             self._outfit_widgets.append(
                 {"pixmap": pixmap_label, "button": button,
-                 "outfit_id": outfit["id"]},
+                 "idle": idle, "outfit_id": outfit["id"]},
             )
     def _toggle_outfit(self, outfit_id):
         """点击装备按钮：未装备→装备，已装备→卸下；保存并同步桌面/小屋。"""
