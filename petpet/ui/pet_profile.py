@@ -426,10 +426,17 @@ class _AvatarButton(QWidget):
             if self._hovered:
                 painter.setBrush(QColor(255, 252, 246, 90))
                 painter.drawRoundedRect(0, 0, w, h, radius, radius)
-            # 选中（当前宠物）：常驻琥珀描边；未选中悬停用珊瑚描边。
-            color = "#d29a38" if self.selected else "#f28f76"
-            if self.selected or self._hovered:
-                painter.setPen(QPen(QColor(color), pen_w))
+            # 选中（当前宠物）：淡琥珀虚线常驻描边；未选中悬停用珊瑚实线。
+            if self.selected:
+                pen = QPen(QColor(230, 183, 110, 200), pen_w, Qt.DotLine)
+                painter.setPen(pen)
+                painter.setBrush(Qt.NoBrush)
+                painter.drawRoundedRect(
+                    pen_w // 2, pen_w // 2, w - pen_w, h - pen_w,
+                    radius, radius,
+                )
+            if self._hovered:
+                painter.setPen(QPen(QColor("#f28f76"), pen_w))
                 painter.setBrush(Qt.NoBrush)
                 painter.drawRoundedRect(
                     pen_w // 2, pen_w // 2, w - pen_w, h - pen_w,
@@ -606,7 +613,7 @@ class PetProfileWindow(QWidget):
             button = _AvatarButton(self)
             # 方形按钮：横纵显示比例不同（_SX≠_SY）会把 150x150 拉成 118x99，
             # 用统一方形边长（取显示像素 106 ≈ 150*_SX）保证绝对正方形。
-            button.setFixedSize(round(106 * _FIT), round(106 * _FIT))
+            button.setFixedSize(round(118 * _FIT), round(118 * _FIT))
             button.move(_R(card_x, card_y, 0, 0).topLeft())
             button.clicked.connect(
                 lambda _checked=False, target=pet_id: self._select_pet(target)
