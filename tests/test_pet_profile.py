@@ -381,11 +381,10 @@ class ProfileWindowShellTests(unittest.TestCase):
 
     @staticmethod
     def _press(button):
-        """模拟"按下→在按钮内松开"（跳过两段动画等待，立即触发）。"""
+        """模拟"按下→在按钮内松开"（头像式：松开立即执行）。"""
         button._armed = True
-        button._pending_fire = True
         button._phase = None
-        button._advance_phase()
+        button._fire()
 
     def test_equip_button_equips_directly_not_shop(self):
         state = _fresh_state()

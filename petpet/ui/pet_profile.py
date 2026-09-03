@@ -598,10 +598,11 @@ class _ArtButton(QWidget):
         """素材绘制区（按钮内居中，按状态缩放）。"""
         full = QRect(0, 0, self.width(), self.height())
         rect = full
-        if self.hovered and self._phase is None:
-            rect = full.adjusted(-3, -3, 3, 3)
-        elif self._phase == "pressed":
+        if self._phase == "pressed":
+            # 按住持续缩小（第三十二轮：与头像反馈一致，直至松开）。
             rect = full.adjusted(4, 4, -4, -4)
+        elif self.hovered and self._phase is None:
+            rect = full.adjusted(-3, -3, 3, 3)
         return rect
 
     def paintEvent(self, event):
@@ -621,11 +622,10 @@ class _ArtButton(QWidget):
             )
         painter.setPen(Qt.NoPen)
         if self._phase == "pressed":
-            # 压暗洗只盖住素材实际范围（KeepAspectRatio 后的 scaled 尺寸），
-            # 且更淡（第三十一轮：alpha 120→80）。
+            # 黑闪保持 alpha 80，盖素材实际范围，按住期间持续显示。
             painter.setBrush(QColor(70, 42, 28, 80))
             painter.drawRoundedRect(scaled.rect(), 10, 10)
-        elif self.hovered or self._phase == "recover":
+        elif self.hovered:
             painter.setBrush(QColor(255, 252, 246, 80))
             painter.drawRoundedRect(scaled.rect(), 10, 10)
 
@@ -642,8 +642,8 @@ class _ArtButton(QWidget):
             return
         event.accept()
         self._armed = True
+        # 头像式交互：按住持续缩小+压暗，松开才决定执行与否（不播定时动画）。
         self._phase = "pressed"
-        self._timer.start(CLOSE_PRESS_FLASH_MS + 20)
         self.update()
 
     def mouseReleaseEvent(self, event):
@@ -660,10 +660,10 @@ class _ArtButton(QWidget):
             self._timer.stop()
             self.update()
             return
-        # 在按钮内松开：动画播完后触发。
-        self._pending_fire = True
-        if self._phase is None:
-            self._advance_phase()
+        # 在按钮内松开：立即恢复常态并执行。
+        self._phase = None
+        self.update()
+        self._fire()
 
     def _fire(self):
         activate = self._on_activate
@@ -671,18 +671,9 @@ class _ArtButton(QWidget):
             activate()
 
     def _advance_phase(self):
-        if self._phase == "pressed":
-            self._phase = "recover"
-            self._timer.start(
-                CLOSE_CLICK_DEFER_MS - CLOSE_PRESS_FLASH_MS + 20
-            )
-            self.update()
-            return
+        """兼容入口：立即恢复常态（两段定时动画已随头像式交互移除）。"""
         self._phase = None
         self.update()
-        if self._pending_fire:
-            self._pending_fire = False
-            self._fire()
 
 
 class PetProfileWindow(QWidget):
@@ -1107,8 +1098,10 @@ class PetProfileWindow(QWidget):
             # 若描述实测超 2 行，加高卡让文字放宽后两行完整显示。
             from PyQt5.QtGui import QFontMetrics
             fm = QFontMetrics(desc_label.font())
+            # 第三十二轮：文字行宽加宽 10 显示px。
             text_w = max(200, card.width() - pixmap_label.width()
-                         - idle.width() - round(60 * _SX * _FIT))
+                         - idle.width() - round(60 * _SX * _FIT)
+                         + round(10 / _SX))
             lines_needed = 0
             remaining = outfit.get("description") or ""
             while remaining and lines_needed < 4:
