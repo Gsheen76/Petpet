@@ -349,8 +349,8 @@ class ProfileWindowShellTests(unittest.TestCase):
     def test_card_positions_round_twenty(self):
         from petpet.ui.pet_profile import RAIL_TITLE_AT
 
-        # 第二十轮：标题左移（x54→24）。
-        self.assertAlmostEqual(RAIL_TITLE_AT[0], 24, delta=2)
+        # 第二十六轮：标题左移 20 显示px（x24→-2）。
+        self.assertAlmostEqual(RAIL_TITLE_AT[0], -2, delta=2)
 
     def test_card_positions_round_twenty_one(self):
         from petpet.ui.pet_profile import PET_CARD_SLOTS, RAIL_AT

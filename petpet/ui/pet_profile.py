@@ -54,7 +54,7 @@ CLOSE_CLICK_DEFER_MS = 80
 # 图1 左栏：宠物头像列表 rail（250x1326 素材，纯背景板无烘焙槽）+
 # 程序布局双卡槽（坐标按参考图反推到 art 比例）。
 RAIL_AT = (51, 230, 200, 992)
-RAIL_TITLE_AT = (24, 182, 320, 46)           # 「我的伙伴」（rail 正上方，加粗）
+RAIL_TITLE_AT = (-2, 182, 320, 46)           # 「我的伙伴」（rail 正上方，加粗）
 PET_CARD_SLOTS = ((76, 272), (76, 470))      # 每卡头像左上（烟花上移80、奶油上移200、右移10，显示px 换算）
 PET_CARD_SIZE = (150, 150)
 PET_CARD_NAME_AT = (-20, 156, 190, 36)       # 名字（相对卡，卡下，略宽于卡居中）
@@ -67,9 +67,10 @@ IDLE_FPS = 8
 
 # 图3 名字牌（rename_bg 323x63）+ 改名钮（change_name 94x55）：
 # 垫正下方居中，两素材均放大 50%（第十五轮后续）；改名钮放牌内右端。
-NAME_PLATE_AT = (440, 585, 360, 70)
-NAME_ART_AT = (452, 588, 205, 64)
-RENAME_BUTTON_AT = (668, 588, 113, 66)   # 原生 94x55 × 1.2 等比（不被压扁）
+NAME_PLATE_AT = (466, 585, 360, 70)
+# 名字在牌内部整体居中（第二十六轮）：可用区 = 牌宽 - 钮宽 - 边距，居中放。
+NAME_ART_AT = (478, 588, 220, 64)   # 居中于牌内可用区（左缘~按钮左缘）
+RENAME_BUTTON_AT = (700, 588, 113, 66)   # 原生 94x55 × 1.2 等比（不被压扁）
 
 # 分栏（description_bg）：名字牌下方；两页「简介 / 套装」。
 TAB_BAR_AT = (305, 684, 728, 69)
@@ -357,6 +358,30 @@ class _MiniBar(QWidget):
                                  hl_h / 2, hl_h / 2)
         painter.setBrush(QColor(255, 255, 255, 90))
         painter.drawPath(highlight)
+
+
+class _FramedStack(QStackedWidget):
+    """简介/套装内容区：浅色可爱风外框（淡珊瑚圆角虚线 + 更淡的底洗）。"""
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        w, h = self.width(), self.height()
+        radius = max(10, round(16 * _FIT))
+        # 淡底洗（几乎不可见的暖色）。
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(255, 249, 240, 70))
+        painter.drawRoundedRect(0, 0, w, h, radius, radius)
+        # 淡珊瑚圆点虚线外框。
+        pen = QPen(QColor(242, 168, 140, 210), max(2, round(3 * _FIT)))
+        pen.setStyle(Qt.DotLine)
+        painter.setPen(pen)
+        painter.setBrush(Qt.NoBrush)
+        painter.drawRoundedRect(
+            pen.width() // 2, pen.width() // 2,
+            w - pen.width(), h - pen.width(), radius, radius,
+        )
+        super().paintEvent(event)
 
 
 class _AvatarButton(QWidget):
@@ -653,7 +678,7 @@ class PetProfileWindow(QWidget):
             )
             self._tab_buttons[name] = tab
 
-        self._content = QStackedWidget(self)
+        self._content = _FramedStack(self)
         self._content.setGeometry(_R(*CONTENT_AT))
         self._intro_page = self._build_intro_page()
         self._outfit_page = self._build_outfit_page()
