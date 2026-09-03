@@ -370,6 +370,7 @@ class _AvatarButton(QWidget):
         self._pixmap = QPixmap()
         self._hovered = False
         self._pressed = False
+        self.selected = False  # 当前使用宠物：常驻描边
         self.setCursor(Qt.PointingHandCursor)
 
     def set_pixmap(self, pixmap):
@@ -413,22 +414,27 @@ class _AvatarButton(QWidget):
                 (w - scaled.width()) // 2, (h - scaled.height()) // 2, scaled,
             )
         # 反馈：圆角正方形描边（边长 = 按钮方形），悬停/按压变色。
-        radius = max(6, round(18 * _SX * _FIT))
-        pen_w = max(2, round(3 * _SX * _FIT))
+        radius = max(6, round(16 * _FIT))
+        pen_w = max(3, round(4 * _FIT))
         if self._pressed:
             painter.setPen(QPen(QColor("#e8714f"), pen_w))
             painter.setBrush(QColor(70, 42, 28, 60))
             painter.drawRoundedRect(
                 pen_w // 2, pen_w // 2, w - pen_w, h - pen_w, radius, radius,
             )
-        elif self._hovered:
-            painter.setBrush(QColor(255, 252, 246, 90))
-            painter.drawRoundedRect(0, 0, w, h, radius, radius)
-            painter.setPen(QPen(QColor("#f28f76"), pen_w))
-            painter.setBrush(Qt.NoBrush)
-            painter.drawRoundedRect(
-                pen_w // 2, pen_w // 2, w - pen_w, h - pen_w, radius, radius,
-            )
+        else:
+            if self._hovered:
+                painter.setBrush(QColor(255, 252, 246, 90))
+                painter.drawRoundedRect(0, 0, w, h, radius, radius)
+            # 选中（当前宠物）：常驻琥珀描边；未选中悬停用珊瑚描边。
+            color = "#d29a38" if self.selected else "#f28f76"
+            if self.selected or self._hovered:
+                painter.setPen(QPen(QColor(color), pen_w))
+                painter.setBrush(Qt.NoBrush)
+                painter.drawRoundedRect(
+                    pen_w // 2, pen_w // 2, w - pen_w, h - pen_w,
+                    radius, radius,
+                )
 
 
 class _ArtButton(QWidget):
@@ -598,7 +604,10 @@ class PetProfileWindow(QWidget):
             # icon+padding 机制造成的显示不完整），反馈为贴合素材的
             # 圆角正方形描边（悬停珊瑚）+ 暗洗（按压）。
             button = _AvatarButton(self)
-            button.setGeometry(_R(card_x, card_y, *PET_CARD_SIZE))
+            # 方形按钮：横纵显示比例不同（_SX≠_SY）会把 150x150 拉成 118x99，
+            # 用统一方形边长（取显示像素 106 ≈ 150*_SX）保证绝对正方形。
+            button.setFixedSize(round(106 * _FIT), round(106 * _FIT))
+            button.move(_R(card_x, card_y, 0, 0).topLeft())
             button.clicked.connect(
                 lambda _checked=False, target=pet_id: self._select_pet(target)
             )
@@ -804,6 +813,8 @@ class PetProfileWindow(QWidget):
             else:
                 icon = _grayscale_pixmap(icon_path) if icon_path else QPixmap()
             card["button"].set_pixmap(icon)
+            card["button"].selected = pet_id == active_id
+            card["button"].update()
             if card.get("tag") is not None:
                 card["tag"].setVisible(pet_id == active_id)
 
