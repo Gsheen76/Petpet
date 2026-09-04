@@ -80,7 +80,7 @@ TAB_SLOTS = {
     "套装": "tab_outfit.png",
 }
 TAB_BAR_AT = (279, 660, 728, 124)
-CONTENT_AT = (279, 712, 728, 653)
+CONTENT_AT = (279, 712, 728, 574)   # 高 380 显示px（第三十五轮）
 
 # 套装素材（新 art 直接按套装 id 映射；未映射回退 idle 预览路径）。
 OUTFIT_ART = {
