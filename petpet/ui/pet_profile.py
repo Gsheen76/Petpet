@@ -1190,10 +1190,10 @@ class PetProfileWindow(QWidget):
                 art_path = _outfit_preview_path(pet_id, outfit)
             card = QWidget()
             card.setMinimumHeight(card_h)
-            # 套装卡描边（第四十七轮）：暖棕圆角框。
+            # 套装卡描边（第四十八轮）：暖棕圆角虚线框（与参考图一致）。
             card.setStyleSheet(
                 "QWidget{background:transparent;"
-                f"border:2px solid #d6a880;border-radius:16px;}}"
+                f"border:2px dashed #d6a880;border-radius:16px;}}"
             )
             row = QHBoxLayout(card)
             row.setContentsMargins(12, 8, 12, 8)
