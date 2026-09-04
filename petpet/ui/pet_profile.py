@@ -933,8 +933,8 @@ class PetProfileWindow(QWidget):
 
         self._content = QStackedWidget(self)
         self._content.setGeometry(_R(*CONTENT_AT))
-        # 内容页留出框内边距：滚动条落在背景图内部。
-        self._content.setContentsMargins(14, 14, 14, 14)
+        # 内容直接写在区域背景内框里（第三十九轮：剥掉所有中间层）。
+        self._content.setContentsMargins(26, 8, 26, 14)
         self._intro_page = self._build_intro_page()
         self._outfit_page = self._build_outfit_page()
         self._content.addWidget(self._intro_page)
@@ -1078,17 +1078,6 @@ class PetProfileWindow(QWidget):
         scroll.setWidget(self._outfit_host)
         return scroll
 
-    def _outfit_card_qss(self):
-        """套装卡：商店同款暖底圆角卡（虚线边 + 奶油渐变）。"""
-        return (
-            'QWidget[outfitCardRole="true"]{'
-            f"font-family:'{APP_FONT_FAMILY}';"
-            "background:qlineargradient(x1:0,y1:0,x2:0,y2:1,"
-            "stop:0 #fffcf6, stop:1 #faecd9);"
-            "border:2px dashed #e8bfa8;border-radius:18px;"
-            "}"
-        )
-
     def _show_tab(self, name):
         """切换分栏（同步选中态 + 区域背景图随页切换）。"""
         pages = {"简介": self._intro_page, "套装": self._outfit_page}
@@ -1191,8 +1180,6 @@ class PetProfileWindow(QWidget):
             if not art_path:
                 art_path = _outfit_preview_path(pet_id, outfit)
             card = QWidget()
-            card.setProperty("outfitCardRole", True)
-            card.setStyleSheet(self._outfit_card_qss())
             card.setMinimumHeight(card_h)
             row = QHBoxLayout(card)
             row.setContentsMargins(12, 8, 12, 8)
@@ -1225,8 +1212,8 @@ class PetProfileWindow(QWidget):
             desc_label.setWordWrap(True)
             # 第三十二轮：文字列加宽用控件 min-width（不能给装了控件的
             # layout 做 text_host 包装——reparent 链会同步销毁按钮）。
-            name_label.setMinimumWidth(round(268 * _SX * _FIT))
-            desc_label.setMinimumWidth(round(268 * _SX * _FIT))
+            name_label.setMinimumWidth(round(250 * _SX * _FIT))
+            desc_label.setMinimumWidth(round(250 * _SX * _FIT))
             # 描述字号（第二十八轮：19→23）。
             desc_label.setStyleSheet(
                 f"font-family:'{APP_FONT_FAMILY}';"
