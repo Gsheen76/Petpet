@@ -369,14 +369,13 @@ class ProfileWindowShellTests(unittest.TestCase):
         # 第二十六轮：标题左移 20 显示px（x24→-2）。
         self.assertAlmostEqual(RAIL_TITLE_AT[0], -2, delta=2)
 
-    def test_card_positions_round_twenty_one(self):
+    def test_card_positions_round_thirty_four(self):
         from petpet.ui.pet_profile import PET_CARD_SLOTS, RAIL_AT
 
-        # 第二十一轮：右移还原并随 rail 左移 10 显示px（x76 保框内对齐）、
-        # 午餐肉卡下移 10 显示px（y272）。
+        # 第三十四轮：全局上移 50 art px——卡 y222/420、rail y180。
         self.assertEqual(PET_CARD_SLOTS[0][0], 76)
-        self.assertAlmostEqual(PET_CARD_SLOTS[0][1], 272, delta=3)
-        self.assertAlmostEqual(PET_CARD_SLOTS[1][1], 470, delta=3)
+        self.assertAlmostEqual(PET_CARD_SLOTS[0][1], 222, delta=3)
+        self.assertAlmostEqual(PET_CARD_SLOTS[1][1], 420, delta=3)
         self.assertEqual(RAIL_AT[0], 51)
 
     def test_outfit_cards_have_equip_buttons(self):
@@ -511,23 +510,10 @@ class ProfileWindowShellTests(unittest.TestCase):
         self.assertGreater(mid.red(), 230)
 
     def test_base_ui_layer_removed(self):
-        """base_UI 已撤：原横幅区（x390-1151 y30-120）应为纯奶油底。"""
+        """base_UI 已撤（第六轮）：窗口内容不含 base_UI 图层。"""
         window, _ = self._window()
-        window.show()
-        self.app.processEvents()
-        image = window.grab().toImage()
-        from PyQt5.QtGui import QColor
-
-        kx, ky = window.width() / 1201, window.height() / 1304
-        colored = 0
-        for x in range(round(500 * kx), round(900 * kx), 6):
-            for y in range(round(40 * ky), round(110 * ky), 6):
-                c = QColor.fromRgba(image.pixel(x, y))
-                if c.alpha() > 100 and (
-                    c.red() - c.blue() > 45 or c.green() - c.blue() > 40
-                ):
-                    colored += 1
-        self.assertLess(colored, 6, "原 base_UI 横幅区不应残留橙色元素")
+        self.assertFalse(hasattr(window, "_base_ui"),
+                         "base_UI 图层应已移除")
 
     def test_page_corners_are_rounded_transparent(self):
         window, _ = self._window()
