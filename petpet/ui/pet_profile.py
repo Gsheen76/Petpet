@@ -923,8 +923,9 @@ class PetProfileWindow(QWidget):
         for i, (name, art_name) in enumerate(TAB_SLOTS.items()):
             tab = _TabButton(name, self, art=_pp_pixmap(art_name))
             tx = block_x + round((24 + i * 176) * _SX * _FIT)
-            ty = TAB_BAR_AT[1] + round(8 * _SY * _FIT)
-            tab.setGeometry(tx, ty, tab_w, tab_h)
+            # 骑在内容区上边缘（半嵌，参考图样式）。
+            ty = CONTENT_AT[1] - round(23 * _SY * _FIT)
+            tab.setGeometry(_R(tx, ty, tab_w, tab_h))
             tab.raise_()
             tab.clicked.connect(
                 lambda target=name: self._show_tab(target)
