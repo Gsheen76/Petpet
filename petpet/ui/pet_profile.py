@@ -457,10 +457,10 @@ class _RoundedBgLabel(QWidget):
         painter.drawPixmap(
             (w - scaled.width()) // 2, (h - scaled.height()) // 2, scaled,
         )
-        # 暖棕实线描边（第五十轮）：贴圆角外缘。
+        # 暖棕实线描边（第五十一轮）：加粗至 6×fit，明确成框。
         painter.setClipPath(QPainterPath())
-        pen_w = max(3, round(4 * _FIT))
-        painter.setPen(QPen(QColor("#d6a880"), pen_w))
+        pen_w = max(4, round(6 * _FIT))
+        painter.setPen(QPen(QColor("#c9955e"), pen_w))
         painter.setBrush(Qt.NoBrush)
         painter.drawRoundedRect(
             pen_w // 2, pen_w // 2, w - pen_w, h - pen_w, radius, radius,
@@ -1044,7 +1044,7 @@ class PetProfileWindow(QWidget):
         icon = QLabel()
         pm = _pp_pixmap(self.SECTION_ICONS.get(key, ""))
         if not pm.isNull():
-            icon_px = max(18, round(30 * _FIT))
+            icon_px = max(18, round(60 * _FIT))   # 两行高度（第五十一轮）
             icon.setPixmap(pm.scaled(
                 icon_px, icon_px,
                 Qt.KeepAspectRatio, Qt.SmoothTransformation,
@@ -1172,7 +1172,11 @@ class PetProfileWindow(QWidget):
                 art_path = _outfit_preview_path(pet_id, outfit)
             card = QWidget()
             card.setMinimumHeight(card_h)
-            # 第五十轮：套装卡内框删除（只留区域背景最外面的框）。
+            # 套装外围框（第五十二轮恢复）：暖棕虚线圆角。
+            card.setStyleSheet(
+                "QWidget{background:transparent;"
+                f"border:2px dashed #d6a880;border-radius:16px;}}"
+            )
             row = QHBoxLayout(card)
             row.setContentsMargins(12, 8, 12, 8)
             row.setSpacing(12)
