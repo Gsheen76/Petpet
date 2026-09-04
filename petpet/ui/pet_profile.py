@@ -13,7 +13,8 @@ import os
 
 import numpy as np
 from PIL import Image as PILImage
-from PyQt5.QtCore import QRect, QSize, Qt, QTimer, pyqtSignal
+from PyQt5.QtCore import (QEasingCurve, QRect, QSize, Qt, QTimer,
+                          pyqtSignal, QVariantAnimation)
 from PyQt5.QtGui import QColor, QFont, QIcon, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap
 from PyQt5.QtWidgets import (QApplication, QHBoxLayout, QLabel,
                              QPushButton, QScrollArea, QStackedWidget,
@@ -332,18 +333,50 @@ class _ArtTitle(QWidget):
 
 
 class _MiniBar(QWidget):
-    """简介进度条：深奶油槽 + 珊瑚渐变填充 + 高光带（第二十一轮恢复）。"""
+    """简介进度条：奶油槽 + 珊瑚渐变填充；数值变化平滑滑动 + 高光循环扫过。
+
+    第三十五轮：set_ratio 不再瞬跳——填充用 450ms 缓动从旧值滑到新值；
+    静止时一道高光带周期性从左向右扫过（呼吸感）。
+    """
+
+    SWEEP_MS = 2400      # 高光扫完一整圈的周期
+    TICK_MS = 33         # 扫光推进步进（约 30fps）
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._value = 0
         self._maximum = 1
+        self._display_value = 0.0   # 动画中的显示值（浮点，随缓动推进）
         self.setFixedHeight(max(8, round(18 * _SY * _FIT)))
+        # 数值过渡动画
+        self._anim = QVariantAnimation(self)
+        self._anim.setDuration(450)
+        self._anim.setEasingCurve(QEasingCurve.OutCubic)
+        self._anim.valueChanged.connect(self._on_anim_value)
+        # 高光扫过循环
+        self._sweep_phase = 0.0
+        self._sweep_timer = QTimer(self)
+        self._sweep_timer.setInterval(self.TICK_MS)
+        self._sweep_timer.timeout.connect(self._advance_sweep)
+        self._sweep_timer.start()
+
+    def _on_anim_value(self, v):
+        self._display_value = float(v)
+        self.update()
+
+    def _advance_sweep(self):
+        self._sweep_phase = (self._sweep_phase + self.TICK_MS / self.SWEEP_MS) % 1.0
+        self.update()
 
     def set_ratio(self, value, maximum):
+        """立即记录目标值，填充以 450ms 缓动滑向新值（真的移动）。"""
         self._value = max(0, int(value))
         self._maximum = max(1, int(maximum))
-        self.update()
+        target = max(0.0, min(1.0, self._value / self._maximum))
+        self._anim.stop()
+        self._anim.setStartValue(float(self._display_value))
+        self._anim.setEndValue(target)
+        self._anim.start()
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -355,7 +388,7 @@ class _MiniBar(QWidget):
         painter.setPen(QPen(QColor(232, 197, 158), max(1, h // 16)))
         painter.setBrush(QColor("#f6ead8"))
         painter.drawPath(track)
-        frac = max(0.0, min(1.0, self._value / self._maximum))
+        frac = max(0.0, min(1.0, self._display_value / self._maximum))
         if frac <= 0:
             return
         fill_w = max(int(w * frac), h)
@@ -369,13 +402,17 @@ class _MiniBar(QWidget):
         painter.setPen(Qt.NoPen)
         painter.setBrush(grad)
         painter.drawPath(fill)
-        highlight = QPainterPath()
-        hl_h = (h - inset * 4) * 0.42
-        highlight.addRoundedRect(inset * 2, inset * 2,
-                                 max(0.0, fill_w - inset * 4), hl_h,
-                                 hl_h / 2, hl_h / 2)
-        painter.setBrush(QColor(255, 255, 255, 90))
-        painter.drawPath(highlight)
+        # 循环高光带：只在填充范围内扫过，边缘羽化。
+        band_w = max(24, int(w * 0.18))
+        band_x = int((self._sweep_phase * (w + band_w * 2)) - band_w)
+        if band_x + band_w > inset:
+            painter.setClipPath(fill)
+            band_grad = QLinearGradient(band_x, 0, band_x + band_w, 0)
+            band_grad.setColorAt(0.0, QColor(255, 255, 255, 0))
+            band_grad.setColorAt(0.5, QColor(255, 255, 255, 110))
+            band_grad.setColorAt(1.0, QColor(255, 255, 255, 0))
+            painter.setBrush(band_grad)
+            painter.drawRect(band_x, inset, band_w, h - inset * 2)
 
 
 class _TabButton(QWidget):
