@@ -79,8 +79,8 @@ TAB_SLOTS = {
     "简介": "tab_outfit.png",
     "套装": "tab_intro.png",
 }
-TAB_BAR_AT = (279, 736, 728, 124)
-CONTENT_AT = (279, 750, 728, 574)   # 高 380 显示px（第三十五轮）
+TAB_BAR_AT = (264, 730, 758, 130)
+CONTENT_AT = (264, 744, 758, 614)   # 第五十轮：背景放大（宽+30 高+40 art）
 
 # 套装素材（新 art 直接按套装 id 映射；未映射回退 idle 预览路径）。
 OUTFIT_ART = {
@@ -457,10 +457,10 @@ class _RoundedBgLabel(QWidget):
         painter.drawPixmap(
             (w - scaled.width()) // 2, (h - scaled.height()) // 2, scaled,
         )
-        # 白色描边（第四十九轮）：贴圆角外缘。
+        # 暖棕实线描边（第五十轮）：贴圆角外缘。
         painter.setClipPath(QPainterPath())
         pen_w = max(3, round(4 * _FIT))
-        painter.setPen(QPen(QColor(255, 255, 255), pen_w))
+        painter.setPen(QPen(QColor("#d6a880"), pen_w))
         painter.setBrush(Qt.NoBrush)
         painter.drawRoundedRect(
             pen_w // 2, pen_w // 2, w - pen_w, h - pen_w, radius, radius,
@@ -1172,11 +1172,7 @@ class PetProfileWindow(QWidget):
                 art_path = _outfit_preview_path(pet_id, outfit)
             card = QWidget()
             card.setMinimumHeight(card_h)
-            # 套装卡描边（第四十八轮）：暖棕圆角虚线框（与参考图一致）。
-            card.setStyleSheet(
-                "QWidget{background:transparent;"
-                f"border:2px dashed #d6a880;border-radius:16px;}}"
-            )
+            # 第五十轮：套装卡内框删除（只留区域背景最外面的框）。
             row = QHBoxLayout(card)
             row.setContentsMargins(12, 8, 12, 8)
             row.setSpacing(12)
