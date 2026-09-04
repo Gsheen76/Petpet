@@ -1172,8 +1172,11 @@ class PetProfileWindow(QWidget):
             card = QWidget()
             card.setMinimumHeight(card_h)
             # 套装外围框（第五十二轮恢复）：暖棕虚线圆角。
+            # 第五十五轮：选择器收窄到卡片本体——裸 QWidget 会把虚线框
+            # 传染给卡内图片/动画等 QLabel 子控件（用户指出两处内框删除）。
+            card.setObjectName("outfitCard")
             card.setStyleSheet(
-                "QWidget{background:transparent;"
+                "QWidget#outfitCard{background:transparent;"
                 f"border:2px dashed #d6a880;border-radius:16px;}}"
             )
             row = QHBoxLayout(card)
