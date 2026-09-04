@@ -26,7 +26,11 @@ def parse_args():
         "--output-dir",
         type=Path,
         default=None,
-        help="Explicit output directory; defaults to assets/animations/<action>",
+        help=(
+            "Explicit output directory; pass the per-pet animation folder, "
+            "e.g. assets/runtime/pets/<pet_id>/desktop/animations/<action>. "
+            "The legacy default assets/animations/<action> is deprecated."
+        ),
     )
     return parser.parse_args()
 

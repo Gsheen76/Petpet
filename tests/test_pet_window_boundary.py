@@ -282,7 +282,7 @@ class PetWindowBoundaryTests(unittest.TestCase):
                 / "ice_cream"
                 / "home"
                 / "poses"
-                / "home-pet-sleep.png"
+                / "home_pet_sleep.png"
             )
             expected_first = QPixmap(str(sheet_path)).copy(24, 176, 592, 288)
             expected_first = expected_first.scaled(

@@ -1857,6 +1857,7 @@ class PetWindow(QWidget):
                     new_y = ground_y
                     if abs(self.vy) > 60:
                         self.vy = -self.vy * BOUNCE_FLOOR
+                        self.play_sound("bounce")
                         if abs(self.vy) > 250:
                             self.say("哎哟！", 800)
                     else:

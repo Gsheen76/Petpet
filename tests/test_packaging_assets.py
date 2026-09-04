@@ -56,7 +56,7 @@ class PackagingAssetTests(unittest.TestCase):
             / "poses"
         )
         for name in (
-            "home-pet-idle-sit.png",
+            "home_pet_idle_sit.png",
         ):
             with self.subTest(name=name):
                 path = asset_dir / name
@@ -77,7 +77,7 @@ class PackagingAssetTests(unittest.TestCase):
             / "ice_cream"
             / "home"
             / "poses"
-            / "home-pet-sleep.png"
+            / "home_pet_sleep.png"
         )
         self.assertTrue(path.is_file())
         image = QImage(str(path))
@@ -117,9 +117,9 @@ class PackagingAssetTests(unittest.TestCase):
     def test_navigation_and_furniture_assets_have_runtime_domains(self):
         root = Path(__file__).resolve().parents[1] / "assets" / "runtime"
         for path in (
-            root / "scenes/home/home-nav-paw.png",
-            root / "scenes/home/home-nav-target.png",
-            root / "scenes/home/home-nav-arrow.png",
+            root / "scenes/home/home_nav_paw.png",
+            root / "scenes/home/home_nav_target.png",
+            root / "scenes/home/home_nav_arrow.png",
             root / "furniture/home/rug.png",
             root / "furniture/home/sofa.png",
         ):

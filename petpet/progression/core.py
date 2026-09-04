@@ -297,7 +297,7 @@ HOME_DECORATION_DEFINITIONS = {
         "name": "墙面装饰画",
         "category": "home",
         "price": 180,
-        "asset": "wall-art.png",
+        "asset": "wall_art.png",
         "description": "给墙面挂上一幅温柔的日落风景。",
         "default_position": {"x": 1110, "y": 95},
         "size": (220, 285),

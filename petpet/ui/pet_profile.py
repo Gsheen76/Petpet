@@ -1,7 +1,7 @@
 """宠物详情面板：数据快照纯函数 + 新素材面板（逐轮搭建）。
 
-页面骨架：background 原生尺寸 1201x1304（显示比例 0.7），background + base_UI
-两层，整页圆角裁剪（CORNER_RADIUS），无边框可拖拽。
+页面骨架：background 原生尺寸（显示比例 0.7）单层画布，整页圆角裁剪
+（CORNER_RADIUS），无边框可拖拽（base_UI 图层已于第六轮撤下）。
 内容区（第三轮）：左栏宠物切换卡、待机动画、名字牌+改名、等级/好感两行。
 """
 
@@ -457,10 +457,10 @@ class _RoundedBgLabel(QWidget):
         painter.drawPixmap(
             (w - scaled.width()) // 2, (h - scaled.height()) // 2, scaled,
         )
-        # 暖棕描边（第四十七轮）：贴圆角外缘。
+        # 白色描边（第四十九轮）：贴圆角外缘。
         painter.setClipPath(QPainterPath())
-        pen_w = max(2, round(3 * _FIT))
-        painter.setPen(QPen(QColor(214, 168, 128), pen_w))
+        pen_w = max(3, round(4 * _FIT))
+        painter.setPen(QPen(QColor(255, 255, 255), pen_w))
         painter.setBrush(Qt.NoBrush)
         painter.drawRoundedRect(
             pen_w // 2, pen_w // 2, w - pen_w, h - pen_w, radius, radius,
@@ -785,7 +785,7 @@ class _ArtButton(QWidget):
 
 
 class PetProfileWindow(QWidget):
-    """宠物详情面板：background + base_UI 圆角画布上的宠物内容区。
+    """宠物详情面板：background 圆角画布上的宠物内容区。
 
     所有按键加入时必须带悬停与点击反馈（AGENTS.md UI 约定）。
     """
@@ -1011,9 +1011,7 @@ class PetProfileWindow(QWidget):
 
         self._intro_sections = {}
         self._intro_heads = {}
-        self._level_bar = None
-        self._affection_bar = None
-        self._attr_bars = {}
+        # 第四十九轮：进度条全删，仅保留图标节标 + 数值。
         sections = (
             ("等级", "level"),
             ("好感度", "affection"),
@@ -1026,17 +1024,6 @@ class PetProfileWindow(QWidget):
             value = styled_label(26, "#a8742c")
             layout.addWidget(value)
             self._intro_sections[key] = value
-            if key == "level":
-                self._level_bar = _MiniBar()
-                layout.addWidget(self._level_bar)
-            elif key == "affection":
-                self._affection_bar = _MiniBar()
-                layout.addWidget(self._affection_bar)
-            else:
-                for attr in ("hunger", "mood", "energy"):
-                    bar = _MiniBar()
-                    layout.addWidget(bar)
-                    self._attr_bars[attr] = bar
             layout.addSpacing(18)
         head = self._section_header("性格", "personality", k)
         layout.addWidget(head)
@@ -1161,16 +1148,11 @@ class PetProfileWindow(QWidget):
             f"Lv.{snapshot['affection_level']}　"
             f"{snapshot['affection_points']} / {snapshot['affection_next']}"
         )
-        self._affection_bar.set_ratio(
-            snapshot["affection_points"], snapshot["affection_next"]
-        )
-        self._level_bar.set_ratio(snapshot["xp"], snapshot["xp_next"])
+
         self._intro_sections["attrs"].setText(
             f"饱腹 {snapshot['hunger']}　心情 {snapshot['mood']}　"
             f"精力 {snapshot['energy']}"
         )
-        for key in ("hunger", "mood", "energy"):
-            self._attr_bars[key].set_ratio(snapshot[key], 100)
         self._intro_sections["personality"].setText(snapshot["description"])
 
     def _refresh_outfits(self, snapshot):

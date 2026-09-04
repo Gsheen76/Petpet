@@ -12,8 +12,6 @@ dist/
 *.app
 *.dmg
 *.zip
-assets/icons/icon-512.png
-assets/icons/icon-1024.png
 
 # Local user data and secrets
 data/

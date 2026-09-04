@@ -1,77 +1,55 @@
-# Petpet 动画素材规范
+# Petpet 动画素材规范（v2，2026-09-04 素材治理轮更新）
 
-程序会自动读取本目录下的 PNG 连续帧。某组动画不存在时，会回退到
-`assets/poses/` 中对应的静态图片，因此可以逐个动作制作。
+本目录 `assets/source/spritesheets/` 是**开发期源稿**：AI 生成的精灵表、
+关键帧草稿都放这里，**不随程序打包**（打包只带 `assets/runtime/`）。
+运行时正式素材一律放 `assets/runtime/pets/<pet_id>/…`。
 
-## 建议制作顺序
-
-1. `walk`：最常出现，建议 8 帧循环
-2. `eat`：喂食时触发，建议 6～8 帧循环
-3. `idle`：呼吸、尾巴轻摇，建议 6 帧循环
-4. `play`：交互扔球场景中的扑球动作，当前为 24 帧、非循环
-5. `pet`：左键抚摸动作，当前为 24 帧、非循环
-6. `happy`：开心状态，建议 6～8 帧循环
-7. `sleep`：呼吸起伏，当前为 12 帧循环
-8. `sad`、`drag`、`sit`、`ask`：按需要继续补充
-
-## 每帧要求
-
-- PNG，透明背景，推荐每帧 `512 × 512`
-- 小狗必须朝右；程序向左移动时会自动水平翻转
-- 所有帧画布、镜头、缩放和身体中心保持一致
-- 脚底基线固定，不能每帧上下漂移；需要跳跃时才改变高度
-- 不要包含文字、边框、分镜编号、地面或裁切线
-- 阴影要么所有帧完全一致，要么全部不要
-- 文件按播放顺序命名：`000.png`、`001.png`、`002.png`……
-
-目录示例：
+## 目录结构（现行，按宠物组织）
 
 ```text
-assets/animations/
-├── manifest.json
-├── walk/
-│   ├── 000.png
-│   ├── 001.png
-│   └── ...
-└── eat/
-    ├── 000.png
-    └── ...
+assets/runtime/pets/<pet_id>/
+├── avatar.png                     # 方形头像（聊天/详情面板）
+├── desktop/
+│   ├── poses/<动作>.png           # 静态姿势（缺失动画时的回退图）
+│   └── animations/
+│       ├── manifest.json          # 动画声明（folder/fps/loop/fallback/…）
+│       ├── idle/000.png …         # 连续帧，三位数字命名
+│       └── outfits/<套装>/<动作>/… # 套装专属动画
+└── home/                          # 家园场景素材（poses/ 或整张精灵表）
 ```
 
-## 推荐的 AI 制作方法
+动画缺失时程序回退到 `poses/<同名>.png`；连静态图也没有则按
+manifest 的 `fallback` 字段落到对应姿势。**manifest 里允许预声明
+尚不存在的文件夹**（如 happy/sad/sit/ask），加载器会优雅跳过。
 
-不要分别生成八张互不关联的图片，角色外观会漂移。把
-`assets/poses/idle.png` 作为角色参考图，一次生成一张规则精灵表，再用切帧工具拆开。
+## 命名规范（强制，守卫测试 tests/test_asset_inventory.py 会拦）
 
-推荐先生成 `4 列 × 2 行`、共 8 帧的精灵表。提示词模板：
+- 全库 `assets/runtime/` 文件名：**纯 ASCII、snake_case**
+  `^[a-z0-9_]+\.(png|wav|json)$`；例外：动画帧 `^\d{3}\.png$`、图标 `icon-\d{2,4}\.png`
+- 禁止中文文件名、大写、连字符（历史 kebab 已于 2026-09-04 全部治理）
+- `assets/source/` 无此约束（开发稿自由命名，kebab 可）
 
-```text
-严格参考输入图片中的同一只可爱小狗，保持毛色、耳朵、五官、项圈、身体比例和画风完全一致。
-制作“向右走路”的 8 帧循环动画精灵表，4 列 2 行，时间顺序从左到右、从上到下。
-整张图透明背景，每个格子大小完全相同，小狗在每格中的缩放、身体中心和脚底基线固定。
-表现自然的四足步态与轻微尾巴摆动，第一帧和第八帧可无缝衔接。
-不要文字、编号、边框、分隔线、地面、额外物体，不改变镜头和角色设计。
-```
+## 制作流程
 
-制作吃东西时，把动作描述替换为：
+1. 用 AI 生成规则精灵表（4 列 × 2 行起步），存到本目录
+2. 拆帧（务必用 `--output-dir` 指到目标宠物目录）：
 
-```text
-小狗低头吃面前的一小块肉，包含低头、咀嚼、抬头满足的连续动作；肉的位置固定，循环衔接自然。
-```
+   ```powershell
+   python tools\slice_sprite_sheet.py 精灵表.png walk --columns 4 --rows 2 `
+       --output-dir assets\runtime\pets\lunch_meat\desktop\animations\walk
+   ```
 
-如果 AI 支持角色参考强度或种子，请固定参考图、种子、画风和画布设置。
+3. 在该宠物的 `animations/manifest.json` 里声明 `folder/fps/loop/fallback`
+4. 跑 `pytest`；帧数与 manifest 声明要一致
 
-## 拆分精灵表
+## 每帧要求（不变）
 
-安装构建依赖后运行：
+- PNG 透明背景，推荐 512×512；小狗朝向按宠物 registry `facing` 固定
+- 所有帧画布、镜头、缩放、身体中心、脚底基线一致
+- 不含文字/边框/编号/地面/裁切线；阴影要么全一致要么全不要
+- 帧按播放顺序命名 `000.png`、`001.png`…
 
-```powershell
-python tools\slice_sprite_sheet.py 你的精灵表.png walk --columns 4 --rows 2 --frames 8
-```
+## 历史源稿索引
 
-输出会自动写入 `assets/animations/walk/`。重新启动 Petpet 即可看到动画。
-
-播放速度、是否循环、静态回退姿势和颜色可以在 `manifest.json` 中调整。
-`saturation` 与 `brightness` 的范围为 `0.0～1.0`；例如吃东西动画使用
-`"saturation": 0.9`、`"brightness": 0.97`，只在加载时轻微降低鲜艳度和
-亮度，不会改写原始 PNG。
+本目录现存的 `*-generated.png` / `*keyframes*.png` / `pet_hand.png` 是
+已导入运行时的历史中间稿，仅作再生成参考，无代码引用。

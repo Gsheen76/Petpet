@@ -6,7 +6,7 @@
     "fallback": "idle"
   },
   "sleep": {
-    "spritesheet": "../../home/poses/home-pet-sleep.png",
+    "spritesheet": "../../home/poses/home_pet_sleep.png",
     "frame_size": 640,
     "frame_count": 8,
     "columns": 3,

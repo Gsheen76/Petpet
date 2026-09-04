@@ -1,4 +1,10 @@
-"""Build the deterministic 24-frame front-facing fetch/pounce sequence."""
+"""Build the deterministic 24-frame front-facing fetch/pounce sequence.
+
+Legacy: the paths below predate the per-pet layout. Keyframe sheet now lives
+at ``assets/source/spritesheets/fetch-pounce-keyframes-v1.png`` and frames
+ship from ``assets/runtime/pets/lunch_meat/desktop/animations/play/``.
+Repoint ANIMATIONS_DIR before rerunning.
+"""
 
 from __future__ import annotations
 

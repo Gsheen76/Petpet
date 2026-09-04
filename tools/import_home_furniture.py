@@ -1,4 +1,9 @@
-"""Prepare user-supplied home furniture images for the runtime scene."""
+"""Prepare user-supplied home furniture images for the runtime scene.
+
+Legacy: OUTPUT_DIR still points at the pre-runtime ``assets/scenes/home``
+tree; current furniture ships from ``assets/runtime/furniture/home``
+(snake_case filenames, e.g. ``wall_art.png``). Repoint before rerunning.
+"""
 
 from __future__ import annotations
 
@@ -16,7 +21,7 @@ FURNITURE = {
     "rug.png": (DOWNLOADS / "ChatGPT Image 2026年8月7日 17_14_04.png", (440, 270), "dark"),
     "sofa.png": (DOWNLOADS / "generated-image-1.png", (360, 225), "checkerboard"),
     "plant.png": (DOWNLOADS / "ChatGPT Image 2026年8月7日 17_01_31.png", (190, 340), "green"),
-    "wall-art.png": (DOWNLOADS / "image-1786086652512-tbskax0zjg.png", (220, 285), "checkerboard"),
+    "wall_art.png": (DOWNLOADS / "image-1786086652512-tbskax0zjg.png", (220, 285), "checkerboard"),
 }
 
 

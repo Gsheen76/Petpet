@@ -437,26 +437,12 @@ class ProfileWindowShellTests(unittest.TestCase):
         )
         self.assertIs(second, first)
 
-    def test_mini_bar_animates_and_sweeps(self):
-        """第三十五轮：进度条真的移动——数值缓动滑动 + 高光循环扫过。"""
-        from petpet.ui.pet_profile import _MiniBar
-
+    def test_intro_has_no_progress_bars(self):
+        """第四十九轮：简介页进度条全删。"""
         window, _ = self._window()
-        bar = window._level_bar
-        self.assertIsInstance(bar, _MiniBar)
-        # 数值变化 → 启动 450ms 缓动（不瞬跳）。
-        bar._display_value = 0.0
-        bar.set_ratio(100, 100)
-        self.assertEqual(bar._anim.duration(), 450)
-        self.assertEqual(float(bar._anim.startValue()), 0.0)
-        self.assertAlmostEqual(float(bar._anim.endValue()), 1.0)
-        self.assertEqual(bar._display_value, 0.0, "动画启动时不应瞬跳到目标")
-        # 高光扫过循环推进。
-        p0 = bar._sweep_phase
-        bar._advance_sweep()
-        self.assertGreater(bar._sweep_phase, p0)
-        bar._advance_sweep()
-        self.assertGreater(bar._sweep_phase, p0)
+        self.assertFalse(hasattr(window, "_level_bar"))
+        self.assertFalse(hasattr(window, "_affection_bar"))
+        self.assertFalse(hasattr(window, "_attr_bars"))
 
     def test_outfit_button_inside_card_bottom(self):
         """第二十八轮：按钮在描述小字正下方（文字列内，卡下半部）。"""

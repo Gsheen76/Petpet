@@ -3,6 +3,11 @@
 The dog frames reuse the most consistent seated poses from the eat animation.
 Only the hand is AI-generated; motion, alignment, timing, and easing are
 calculated here so the character never drifts between frames.
+
+Legacy: the paths below predate the per-pet layout. Hand sheet now lives at
+``assets/source/spritesheets/pet_hand.png``, dog frames at
+``assets/runtime/pets/lunch_meat/desktop/animations/eat/``, and output at
+``.../animations/pet/``. Repoint ANIMATIONS_DIR before rerunning.
 """
 
 from __future__ import annotations

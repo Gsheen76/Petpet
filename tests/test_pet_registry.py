@@ -56,7 +56,7 @@ def test_registered_assets_are_owned_by_the_selected_pet():
         "pets/lunch_meat/desktop/poses/idle.png"
     )
     assert pet_asset_path("ice_cream", "home", "idle").endswith(
-        "pets/ice_cream/home/poses/home-pet-idle-sit.png"
+        "pets/ice_cream/home/poses/home_pet_idle_sit.png"
     )
     assert pet_asset_path("lunch_meat", "home", "sleep").endswith(
         "pets/lunch_meat/desktop/poses/sleep.png"

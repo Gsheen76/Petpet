@@ -28,17 +28,17 @@ from petpet.home.geometry import HOME_VIEWPORT_SIZE, scene_rect_for_screen
 
 
 SCENES_DIR = HOME_SCENES_DIR
-HOME_BACKGROUND_PATH = os.path.join(SCENES_DIR, "home-background.png")
+HOME_BACKGROUND_PATH = os.path.join(SCENES_DIR, "home_background.png")
 HOME_BACKGROUND_MODE = "flattened_midground"
-HOME_PET_WALK_DOWN_PATH = os.path.join(HOME_POSES_DIR, "home-pet-walk-down.png")
+HOME_PET_WALK_DOWN_PATH = os.path.join(HOME_POSES_DIR, "home_pet_walk_down.png")
 HOME_PET_WALK_BACK_RIGHT_PATH = os.path.join(
-    HOME_POSES_DIR, "home-pet-walk-back-right.png"
+    HOME_POSES_DIR, "home_pet_walk_back_right.png"
 )
-HOME_PET_IDLE_PATH = os.path.join(HOME_POSES_DIR, "home-pet-idle-sit.png")
-HOME_PET_SLEEP_PATH = os.path.join(HOME_POSES_DIR, "home-pet-sleep.png")
-HOME_NAV_PAW_PATH = os.path.join(SCENES_DIR, "home-nav-paw.png")
-HOME_NAV_TARGET_PATH = os.path.join(SCENES_DIR, "home-nav-target.png")
-HOME_NAV_ARROW_PATH = os.path.join(SCENES_DIR, "home-nav-arrow.png")
+HOME_PET_IDLE_PATH = os.path.join(HOME_POSES_DIR, "home_pet_idle_sit.png")
+HOME_PET_SLEEP_PATH = os.path.join(HOME_POSES_DIR, "home_pet_sleep.png")
+HOME_NAV_PAW_PATH = os.path.join(SCENES_DIR, "home_nav_paw.png")
+HOME_NAV_TARGET_PATH = os.path.join(SCENES_DIR, "home_nav_target.png")
+HOME_NAV_ARROW_PATH = os.path.join(SCENES_DIR, "home_nav_arrow.png")
 HOME_TOGGLE_SIZE = (46, 46)
 HOME_BUTTON_SIZE = (130, 52)
 HOME_BUTTON_PATHS = {
@@ -117,7 +117,7 @@ HOME_FURNITURE_PATHS = {
     "home_rug": os.path.join(HOME_FURNITURE_DIR, "rug.png"),
     "home_sofa": os.path.join(HOME_FURNITURE_DIR, "sofa.png"),
     "home_plant": os.path.join(HOME_FURNITURE_DIR, "plant.png"),
-    "home_wall_art": os.path.join(HOME_FURNITURE_DIR, "wall-art.png"),
+    "home_wall_art": os.path.join(HOME_FURNITURE_DIR, "wall_art.png"),
 }
 HOME_DECORATION_CATEGORIES = (
     ("all", "全部"),

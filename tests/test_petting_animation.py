@@ -136,7 +136,7 @@ class PettingAnimationAssetTests(unittest.TestCase):
         sleep_scale = manifest["sleep"]["scale"]
 
         idle_path = manifest_path.parents[1] / "poses" / "idle.png"
-        sleep_path = manifest_path.parents[2] / "home" / "poses" / "home-pet-sleep.png"
+        sleep_path = manifest_path.parents[2] / "home" / "poses" / "home_pet_sleep.png"
         with Image.open(idle_path).convert("RGBA") as idle, Image.open(sleep_path).convert("RGBA") as sheet:
             idle_height = idle.getchannel("A").getbbox()[3]
             idle_top = idle.getchannel("A").getbbox()[1]

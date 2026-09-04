@@ -29,7 +29,7 @@
     "original_price": 1000,
     "discount": 0.76,
     "price": 760,
-    "preview": "pets/ice_cream/home/poses/home-pet-idle-sit.png",
+    "preview": "pets/ice_cream/home/poses/home_pet_idle_sit.png",
     "avatar": "pets/ice_cream/avatar.png",
     "desktop": {
       "root": "pets/ice_cream/desktop",
@@ -37,10 +37,10 @@
     },
     "home": {
       "root": "pets/ice_cream/home",
-      "idle": "pets/ice_cream/home/poses/home-pet-idle-sit.png",
-      "walk_down": "pets/ice_cream/home/poses/home-pet-walk-down.png",
-      "walk_back_right": "pets/ice_cream/home/poses/home-pet-walk-back-right.png",
-      "sleep": "pets/ice_cream/home/poses/home-pet-sleep.png"
+      "idle": "pets/ice_cream/home/poses/home_pet_idle_sit.png",
+      "walk_down": "pets/ice_cream/home/poses/home_pet_walk_down.png",
+      "walk_back_right": "pets/ice_cream/home/poses/home_pet_walk_back_right.png",
+      "sleep": "pets/ice_cream/home/poses/home_pet_sleep.png"
     },
     "facing": "left"
   }

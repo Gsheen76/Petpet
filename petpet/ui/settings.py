@@ -31,6 +31,11 @@ from petpet.app.settings import DEFAULT_SETTINGS, save_settings
 from petpet.ui.common import independent_pixel_font
 from petpet.ui.controls import StepperControl, ThreeLevelSlider, ToggleSwitch
 
+# QSS 的 url() 只认正斜杠，走一个模块级常量避免两处各拼一遍。
+CLOSE_BUTTON_ICON_PATH = os.path.join(
+    SHOP_UI_DIR, "close_button.png"
+).replace("\\", "/")
+
 
 class HoverCloseButton(QPushButton):
     """Round close button that tints on hover and darkens when pressed."""
@@ -303,7 +308,7 @@ class SettingsWindow(QWidget):
                 background:transparent;
                 color:transparent;
                 border:0;
-                border-image:url("D:/Agent_project/Petpet/assets/runtime/ui/shop/close_button.png");
+                border-image:url("{CLOSE_BUTTON_ICON_PATH}");
                 border-radius:16px;
                 padding:0;
                 font-weight:600;
@@ -389,9 +394,7 @@ class SettingsWindow(QWidget):
         self.title_label.setObjectName("settingsTitle")
         self.title_label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
         close_button = HoverCloseButton(
-            "" if os.path.exists(
-                os.path.join(SHOP_UI_DIR, "close_button.png")
-            ) else "×"
+            "" if os.path.exists(CLOSE_BUTTON_ICON_PATH) else "×"
         )
         close_button.setObjectName("closeButton")
         close_button.setCursor(Qt.PointingHandCursor)

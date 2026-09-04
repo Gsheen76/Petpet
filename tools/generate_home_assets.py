@@ -1,3 +1,10 @@
+"""Legacy placeholder generator for the pre-runtime home scene layout.
+
+Outputs still use the old ``assets/scenes/home`` tree; current runtime assets
+live under ``assets/runtime/scenes/home`` and ``assets/runtime/furniture/home``
+(snake_case filenames). Rerun only after repointing ROOT.
+"""
+
 from pathlib import Path
 
 from PIL import Image, ImageDraw
@@ -32,7 +39,7 @@ draw.rectangle((145, 200, 340, 224), fill="#f2d9a8")
 draw.ellipse((1370, 92, 1575, 300), fill="#f4e7d6", outline="#c79b79", width=8)
 draw.rectangle((1396, 120, 1548, 272), fill="#d9a87e")
 draw.ellipse((1420, 140, 1515, 235), fill="#9fb89f")
-background.save(ROOT / "home-background.png")
+background.save(ROOT / "home_background.png")
 
 
 def transparent(size):
@@ -67,4 +74,4 @@ d.rectangle((8, 8, 212, 142), fill="#f4e1bc", outline="#9c705d", width=7)
 d.ellipse((42, 35, 110, 103), fill="#eaa67e")
 d.ellipse((110, 46, 180, 114), fill="#91b79a")
 d.arc((58, 44, 155, 120), 10, 170, fill="#8b5e55", width=5)
-img.save(ROOT / "wall-art.png")
+img.save(ROOT / "wall_art.png")
