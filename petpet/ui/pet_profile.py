@@ -52,7 +52,7 @@ CLOSE_BUTTON_AT = (970, 44, 74, 67)
 CLOSE_PRESS_FLASH_MS = 40
 CLOSE_CLICK_DEFER_MS = 80
 
-# 图1 左栏：宠物头像列表 rail（250x1326 素材，纯背景板无烘焙槽）+
+# 图1 左栏：宠物头像 rail（pet_avatar_rail，纯背景板无烘焙槽）+
 # 程序布局双卡槽（坐标按参考图反推到 art 比例）。
 RAIL_AT = (51, 230, 200, 992)
 RAIL_TITLE_AT = (-2, 182, 320, 46)           # 「我的伙伴」（rail 正上方，加粗）
@@ -85,7 +85,7 @@ CONTENT_AT = (279, 750, 728, 574)   # 高 380 显示px（第三十五轮）
 # 套装素材（新 art 直接按套装 id 映射；未映射回退 idle 预览路径）。
 OUTFIT_ART = {
     "strawberry_suit": "outfit_strawberry.png",
-    "dinosaur_suit": "outfit_diansour.png",
+    "dinosaur_suit": "outfit_dinosaur.png",
 }
 OUTFIT_CARD_SIZE = (620, 400)
 
@@ -818,8 +818,8 @@ class PetProfileWindow(QWidget):
         self.setFixedSize(round(UNIFIED_W * _FIT), round(UNIFIED_H * _FIT))
         self._background = _pp_pixmap("new_background.png", ART_W, ART_H)
         # 头像列表 rail（宠物系统独立背景板，叠加在背景左侧）。
-        self._rail = _pp_pixmap("宠物头像列表.png", RAIL_AT[2], RAIL_AT[3])
-        # base_UI 已按用户指示撤下（第六轮）；第七轮：新 UI 素材逐个接入。
+        self._rail = _pp_pixmap("pet_avatar_rail.png", RAIL_AT[2], RAIL_AT[3])
+        # 素材逐个接入（base_UI 已于第六轮撤下）。
         self._close_button = _ArtButton(
             self, _pp_pixmap("close_button.png"), self.close,
         )
