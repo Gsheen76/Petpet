@@ -369,13 +369,13 @@ class ProfileWindowShellTests(unittest.TestCase):
         # 第二十六轮：标题左移 20 显示px（x24→-2）。
         self.assertAlmostEqual(RAIL_TITLE_AT[0], -2, delta=2)
 
-    def test_card_positions_round_thirty_four(self):
+    def test_card_positions_restored(self):
         from petpet.ui.pet_profile import PET_CARD_SLOTS, RAIL_AT
 
-        # 第三十四轮：全局上移 50 art px——卡 y222/420、rail y180。
+        # 第三十四轮 B 还原：全局位置回到 y272/470（rail y230）。
         self.assertEqual(PET_CARD_SLOTS[0][0], 76)
-        self.assertAlmostEqual(PET_CARD_SLOTS[0][1], 222, delta=3)
-        self.assertAlmostEqual(PET_CARD_SLOTS[1][1], 420, delta=3)
+        self.assertAlmostEqual(PET_CARD_SLOTS[0][1], 272, delta=3)
+        self.assertAlmostEqual(PET_CARD_SLOTS[1][1], 470, delta=3)
         self.assertEqual(RAIL_AT[0], 51)
 
     def test_outfit_cards_have_equip_buttons(self):
