@@ -333,27 +333,26 @@ class _ArtTitle(QWidget):
 
 
 class _MiniBar(QWidget):
-    """简介进度条：奶油槽 + 珊瑚渐变填充；数值变化平滑滑动 + 高光循环扫过。
+    """简介进度条（第三十六轮素材版）：progress_track/fill 贴图绘制；
+    数值变化 450ms 缓动滑动 + 高光循环扫过（第三十五轮行为保留）。"""
 
-    第三十五轮：set_ratio 不再瞬跳——填充用 450ms 缓动从旧值滑到新值；
-    静止时一道高光带周期性从左向右扫过（呼吸感）。
-    """
-
-    SWEEP_MS = 2400      # 高光扫完一整圈的周期
-    TICK_MS = 33         # 扫光推进步进（约 30fps）
+    SWEEP_MS = 2400
+    TICK_MS = 33
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._value = 0
         self._maximum = 1
-        self._display_value = 0.0   # 动画中的显示值（浮点，随缓动推进）
-        self.setFixedHeight(max(8, round(18 * _SY * _FIT)))
-        # 数值过渡动画
+        self._display_value = 0.0
+        # 素材：空槽轨道 + 满填充（圆头含在素材里）。
+        self._track_pm = _pp_pixmap("progress_track.png")
+        self._fill_pm = _pp_pixmap("progress_fill.png")
+        bar_h = max(10, round(26 * _FIT))
+        self.setFixedHeight(bar_h)
         self._anim = QVariantAnimation(self)
         self._anim.setDuration(450)
         self._anim.setEasingCurve(QEasingCurve.OutCubic)
         self._anim.valueChanged.connect(self._on_anim_value)
-        # 高光扫过循环
         self._sweep_phase = 0.0
         self._sweep_timer = QTimer(self)
         self._sweep_timer.setInterval(self.TICK_MS)
@@ -369,7 +368,6 @@ class _MiniBar(QWidget):
         self.update()
 
     def set_ratio(self, value, maximum):
-        """立即记录目标值，填充以 450ms 缓动滑向新值（真的移动）。"""
         self._value = max(0, int(value))
         self._maximum = max(1, int(maximum))
         target = max(0.0, min(1.0, self._value / self._maximum))
@@ -382,37 +380,51 @@ class _MiniBar(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         w, h = self.width(), self.height()
-        radius = h / 2
-        track = QPainterPath()
-        track.addRoundedRect(0, 0, w, h, radius, radius)
-        painter.setPen(QPen(QColor(232, 197, 158), max(1, h // 16)))
-        painter.setBrush(QColor("#f6ead8"))
-        painter.drawPath(track)
+        # 轨道：空槽贴图拉满整宽（高度自适应）。
+        if not self._track_pm.isNull():
+            painter.drawPixmap(0, 0, w, h, self._track_pm)
+        else:
+            radius = h / 2
+            track = QPainterPath()
+            track.addRoundedRect(0, 0, w, h, radius, radius)
+            painter.setPen(QPen(QColor(232, 197, 158), max(1, h // 16)))
+            painter.setBrush(QColor("#f6ead8"))
+            painter.drawPath(track)
         frac = max(0.0, min(1.0, self._display_value / self._maximum))
         if frac <= 0:
             return
         fill_w = max(int(w * frac), h)
-        inset = max(1, h // 10)
-        fill = QPainterPath()
-        fill.addRoundedRect(inset, inset, fill_w - inset * 2, h - inset * 2,
-                            radius - inset, radius - inset)
-        grad = QLinearGradient(0, 0, 0, h)
-        grad.setColorAt(0, QColor("#f9b39c"))
-        grad.setColorAt(1, QColor("#ef8a70"))
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(grad)
-        painter.drawPath(fill)
-        # 循环高光带：只在填充范围内扫过，边缘羽化。
+        # 填充：满填充贴图按宽度裁剪（保留左侧圆头）。
+        if not self._fill_pm.isNull():
+            painter.drawPixmap(0, 0, fill_w, h, self._fill_pm, 0, 0,
+                               max(1, int(self._fill_pm.width() * frac)), 0)
+        else:
+            radius = h / 2
+            inset = max(1, h // 10)
+            fill = QPainterPath()
+            fill.addRoundedRect(inset, inset, fill_w - inset * 2, h - inset * 2,
+                                radius - inset, radius - inset)
+            grad = QLinearGradient(0, 0, 0, h)
+            grad.setColorAt(0, QColor("#f9b39c"))
+            grad.setColorAt(1, QColor("#ef8a70"))
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(grad)
+            painter.drawPath(fill)
+        # 高光带：只在填充内扫过。
         band_w = max(24, int(w * 0.18))
         band_x = int((self._sweep_phase * (w + band_w * 2)) - band_w)
-        if band_x + band_w > inset:
-            painter.setClipPath(fill)
+        if band_x + band_w > 0 and frac > 0.02:
+            clip = QPainterPath()
+            radius = h / 2
+            clip.addRoundedRect(0, 0, fill_w, h, radius, radius)
+            painter.setClipPath(clip)
             band_grad = QLinearGradient(band_x, 0, band_x + band_w, 0)
             band_grad.setColorAt(0.0, QColor(255, 255, 255, 0))
             band_grad.setColorAt(0.5, QColor(255, 255, 255, 110))
             band_grad.setColorAt(1.0, QColor(255, 255, 255, 0))
+            painter.setPen(Qt.NoPen)
             painter.setBrush(band_grad)
-            painter.drawRect(band_x, inset, band_w, h - inset * 2)
+            painter.drawRect(band_x, 0, band_w, h)
 
 
 class _TabButton(QWidget):
@@ -911,15 +923,31 @@ class PetProfileWindow(QWidget):
             "height:0;width:0;}"
         )
 
+    # 简介各节的图标素材（第三十六轮）。
+    SECTION_ICONS = {
+        "level": "icon_star_level.png",
+        "affection": "icon_heart_affection.png",
+        "attrs": "icon_paw_attributes.png",
+        "personality": "icon_leaf_personality.png",
+    }
+
     def _build_intro_page(self):
-        """简介页（第十轮）：分节标签 + 数值 + 进度条（等级经验与三属性）。"""
+        """简介页（第三十六轮素材版）：jieshao 背景图 + 图标节标 +
+        数值 + 素材进度条；滑动/扫光动画保留。"""
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet(self._scroll_qss())
         host = QWidget()
+        # 背景图垫底（771x555 原比例，拉伸铺满内容宽度）。
+        bg_label = QLabel(host)
+        bg_pm = _pp_pixmap("jieshao_background.png")
+        host.setMinimumHeight(max(460, round(560 * _FIT)))
+        bg_label.setPixmap(bg_pm)
+        bg_label.setScaledContents(True)
+        bg_label.lower()
         layout = QVBoxLayout(host)
-        layout.setContentsMargins(12, 6, 12, 6)
-        layout.setSpacing(4)
+        layout.setContentsMargins(24, 18, 24, 14)
+        layout.setSpacing(6)
         k = _SX * _FIT
 
         def styled_label(size, color, weight=600):
@@ -931,26 +959,24 @@ class PetProfileWindow(QWidget):
             )
             return label
 
-        # 第十九轮：删名字大标题与全部进度条；字体统一商店琥珀色 #a8742c。
         self._intro_sections = {}
         self._intro_heads = {}
         self._level_bar = None
         self._affection_bar = None
         self._attr_bars = {}
+        self._bg_label = bg_label
         sections = (
             ("等级", "level"),
             ("好感度", "affection"),
             ("属性", "attrs"),
         )
         for title, key in sections:
-            head = styled_label(27, "#d29a38")
-            head.setText(f"『{title}』")
+            head = self._section_header(title, key, k)
             layout.addWidget(head)
             self._intro_heads[key] = head
             value = styled_label(26, "#a8742c")
             layout.addWidget(value)
             self._intro_sections[key] = value
-            # 进度条（第二十一轮恢复）：等级=经验、好感=好感值、属性=三项。
             if key == "level":
                 self._level_bar = _MiniBar()
                 layout.addWidget(self._level_bar)
@@ -962,10 +988,8 @@ class PetProfileWindow(QWidget):
                     bar = _MiniBar()
                     layout.addWidget(bar)
                     self._attr_bars[attr] = bar
-            layout.addSpacing(24)
-        # 性格。
-        head = styled_label(27, "#d29a38")
-        head.setText("『性格』")
+            layout.addSpacing(18)
+        head = self._section_header("性格", "personality", k)
         layout.addWidget(head)
         self._intro_heads["personality"] = head
         self._intro_sections["personality"] = styled_label(26, "#a8742c")
@@ -973,6 +997,31 @@ class PetProfileWindow(QWidget):
         layout.addStretch(1)
         scroll.setWidget(host)
         return scroll
+
+    def _section_header(self, title, key, k):
+        """图标 + 节名横排节标（第三十六轮素材版）。"""
+        row = QWidget()
+        row.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        h = QHBoxLayout(row)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(6)
+        icon = QLabel()
+        pm = _pp_pixmap(self.SECTION_ICONS.get(key, ""))
+        if not pm.isNull():
+            icon_px = max(18, round(30 * _FIT))
+            icon.setPixmap(pm.scaled(
+                icon_px, icon_px,
+                Qt.KeepAspectRatio, Qt.SmoothTransformation,
+            ))
+            h.addWidget(icon)
+        label = QLabel(title)
+        label.setStyleSheet(
+            f"font-family:'{APP_FONT_FAMILY}';font-size:{round(27 * k)}px;"
+            "font-weight:600;color:#d29a38;background:transparent;"
+        )
+        h.addWidget(label)
+        h.addStretch(1)
+        return row
 
     def _build_outfit_page(self):
         """套装页（第十轮）：大卡纵排，只上下滚动。"""
@@ -985,6 +1034,12 @@ class PetProfileWindow(QWidget):
         self._outfit_layout.setContentsMargins(8, 10, 14, 10)
         self._outfit_layout.setSpacing(12)
         self._outfit_layout.addStretch(1)
+        # 套装页背景图垫底（第三十六轮）。
+        tz_bg = QLabel(self._outfit_host)
+        tz_bg.setPixmap(_pp_pixmap("taozhuang_background.png"))
+        tz_bg.setScaledContents(True)
+        tz_bg.lower()
+        self._outfit_host.setMinimumHeight(max(460, round(560 * _FIT)))
         scroll.setWidget(self._outfit_host)
         return scroll
 

@@ -216,10 +216,20 @@ class ProfileWindowShellTests(unittest.TestCase):
         self.assertEqual(window._idle_index, (index + 1) % len(window._idle_frames))
 
     def _intro_text(self, window):
+        from PyQt5.QtWidgets import QLabel
+
+        def head_text(w):
+            if isinstance(w, QLabel) and w.text():
+                return w.text()
+            for child in w.findChildren(QLabel):
+                if child.text():
+                    return child.text()
+            return ""
+
         parts = []
         for key, value in window._intro_sections.items():
             head = window._intro_heads[key]
-            parts.append(f"{head.text()} {value.text()}")
+            parts.append(f"{head_text(head)} {value.text()}")
         return "\n".join(parts)
 
     def test_intro_tab_shows_name_affection_attributes_personality(self):
