@@ -428,6 +428,37 @@ class _MiniBar(QWidget):
             painter.drawRect(band_x, 0, band_w, h)
 
 
+class _RoundedBgLabel(QWidget):
+    """区域背景（第三十九轮）：素材按区域等比绘制并裁剪圆角。"""
+
+    def __init__(self, parent=None, radius=28):
+        super().__init__(parent)
+        self._art = QPixmap()
+        self._radius = radius
+        self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+
+    def set_art(self, pixmap):
+        self._art = pixmap if pixmap is not None and not pixmap.isNull() else QPixmap()
+        self.update()
+
+    def paintEvent(self, event):
+        if self._art.isNull():
+            return
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        w, h = self.width(), self.height()
+        radius = self._radius * _FIT
+        clip = QPainterPath()
+        clip.addRoundedRect(0, 0, w, h, radius, radius)
+        painter.setClipPath(clip)
+        scaled = self._art.scaled(
+            w, h, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation,
+        )
+        painter.drawPixmap(
+            (w - scaled.width()) // 2, (h - scaled.height()) // 2, scaled,
+        )
+
+
 class _TabButton(QWidget):
     """素材分栏按钮（第三十七轮）：参考图裁切的「简介/套装」牌。
     悬停=放大+白洗；按住=缩小+压暗（alpha 60），松开在内才切换。"""
@@ -880,18 +911,21 @@ class PetProfileWindow(QWidget):
         block_x, block_y = TAB_BAR_AT[0], TAB_BAR_AT[1]
         block_w = TAB_BAR_AT[2]
         block_h = (CONTENT_AT[1] + CONTENT_AT[3]) - TAB_BAR_AT[1]
-        self._region_bg = QLabel(self)
+        # 第三十九轮：统一背景 region_background.png（圆角裁剪），
+        # 两枚素材分栏按钮移到背景图上方（骑在圆角顶边）。
+        self._region_bg = _RoundedBgLabel(self, radius=28)
         self._region_bg.setGeometry(_R(block_x, block_y, block_w, block_h))
-        self._region_bg.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self._region_bg.set_art(_pp_pixmap("region_background.png"))
 
         self._tab_buttons = {}
         tab_w = round(160 * _SX * _FIT)
         tab_h = round(46 * _SY * _FIT)
         for i, (name, art_name) in enumerate(TAB_SLOTS.items()):
             tab = _TabButton(name, self, art=_pp_pixmap(art_name))
-            tx = block_x + round((14 + i * 180) * _SX * _FIT)
-            ty = TAB_BAR_AT[1] + round(6 * _SY * _FIT)
+            tx = block_x + round((24 + i * 176) * _SX * _FIT)
+            ty = TAB_BAR_AT[1] - round(tab_h * 0.55)
             tab.setGeometry(tx, ty, tab_w, tab_h)
+            tab.raise_()
             tab.clicked.connect(
                 lambda target=name: self._show_tab(target)
             )
@@ -1060,12 +1094,6 @@ class PetProfileWindow(QWidget):
         pages = {"简介": self._intro_page, "套装": self._outfit_page}
         page = pages.get(name, self._intro_page)
         self._content.setCurrentWidget(page)
-        bg_name = "jieshao_background.png" if name == "简介" else "taozhuang_background.png"
-        pm = _pp_pixmap(bg_name, TAB_BAR_AT[2],
-                        (CONTENT_AT[1] + CONTENT_AT[3]) - TAB_BAR_AT[1])
-        if not pm.isNull():
-            self._region_bg.setPixmap(pm)
-            self._region_bg.setScaledContents(True)
         for label, button in self._tab_buttons.items():
             button.setChecked(label == name)
 
