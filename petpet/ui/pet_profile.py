@@ -80,7 +80,7 @@ TAB_SLOTS = {
     "套装": "tab_intro.png",
 }
 TAB_BAR_AT = (279, 736, 728, 124)
-CONTENT_AT = (279, 788, 728, 574)   # 高 380 显示px（第三十五轮）
+CONTENT_AT = (279, 750, 728, 574)   # 高 380 显示px（第三十五轮）
 
 # 套装素材（新 art 直接按套装 id 映射；未映射回退 idle 预览路径）。
 OUTFIT_ART = {
@@ -456,6 +456,14 @@ class _RoundedBgLabel(QWidget):
         )
         painter.drawPixmap(
             (w - scaled.width()) // 2, (h - scaled.height()) // 2, scaled,
+        )
+        # 暖棕描边（第四十七轮）：贴圆角外缘。
+        painter.setClipPath(QPainterPath())
+        pen_w = max(2, round(3 * _FIT))
+        painter.setPen(QPen(QColor(214, 168, 128), pen_w))
+        painter.setBrush(Qt.NoBrush)
+        painter.drawRoundedRect(
+            pen_w // 2, pen_w // 2, w - pen_w, h - pen_w, radius, radius,
         )
 
 
@@ -918,8 +926,8 @@ class PetProfileWindow(QWidget):
         self._region_bg.set_art(_pp_pixmap("region_background.png"))
 
         self._tab_buttons = {}
-        tab_w = round(208 * _SX * _FIT)
-        tab_h = round(60 * _SY * _FIT)
+        tab_w = round(250 * _SX * _FIT)
+        tab_h = round(72 * _SY * _FIT)
         for i, (name, art_name) in enumerate(TAB_SLOTS.items()):
             tab = _TabButton(name, self, art=_pp_pixmap(art_name))
             tx = block_x + round((6 + i * 216) * _SX * _FIT)
@@ -1182,6 +1190,11 @@ class PetProfileWindow(QWidget):
                 art_path = _outfit_preview_path(pet_id, outfit)
             card = QWidget()
             card.setMinimumHeight(card_h)
+            # 套装卡描边（第四十七轮）：暖棕圆角框。
+            card.setStyleSheet(
+                "QWidget{background:transparent;"
+                f"border:2px solid #d6a880;border-radius:16px;}}"
+            )
             row = QHBoxLayout(card)
             row.setContentsMargins(12, 8, 12, 8)
             row.setSpacing(12)
