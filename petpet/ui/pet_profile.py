@@ -79,8 +79,8 @@ TAB_SLOTS = {
     "简介": "tab_intro.png",
     "套装": "tab_outfit.png",
 }
-TAB_BAR_AT = (279, 660, 728, 124)
-CONTENT_AT = (279, 712, 728, 574)   # 高 380 显示px（第三十五轮）
+TAB_BAR_AT = (279, 736, 728, 124)
+CONTENT_AT = (279, 788, 728, 574)   # 高 380 显示px（第三十五轮）
 
 # 套装素材（新 art 直接按套装 id 映射；未映射回退 idle 预览路径）。
 OUTFIT_ART = {
@@ -918,13 +918,13 @@ class PetProfileWindow(QWidget):
         self._region_bg.set_art(_pp_pixmap("region_background.png"))
 
         self._tab_buttons = {}
-        tab_w = round(160 * _SX * _FIT)
-        tab_h = round(46 * _SY * _FIT)
+        tab_w = round(208 * _SX * _FIT)
+        tab_h = round(60 * _SY * _FIT)
         for i, (name, art_name) in enumerate(TAB_SLOTS.items()):
             tab = _TabButton(name, self, art=_pp_pixmap(art_name))
-            tx = block_x + round((24 + i * 176) * _SX * _FIT)
-            # 骑在内容区上边缘（半嵌，参考图样式）。
-            ty = CONTENT_AT[1] - round(23 * _SY * _FIT)
+            tx = block_x + round((6 + i * 216) * _SX * _FIT)
+            # 严格卡在背景上边缘（半嵌于背景顶线，不是内容区顶）。
+            ty = TAB_BAR_AT[1] - round(tab_h * 0.5 / _SY)
             tab.setGeometry(_R(tx, ty, tab_w, tab_h))
             tab.raise_()
             tab.clicked.connect(
