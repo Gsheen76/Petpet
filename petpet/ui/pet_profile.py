@@ -80,7 +80,7 @@ TAB_SLOTS = {
     "套装": "tab_outfit.png",
 }
 TAB_BAR_AT = (279, 660, 728, 124)
-CONTENT_AT = (279, 796, 728, 569)
+CONTENT_AT = (279, 712, 728, 653)
 
 # 套装素材（新 art 直接按套装 id 映射；未映射回退 idle 预览路径）。
 OUTFIT_ART = {
@@ -923,7 +923,7 @@ class PetProfileWindow(QWidget):
         for i, (name, art_name) in enumerate(TAB_SLOTS.items()):
             tab = _TabButton(name, self, art=_pp_pixmap(art_name))
             tx = block_x + round((24 + i * 176) * _SX * _FIT)
-            ty = TAB_BAR_AT[1] - round(tab_h * 0.55)
+            ty = TAB_BAR_AT[1] + round(8 * _SY * _FIT)
             tab.setGeometry(tx, ty, tab_w, tab_h)
             tab.raise_()
             tab.clicked.connect(
@@ -934,7 +934,7 @@ class PetProfileWindow(QWidget):
         self._content = QStackedWidget(self)
         self._content.setGeometry(_R(*CONTENT_AT))
         # 内容直接写在区域背景内框里（第三十九轮：剥掉所有中间层）。
-        self._content.setContentsMargins(26, 8, 26, 14)
+        self._content.setContentsMargins(22, 6, 22, 10)
         self._intro_page = self._build_intro_page()
         self._outfit_page = self._build_outfit_page()
         self._content.addWidget(self._intro_page)
