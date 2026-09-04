@@ -300,17 +300,20 @@ class ProfileWindowShellTests(unittest.TestCase):
             button.mouseReleaseEvent(_mouse_release(5, 5))
             self.assertFalse(button._pressed)
 
-    def test_tab_buttons_are_pill_shaped(self):
+    def test_tab_buttons_are_art_assets(self):
+        """第三十七轮：分栏为参考图裁切的素材按钮（附着背景图上方）。"""
         from petpet.ui.pet_profile import TAB_SLOTS, _TabButton
 
         window, _ = self._window()
-        for button in window._tab_buttons.values():
-            self.assertIsInstance(button, _TabButton,
-                                  "分栏为自绘胶囊（松开在内才切换）")
-        th = TAB_SLOTS["简介"][3]
-        self.assertAlmostEqual(
-            window._tab_buttons["简介"].height(), round(th * 960 / 1450), delta=3,
-        )
+        for name, button in window._tab_buttons.items():
+            self.assertIsInstance(button, _TabButton)
+            self.assertFalse(button._art.isNull(),
+                             f"{name} 分栏应使用参考图素材")
+            self.assertEqual(TAB_SLOTS[name].endswith(".png"), True)
+        # 松开在内才切换 + 选中态可置。
+        btn = window._tab_buttons["简介"]
+        btn.setChecked(True)
+        self.assertTrue(btn.checked)
 
     def test_intro_is_modular_sections(self):
         state = _fresh_state()

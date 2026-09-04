@@ -73,13 +73,14 @@ NAME_PLATE_AT = (466, 585, 360, 70)
 NAME_ART_AT = (478, 588, 220, 64)   # 居中于牌内可用区（左缘~按钮左缘）
 RENAME_BUTTON_AT = (700, 588, 113, 66)   # 原生 94x55 × 1.2 等比（不被压扁）
 
-# 分栏（description_bg）：名字牌下方；两页「简介 / 套装」。
-TAB_BAR_AT = (279, 684, 728, 69)
+# 分栏（第三十七轮）：参考图裁切的两枚素材按钮（简介/套装），
+# 附着在内容背景图上方；选中态用另一枚按钮互换表示。
 TAB_SLOTS = {
-    "简介": (339, 696, 140, 46),
-    "套装": (489, 696, 140, 46),
+    "简介": "tab_intro.png",
+    "套装": "tab_outfit.png",
 }
-CONTENT_AT = (279, 778, 728, 587)
+TAB_BAR_AT = (279, 660, 728, 124)
+CONTENT_AT = (279, 796, 728, 569)
 
 # 套装素材（新 art 直接按套装 id 映射；未映射回退 idle 预览路径）。
 OUTFIT_ART = {
@@ -428,20 +429,26 @@ class _MiniBar(QWidget):
 
 
 class _TabButton(QWidget):
-    """分栏胶囊按钮：选中珊瑚常驻；悬停白洗；按下压暗，**松开在内才切换**。"""
+    """素材分栏按钮（第三十七轮）：参考图裁切的「简介/套装」牌。
+    悬停=放大+白洗；按住=缩小+压暗（alpha 60），松开在内才切换。"""
 
     clicked = pyqtSignal(str)
 
-    def __init__(self, text, parent=None):
+    def __init__(self, text, parent=None, art=None):
         super().__init__(parent)
         self._text = text
-        self.checked = False
+        self._art = art if art is not None and not art.isNull() else QPixmap()
         self._hovered = False
         self._pressed = False
+        self.checked = False
         self.setCursor(Qt.PointingHandCursor)
 
     def setChecked(self, checked):
         self.checked = bool(checked)
+        self.update()
+
+    def set_art(self, art):
+        self._art = art if art is not None and not art.isNull() else QPixmap()
         self.update()
 
     def enterEvent(self, event):
@@ -471,28 +478,48 @@ class _TabButton(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         w, h = self.width(), self.height()
-        radius = h / 2
-        font_px = round(26 * _SX * _FIT)
-        font = QFont(APP_FONT_FAMILY)
-        font.setBold(True)
-        font.setPixelSize(max(1, font_px))
-        painter.setFont(font)
+        rect = QRect(0, 0, w, h)
         if self._pressed:
-            painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor(70, 42, 28, 70))
-            painter.drawRoundedRect(0, 0, w, h, radius, radius)
-        elif self.checked:
+            rect = rect.adjusted(3, 3, -3, -3)
+        elif self._hovered:
+            rect = rect.adjusted(-2, -2, 2, 2)
+        if not self._art.isNull():
+            scaled = self._art.scaled(
+                rect.width(), rect.height(),
+                Qt.KeepAspectRatio, Qt.SmoothTransformation,
+            )
+            if not (self.checked or self._hovered or self._pressed):
+                painter.setOpacity(0.45)
+            painter.drawPixmap(
+                rect.x() + (rect.width() - scaled.width()) // 2,
+                rect.y() + (rect.height() - scaled.height()) // 2,
+                scaled,
+            )
+            painter.setOpacity(1.0)
+        else:
+            # 无素材回退：文字胶囊。
             painter.setPen(Qt.NoPen)
             painter.setBrush(QColor("#f5a48f"))
-            painter.drawRoundedRect(0, 0, w, h, radius, radius)
-        elif self._hovered:
-            painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor(255, 252, 246, 150))
-            painter.drawRoundedRect(0, 0, w, h, radius, radius)
-        painter.setPen(
-            QColor("#ffffff") if self.checked else QColor("#6b5646")
+            painter.drawRoundedRect(rect, h / 2, h / 2)
+            font = QFont(APP_FONT_FAMILY)
+            font.setBold(True)
+            font.setPixelSize(max(1, round(26 * _SX * _FIT)))
+            painter.setFont(font)
+            painter.setPen(QColor("#ffffff"))
+            painter.drawText(rect, Qt.AlignCenter, self._text)
+        painter.setPen(Qt.NoPen)
+        art_pos = QRect(
+            rect.x() + (rect.width() - (scaled.width() if not self._art.isNull() else rect.width())) // 2,
+            rect.y() + (rect.height() - (scaled.height() if not self._art.isNull() else rect.height())) // 2,
+            (scaled.width() if not self._art.isNull() else rect.width()),
+            (scaled.height() if not self._art.isNull() else rect.height()),
         )
-        painter.drawText(self.rect(), Qt.AlignCenter, self._text)
+        if self._pressed:
+            painter.setBrush(QColor(70, 42, 28, 60))
+            painter.drawRoundedRect(art_pos, 12, 12)
+        elif self._hovered:
+            painter.setBrush(QColor(255, 252, 246, 80))
+            painter.drawRoundedRect(art_pos, 12, 12)
 
 
 class _OutfitIdleLabel(QLabel):
@@ -872,13 +899,23 @@ class PetProfileWindow(QWidget):
         )
         self._rename_button.set_art_rect(RENAME_BUTTON_AT)
 
-        # 分栏（description_bg 素材）+ 内容页（滚动区承载，超出可滚）。
-        self._pixmap_label("description_bg.png", *TAB_BAR_AT)
+        # 第三十七轮：背景图直接覆盖原分栏+内容整块区域；两枚素材
+        # 分栏按钮（参考图裁切）附着在背景图上方选择当前栏目。
+        block_x, block_y = TAB_BAR_AT[0], TAB_BAR_AT[1]
+        block_w = TAB_BAR_AT[2]
+        block_h = (CONTENT_AT[1] + CONTENT_AT[3]) - TAB_BAR_AT[1]
+        self._region_bg = QLabel(self)
+        self._region_bg.setGeometry(_R(block_x, block_y, block_w, block_h))
+        self._region_bg.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+
         self._tab_buttons = {}
-        for name, (tx, ty, tw, th) in TAB_SLOTS.items():
-            # 第三十轮：分栏按钮换自绘件——松开才切换（拖走取消），反馈同步。
-            tab = _TabButton(name, self)
-            tab.setGeometry(_R(tx, ty, tw, th))
+        tab_w = round(160 * _SX * _FIT)
+        tab_h = round(46 * _SY * _FIT)
+        for i, (name, art_name) in enumerate(TAB_SLOTS.items()):
+            tab = _TabButton(name, self, art=_pp_pixmap(art_name))
+            tx = block_x + round((14 + i * 180) * _SX * _FIT)
+            ty = TAB_BAR_AT[1] + round(6 * _SY * _FIT)
+            tab.setGeometry(tx, ty, tab_w, tab_h)
             tab.clicked.connect(
                 lambda target=name: self._show_tab(target)
             )
@@ -886,8 +923,8 @@ class PetProfileWindow(QWidget):
 
         self._content = _FramedStack(self)
         self._content.setGeometry(_R(*CONTENT_AT))
-        # 内容页留出框内边距：滚动条落在虚线框内部而不是框线上。
-        self._content.setContentsMargins(4, 4, 4, 4)
+        # 内容页留出框内边距：滚动条落在背景图内部。
+        self._content.setContentsMargins(14, 14, 14, 14)
         self._intro_page = self._build_intro_page()
         self._outfit_page = self._build_outfit_page()
         self._content.addWidget(self._intro_page)
@@ -1190,8 +1227,8 @@ class PetProfileWindow(QWidget):
             desc_label.setWordWrap(True)
             # 第三十二轮：文字列加宽用控件 min-width（不能给装了控件的
             # layout 做 text_host 包装——reparent 链会同步销毁按钮）。
-            name_label.setMinimumWidth(round(280 * _SX * _FIT))
-            desc_label.setMinimumWidth(round(280 * _SX * _FIT))
+            name_label.setMinimumWidth(round(268 * _SX * _FIT))
+            desc_label.setMinimumWidth(round(268 * _SX * _FIT))
             # 描述字号（第二十八轮：19→23）。
             desc_label.setStyleSheet(
                 f"font-family:'{APP_FONT_FAMILY}';"
