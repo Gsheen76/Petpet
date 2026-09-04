@@ -408,6 +408,23 @@ class ProfileWindowShellTests(unittest.TestCase):
         self._press(widget["button"])
         self.assertIsNone(state["equipped_outfit"])
 
+    def test_idle_frames_cached_across_refreshes(self):
+        """帧缓存：同参数二次加载必须命中缓存（切换卡顿根因回归）。"""
+        import petpet.ui.pet_profile as module
+
+        module._IDLE_FRAMES_CACHE.clear()
+        first = module._load_idle_frames(
+            "lunch_meat", 130, anim_key="idle_dinosaur",
+        )
+        self.assertTrue(first)
+        key = ("lunch_meat", "idle_dinosaur", 130)
+        self.assertIn(key, module._IDLE_FRAMES_CACHE)
+        # 命中缓存：返回同一列表对象（不再走磁盘）。
+        second = module._load_idle_frames(
+            "lunch_meat", 130, anim_key="idle_dinosaur",
+        )
+        self.assertIs(second, first)
+
     def test_outfit_button_inside_card_bottom(self):
         """第二十八轮：按钮在描述小字正下方（文字列内，卡下半部）。"""
         window, _ = self._window()

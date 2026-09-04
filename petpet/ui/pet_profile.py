@@ -249,8 +249,18 @@ def _grayscale_pixmap(path):
         return QPixmap(path)
 
 
+_IDLE_FRAMES_CACHE = {}
+
+
 def _load_idle_frames(pet_id, height, anim_key="idle"):
-    """加载指定桌面动画全部帧（等高缩放）；缺动画回退空列表。"""
+    """加载指定桌面动画全部帧（等高缩放）；带缓存，缺动画回退空列表。
+
+    一次磁盘加载 ~124ms（16 帧），切换宠物/套装会反复取同一组帧——
+    不缓存则每次 refresh 主线程冻结 250ms，按压反馈被冻在屏上。
+    """
+    cache_key = (pet_id, anim_key, round(height))
+    if cache_key in _IDLE_FRAMES_CACHE:
+        return _IDLE_FRAMES_CACHE[cache_key]
     folder = pet_registry.pet_asset_path(pet_id, "desktop", "idle")
     if not folder:
         return []
@@ -278,7 +288,8 @@ def _load_idle_frames(pet_id, height, anim_key="idle"):
                     round(height * _SX * _FIT), Qt.SmoothTransformation,
                 ))
     except (OSError, ValueError):
-        return frames
+        pass
+    _IDLE_FRAMES_CACHE[cache_key] = frames
     return frames
 
 
@@ -599,8 +610,8 @@ class _ArtButton(QWidget):
         full = QRect(0, 0, self.width(), self.height())
         rect = full
         if self._phase == "pressed":
-            # 按住持续缩小（第三十二轮：与头像反馈一致，直至松开）。
-            rect = full.adjusted(4, 4, -4, -4)
+            # 按住持续缩小（第三十四轮：幅度 4→3px 略减）。
+            rect = full.adjusted(3, 3, -3, -3)
         elif self.hovered and self._phase is None:
             rect = full.adjusted(-3, -3, 3, 3)
         return rect
@@ -628,8 +639,8 @@ class _ArtButton(QWidget):
             scaled.width(), scaled.height(),
         )
         if self._phase == "pressed":
-            # 黑闪保持 alpha 80，盖素材实际范围，按住期间持续显示。
-            painter.setBrush(QColor(70, 42, 28, 80))
+            # 黑闪盖素材实际范围（第三十四轮：alpha 80→60 略减）。
+            painter.setBrush(QColor(70, 42, 28, 60))
             painter.drawRoundedRect(art_pos, 10, 10)
         elif self.hovered:
             painter.setBrush(QColor(255, 252, 246, 80))
@@ -728,6 +739,23 @@ class PetProfileWindow(QWidget):
         self._build_content()
         self._start_idle_animation()
         self.refresh()
+        # 首帧绘制后后台预热各宠物/套装动画帧，消除首次切换的磁盘加载卡顿。
+        QTimer.singleShot(0, self._prewarm_animation_frames)
+
+    def _prewarm_animation_frames(self):
+        """预载所有宠物的 idle 与套装专属动画帧（一次性磁盘 IO 移出交互路径）。
+
+        注意：singleShot 可能在窗口已销毁后才触发（槽内对已删 C++ 对象
+        访问会 RuntimeError，PyQt 对槽内异常直接终止进程）——必须兜底。
+        """
+        try:
+            card_h = round(130 * _FIT)
+            for pet_id in pet_registry.load_pet_registry():
+                _load_idle_frames(pet_id, IDLE_FRAME_HEIGHT)
+                for anim_key in OUTFIT_IDLE_ANIM.values():
+                    _load_idle_frames(pet_id, card_h, anim_key=anim_key)
+        except RuntimeError:
+            pass  # 窗口已销毁，预热无意义。
 
     # ---- 内容区构建 ----
 
