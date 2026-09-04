@@ -1066,7 +1066,8 @@ class PetProfileWindow(QWidget):
         scroll.setStyleSheet(self._scroll_qss())
         self._outfit_host = QWidget()
         self._outfit_layout = QVBoxLayout(self._outfit_host)
-        self._outfit_layout.setContentsMargins(8, 10, 14, 10)
+        # 第五十六轮：左右边距收窄（8/14→2/4），套装卡加宽 16 显示px。
+        self._outfit_layout.setContentsMargins(2, 10, 4, 10)
         self._outfit_layout.setSpacing(12)
         self._outfit_layout.addStretch(1)
         # 背景在外层 _region_bg（第三十七轮覆盖整块区域）。
