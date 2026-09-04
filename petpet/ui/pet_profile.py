@@ -1022,6 +1022,9 @@ class PetProfileWindow(QWidget):
             layout.addWidget(head)
             self._intro_heads[key] = head
             value = styled_label(26, "#a8742c")
+            # 第二行小字对齐到图标后面（左缩进 66 = 图标 60 + 间距 6）。
+            value.setStyleSheet(value.styleSheet()
+                                + f"padding-left:{round(66 * _FIT)}px;")
             layout.addWidget(value)
             self._intro_sections[key] = value
             layout.addSpacing(18)
