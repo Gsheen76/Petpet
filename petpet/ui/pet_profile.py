@@ -552,30 +552,6 @@ class _OutfitIdleLabel(QLabel):
         self.setPixmap(self._frames[self._index])
 
 
-class _FramedStack(QStackedWidget):
-    """简介/套装内容区：浅色可爱风外框（淡珊瑚圆角虚线 + 更淡的底洗）。"""
-
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        w, h = self.width(), self.height()
-        radius = max(10, round(16 * _FIT))
-        # 淡底洗（几乎不可见的暖色）。
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor(255, 249, 240, 70))
-        painter.drawRoundedRect(0, 0, w, h, radius, radius)
-        # 淡珊瑚圆点虚线外框。
-        pen = QPen(QColor(242, 168, 140, 210), max(2, round(3 * _FIT)))
-        pen.setStyle(Qt.DotLine)
-        painter.setPen(pen)
-        painter.setBrush(Qt.NoBrush)
-        painter.drawRoundedRect(
-            pen.width() // 2, pen.width() // 2,
-            w - pen.width(), h - pen.width(), radius, radius,
-        )
-        super().paintEvent(event)
-
-
 class _AvatarButton(QWidget):
     """宠物头像按钮：整幅绘制不裁切；悬停=圆角正方形珊瑚描边+白洗，
     按压=暗洗+描边（贴合素材的绝对圆角方形，不受 QSS padding 影响）。"""
@@ -921,7 +897,7 @@ class PetProfileWindow(QWidget):
             )
             self._tab_buttons[name] = tab
 
-        self._content = _FramedStack(self)
+        self._content = QStackedWidget(self)
         self._content.setGeometry(_R(*CONTENT_AT))
         # 内容页留出框内边距：滚动条落在背景图内部。
         self._content.setContentsMargins(14, 14, 14, 14)
@@ -975,13 +951,7 @@ class PetProfileWindow(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet(self._scroll_qss())
         host = QWidget()
-        # 背景图垫底（771x555 原比例，拉伸铺满内容宽度）。
-        bg_label = QLabel(host)
-        bg_pm = _pp_pixmap("jieshao_background.png")
-        host.setMinimumHeight(max(460, round(560 * _FIT)))
-        bg_label.setPixmap(bg_pm)
-        bg_label.setScaledContents(True)
-        bg_label.lower()
+        # 背景在外层 _region_bg（第三十七轮覆盖整块区域）。
         layout = QVBoxLayout(host)
         layout.setContentsMargins(24, 18, 24, 14)
         layout.setSpacing(6)
@@ -1001,7 +971,6 @@ class PetProfileWindow(QWidget):
         self._level_bar = None
         self._affection_bar = None
         self._attr_bars = {}
-        self._bg_label = bg_label
         sections = (
             ("等级", "level"),
             ("好感度", "affection"),
@@ -1071,12 +1040,7 @@ class PetProfileWindow(QWidget):
         self._outfit_layout.setContentsMargins(8, 10, 14, 10)
         self._outfit_layout.setSpacing(12)
         self._outfit_layout.addStretch(1)
-        # 套装页背景图垫底（第三十六轮）。
-        tz_bg = QLabel(self._outfit_host)
-        tz_bg.setPixmap(_pp_pixmap("taozhuang_background.png"))
-        tz_bg.setScaledContents(True)
-        tz_bg.lower()
-        self._outfit_host.setMinimumHeight(max(460, round(560 * _FIT)))
+        # 背景在外层 _region_bg（第三十七轮覆盖整块区域）。
         scroll.setWidget(self._outfit_host)
         return scroll
 
@@ -1092,10 +1056,16 @@ class PetProfileWindow(QWidget):
         )
 
     def _show_tab(self, name):
-        """切换分栏（并同步选中态）。"""
+        """切换分栏（同步选中态 + 区域背景图随页切换）。"""
         pages = {"简介": self._intro_page, "套装": self._outfit_page}
         page = pages.get(name, self._intro_page)
         self._content.setCurrentWidget(page)
+        bg_name = "jieshao_background.png" if name == "简介" else "taozhuang_background.png"
+        pm = _pp_pixmap(bg_name, TAB_BAR_AT[2],
+                        (CONTENT_AT[1] + CONTENT_AT[3]) - TAB_BAR_AT[1])
+        if not pm.isNull():
+            self._region_bg.setPixmap(pm)
+            self._region_bg.setScaledContents(True)
         for label, button in self._tab_buttons.items():
             button.setChecked(label == name)
 
