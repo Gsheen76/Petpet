@@ -326,6 +326,23 @@ class ProfileWindowShellTests(unittest.TestCase):
             self.assertIn(key, window._intro_sections)
         self.assertIn("经验", html, "介绍应更详细（含经验）")
 
+    def test_intro_icon_spans_title_and_value_rows(self):
+        """第五十四轮：图标竖跨两行，节名与数值同处图标右侧一组。"""
+        from PyQt5.QtWidgets import QLabel
+
+        window, _ = self._window()
+        for key, value in window._intro_sections.items():
+            head = window._intro_heads[key]
+            # 数值行必须内嵌在节标行里（同一横向组），而不是另起一行。
+            self.assertIs(value.parentWidget(), head,
+                          f"{key} 数值行应与节名同组（图标占两行）")
+            icons = [c for c in head.findChildren(QLabel)
+                     if c.pixmap() is not None and not c.pixmap().isNull()]
+            self.assertTrue(icons, f"{key} 节标应带图标")
+            self.assertGreaterEqual(icons[0].height(),
+                                    value.fontMetrics().height(),
+                                    f"{key} 图标应不低于单行文字高度")
+
     def test_outfit_page_has_no_text_labels(self):
         window, _ = self._window()
         window._show_tab("套装")

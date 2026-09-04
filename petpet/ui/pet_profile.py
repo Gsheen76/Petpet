@@ -1000,45 +1000,30 @@ class PetProfileWindow(QWidget):
         layout.setSpacing(6)
         k = _SX * _FIT
 
-        def styled_label(size, color, weight=600):
-            label = QLabel()
-            label.setWordWrap(True)
-            label.setStyleSheet(
-                f"font-family:'{APP_FONT_FAMILY}';font-size:{round(size * k)}px;"
-                f"font-weight:{weight};color:{color};background:transparent;"
-            )
-            return label
-
         self._intro_sections = {}
         self._intro_heads = {}
-        # 第四十九轮：进度条全删，仅保留图标节标 + 数值。
+        # 第五十四轮：图标竖跨两行（左），节名/数值两行文字（右）。
         sections = (
             ("等级", "level"),
             ("好感度", "affection"),
             ("属性", "attrs"),
         )
         for title, key in sections:
-            head = self._section_header(title, key, k)
-            layout.addWidget(head)
-            self._intro_heads[key] = head
-            value = styled_label(26, "#a8742c")
-            # 第二行小字对齐到图标后面（左缩进 66 = 图标 60 + 间距 6）。
-            value.setStyleSheet(value.styleSheet()
-                                + f"padding-left:{round(66 * _FIT)}px;")
-            layout.addWidget(value)
+            row, value = self._intro_section(title, key, k)
+            layout.addWidget(row)
+            self._intro_heads[key] = row
             self._intro_sections[key] = value
             layout.addSpacing(18)
-        head = self._section_header("性格", "personality", k)
-        layout.addWidget(head)
-        self._intro_heads["personality"] = head
-        self._intro_sections["personality"] = styled_label(26, "#a8742c")
-        layout.addWidget(self._intro_sections["personality"])
+        row, value = self._intro_section("性格", "personality", k)
+        layout.addWidget(row)
+        self._intro_heads["personality"] = row
+        self._intro_sections["personality"] = value
         layout.addStretch(1)
         scroll.setWidget(host)
         return scroll
 
-    def _section_header(self, title, key, k):
-        """图标 + 节名横排节标（第三十六轮素材版）。"""
+    def _intro_section(self, title, key, k):
+        """图标竖跨两行居中 + 右侧两行文字（节名/数值）（第五十四轮）。"""
         row = QWidget()
         row.setAttribute(Qt.WA_TransparentForMouseEvents, True)
         h = QHBoxLayout(row)
@@ -1052,15 +1037,26 @@ class PetProfileWindow(QWidget):
                 icon_px, icon_px,
                 Qt.KeepAspectRatio, Qt.SmoothTransformation,
             ))
-            h.addWidget(icon)
-        label = QLabel(title)
-        label.setStyleSheet(
+            h.addWidget(icon, 0, Qt.AlignVCenter)
+        col = QVBoxLayout()
+        col.setContentsMargins(0, 0, 0, 0)
+        col.setSpacing(2)
+        title_label = QLabel(title)
+        title_label.setStyleSheet(
             f"font-family:'{APP_FONT_FAMILY}';font-size:{round(27 * k)}px;"
             "font-weight:600;color:#d29a38;background:transparent;"
         )
-        h.addWidget(label)
-        h.addStretch(1)
-        return row
+        col.addWidget(title_label)
+        value = QLabel()
+        value.setWordWrap(True)
+        value.setStyleSheet(
+            f"font-family:'{APP_FONT_FAMILY}';font-size:{round(26 * k)}px;"
+            "font-weight:600;color:#a8742c;background:transparent;"
+        )
+        col.addWidget(value)
+        # 文字列吃满剩余宽度，数值尽量单行（wordWrap 仅兜底长文本）。
+        h.addLayout(col, 1)
+        return row, value
 
     def _build_outfit_page(self):
         """套装页（第十轮）：大卡纵排，只上下滚动。"""
