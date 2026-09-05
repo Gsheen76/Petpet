@@ -58,6 +58,7 @@ D:\Agent_project\Petpet
 
 | 领域 | 内容 |
 |------|------|
+| **小屋宠物键素材** | 菜单「宠物」键（action `pets`）原本无素材走程序绘制兜底（`HOME_BUTTON_PATHS` 只注册了 `pet`=抚摸键）；新增 `buttons/pets.png`（睡窝柴犬横幅，提交 `f6406a4`）。**素材比例 3.03 vs 槽位 2.5**：从狗窝与爪印间的虚线空档精确裁 292px（≈6×顶线节距 48.2/5.9×底线 49.3，接缝相位误差 <1px 渲染）拼接成 2.487，零变形；运行时「宠物」标签照常画在空白区 |
 | **家园性能** | `load_pet_registry` 按 mtime 缓存；`current_pet_id` 记忆化；墙面状态卡按内容签名缓存；`home_decoration_transform` 纯读取不跑全量 ensure——paintEvent 从 ~100ms 降到 ~2ms |
 | **胶囊按键反馈** | 两段式：按下缩小 3px+灰黑块 40ms → 回弹原大小+悬浮描边/白洗 40ms → 80ms 时关闭菜单并触发动作（`_click_defer_timer`，总时长短于旧版单段 100ms）；悬停放大 3px + 描边 + 白洗 |
 | **影子实测驱动** | 冰淇淋家园行走影子按当前帧 alpha 实测倾角与脚掌中心（`_ice_shadow_params`，QBuffer→BytesIO→PIL），四向方向数学保证正确；预加载消除首次卡顿 |
@@ -181,7 +182,7 @@ assets/runtime/ui/shop/
 
 - **Obsidian 文档规范**（写库前必读，归类/命名/流程的唯一规则源）：`D:\Github Desktop\My-Obsidian\项目\Petpet\文档规范.md`
 - **Obsidian 总档案**：`D:\Github Desktop\My-Obsidian\项目\Petpet\Petpet 总档案.md`（只放项目级总览；2026-09-01 已拆分瘦身，日志类内容全部在各分类目录）
-- **Obsidian 开发记录**：`D:\Github Desktop\My-Obsidian\项目\Petpet\开发记录\`（按日命名 `YYYY-MM-DD 主题.md`；最新：`2026-09-01 小屋按键两段式按压反馈.md`、`2026-08-27 成就分类筛选与弹窗交互完善.md` 含 v1.6.1→v1.6.3 全部迭代细节）
+- **Obsidian 开发记录**：`D:\Github Desktop\My-Obsidian\项目\Petpet\开发记录\`（按日命名 `YYYY-MM-DD 主题.md`；最新：`2026-09-05 小屋宠物按键新素材.md`、`2026-09-01 小屋按键两段式按压反馈.md`、`2026-08-27 成就分类筛选与弹窗交互完善.md` 含 v1.6.1→v1.6.3 全部迭代细节）
 - **版本规划索引**：`D:\Github Desktop\My-Obsidian\项目\Petpet\发布系统\版本规划与发布索引.md`
 - **最新 Release**：https://github.com/Gsheen76/Petpet/releases/tag/v1.6.3
 
