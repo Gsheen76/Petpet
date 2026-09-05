@@ -933,24 +933,34 @@ class PetProfileWindow(QWidget):
         self._tab_buttons = {}
         tab_w = round(250 * _SX * _FIT)
         tab_h = round(72 * _SY * _FIT)
-        # 第五十九轮：两键恢复同尺寸（第四十六轮素材文件内容本就互换，
-        # 本轮文件名归位 + 新简介素材接入，映射恢复自然命名）；上下各留
-        # 4px 悬浮余量修顶裁 BUG（第五十八轮）。
+        # 第五十九轮：两键恢复同尺寸（文件名归位 + 新简介素材接入）。
+        # 第六十一轮：紧靠在一起——widget 按素材实宽收窄（左右各 3px
+        # 悬浮余量），两 widget 相接，素材间距 6px；简介素材位置不动。
         tab_headroom = 4
+        side_margin = 3
         base_art_h = round(tab_h * _SY * _FIT)
         mid_y = (_R(0, TAB_BAR_AT[1] - round(tab_h * 0.5 / _SY), 1, 1).y()
                  + base_art_h // 2)
+        old_w = _R(0, 0, tab_w, 1).width()
+        prev_rect = None
         for i, (name, art_name) in enumerate(TAB_SLOTS.items()):
-            tab = _TabButton(name, self, art=_pp_pixmap(art_name),
-                             headroom=tab_headroom)
-            art_h = base_art_h
-            w = _R(0, 0, tab_w, 1).width()
-            # 第六十轮：键距 216→247 art（+24 显示px），素材间距 14→38。
-            tx = block_x + round((6 + i * 247) * _SX * _FIT)
-            tab.setGeometry(
-                _R(tx, 0, 1, 1).x(), mid_y - art_h // 2 - tab_headroom,
-                w, art_h + 2 * tab_headroom,
-            )
+            pm = _pp_pixmap(art_name)
+            tab = _TabButton(name, self, art=pm, headroom=tab_headroom)
+            if pm.isNull() or pm.height() == 0:
+                art_w = old_w - 2 * side_margin
+            else:
+                art_w = round(pm.width() / pm.height() * base_art_h)
+            w = art_w + 2 * side_margin
+            tx = block_x + round((6 + i * 216) * _SX * _FIT)
+            if prev_rect is None:
+                # 首键：在旧槽位内居中，素材位置与历史轮一致。
+                x = _R(tx, 0, 1, 1).x() + (old_w - w) // 2
+            else:
+                x = prev_rect.x() + prev_rect.width()   # 紧贴上一枚
+            rect = QRect(x, mid_y - base_art_h // 2 - tab_headroom,
+                         w, base_art_h + 2 * tab_headroom)
+            tab.setGeometry(rect)
+            prev_rect = rect
             tab.raise_()
             tab.clicked.connect(
                 lambda target=name: self._show_tab(target)
