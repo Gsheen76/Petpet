@@ -76,8 +76,8 @@ RENAME_BUTTON_AT = (700, 588, 113, 66)   # 原生 94x55 × 1.2 等比（不被�
 # 分栏（第三十七轮）：参考图裁切的两枚素材按钮（简介/套装），
 # 附着在内容背景图上方；选中态用另一枚按钮互换表示。
 TAB_SLOTS = {
-    "简介": "tab_outfit.png",
-    "套装": "tab_intro.png",
+    "简介": "tab_intro.png",
+    "套装": "tab_outfit.png",
 }
 TAB_BAR_AT = (264, 715, 758, 130)
 CONTENT_AT = (264, 729, 758, 614)   # 第五十七轮：整块上移 10 显示px（-15 art）
@@ -933,10 +933,9 @@ class PetProfileWindow(QWidget):
         self._tab_buttons = {}
         tab_w = round(250 * _SX * _FIT)
         tab_h = round(72 * _SY * _FIT)
-        # 第五十八轮：简介键长压缩 10%、套装拉伸 10%（素材高度受限，
-        # 等比改高才生效，长度随之 ±10%）；素材中线保持原位。上下各留
-        # 4px 余量修悬浮放大顶裁 BUG。
-        tab_pct = {"简介": 0.9, "套装": 1.1}
+        # 第五十九轮：两键恢复同尺寸（第四十六轮素材文件内容本就互换，
+        # 本轮文件名归位 + 新简介素材接入，映射恢复自然命名）；上下各留
+        # 4px 悬浮余量修顶裁 BUG（第五十八轮）。
         tab_headroom = 4
         base_art_h = round(tab_h * _SY * _FIT)
         mid_y = (_R(0, TAB_BAR_AT[1] - round(tab_h * 0.5 / _SY), 1, 1).y()
@@ -944,9 +943,8 @@ class PetProfileWindow(QWidget):
         for i, (name, art_name) in enumerate(TAB_SLOTS.items()):
             tab = _TabButton(name, self, art=_pp_pixmap(art_name),
                              headroom=tab_headroom)
-            pct = tab_pct.get(name, 1.0)
-            art_h = round(base_art_h * pct)
-            w = round(_R(0, 0, tab_w, 1).width() * pct)
+            art_h = base_art_h
+            w = _R(0, 0, tab_w, 1).width()
             tx = block_x + round((6 + i * 216) * _SX * _FIT)
             tab.setGeometry(
                 _R(tx, 0, 1, 1).x(), mid_y - art_h // 2 - tab_headroom,
