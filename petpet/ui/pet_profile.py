@@ -473,13 +473,16 @@ class _TabButton(QWidget):
 
     clicked = pyqtSignal(str)
 
-    def __init__(self, text, parent=None, art=None):
+    def __init__(self, text, parent=None, art=None, headroom=0):
         super().__init__(parent)
         self._text = text
         self._art = art if art is not None and not art.isNull() else QPixmap()
         self._hovered = False
         self._pressed = False
         self.checked = False
+        # 第五十八轮：素材区上下的悬浮余量（显示px）。悬浮放大会向外扩
+        # 2px，自绘只能在 widget 边界内作画——无余量时顶部被裁 ~5px。
+        self._headroom = max(0, headroom)
         self.setCursor(Qt.PointingHandCursor)
 
     def setChecked(self, checked):
@@ -517,7 +520,9 @@ class _TabButton(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         w, h = self.width(), self.height()
-        rect = QRect(0, 0, w, h)
+        # 素材区 = widget 去掉上下余量；悬浮放大从素材区向外扩，
+        # 扩入余量带，不再触顶裁切。
+        rect = QRect(0, self._headroom, w, h - 2 * self._headroom)
         if self._pressed:
             rect = rect.adjusted(3, 3, -3, -3)
         elif self._hovered:
@@ -928,12 +933,25 @@ class PetProfileWindow(QWidget):
         self._tab_buttons = {}
         tab_w = round(250 * _SX * _FIT)
         tab_h = round(72 * _SY * _FIT)
+        # 第五十八轮：简介键长压缩 10%、套装拉伸 10%（素材高度受限，
+        # 等比改高才生效，长度随之 ±10%）；素材中线保持原位。上下各留
+        # 4px 余量修悬浮放大顶裁 BUG。
+        tab_pct = {"简介": 0.9, "套装": 1.1}
+        tab_headroom = 4
+        base_art_h = round(tab_h * _SY * _FIT)
+        mid_y = (_R(0, TAB_BAR_AT[1] - round(tab_h * 0.5 / _SY), 1, 1).y()
+                 + base_art_h // 2)
         for i, (name, art_name) in enumerate(TAB_SLOTS.items()):
-            tab = _TabButton(name, self, art=_pp_pixmap(art_name))
+            tab = _TabButton(name, self, art=_pp_pixmap(art_name),
+                             headroom=tab_headroom)
+            pct = tab_pct.get(name, 1.0)
+            art_h = round(base_art_h * pct)
+            w = round(_R(0, 0, tab_w, 1).width() * pct)
             tx = block_x + round((6 + i * 216) * _SX * _FIT)
-            # 严格卡在背景上边缘（半嵌于背景顶线，不是内容区顶）。
-            ty = TAB_BAR_AT[1] - round(tab_h * 0.5 / _SY)
-            tab.setGeometry(_R(tx, ty, tab_w, tab_h))
+            tab.setGeometry(
+                _R(tx, 0, 1, 1).x(), mid_y - art_h // 2 - tab_headroom,
+                w, art_h + 2 * tab_headroom,
+            )
             tab.raise_()
             tab.clicked.connect(
                 lambda target=name: self._show_tab(target)
