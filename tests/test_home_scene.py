@@ -1967,7 +1967,8 @@ class HomeSceneAssetTests(unittest.TestCase):
         handle = scene.selection_handles("home_sofa")["rotate"].center().toPoint()
         self.assertGreater(image.pixelColor(handle).alpha(), 0)
 
-    def test_button_flash_runs_pressed_then_recover_within_shorter_total(self):
+    def test_button_press_holds_shrink_then_recover_and_fire_on_release(self):
+        """第六十八轮：按住持续内缩；松开键内回弹 40ms 后触发，拖走取消。"""
         state = progression.ensure_progression({})
         pet = SimpleNamespace(
             state=state,
@@ -1985,40 +1986,72 @@ class HomeSceneAssetTests(unittest.TestCase):
             Qt.LeftButton,
             Qt.NoModifier,
         )
+        release_inside = QMouseEvent(
+            QEvent.MouseButtonRelease,
+            QPoint(center.x(), center.y()),
+            Qt.LeftButton,
+            Qt.LeftButton,
+            Qt.NoModifier,
+        )
         base = 10.0
-        with patch(
-            "petpet.home.window.time.monotonic", return_value=base
-        ):
+        with patch("petpet.home.window.time.monotonic", return_value=base):
             scene.mousePressEvent(press)
             self.assertEqual(
                 scene._button_state("toggle:interaction"), "pressed"
             )
-            # 前段（缩小+变暗）须在 40ms 内结束并切入回弹段
-            with patch(
-                "petpet.home.window.time.monotonic",
-                return_value=base + 0.045,
-            ):
-                self.assertEqual(
-                    scene._button_state("toggle:interaction"), "recover"
-                )
-            # 回弹段（原大小+悬浮高亮）持续到总时长，总时长短于旧版 100ms
-            with patch(
-                "petpet.home.window.time.monotonic",
-                return_value=base + scene.BUTTON_CLICK_DEFER_MS / 1000.0 - 0.001,
-            ):
-                self.assertEqual(
-                    scene._button_state("toggle:interaction"), "recover"
-                )
-            with patch(
-                "petpet.home.window.time.monotonic",
-                return_value=base + 0.101,
-            ):
-                self.assertIsNone(scene._button_state("toggle:interaction"))
-        # 回弹段必须存在（总时长长于前段），且总反馈时长短于旧版单段 100ms
-        self.assertGreater(
-            scene.BUTTON_CLICK_DEFER_MS, scene.BUTTON_PRESS_FLASH_MS
+        # 按住期间持续内缩（不再 40ms 后自动回弹）
+        with patch(
+            "petpet.home.window.time.monotonic",
+            return_value=base + 0.5,
+        ):
+            self.assertEqual(
+                scene._button_state("toggle:interaction"), "pressed"
+            )
+        # 松开在键内 → 回弹段（原大小+悬浮高亮）40ms
+        with patch("petpet.home.window.time.monotonic", return_value=base + 0.6):
+            scene.mouseReleaseEvent(release_inside)
+            self.assertEqual(
+                scene._button_state("toggle:interaction"), "recover"
+            )
+            self.assertIsNotNone(scene._deferred_click_point)
+        # 回弹播完 → 延迟触发器到点：清理状态并触发
+        with patch(
+            "petpet.home.window.time.monotonic",
+            return_value=base + 0.7,
+        ):
+            self.assertEqual(
+                scene._button_state("toggle:interaction"), "pressed"
+            )  # 触发器未到点前状态变量仍在（真实流程 40ms 即触发）
+        scene._fire_deferred_click()
+        self.assertIsNone(scene._deferred_click_point)
+        self.assertIsNone(scene._pressed_button)
+        self.assertIsNone(scene._button_state("toggle:interaction"))
+
+    def test_button_release_outside_cancels(self):
+        state = progression.ensure_progression({})
+        pet = SimpleNamespace(
+            state=state,
+            width=lambda: 190,
+            height=lambda: 220,
+            current_screen_rect=lambda: QRect(0, 0, 1920, 1080),
         )
-        self.assertLess(scene.BUTTON_CLICK_DEFER_MS, 100)
+        scene = home_scene.HomeSceneWindow(pet, Mock())
+        self.addCleanup(scene.close)
+        center = scene.interaction_toggle_rect().center()
+        scene.mousePressEvent(QMouseEvent(
+            QEvent.MouseButtonPress,
+            QPoint(center.x(), center.y()),
+            Qt.LeftButton, Qt.LeftButton, Qt.NoModifier,
+        ))
+        self.assertEqual(scene._pressed_button, "toggle:interaction")
+        # 拖出键外松开 → 取消（不触发、状态清理）
+        scene.mouseReleaseEvent(QMouseEvent(
+            QEvent.MouseButtonRelease,
+            QPoint(center.x() + 400, center.y() + 400),
+            Qt.LeftButton, Qt.LeftButton, Qt.NoModifier,
+        ))
+        self.assertIsNone(scene._pressed_button)
+        self.assertIsNone(scene._deferred_click_point)
 
 
 if __name__ == "__main__":

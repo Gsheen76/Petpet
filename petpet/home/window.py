@@ -56,7 +56,6 @@ class HomeSceneWindow(QWidget):
     # 胶囊按键两段式按压反馈：前段缩小+变暗，后段回弹原大小+悬浮高亮；
     # 总时长（含延迟触发动作）须保持短于旧版单段 100ms。
     BUTTON_PRESS_FLASH_MS = 40
-    BUTTON_CLICK_DEFER_MS = 80
 
     def __init__(self, pet, save_state):
         super().__init__()
@@ -133,11 +132,7 @@ class HomeSceneWindow(QWidget):
         self._hover_button = None
         self._hover_button_prev = None
         self._pressed_button = None
-        self._button_flash_phase_deadline = 0.0
-        self._button_flash_until = 0.0
-        self._button_flash_timer = QTimer(self)
-        self._button_flash_timer.setSingleShot(True)
-        self._button_flash_timer.timeout.connect(self._expire_button_flash)
+        self._button_recover_until = 0.0
         self._deferred_click_point = None
         self._click_defer_timer = QTimer(self)
         self._click_defer_timer.setSingleShot(True)
@@ -2179,22 +2174,19 @@ class HomeSceneWindow(QWidget):
     def _fire_deferred_click(self):
         point = self._deferred_click_point
         self._deferred_click_point = None
+        self._pressed_button = None
+        self._button_recover_until = 0.0
         if point is None:
             return
         self.handle_scene_click(point)
 
-    def _expire_button_flash(self):
-        if time.monotonic() >= self._button_flash_until - 0.02:
-            self._pressed_button = None
-            self.update()
-
     def _button_state(self, name):
         now = time.monotonic()
-        if self._pressed_button == name and now < self._button_flash_until:
-            # 两段式反馈：前段缩小变暗，后段回弹原大小并套用悬浮高亮色。
-            if now < self._button_flash_phase_deadline:
-                return "pressed"
-            return "recover"
+        if self._pressed_button == name:
+            # 第六十八轮：按住持续内缩，松开键内才进入回弹段（40ms）。
+            if self._button_recover_until and now < self._button_recover_until:
+                return "recover"
+            return "pressed"
         if self._hover_button == name:
             return "hover"
         return None
@@ -2207,21 +2199,10 @@ class HomeSceneWindow(QWidget):
             return
         key = self._hit_scene_button(event.pos())
         if key:
-            now = time.monotonic()
+            # 第六十八轮：按住只内缩，松开键内才回弹+触发（拖走取消）。
             self._pressed_button = key
-            self._button_flash_phase_deadline = (
-                now + self.BUTTON_PRESS_FLASH_MS / 1000.0
-            )
-            self._button_flash_until = now + self.BUTTON_CLICK_DEFER_MS / 1000.0
-            self.update()
-            self._button_flash_timer.start(self.BUTTON_CLICK_DEFER_MS + 20)
-            # 场景定时器 33ms 一帧，相位边界未必恰好落在帧上；
-            # 在前段截止点主动补一次重绘，保证回弹段至少画出一帧。
-            QTimer.singleShot(self.BUTTON_PRESS_FLASH_MS, self.update)
-            # 按下先缩小变暗，再回弹原大小并显示悬浮高亮；两段播完
-            # 菜单才关闭、动作才触发（总 80ms，短于旧版单段 100ms）。
             self._deferred_click_point = event.pos()
-            self._click_defer_timer.start(self.BUTTON_CLICK_DEFER_MS)
+            self.update()
             event.accept()
             return
         if self.handle_scene_click(event.pos()):
@@ -2265,6 +2246,25 @@ class HomeSceneWindow(QWidget):
             event.accept()
             return
         if event.button() != Qt.LeftButton:
+            return
+        if self._pressed_button is not None:
+            # 第六十八轮：松开在键内 → 回弹 40ms 后触发；拖走 → 取消。
+            key = self._pressed_button
+            if self._hit_scene_button(event.pos()) == key:
+                now = time.monotonic()
+                self._button_recover_until = (
+                    now + self.BUTTON_PRESS_FLASH_MS / 1000.0
+                )
+                self.update()
+                QTimer.singleShot(self.BUTTON_PRESS_FLASH_MS, self.update)
+                self._deferred_click_point = event.pos()
+                self._click_defer_timer.start(self.BUTTON_PRESS_FLASH_MS)
+            else:
+                self._pressed_button = None
+                self._deferred_click_point = None
+                self._button_recover_until = 0.0
+                self.update()
+            event.accept()
             return
         if self._pan_direction is not None:
             self.end_pan()
