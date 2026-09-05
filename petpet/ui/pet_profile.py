@@ -79,8 +79,8 @@ TAB_SLOTS = {
     "简介": "tab_outfit.png",
     "套装": "tab_intro.png",
 }
-TAB_BAR_AT = (264, 730, 758, 130)
-CONTENT_AT = (264, 744, 758, 614)   # 第五十轮：背景放大（宽+30 高+40 art）
+TAB_BAR_AT = (264, 715, 758, 130)
+CONTENT_AT = (264, 729, 758, 614)   # 第五十七轮：整块上移 10 显示px（-15 art）
 
 # 套装素材（新 art 直接按套装 id 映射；未映射回退 idle 预览路径）。
 OUTFIT_ART = {
