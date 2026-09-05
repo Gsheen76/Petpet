@@ -79,8 +79,8 @@ TAB_SLOTS = {
     "简介": "tab_intro.png",
     "套装": "tab_outfit.png",
 }
-TAB_BAR_AT = (264, 715, 758, 130)
-CONTENT_AT = (264, 729, 758, 614)   # 第五十七轮：整块上移 10 显示px（-15 art）
+TAB_BAR_AT = (264, 723, 758, 130)
+CONTENT_AT = (264, 737, 758, 614)   # 第六十六轮：整块下移 5 显示px（+8 art）
 
 # 套装素材（新 art 直接按套装 id 映射；未映射回退 idle 预览路径）。
 OUTFIT_ART = {
@@ -457,13 +457,12 @@ class _RoundedBgLabel(QWidget):
         painter.drawPixmap(
             (w - scaled.width()) // 2, (h - scaled.height()) // 2, scaled,
         )
-        # 暖棕实线描边（第六十四轮）：外围 3px 粗（用户定稿）。
-        # 第六十五轮：换 #d6a880（与套装虚线框同色系，原 #c9955e 太扎眼）。
+        # 纯白实线描边（第六十六轮）：外围 3px 粗。
         # 坑位：setClipPath(空路径) = 裁掉一切，描边整段消失；
         # 解除裁剪必须用 setClipping(False)。
         painter.setClipping(False)
         pen_w = 3
-        painter.setPen(QPen(QColor("#d6a880"), pen_w))
+        painter.setPen(QPen(QColor("#ffffff"), pen_w))
         painter.setBrush(Qt.NoBrush)
         painter.drawRoundedRect(
             pen_w // 2, pen_w // 2, w - pen_w, h - pen_w, radius, radius,
@@ -540,11 +539,15 @@ class _TabButton(QWidget):
                 rect.width(), rect.height(),
                 Qt.KeepAspectRatio, Qt.SmoothTransformation,
             )
+            # 第六十六轮：未选中恢复透明度法（0.45 太淡 → 0.65 别太透明）。
+            if not (self.checked or self._hovered or self._pressed):
+                painter.setOpacity(0.65)
             painter.drawPixmap(
                 rect.x() + (rect.width() - scaled.width()) // 2,
                 rect.y() + (rect.height() - scaled.height()) // 2,
                 scaled,
             )
+            painter.setOpacity(1.0)
         else:
             # 无素材回退：文字胶囊。
             painter.setPen(Qt.NoPen)
@@ -568,10 +571,6 @@ class _TabButton(QWidget):
             painter.drawRoundedRect(art_pos, 12, 12)
         elif self._hovered:
             painter.setBrush(QColor(255, 252, 246, 80))
-            painter.drawRoundedRect(art_pos, 12, 12)
-        elif not self.checked:
-            # 第六十五轮：未选中不再降透明度，改为暖色压暗。
-            painter.setBrush(QColor(110, 68, 40, 55))
             painter.drawRoundedRect(art_pos, 12, 12)
 
 
