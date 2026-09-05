@@ -938,7 +938,10 @@ class PetProfileWindow(QWidget):
         # 悬浮余量），两 widget 相接，素材间距 6px；简介素材位置不动。
         tab_headroom = 4
         side_margin = 3
-        base_art_h = round(tab_h * _SY * _FIT)
+        # 第六十二轮：两键放大 20%（素材高 32→38），素材左缘仍对齐内容
+        # 区左缘（229），两键紧贴间距 6px 不变。
+        tab_scale = 1.2
+        base_art_h = round(tab_h * _SY * _FIT * tab_scale)
         mid_y = (_R(0, TAB_BAR_AT[1] - round(tab_h * 0.5 / _SY), 1, 1).y()
                  + base_art_h // 2)
         old_w = _R(0, 0, tab_w, 1).width()
@@ -953,8 +956,8 @@ class PetProfileWindow(QWidget):
             w = art_w + 2 * side_margin
             tx = block_x + round((6 + i * 216) * _SX * _FIT)
             if prev_rect is None:
-                # 首键：在旧槽位内居中，素材位置与历史轮一致。
-                x = _R(tx, 0, 1, 1).x() + (old_w - w) // 2
+                # 首键素材左缘对齐内容区左缘（内容边距 22）。
+                x = _R(CONTENT_AT[0], 0, 1, 1).x() + 22 - side_margin
             else:
                 x = prev_rect.x() + prev_rect.width()   # 紧贴上一枚
             rect = QRect(x, mid_y - base_art_h // 2 - tab_headroom,
