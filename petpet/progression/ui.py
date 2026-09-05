@@ -113,9 +113,9 @@ def _status_badge_label(text, kind):
     """Baked 使用中/已拥有 pill when available, styled text otherwise."""
     label = PreservedTextLabel(text)
     if kind == "active":
-        pixmap = _shop_pixmap_cropped("status_in_use.png", 47)
+        pixmap = _shop_pixmap_cropped("status_in_use.png", 45)
     elif kind == "owned":
-        pixmap = _shop_pixmap_cropped("status_owned.png", 47)
+        pixmap = _shop_pixmap_cropped("status_owned.png", 45)
     else:
         pixmap = QPixmap()
     if not pixmap.isNull():
@@ -672,34 +672,96 @@ class PreservedTextLabel(QLabel):
 
 
 class FeedbackButton(QPushButton):
-    """Push button with hover brightening and pressed tint feedback.
+    """Push button with the app-standard hover/press feedback.
 
+    悬停 = 白洗 + 珊瑚描边；按住 = 持续缩小 + 压暗；松开在键内 =
+    回弹高亮 40ms 后才触发 clicked（家园胶囊键同款两段式）。
+    checkable 键（页签/筛选）保留原生释放时序，仅视觉反馈相同。
     Asset-backed pills (border-image QSS) hide plain background swaps, so
     the feedback is painted as a translucent overlay above the skin.
     """
+
+    PRESS_FLASH_MS = 40
+    CLICK_DEFER_MS = 80
 
     def __init__(self, text="", parent=None):
         super().__init__(text, parent)
         self.setAttribute(Qt.WA_Hover)
         self.setCursor(Qt.PointingHandCursor)
+        # 两段式闪相截止点（time.monotonic 秒）；0 = 无闪相。
+        self._flash_phase_deadline = 0.0
+        self._flash_until = 0.0
+        self._recover_timer = QTimer(self)
+        self._recover_timer.setSingleShot(True)
+        self._recover_timer.timeout.connect(self._fire_deferred)
+
+    def _flash_phase(self):
+        """None | 'pressed' | 'recover'（与家园场景同语义）。"""
+        now = time.monotonic()
+        if now >= self._flash_until:
+            return None
+        return "pressed" if now < self._flash_phase_deadline else "recover"
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton and self.isEnabled():
+            now = time.monotonic()
+            self._flash_phase_deadline = now + self.PRESS_FLASH_MS / 1000
+            self._flash_until = now + self.CLICK_DEFER_MS / 1000
+            # 相位边界必补一帧（33ms 定时器可能跨过 40ms 边界）。
+            QTimer.singleShot(self.PRESS_FLASH_MS, self.update)
+        super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        inside = self.rect().contains(event.pos())
+        if (event.button() == Qt.LeftButton and self.isEnabled()
+                and not self.isCheckable() and inside
+                and self._flash_phase() is not None):
+            # 拦截原生 click：回弹段播完再触发（对齐家园两段式）。
+            self.setDown(False)
+            event.accept()
+            self.update()
+            remaining = max(
+                0, int((self._flash_until - time.monotonic()) * 1000))
+            self._recover_timer.start(remaining)
+            return
+        self._flash_until = 0.0
+        super().mouseReleaseEvent(event)
+
+    def _fire_deferred(self):
+        try:
+            self.clicked.emit(False)
+        except RuntimeError:
+            pass  # 窗口已销毁的延迟触发
 
     def paintEvent(self, event):
         super().paintEvent(event)
         if not self.isEnabled():
             return
-        if self.isDown():
+        phase = self._flash_phase()
+        if phase == "recover":
+            tint = QColor(255, 252, 246, 90)
+            outline = QColor("#f28f76")
+        elif self.isDown():
+            # 按住缩小 + 压暗（内缩 2px 制造收缩感）。
             tint = QColor(150, 60, 40, 70)
+            outline = None
         elif self.underMouse():
             tint = QColor(255, 255, 255, 55)
+            outline = QColor("#f28f76")
         else:
             return
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
+        rect = self.rect().adjusted(2, 2, -2, -2)
+        if self.isDown():
+            rect = rect.adjusted(2, 2, -2, -2)
         path = QPainterPath()
-        path.addRoundedRect(
-            QRectF(self.rect()).adjusted(2, 2, -2, -2), 16, 16
-        )
+        path.addRoundedRect(QRectF(rect), 16, 16)
         painter.fillPath(path, tint)
+        if outline is not None:
+            painter.setPen(QPen(outline, 2))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawPath(path)
         painter.end()
 
 
@@ -2014,11 +2076,8 @@ class ShopWindow(CozyProgressWindow):
         title = QLabel("宠物商店")
         title.setObjectName("sectionTitle")
         title.setAlignment(Qt.AlignCenter)
-        tip = QLabel("挑选可爱的小狗，用 Pet币 带回家。")
-        tip.setObjectName("muted")
-        tip.setWordWrap(True)
-        tip.setAlignment(Qt.AlignCenter)
-        self._add_page_header(title, tip)
+        # 第六十七轮：页首小字删除（用户要求，四个页面统一）。
+        self._add_page_header(title)
         registry = load_pet_registry()
         pet_ids = sorted(
             progression.available_pet_ids(),
@@ -2149,7 +2208,7 @@ class ShopWindow(CozyProgressWindow):
     @staticmethod
     def _price_tag(text, role, object_name):
         if role == "gift":
-            gift_pixmap = _shop_pixmap_cropped("free_gift_button.png", 50)
+            gift_pixmap = _shop_pixmap_cropped("free_gift_button.png", 48)
             if not gift_pixmap.isNull():
                 label = PreservedTextLabel(text)
                 label.setObjectName(object_name)
@@ -2272,13 +2331,7 @@ class ShopWindow(CozyProgressWindow):
         products_title = QLabel("套装商店")
         products_title.setObjectName("sectionTitle")
         products_title.setAlignment(Qt.AlignCenter)
-        tip = QLabel(
-            "购买完整套装后直接装备，待机时会替换为套装专属动画。"
-        )
-        tip.setObjectName("muted")
-        tip.setWordWrap(True)
-        tip.setAlignment(Qt.AlignCenter)
-        self._add_page_header(products_title, tip)
+        self._add_page_header(products_title)
 
         selector = QFrame()
         selector.setObjectName("outfitPetSelector")
@@ -2657,13 +2710,7 @@ class ShopWindow(CozyProgressWindow):
         title = QLabel("家居小铺")
         title.setObjectName("sectionTitle")
         title.setAlignment(Qt.AlignCenter)
-        tip = QLabel(
-            "购买后的家具会放入家场景。打开家场景后，可直接拖动家具调整位置。"
-        )
-        tip.setObjectName("muted")
-        tip.setWordWrap(True)
-        tip.setAlignment(Qt.AlignCenter)
-        self._add_page_header(title, tip)
+        self._add_page_header(title)
 
         grid_host = QWidget()
         grid = QGridLayout(grid_host)
@@ -2797,11 +2844,7 @@ class ShopWindow(CozyProgressWindow):
         upgrades_title = QLabel("成长强化")
         upgrades_title.setObjectName("sectionTitle")
         upgrades_title.setAlignment(Qt.AlignCenter)
-        tip = QLabel("每项最多 5 级，强化后立即生效。")
-        tip.setObjectName("muted")
-        tip.setWordWrap(True)
-        tip.setAlignment(Qt.AlignCenter)
-        self._add_page_header(upgrades_title, tip)
+        self._add_page_header(upgrades_title)
 
         grid_host = QWidget()
         grid = QGridLayout(grid_host)
