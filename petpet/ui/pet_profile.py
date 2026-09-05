@@ -473,7 +473,7 @@ class _TabButton(QWidget):
 
     clicked = pyqtSignal(str)
 
-    def __init__(self, text, parent=None, art=None, headroom=0):
+    def __init__(self, text, parent=None, art=None, headroom=0, side_margin=0):
         super().__init__(parent)
         self._text = text
         self._art = art if art is not None and not art.isNull() else QPixmap()
@@ -483,6 +483,10 @@ class _TabButton(QWidget):
         # 第五十八轮：素材区上下的悬浮余量（显示px）。悬浮放大会向外扩
         # 2px，自绘只能在 widget 边界内作画——无余量时顶部被裁 ~5px。
         self._headroom = max(0, headroom)
+        # 第六十三轮：左右悬浮余量。悬浮时 KeepAspectRatio 缩放会从
+        # 高度受限翻转为宽度受限，素材横向涨幅（+4px）远超纵向，
+        # 余量不足即左右截断（用户实测）。
+        self._side_margin = max(0, side_margin)
         self.setCursor(Qt.PointingHandCursor)
 
     def setChecked(self, checked):
@@ -520,9 +524,10 @@ class _TabButton(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         w, h = self.width(), self.height()
-        # 素材区 = widget 去掉上下余量；悬浮放大从素材区向外扩，
-        # 扩入余量带，不再触顶裁切。
-        rect = QRect(0, self._headroom, w, h - 2 * self._headroom)
+        # 素材区 = widget 去掉四周余量；悬浮放大从素材区向外扩，
+        # 扩入余量带，不再触边裁切。
+        rect = QRect(self._side_margin, self._headroom,
+                     w - 2 * self._side_margin, h - 2 * self._headroom)
         if self._pressed:
             rect = rect.adjusted(3, 3, -3, -3)
         elif self._hovered:
@@ -937,7 +942,8 @@ class PetProfileWindow(QWidget):
         # 第六十一轮：紧靠在一起——widget 按素材实宽收窄（左右各 3px
         # 悬浮余量），两 widget 相接，素材间距 6px；简介素材位置不动。
         tab_headroom = 4
-        side_margin = 3
+        # 第六十三轮：左右余量 3→5（悬浮横向涨幅 +4px + 抗锯齿 1px 缓冲）。
+        side_margin = 5
         # 第六十二轮：两键放大 20%（素材高 32→38），素材左缘仍对齐内容
         # 区左缘（229），两键紧贴间距 6px 不变。
         tab_scale = 1.2
@@ -948,7 +954,8 @@ class PetProfileWindow(QWidget):
         prev_rect = None
         for i, (name, art_name) in enumerate(TAB_SLOTS.items()):
             pm = _pp_pixmap(art_name)
-            tab = _TabButton(name, self, art=pm, headroom=tab_headroom)
+            tab = _TabButton(name, self, art=pm, headroom=tab_headroom,
+                             side_margin=side_margin)
             if pm.isNull() or pm.height() == 0:
                 art_w = old_w - 2 * side_margin
             else:
