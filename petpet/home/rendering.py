@@ -51,6 +51,7 @@ HOME_BUTTON_PATHS = {
         "play",
         "sleep",
         "shop",
+        "pets",
         "decorate",
         "exit",
     )
