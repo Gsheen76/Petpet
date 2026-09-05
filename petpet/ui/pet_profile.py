@@ -945,7 +945,8 @@ class PetProfileWindow(QWidget):
                              headroom=tab_headroom)
             art_h = base_art_h
             w = _R(0, 0, tab_w, 1).width()
-            tx = block_x + round((6 + i * 216) * _SX * _FIT)
+            # 第六十轮：键距 216→247 art（+24 显示px），素材间距 14→38。
+            tx = block_x + round((6 + i * 247) * _SX * _FIT)
             tab.setGeometry(
                 _R(tx, 0, 1, 1).x(), mid_y - art_h // 2 - tab_headroom,
                 w, art_h + 2 * tab_headroom,
