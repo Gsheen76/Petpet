@@ -458,11 +458,12 @@ class _RoundedBgLabel(QWidget):
             (w - scaled.width()) // 2, (h - scaled.height()) // 2, scaled,
         )
         # 暖棕实线描边（第六十四轮）：外围 3px 粗（用户定稿）。
+        # 第六十五轮：换 #d6a880（与套装虚线框同色系，原 #c9955e 太扎眼）。
         # 坑位：setClipPath(空路径) = 裁掉一切，描边整段消失；
         # 解除裁剪必须用 setClipping(False)。
         painter.setClipping(False)
         pen_w = 3
-        painter.setPen(QPen(QColor("#c9955e"), pen_w))
+        painter.setPen(QPen(QColor("#d6a880"), pen_w))
         painter.setBrush(Qt.NoBrush)
         painter.drawRoundedRect(
             pen_w // 2, pen_w // 2, w - pen_w, h - pen_w, radius, radius,
@@ -539,14 +540,11 @@ class _TabButton(QWidget):
                 rect.width(), rect.height(),
                 Qt.KeepAspectRatio, Qt.SmoothTransformation,
             )
-            if not (self.checked or self._hovered or self._pressed):
-                painter.setOpacity(0.45)
             painter.drawPixmap(
                 rect.x() + (rect.width() - scaled.width()) // 2,
                 rect.y() + (rect.height() - scaled.height()) // 2,
                 scaled,
             )
-            painter.setOpacity(1.0)
         else:
             # 无素材回退：文字胶囊。
             painter.setPen(Qt.NoPen)
@@ -570,6 +568,10 @@ class _TabButton(QWidget):
             painter.drawRoundedRect(art_pos, 12, 12)
         elif self._hovered:
             painter.setBrush(QColor(255, 252, 246, 80))
+            painter.drawRoundedRect(art_pos, 12, 12)
+        elif not self.checked:
+            # 第六十五轮：未选中不再降透明度，改为暖色压暗。
+            painter.setBrush(QColor(110, 68, 40, 55))
             painter.drawRoundedRect(art_pos, 12, 12)
 
 
@@ -946,12 +948,12 @@ class PetProfileWindow(QWidget):
         tab_headroom = 4
         # 第六十三轮：左右余量 3→5（悬浮横向涨幅 +4px + 抗锯齿 1px 缓冲）。
         side_margin = 5
-        # 第六十二轮：两键放大 20%（素材高 32→38），素材左缘仍对齐内容
-        # 区左缘（229），两键紧贴间距 6px 不变。
+        # 第六十二轮：两键放大 20%（素材高 32→38）。
         tab_scale = 1.2
         base_art_h = round(tab_h * _SY * _FIT * tab_scale)
-        mid_y = (_R(0, TAB_BAR_AT[1] - round(tab_h * 0.5 / _SY), 1, 1).y()
-                 + base_art_h // 2)
+        # 第六十五轮：两键精准吸附到背景卡边框上方——素材底缘 = 卡顶缘
+        # （不再半嵌卡片）。
+        card_top = _R(0, TAB_BAR_AT[1], 1, 1).y()
         old_w = _R(0, 0, tab_w, 1).width()
         prev_rect = None
         for i, (name, art_name) in enumerate(TAB_SLOTS.items()):
@@ -969,7 +971,7 @@ class PetProfileWindow(QWidget):
                 x = _R(CONTENT_AT[0], 0, 1, 1).x() + 22 - side_margin
             else:
                 x = prev_rect.x() + prev_rect.width()   # 紧贴上一枚
-            rect = QRect(x, mid_y - base_art_h // 2 - tab_headroom,
+            rect = QRect(x, card_top - base_art_h - tab_headroom,
                          w, base_art_h + 2 * tab_headroom)
             tab.setGeometry(rect)
             prev_rect = rect
