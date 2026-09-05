@@ -240,7 +240,7 @@ class ProfileWindowShellTests(unittest.TestCase):
         # 第十九轮：名字只显示在改名条牌上，简介内不再重复。
         self.assertEqual(window._name_label.text(), "烟花")
         self.assertNotIn("烟花", html)
-        self.assertIn("好感度", html)
+        self.assertIn("好感", html)
         for word in ("饱腹", "心情", "精力"):
             self.assertIn(word, html, f"属性值应含 {word}")
         self.assertIn("陪伴小狗", html, "性格介绍应来自 registry description")

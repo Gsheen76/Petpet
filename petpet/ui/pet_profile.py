@@ -457,9 +457,11 @@ class _RoundedBgLabel(QWidget):
         painter.drawPixmap(
             (w - scaled.width()) // 2, (h - scaled.height()) // 2, scaled,
         )
-        # 暖棕实线描边（第五十一轮）：加粗至 6×fit，明确成框。
-        painter.setClipPath(QPainterPath())
-        pen_w = max(4, round(6 * _FIT))
+        # 暖棕实线描边（第六十四轮）：外围 3px 粗（用户定稿）。
+        # 坑位：setClipPath(空路径) = 裁掉一切，描边整段消失；
+        # 解除裁剪必须用 setClipping(False)。
+        painter.setClipping(False)
+        pen_w = 3
         painter.setPen(QPen(QColor("#c9955e"), pen_w))
         painter.setBrush(Qt.NoBrush)
         painter.drawRoundedRect(
@@ -1042,7 +1044,7 @@ class PetProfileWindow(QWidget):
         # 第五十四轮：图标竖跨两行（左），节名/数值两行文字（右）。
         sections = (
             ("等级", "level"),
-            ("好感度", "affection"),
+            ("好感", "affection"),
             ("属性", "attrs"),
         )
         for title, key in sections:
