@@ -689,9 +689,24 @@ class FeedbackButton(QPushButton):
         self.setCursor(Qt.PointingHandCursor)
         self._plain_render = False   # render 抓帧时的递归护栏
         self._pending_fire = False   # 键内松开，待回弹播完触发
+        self._skin_cache = None      # 素颜帧缓存（paint 期内 render 不可靠）
         self._fire_timer = QTimer(self)
         self._fire_timer.setSingleShot(True)
         self._fire_timer.timeout.connect(self._fire_deferred)
+
+    def _capture_skin(self):
+        """事件循环内（非 paint 期）抓取素颜帧并刷新。"""
+        if self._skin_cache is not None and self._skin_cache.size() == self.size():
+            return
+        pixmap = QPixmap(self.size())
+        pixmap.fill(Qt.transparent)
+        self._plain_render = True
+        try:
+            self.render(pixmap)
+        finally:
+            self._plain_render = False
+        self._skin_cache = pixmap
+        self.update()
 
     def _phase(self):
         """None | 'pressed' | 'recover' | 'hover'。"""
@@ -729,17 +744,14 @@ class FeedbackButton(QPushButton):
 
     def paintEvent(self, event):
         phase = self._phase()
-        if self._plain_render or phase is None:
+        skin = self._skin_cache
+        if self._plain_render or phase is None or skin is None:
+            # 素颜直绘；反馈帧所需皮肤缺失时延后抓取（paint 期内
+            # render 在真机会抓到空帧——曾致悬浮整键消失）。
+            if phase is not None and skin is None:
+                QTimer.singleShot(0, self._capture_skin)
             super().paintEvent(event)
             return
-        # 抓素颜帧（QSS 皮肤），按相位整体缩放绘制（悬浮放大/按住内缩）。
-        pixmap = QPixmap(self.size())
-        pixmap.fill(Qt.transparent)
-        self._plain_render = True
-        try:
-            self.render(pixmap)
-        finally:
-            self._plain_render = False
         painter = QPainter(self)
         painter.setRenderHint(QPainter.SmoothPixmapTransform)
         painter.setRenderHint(QPainter.Antialiasing)
@@ -755,7 +767,7 @@ class FeedbackButton(QPushButton):
             else:
                 tint = QColor(255, 255, 255, 55)
             outline = QColor("#f28f76")
-        painter.drawPixmap(target, pixmap)
+        painter.drawPixmap(target, skin)
         path = QPainterPath()
         path.addRoundedRect(QRectF(target), 16, 16)
         painter.fillPath(path, tint)

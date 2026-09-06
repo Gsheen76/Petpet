@@ -1869,13 +1869,28 @@ class HomeSceneWindow(QWidget):
             "家具布置",
         )
         self._draw_scene_button(
-            painter, self.decoration_panel_close_button_rect(), "×"
+            painter, self.decoration_panel_close_button_rect(), "×",
+            state=self._button_state("deco:close"),
         )
         for category, label in HOME_DECORATION_CATEGORIES:
             rect = self._category_rects()[category]
-            painter.setBrush(QColor("#cf846a" if category == self._decoration_category else "#f9e7ce"))
+            state = self._button_state(f"deco:cat:{category}")
+            # 第六十八轮：分类签同按键规范（悬浮放大+描边，按住内缩+压暗）。
+            if state == "hover" or state == "recover":
+                rect = rect.adjusted(-2, -2, 2, 2)
+            elif state == "pressed":
+                rect = rect.adjusted(2, 2, -2, -2)
+            selected = category == self._decoration_category
+            fill = "#cf846a" if selected else "#f9e7ce"
+            if state == "pressed":
+                fill = "#b06a4f" if selected else "#ecd0b2"
+            painter.setBrush(QColor(fill))
             painter.setPen(Qt.NoPen)
             painter.drawRoundedRect(rect, 7, 7)
+            if state in ("hover", "recover"):
+                painter.setPen(QPen(QColor("#f28f76"), 2))
+                painter.setBrush(Qt.NoBrush)
+                painter.drawRoundedRect(rect, 7, 7)
             painter.setPen(QColor("#65483b"))
             painter.drawText(rect, Qt.AlignCenter, label)
         for item_id, card in self._item_card_rects().items():
@@ -1902,10 +1917,20 @@ class HomeSceneWindow(QWidget):
             name_rect = QRect(card.x() + 8, card.y() + 88, card.width() - 12, 23)
             painter.drawText(name_rect, Qt.AlignVCenter | Qt.AlignLeft, name)
             action = "放置" if stored else "收纳"
-            painter.setBrush(QColor("#f5d6b3"))
-            painter.setPen(Qt.NoPen)
             action_rect = self._item_action_rect(card)
+            state = self._button_state(f"deco:act:{item_id}")
+            # 第六十八轮：放置/收纳键同按键规范。
+            if state == "hover" or state == "recover":
+                action_rect = action_rect.adjusted(-2, -2, 2, 2)
+            elif state == "pressed":
+                action_rect = action_rect.adjusted(2, 2, -2, -2)
+            painter.setBrush(QColor("#e8b98c" if state == "pressed" else "#f5d6b3"))
+            painter.setPen(Qt.NoPen)
             painter.drawRoundedRect(action_rect, 7, 7)
+            if state in ("hover", "recover"):
+                painter.setPen(QPen(QColor("#f28f76"), 2))
+                painter.setBrush(Qt.NoBrush)
+                painter.drawRoundedRect(action_rect, 7, 7)
             painter.setPen(QColor("#65483b"))
             painter.drawText(action_rect, Qt.AlignCenter, action)
 
@@ -2022,6 +2047,20 @@ class HomeSceneWindow(QWidget):
             self.save_state(self.state)
         self.update()
         return True
+
+    def _hit_decoration_button(self, point):
+        """装修面板内可交互按键的命中键（两段式反馈用），非面板返回 None。"""
+        if not self.is_decorating():
+            return None
+        if self.decoration_panel_close_button_rect().contains(point):
+            return "deco:close"
+        for category, rect in self._category_rects().items():
+            if rect.contains(point):
+                return f"deco:cat:{category}"
+        for item_id, card in self._item_card_rects().items():
+            if self._item_action_rect(card).contains(point):
+                return f"deco:act:{item_id}"
+        return None
 
     def _handle_decoration_panel_click(self, point):
         if self.decoration_panel_close_button_rect().contains(point):
@@ -2197,7 +2236,9 @@ class HomeSceneWindow(QWidget):
             return
         if event.button() != Qt.LeftButton:
             return
-        key = self._hit_scene_button(event.pos())
+        key = self._hit_scene_button(event.pos()) or self._hit_decoration_button(
+            event.pos()
+        )
         if key:
             # 第六十八轮：按住只内缩，松开键内才回弹+触发（拖走取消）。
             self._pressed_button = key
@@ -2250,7 +2291,10 @@ class HomeSceneWindow(QWidget):
         if self._pressed_button is not None:
             # 第六十八轮：松开在键内 → 回弹 40ms 后触发；拖走 → 取消。
             key = self._pressed_button
-            if self._hit_scene_button(event.pos()) == key:
+            hit = self._hit_scene_button(event.pos()) or self._hit_decoration_button(
+                event.pos()
+            )
+            if hit == key:
                 now = time.monotonic()
                 self._button_recover_until = (
                     now + self.BUTTON_PRESS_FLASH_MS / 1000.0
