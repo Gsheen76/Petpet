@@ -55,6 +55,9 @@ CLOSE_CLICK_DEFER_MS = 80
 # 图1 左栏：宠物头像 rail（pet_avatar_rail，纯背景板无烘焙槽）+
 # 程序布局双卡槽（坐标按参考图反推到 art 比例）。
 RAIL_AT = (51, 230, 200, 992)
+# 第七十二轮：左下角商店提示区（rail 下方）。
+SHOP_TIP_AT = (48, 1236, 210, 64)
+SHOP_BUTTON_AT = (48, 1314, 210, 84)
 RAIL_TITLE_AT = (-2, 182, 320, 46)           # 「我的伙伴」（rail 正上方，加粗）
 PET_CARD_SLOTS = ((76, 272), (76, 470))      # 每卡头像左上（烟花上移80、奶油上移200、右移10，显示px 换算）
 PET_CARD_SIZE = (150, 150)
@@ -574,6 +577,87 @@ class _TabButton(QWidget):
             painter.drawRoundedRect(art_pos, 12, 12)
 
 
+class _ShopPillButton(QWidget):
+    """左下角「前往商店」胶囊键（第七十二轮）：程序绘制 + 标准反馈
+    （悬浮放大+白洗描边、按住内缩压暗、键内松开回弹 40ms 后触发）。"""
+
+    clicked = pyqtSignal()
+    RECOVER_MS = 40
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._hovered = False
+        self._armed = False
+        self._pending_fire = False
+        self._timer = QTimer(self)
+        self._timer.setSingleShot(True)
+        self._timer.timeout.connect(self._fire)
+        self.setCursor(Qt.PointingHandCursor)
+
+    def enterEvent(self, event):
+        self._hovered = True
+        self.update()
+
+    def leaveEvent(self, event):
+        self._hovered = False
+        self._armed = False
+        self.update()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._armed = True
+            self.update()
+            event.accept()
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton and self._armed:
+            self._armed = False
+            if self.rect().contains(event.pos()):
+                self._pending_fire = True
+                self.update()
+                self._timer.start(self.RECOVER_MS)
+            else:
+                self.update()
+            event.accept()
+
+    def _fire(self):
+        if not self._pending_fire:
+            return
+        self._pending_fire = False
+        self.update()
+        self.clicked.emit()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        w, h = self.width(), self.height()
+        rect = QRect(0, 0, w, h)
+        if self._armed:
+            rect = rect.adjusted(3, 3, -3, -3)
+        elif self._hovered:
+            rect = rect.adjusted(-2, -2, 2, 2)
+        radius = rect.height() / 2
+        painter.setPen(QPen(QColor("#f2b193"), 2))
+        painter.setBrush(QColor("#ffe9d6"))
+        painter.drawRoundedRect(rect, radius, radius)
+        font = QFont(APP_FONT_FAMILY)
+        font.setBold(True)
+        font.setPixelSize(max(1, round(24 * _SX * _FIT)))
+        painter.setFont(font)
+        painter.setPen(QColor("#9c5a3d"))
+        painter.drawText(rect, Qt.AlignCenter, "🏪 前往商店")
+        if self._armed:
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor(70, 42, 28, 60))
+            painter.drawRoundedRect(rect, radius, radius)
+        elif self._hovered or self._pending_fire:
+            painter.setPen(QPen(QColor("#f28f76"), 2))
+            painter.setBrush(
+                QColor(255, 252, 246, 90 if self._pending_fire else 60)
+            )
+            painter.drawRoundedRect(rect, radius, radius)
+
+
 class _OutfitIdleLabel(QLabel):
     """套装卡右侧：穿上对应套装的小狗待机动画（8fps 循环）。"""
 
@@ -839,6 +923,22 @@ class PetProfileWindow(QWidget):
         self._close_button.set_art_rect(CLOSE_BUTTON_AT)
         # 套装装备按钮素材映射（绿=恐龙、橘=草莓），测试与刷新共用。
         self._outfit_button_assets = dict(OUTFIT_EQUIP_BUTTON)
+
+        # 第七十二轮：左下角商店提示（rail 下方）。
+        self._shop_tip = QLabel(self)
+        self._shop_tip.setWordWrap(True)
+        self._shop_tip.setAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
+        self._shop_tip.setStyleSheet(
+            f"font-family:'{APP_FONT_FAMILY}';"
+            f"font-size:{round(17 * _SX * _FIT)}px;"
+            "font-weight:500;color:#a8742c;background:transparent;"
+        )
+        self._shop_tip.setText("宠物和套装\n可前往商店购买")
+        self._shop_tip.setGeometry(_R(*SHOP_TIP_AT))
+        self._shop_tip.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self._shop_button = _ShopPillButton(self)
+        self._shop_button.setGeometry(_R(*SHOP_BUTTON_AT))
+        self._shop_button.clicked.connect(self._open_shop)
 
         self._build_content()
         self._start_idle_animation()
@@ -1335,6 +1435,12 @@ class PetProfileWindow(QWidget):
         self.refresh()
 
     def _open_shop(self):
+        opener = getattr(self.pet, "open_shop", None)
+        if callable(opener):
+            opener()
+
+    def _open_shop(self):
+        """左下角商店键：打开 Pet币商店（PetWindow.open_shop）。"""
         opener = getattr(self.pet, "open_shop", None)
         if callable(opener):
             opener()
