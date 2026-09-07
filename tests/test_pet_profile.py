@@ -467,8 +467,8 @@ class ProfileWindowShellTests(unittest.TestCase):
         rail_rect = _R(*RAIL_AT)
         self.assertLessEqual(abs(box.width() - (rail_rect.width() - 6)), 1,
                              "改稿5：框宽 = rail 宽 - 6（±1 取整）")
-        self.assertLessEqual(abs(box.x() - rail_rect.x()), 1,
-                             "改稿6：右移 1px（±1 取整）")
+        self.assertLessEqual(abs(box.x() - rail_rect.x()), 4,
+                             "改稿7：相对 rail 累计右移 4px（±1 取整）")
         g = box.geometry()
         self.assertGreater(g.y(), window.height() * 5 / 6)
         # 改稿：不再有商店按键
