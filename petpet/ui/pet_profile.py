@@ -56,7 +56,9 @@ CLOSE_CLICK_DEFER_MS = 80
 # 程序布局双卡槽（坐标按参考图反推到 art 比例）。
 RAIL_AT = (51, 230, 200, 992)
 # 第七十二轮：左下角商店提示框（rail 下方）。
-SHOP_TIP_AT = (48, 1240, 210, 122)
+# 第七十二轮（改稿2）：左下角商店提示框——宽度与上方 rail 对齐
+# （同 x/同宽），白色边框加粗，框内加「小tips」标题。
+SHOP_TIP_AT = (51, 1238, 200, 136)
 RAIL_TITLE_AT = (-2, 182, 320, 46)           # 「我的伙伴」（rail 正上方，加粗）
 PET_CARD_SLOTS = ((76, 272), (76, 470))      # 每卡头像左上（烟花上移80、奶油上移200、右移10，显示px 换算）
 PET_CARD_SIZE = (150, 150)
@@ -70,10 +72,10 @@ IDLE_FPS = 8
 
 # 图3 名字牌（rename_bg 323x63）+ 改名钮（change_name 94x55）：
 # 垫正下方居中，两素材均放大 50%（第十五轮后续）；改名钮放牌内右端。
-NAME_PLATE_AT = (466, 570, 360, 70)   # 第七十一轮：上移 10 显示px（-15 art）
+NAME_PLATE_AT = (466, 578, 360, 70)   # 第七十二轮B：下移 5 显示px（+8 art）
 # 名字在牌内部整体居中（第二十六轮）：可用区 = 牌宽 - 钮宽 - 边距，居中放。
-NAME_ART_AT = (478, 573, 220, 64)   # 居中于牌内可用区（左缘~按钮左缘）
-RENAME_BUTTON_AT = (700, 573, 113, 66)   # 原生 94x55 × 1.2 等比（不被压扁）
+NAME_ART_AT = (478, 581, 220, 64)   # 居中于牌内可用区（左缘~按钮左缘）
+RENAME_BUTTON_AT = (700, 581, 113, 66)   # 原生 94x55 × 1.2 等比（不被压扁）
 
 # 分栏（第三十七轮）：参考图裁切的两枚素材按钮（简介/套装），
 # 附着在内容背景图上方；选中态用另一枚按钮互换表示。
@@ -541,9 +543,9 @@ class _TabButton(QWidget):
                 rect.width(), rect.height(),
                 Qt.KeepAspectRatio, Qt.SmoothTransformation,
             )
-            # 第六十六轮：未选中恢复透明度法（0.45 太淡 → 0.65 别太透明）。
+            # 未选中透明度（第七十二轮B：0.65→0.55 再降一档）。
             if not (self.checked or self._hovered or self._pressed):
-                painter.setOpacity(0.65)
+                painter.setOpacity(0.55)
             painter.drawPixmap(
                 rect.x() + (rect.width() - scaled.width()) // 2,
                 rect.y() + (rect.height() - scaled.height()) // 2,
@@ -842,22 +844,37 @@ class PetProfileWindow(QWidget):
         # 套装装备按钮素材映射（绿=恐龙、橘=草莓），测试与刷新共用。
         self._outfit_button_assets = dict(OUTFIT_EQUIP_BUTTON)
 
-        # 第七十二轮（改稿）：左下角商店提示框——去按钮，圆角框内
-        # 两行小字，字号加大（17→21px）。
-        self._shop_tip = QLabel(self)
+        # 第七十二轮（改稿2）：左下角商店提示框——宽度与上方 rail 对齐
+        # （同 x 同宽），白色边框加粗（3px），框内加「小tips」标题。
+        tip_host = QWidget(self)
+        tip_host.setObjectName("shopTipBox")
+        tip_host.setAttribute(Qt.WA_StyledBackground, True)
+        tip_host.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        tip_host.setStyleSheet(
+            "QWidget#shopTipBox{background:#fff6e8;"
+            f"border:3px solid #ffffff;border-radius:{round(14 * _FIT)}px;}}"
+        )
+        tip_layout = QVBoxLayout(tip_host)
+        tip_layout.setContentsMargins(8, 6, 8, 8)
+        tip_layout.setSpacing(2)
+        self._shop_tip_title = QLabel("💡 小tips")
+        self._shop_tip_title.setAlignment(Qt.AlignHCenter)
+        self._shop_tip_title.setStyleSheet(
+            f"font-family:'{APP_FONT_FAMILY}';"
+            f"font-size:{round(18 * _SX * _FIT)}px;"
+            "font-weight:800;color:#d29a38;background:transparent;"
+        )
+        tip_layout.addWidget(self._shop_tip_title)
+        self._shop_tip = QLabel("宠物和套装\n可前往商店购买")
         self._shop_tip.setWordWrap(True)
-        self._shop_tip.setAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
-        self._shop_tip.setText("宠物和套装\n可前往商店购买")
-        tip_px = round(21 * _SX * _FIT)
+        self._shop_tip.setAlignment(Qt.AlignHCenter)
         self._shop_tip.setStyleSheet(
             f"font-family:'{APP_FONT_FAMILY}';"
-            f"font-size:{tip_px}px;"
-            "font-weight:600;color:#a8742c;"
-            "background:#fff6e8;"
-            f"border:2px solid #d6a880;border-radius:{round(14 * _FIT)}px;"
+            f"font-size:{round(21 * _SX * _FIT)}px;"
+            "font-weight:600;color:#a8742c;background:transparent;"
         )
-        self._shop_tip.setGeometry(_R(*SHOP_TIP_AT))
-        self._shop_tip.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        tip_layout.addWidget(self._shop_tip)
+        tip_host.setGeometry(_R(*SHOP_TIP_AT))
 
         self._build_content()
         self._start_idle_animation()

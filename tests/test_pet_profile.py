@@ -455,15 +455,19 @@ class ProfileWindowShellTests(unittest.TestCase):
         self.assertIs(second, first)
 
     def test_shop_tip_box_bottom_left(self):
-        """第七十二轮（改稿）：左下角提示框——无按钮，圆角框 + 加大字号。"""
+        """第七十二轮（改稿2）：提示框对齐 rail 宽、带小tips标题。"""
+        from petpet.ui.pet_profile import RAIL_AT, _R
+
         window, pet = self._window()
         self.assertIn("商店", window._shop_tip.text())
         self.assertIn("宠物", window._shop_tip.text())
-        style = window._shop_tip.styleSheet()
-        self.assertIn("border", style, "提示应带边框")
-        self.assertNotIn("font-size:13px", style)
-        g = window._shop_tip.geometry()
-        self.assertLess(g.x(), window.width() / 3)
+        self.assertIn("tips", window._shop_tip_title.text())
+        box = window._shop_tip.parentWidget()
+        rail_rect = _R(*RAIL_AT)
+        self.assertEqual(box.width(), rail_rect.width(),
+                         "提示框宽应与 rail 一致")
+        self.assertEqual(box.x(), rail_rect.x())
+        g = box.geometry()
         self.assertGreater(g.y(), window.height() * 5 / 6)
         # 改稿：不再有商店按键
         self.assertFalse(hasattr(window, "_shop_button"))
