@@ -465,8 +465,8 @@ class ProfileWindowShellTests(unittest.TestCase):
                          "改稿3：标题行已删")
         box = window._shop_tip.parentWidget()
         rail_rect = _R(*RAIL_AT)
-        self.assertEqual(box.width(), rail_rect.width(),
-                         "提示框宽应与 rail 一致")
+        self.assertEqual(box.width(), rail_rect.width() - 6,
+                         "改稿5：框宽 = rail 宽 - 6")
         self.assertEqual(box.x(), rail_rect.x())
         g = box.geometry()
         self.assertGreater(g.y(), window.height() * 5 / 6)

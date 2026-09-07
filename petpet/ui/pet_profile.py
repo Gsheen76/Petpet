@@ -58,7 +58,7 @@ RAIL_AT = (51, 230, 200, 992)
 # 第七十二轮：左下角商店提示框（rail 下方）。
 # 第七十二轮（改稿2）：左下角商店提示框——宽度与上方 rail 对齐
 # （同 x/同宽），白色边框加粗，框内加「小tips」标题。
-SHOP_TIP_AT = (51, 1238, 200, 136)
+SHOP_TIP_AT = (51, 1261, 192, 113)   # 改稿5：宽 -6/高 -15 显示px（左缘对齐 rail、底缘不动）
 RAIL_TITLE_AT = (-2, 182, 320, 46)           # 「我的伙伴」（rail 正上方，加粗）
 PET_CARD_SLOTS = ((76, 272), (76, 470))      # 每卡头像左上（烟花上移80、奶油上移200、右移10，显示px 换算）
 PET_CARD_SIZE = (150, 150)
@@ -844,24 +844,23 @@ class PetProfileWindow(QWidget):
         # 套装装备按钮素材映射（绿=恐龙、橘=草莓），测试与刷新共用。
         self._outfit_button_assets = dict(OUTFIT_EQUIP_BUTTON)
 
-        # 第七十二轮（改稿3）：删去「小tips」标题行，纯提示文字；
-        # 边框改奶黄色。
+        # 第七十二轮（改稿5）：边框再淡（奶黄 #fae7c0），字体 21→23。
         tip_host = QWidget(self)
         tip_host.setObjectName("shopTipBox")
         tip_host.setAttribute(Qt.WA_StyledBackground, True)
         tip_host.setAttribute(Qt.WA_TransparentForMouseEvents, True)
         tip_host.setStyleSheet(
             "QWidget#shopTipBox{background:#fff6e8;"
-            f"border:3px solid #f5db8f;border-radius:{round(14 * _FIT)}px;}}"
+            f"border:3px solid #fae7c0;border-radius:{round(14 * _FIT)}px;}}"
         )
         tip_layout = QVBoxLayout(tip_host)
-        tip_layout.setContentsMargins(8, 8, 8, 8)
+        tip_layout.setContentsMargins(6, 6, 6, 6)
         self._shop_tip = QLabel("宠物和套装\n可前往商店购买")
         self._shop_tip.setWordWrap(True)
         self._shop_tip.setAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
         self._shop_tip.setStyleSheet(
             f"font-family:'{APP_FONT_FAMILY}';"
-            f"font-size:{round(21 * _SX * _FIT)}px;"
+            f"font-size:{round(23 * _SX * _FIT)}px;"
             "font-weight:600;color:#a8742c;background:transparent;"
         )
         tip_layout.addWidget(self._shop_tip)
