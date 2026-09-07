@@ -454,20 +454,19 @@ class ProfileWindowShellTests(unittest.TestCase):
         )
         self.assertIs(second, first)
 
-    def test_shop_tip_and_button_bottom_left(self):
-        """第七十二轮：左下角提示 + 前往商店键（点击打开商店）。"""
-        from PyQt5.QtTest import QTest
-
+    def test_shop_tip_box_bottom_left(self):
+        """第七十二轮（改稿）：左下角提示框——无按钮，圆角框 + 加大字号。"""
         window, pet = self._window()
         self.assertIn("商店", window._shop_tip.text())
         self.assertIn("宠物", window._shop_tip.text())
-        # 按钮在面板左下角（x < 面板宽 1/3、y > 高 5/6）
-        g = window._shop_button.geometry()
+        style = window._shop_tip.styleSheet()
+        self.assertIn("border", style, "提示应带边框")
+        self.assertNotIn("font-size:13px", style)
+        g = window._shop_tip.geometry()
         self.assertLess(g.x(), window.width() / 3)
         self.assertGreater(g.y(), window.height() * 5 / 6)
-        QTest.mouseClick(window._shop_button, Qt.LeftButton)
-        QTest.qWait(80)  # 回弹 40ms 后触发
-        pet.open_shop.assert_called_once()
+        # 改稿：不再有商店按键
+        self.assertFalse(hasattr(window, "_shop_button"))
 
     def test_intro_has_no_progress_bars(self):
         """第四十九轮：简介页进度条全删。"""
