@@ -6,7 +6,15 @@
   <img src="assets/runtime/pets/lunch_meat/desktop/poses/idle.png" width="280" alt="Pet陪它桌面小狗">
 </p>
 
-当前版本：`v1.6.3`
+当前版本：`v1.7.0`
+
+## v1.7.0 更新亮点
+
+- **宠物详情面板从零重做**：全新宠物头像列表、改名牌与简介页四模块布局（等级 / 好感 / 属性 / 性格），套装页左右分栏卡带穿装待机动画预览，左下角新增购买提示框。
+- **按键反馈全应用统一**（宠物面板 / 商店 / 家园 / 装修面板）：悬浮放大+白洗+珊瑚描边，按住内缩+压暗，松开在键内回弹后才触发，拖出键外取消。
+- **简介/套装分栏按键素材化**，精准吸附在内容卡边框上方；小屋菜单新增「宠物」键素材（睡窝柴犬插画）。
+- **商店优化**：免费赠送 / 使用中 / 已拥有徽标缩小 5%，删除各页页首说明小字，交互键统一反馈。
+- 修复详情面板背景描边未渲染、商店按键悬浮消失、装修面板按键无反馈等显示问题。
 
 ## v1.6.3 更新亮点
 
@@ -39,7 +47,7 @@
 
 ## v1.6.0 发布
 
-完整资产通过 `scripts/release.ps1 -Version 1.6.3` 一键构建、校验并发布。
+完整资产通过 `scripts/release.ps1 -Version 1.7.0` 一键构建、校验并发布。
 
 支持平台：Windows 10/11、macOS Apple 芯片（arm64）
 
@@ -92,9 +100,9 @@
 | 平台 | 文件 |
 | --- | --- |
 | Windows 直接运行 | `Petpet.exe` |
-| Windows 便携包 | `Petpet-v1.6.3-windows.zip` |
-| macOS Apple 芯片 | `Petpet-v1.6.3-macOS-arm64.zip` |
-| 校验和 | `Petpet-v1.6.3-SHA256SUMS.txt` |
+| Windows 便携包 | `Petpet-v1.7.0-windows.zip` |
+| macOS Apple 芯片 | `Petpet-v1.7.0-macOS-arm64.zip` |
+| 校验和 | `Petpet-v1.7.0-SHA256SUMS.txt` |
 
 Windows 下载 ZIP 后解压并运行 `Petpet.exe`。直接下载的 `Petpet.exe` 也可以独立运行，程序不会弹出命令行窗口。
 
@@ -326,7 +334,7 @@ dist/Petpet.app
 发布前应先更新 `version.py`、`docs/RELEASE_NOTES_v<版本>.md` 和 README，并提交全部改动。在干净工作树中运行：
 
 ```powershell
-.\scripts\release.ps1 -Version 1.6.3
+.\scripts\release.ps1 -Version 1.7.0
 ```
 
 脚本会依次检查版本和工作树、运行全量测试、编译检查、构建并冒烟验证 Windows 版本、生成 Windows 便携包和 SHA256 校验文件，然后同步 `main`、创建或继续草稿 Release，并触发 macOS arm64 构建工作流。
@@ -334,8 +342,8 @@ dist/Petpet.app
 公开 Release 必须包含以下三项非空正式资产；校验和文件也会一并上传：
 
 - `Petpet.exe`
-- `Petpet-v1.6.3-windows.zip`
-- `Petpet-v1.6.3-macOS-arm64.zip`
+- `Petpet-v1.7.0-windows.zip`
+- `Petpet-v1.7.0-macOS-arm64.zip`
 
 中途失败时 Release 会保持草稿。修复问题后可以重复运行同一版本命令；脚本不会强推、覆盖已存在的标签或删除 worktree。已公开且完整的 Release 会先验证远端资产，避免重复修改。
 
