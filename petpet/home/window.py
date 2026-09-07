@@ -1855,7 +1855,8 @@ class HomeSceneWindow(QWidget):
 
     @staticmethod
     def _item_action_rect(card):
-        return QRect(card.x() + 8, card.bottom() - 32, card.width() - 16, 27)
+        # 第七十轮：行高 27→30（字体完整显示）。
+        return QRect(card.x() + 8, card.bottom() - 34, card.width() - 16, 30)
 
     def _draw_decoration_panel(self, painter):
         panel = self._panel_rect()
@@ -1914,8 +1915,10 @@ class HomeSceneWindow(QWidget):
                     ),
                 )
             painter.setPen(QColor("#754b3a"))
-            name_rect = QRect(card.x() + 8, card.y() + 88, card.width() - 12, 23)
-            painter.drawText(name_rect, Qt.AlignVCenter | Qt.AlignLeft, name)
+            # 第七十轮：名字行加高至 32px 并居中（原 23px 行高小于字体
+            # 高度，上下被裁）。
+            name_rect = QRect(card.x() + 8, card.y() + 86, card.width() - 16, 32)
+            painter.drawText(name_rect, Qt.AlignCenter, name)
             action = "放置" if stored else "收纳"
             action_rect = self._item_action_rect(card)
             state = self._button_state(f"deco:act:{item_id}")
