@@ -68,10 +68,10 @@ IDLE_FPS = 8
 
 # 图3 名字牌（rename_bg 323x63）+ 改名钮（change_name 94x55）：
 # 垫正下方居中，两素材均放大 50%（第十五轮后续）；改名钮放牌内右端。
-NAME_PLATE_AT = (466, 585, 360, 70)
+NAME_PLATE_AT = (466, 570, 360, 70)   # 第七十一轮：上移 10 显示px（-15 art）
 # 名字在牌内部整体居中（第二十六轮）：可用区 = 牌宽 - 钮宽 - 边距，居中放。
-NAME_ART_AT = (478, 588, 220, 64)   # 居中于牌内可用区（左缘~按钮左缘）
-RENAME_BUTTON_AT = (700, 588, 113, 66)   # 原生 94x55 × 1.2 等比（不被压扁）
+NAME_ART_AT = (478, 573, 220, 64)   # 居中于牌内可用区（左缘~按钮左缘）
+RENAME_BUTTON_AT = (700, 573, 113, 66)   # 原生 94x55 × 1.2 等比（不被压扁）
 
 # 分栏（第三十七轮）：参考图裁切的两枚素材按钮（简介/套装），
 # 附着在内容背景图上方；选中态用另一枚按钮互换表示。
@@ -969,7 +969,8 @@ class PetProfileWindow(QWidget):
                 # 首键素材左缘对齐内容区左缘（内容边距 22）。
                 x = _R(CONTENT_AT[0], 0, 1, 1).x() + 22 - side_margin
             else:
-                x = prev_rect.x() + prev_rect.width()   # 紧贴上一枚
+                # 第七十一轮：与上一枚紧连（widget 重叠 6px，素材间距 4px）。
+                x = prev_rect.x() + prev_rect.width() - 6
             rect = QRect(x, card_top - base_art_h - tab_headroom,
                          w, base_art_h + 2 * tab_headroom)
             tab.setGeometry(rect)
@@ -1053,12 +1054,14 @@ class PetProfileWindow(QWidget):
             layout.addWidget(row)
             self._intro_heads[key] = row
             self._intro_sections[key] = value
-            layout.addSpacing(18)
+            # 第七十一轮：模块间隙 = 最小 8px + 均摊剩余空间，
+            # 四模块铺满内容区（原尾部堆一堆空白不美观）。
+            layout.addSpacing(8)
+            layout.addStretch(1)
         row, value = self._intro_section("性格", "personality", k)
         layout.addWidget(row)
         self._intro_heads["personality"] = row
         self._intro_sections["personality"] = value
-        layout.addStretch(1)
         scroll.setWidget(host)
         return scroll
 
