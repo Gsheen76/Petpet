@@ -2264,7 +2264,9 @@ class HomeSceneWindow(QWidget):
         event.accept()
 
     def mouseMoveEvent(self, event):
-        key = self._hit_scene_button(event.pos())
+        key = self._hit_scene_button(event.pos()) or self._hit_decoration_button(
+            event.pos()
+        )
         if key != self._hover_button:
             self._hover_button = key
             self.update()
