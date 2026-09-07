@@ -844,30 +844,21 @@ class PetProfileWindow(QWidget):
         # 套装装备按钮素材映射（绿=恐龙、橘=草莓），测试与刷新共用。
         self._outfit_button_assets = dict(OUTFIT_EQUIP_BUTTON)
 
-        # 第七十二轮（改稿2）：左下角商店提示框——宽度与上方 rail 对齐
-        # （同 x 同宽），白色边框加粗（3px），框内加「小tips」标题。
+        # 第七十二轮（改稿3）：删去「小tips」标题行，纯提示文字；
+        # 边框改奶黄色。
         tip_host = QWidget(self)
         tip_host.setObjectName("shopTipBox")
         tip_host.setAttribute(Qt.WA_StyledBackground, True)
         tip_host.setAttribute(Qt.WA_TransparentForMouseEvents, True)
         tip_host.setStyleSheet(
             "QWidget#shopTipBox{background:#fff6e8;"
-            f"border:3px solid #ffffff;border-radius:{round(14 * _FIT)}px;}}"
+            f"border:3px solid #f5db8f;border-radius:{round(14 * _FIT)}px;}}"
         )
         tip_layout = QVBoxLayout(tip_host)
-        tip_layout.setContentsMargins(8, 6, 8, 8)
-        tip_layout.setSpacing(2)
-        self._shop_tip_title = QLabel("💡 小tips")
-        self._shop_tip_title.setAlignment(Qt.AlignHCenter)
-        self._shop_tip_title.setStyleSheet(
-            f"font-family:'{APP_FONT_FAMILY}';"
-            f"font-size:{round(18 * _SX * _FIT)}px;"
-            "font-weight:800;color:#d29a38;background:transparent;"
-        )
-        tip_layout.addWidget(self._shop_tip_title)
+        tip_layout.setContentsMargins(8, 8, 8, 8)
         self._shop_tip = QLabel("宠物和套装\n可前往商店购买")
         self._shop_tip.setWordWrap(True)
-        self._shop_tip.setAlignment(Qt.AlignHCenter)
+        self._shop_tip.setAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
         self._shop_tip.setStyleSheet(
             f"font-family:'{APP_FONT_FAMILY}';"
             f"font-size:{round(21 * _SX * _FIT)}px;"

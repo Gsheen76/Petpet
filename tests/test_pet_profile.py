@@ -461,7 +461,8 @@ class ProfileWindowShellTests(unittest.TestCase):
         window, pet = self._window()
         self.assertIn("商店", window._shop_tip.text())
         self.assertIn("宠物", window._shop_tip.text())
-        self.assertIn("tips", window._shop_tip_title.text())
+        self.assertFalse(hasattr(window, "_shop_tip_title"),
+                         "改稿3：标题行已删")
         box = window._shop_tip.parentWidget()
         rail_rect = _R(*RAIL_AT)
         self.assertEqual(box.width(), rail_rect.width(),
