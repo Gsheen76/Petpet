@@ -173,7 +173,7 @@ assets/runtime/ui/gifts/          # 礼物图标（商店卡+面板背包共用�
 | 单元测试（offscreen） | `$env:QT_QPA_PLATFORM='offscreen'; python -m pytest -q` |
 | Windows 平台渲染验证 | `python -X utf8 -c "…"`（见测试脚本，需真实桌面） |
 | 重启小狗（验证可见） | `Stop-Process` 旧 PID → `pythonw.exe pet.py` → `EnumWindows` 检查 `IsWindowVisible`；隐藏则二次启动召回 |
-| 版本发布 | 更新 `version.py` + README + 发布说明 → `scripts/release.ps1 -Version X.Y.Z` |
+| 版本发布 | 更新 `version.py` + README + 发布说明 → `scripts/release.ps1 -Version X.Y.Z`；Release 标题规范=「Petpet + 版本号」（2026-09-10 定稿，脚本已固化） |
 
 **测试约束**：
 - `QT_QPA_PLATFORM=offscreen` 跑全量（~1.5–5min，**757 passed**，2026-09-08 礼物页三列网格后基准）
