@@ -25,27 +25,39 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FURNITURE_DIR = os.path.join(ROOT, "assets", "runtime", "furniture", "home")
 
 # 顺序 = 提示词顺序（行优先）→ (asset 文件名, 定义尺寸)。
-FURNITURE_ORDER = (
-    ("lamp.png", (150, 330)),
-    ("bookshelf.png", (230, 280)),
-    ("round_table.png", (280, 190)),
-    ("toy_basket.png", (220, 150)),
-)
+FURNITURE_SETS = {
+    # 新四件（2026-09-10 家具扩充轮）。
+    "new": (
+        ("lamp.png", (150, 330)),
+        ("bookshelf.png", (230, 280)),
+        ("round_table.png", (280, 190)),
+        ("toy_basket.png", (220, 150)),
+    ),
+    # 旧四件重制（2026-09-10 统一风格轮）。
+    "legacy": (
+        ("rug.png", (440, 270)),
+        ("sofa.png", (360, 225)),
+        ("plant.png", (190, 340)),
+        ("wall_art.png", (220, 285)),
+    ),
+}
+FURNITURE_ORDER = FURNITURE_SETS["new"]
 
 COLUMNS = 2
 
 
 def split_sheet(sheet_path: str, threshold: int = 240,
-                write: bool = True) -> list[tuple[str, int]]:
+                write: bool = True, order=None) -> list[tuple[str, int]]:
+    order = order or FURNITURE_ORDER
     sheet = Image.open(sheet_path).convert("RGBA")
     mask = nonwhite_mask(sheet, threshold)
-    rows = -(-len(FURNITURE_ORDER) // COLUMNS)
+    rows = -(-len(order) // COLUMNS)
     col_bounds = axis_bounds(mask, COLUMNS, axis=1)
     row_bounds = axis_bounds(mask, rows, axis=0)
     print(f"gutter cuts: cols {[c for c, _ in col_bounds[1:]]} "
           f"rows {[r for r, _ in row_bounds[1:]]}")
     results = []
-    for index, (filename, size) in enumerate(FURNITURE_ORDER):
+    for index, (filename, size) in enumerate(order):
         col, row = index % COLUMNS, index // COLUMNS
         x0, x1 = col_bounds[col]
         y0, y1 = row_bounds[row]
@@ -72,9 +84,17 @@ def main() -> int:
     parser.add_argument("sheet")
     parser.add_argument("--threshold", type=int, default=240)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--set", choices=tuple(FURNITURE_SETS), default="new",
+        help="素材表批次：new=新四件（灯/书架/茶几/藤篮），"
+             "legacy=旧四件重制（地毯/沙发/绿植/墙画）",
+    )
     args = parser.parse_args()
-    results = split_sheet(args.sheet, args.threshold,
-                          write=not args.dry_run)
+    results = split_sheet(
+        args.sheet, args.threshold,
+        write=not args.dry_run,
+        order=FURNITURE_SETS[args.set],
+    )
     empty = [name for name, opaque in results if opaque <= 0]
     for name, opaque in results:
         print(f"{name:<18} opaque px: {opaque:>7}  "
