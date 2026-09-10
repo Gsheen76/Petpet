@@ -349,7 +349,7 @@ try {
     if ($null -eq $release) {
         Write-Step "gh release create --draft"
         Invoke-Native $GhCommand @(
-            "release", "create", $Tag, "--draft", "--title", "Pet陪它 $Tag",
+            "release", "create", $Tag, "--draft", "--title", "Petpet $Tag",
             "--notes-file", $releaseNotes, "--target", $headCommit
         )
         $release = Get-ReleaseInfo
