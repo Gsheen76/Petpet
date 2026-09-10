@@ -16,7 +16,6 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QPushButton,
     QScrollArea,
     QVBoxLayout,
     QWidget,
@@ -115,7 +114,6 @@ class MemoryProfileDialog(QDialog):
         root.setObjectName("profileRoot")
         root.setGeometry(0, 0, _DIALOG_W, _DIALOG_H)
         root.setStyleSheet(_PANEL_QSS)
-        self._root = root
         self._background = QPixmap(
             os.path.join(SHOP_UI_DIR, "background.png"))
 
@@ -150,7 +148,7 @@ class MemoryProfileDialog(QDialog):
         title.setObjectName("profileTitle")
         hint = QLabel("改错了直接编辑，删掉 TA 就忘；保存后下次聊天生效")
         hint.setObjectName("profileHint")
-        self._close_btn = QPushButton("×")
+        self._close_btn = FeedbackButton("×")
         self._close_btn.setObjectName("profileClose")
         self._close_btn.setFixedSize(28, 28)
         self._close_btn.setCursor(Qt.PointingHandCursor)
@@ -201,7 +199,7 @@ class MemoryProfileDialog(QDialog):
         count.setObjectName("bucketCount")
         hint = QLabel(_BUCKET_HINTS.get(bucket, ""))
         hint.setObjectName("bucketHint")
-        add = QPushButton("＋添加")
+        add = FeedbackButton("＋添加")
         add.setObjectName("addFact")
         add.setCursor(Qt.PointingHandCursor)
         add.clicked.connect(lambda _=False, b=bucket: self._add_row(b))
@@ -226,7 +224,7 @@ class MemoryProfileDialog(QDialog):
         edit = QLineEdit(text)
         edit.setObjectName("factEdit")
         edit.setMaxLength(60)
-        delete = QPushButton("×")
+        delete = FeedbackButton("×")
         delete.setObjectName("delFact")
         delete.setFixedSize(22, 22)
         delete.setCursor(Qt.PointingHandCursor)
