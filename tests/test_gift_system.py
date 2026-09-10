@@ -498,11 +498,22 @@ class ProfileGiftTabTests(unittest.TestCase):
     def test_empty_inventory_shows_guidance(self):
         from PyQt5.QtWidgets import QLabel
 
-        window, _ = self._window()
+        window, pet = self._window()
         window._show_tab("礼物")
-        hint = window._gift_page.findChild(QLabel, "giftEmptyHint")
+        from PyQt5.QtWidgets import QWidget
+
+        host = window._gift_page.findChild(
+            QWidget, "giftEmptyHint").parentWidget()
+        hint = host.findChild(QLabel, "giftEmptyHint")
         self.assertIsNotNone(hint)
         self.assertEqual(window._gift_widgets, {})
+        # 直达按钮（2026-09-10）：点击调用 open_shop("gifts")。
+        from PyQt5.QtWidgets import QPushButton
+
+        go = window._gift_page.findChild(QPushButton, "giftGoShopButton")
+        self.assertIsNotNone(go)
+        go.click()
+        pet.open_shop.assert_called_once_with("gifts")
 
     def test_stocked_gift_shows_card_and_gives_with_confirm(self):
         from PyQt5.QtWidgets import QLabel

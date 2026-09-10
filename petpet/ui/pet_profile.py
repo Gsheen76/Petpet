@@ -1422,6 +1422,10 @@ class PetProfileWindow(QWidget):
         state = self.pet.state
         inventory = progression.gift_inventory(state)
         if not inventory:
+            host = QWidget()
+            col = QVBoxLayout(host)
+            col.setContentsMargins(0, 30, 0, 30)
+            col.setSpacing(16)
             empty = QLabel(
                 "背包里还没有礼物\n可以去商店的「礼物」页挑选心意"
             )
@@ -1433,7 +1437,25 @@ class PetProfileWindow(QWidget):
                 f"font-size:{round(23 * _SX * _FIT)}px;"
                 "color:#b08a5e;background:transparent;border:0;"
             )
-            self._gift_layout.insertWidget(0, empty)
+            col.addWidget(empty)
+            # 直达商店礼物页（2026-09-10 用户指示）：胶囊键，悬浮提亮、
+            # 按住压暗（面板 QSS 胶囊同款反馈）。
+            go_shop = QPushButton("去商店挑选")
+            go_shop.setObjectName("giftGoShopButton")
+            go_shop.setCursor(Qt.PointingHandCursor)
+            go_shop.setFixedSize(
+                round(210 * _SX * _FIT), round(54 * _SY * _FIT))
+            go_shop.setStyleSheet(
+                f"QPushButton{{font-family:'{APP_FONT_FAMILY}';"
+                f"font-size:{round(22 * _SX * _FIT)}px;font-weight:600;"
+                "color:#ffffff;background:#f28f76;border:0;"
+                f"border-radius:{round(27 * _SY * _FIT)}px;}}"
+                "QPushButton:hover{background:#f5a48f;}"
+                "QPushButton:pressed{background:#dd7a5f;}"
+            )
+            go_shop.clicked.connect(lambda: self._open_shop("gifts"))
+            col.addWidget(go_shop, 0, Qt.AlignHCenter)
+            self._gift_layout.insertWidget(0, host)
             return
         stocked = [
             gift_id for gift_id in progression.GIFT_DEFINITIONS
@@ -1657,10 +1679,14 @@ class PetProfileWindow(QWidget):
                 refresh_home()
         self.refresh()
 
-    def _open_shop(self):
+    def _open_shop(self, page=None):
         opener = getattr(self.pet, "open_shop", None)
         if callable(opener):
-            opener()
+            try:
+                opener(page)
+            except TypeError:
+                # 宿主 open_shop 不支持页签参数（旧注入）。
+                opener()
 
     def _open_name_dialog(self):
         if _NAME_DIALOG_FACTORY is None:

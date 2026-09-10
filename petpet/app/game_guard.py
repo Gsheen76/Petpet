@@ -160,10 +160,53 @@ if sys.platform.startswith("win"):
                     ("dwStyle", wintypes.DWORD))
 
 
-def collect_foreground_info() -> dict | None:
-    """当前前台窗口快照；失败/非 Windows 返回 None。"""
-    if not sys.platform.startswith("win"):
+def _collect_darwin() -> dict | None:
+    """macOS 前台应用路径（osascript，零第三方依赖）。
+
+    System Events 返回 HFS 路径（冒号分隔）；关键词匹配走子串，
+    steamapps / Steam / Epic 等标记在两种路径格式里都成立。
+    """
+    import subprocess
+
+    script = (
+        "tell application \"System Events\" to get path of "
+        "(first application process whose frontmost is true)"
+    )
+    try:
+        result = subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True, text=True, timeout=3,
+        )
+        path = (result.stdout or "").strip().strip('"')
+        if not path or result.returncode != 0:
+            return None
+        return {
+            "hwnd": 0,
+            "rect": (0, 0, 0, 0),
+            "monitor": (0, 0, 0, 0),
+            "class": "",
+            "exe": path,
+            "pid": 0,
+        }
+    except (OSError, subprocess.SubprocessError):
         return None
+
+
+def collect_foreground_info() -> dict | None:
+    """当前前台窗口快照；失败/不支持平台返回 None。
+
+    Windows：win32 前台窗口（含几何/类名/进程）。
+    macOS（2026-09-10）：osascript 前台应用路径——路径关键词判定
+    跨平台通用；几何信息留空（判定层不用）。
+    """
+    if sys.platform.startswith("win"):
+        return _collect_windows()
+    if sys.platform == "darwin":
+        return _collect_darwin()
+    return None
+
+
+def _collect_windows() -> dict | None:
     try:
         hwnd = _user32.GetForegroundWindow()
         if not hwnd:

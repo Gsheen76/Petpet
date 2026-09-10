@@ -401,6 +401,44 @@ HOME_DECORATION_DEFINITIONS = {
         "default_position": {"x": 760, "y": 105},
         "size": (420, 270),
     },
+    # 家具扩充（2026-09-10）：正式素材待用户 AI 稿经
+    # tools/split_furniture_sheet.py 落位，当前为同风格程序占位。
+    "home_lamp": {
+        "name": "奶油落地灯",
+        "category": "home",
+        "price": 140,
+        "asset": "lamp.png",
+        "description": "暖暖的一盏小灯，夜里也陪着小狗。",
+        "default_position": {"x": 60, "y": 320},
+        "size": (150, 330),
+    },
+    "home_bookshelf": {
+        "name": "矮矮小书架",
+        "category": "home",
+        "price": 220,
+        "asset": "bookshelf.png",
+        "description": "摆着绘本和小摆件的矮书架。",
+        "default_position": {"x": 1430, "y": 400},
+        "size": (230, 280),
+    },
+    "home_round_table": {
+        "name": "圆润小茶几",
+        "category": "home",
+        "price": 180,
+        "asset": "round_table.png",
+        "description": "放得下一杯热茶的小圆桌。",
+        "default_position": {"x": 760, "y": 470},
+        "size": (280, 190),
+    },
+    "home_toy_basket": {
+        "name": "玩具小藤篮",
+        "category": "home",
+        "price": 120,
+        "asset": "toy_basket.png",
+        "description": "装着毛线球和小玩具的藤篮。",
+        "default_position": {"x": 470, "y": 560},
+        "size": (220, 150),
+    },
 }
 
 FIRST_PURCHASE_DISCOUNT = 0.76

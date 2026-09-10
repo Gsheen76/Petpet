@@ -2855,10 +2855,19 @@ class PetWindow(QWidget):
             self.achievements_win = _dependency("AchievementsWindow")(self, _dependency("save_state"))
         self.achievements_win.show_near_pet()
 
-    def open_shop(self):
-        """Open the Pet-coin shop and interaction upgrades."""
+    def open_shop(self, page=None):
+        """Open the Pet-coin shop and interaction upgrades.
+
+        page（2026-09-10）：可选目标页签（如 "gifts"，礼物空背包直达）；
+        非法页签保持商店当前页。
+        """
         if self.shop_win is None:
             self.shop_win = _dependency("ShopWindow")(self, _dependency("save_state"))
+        if page:
+            try:
+                self.shop_win._set_page(page)
+            except (AttributeError, RuntimeError):
+                pass
         self.shop_win.show_near_pet()
 
     def open_home_scene(self):

@@ -196,3 +196,39 @@ class PetWindowGameGuardTests(unittest.TestCase):
         window._sync_game_guard_timer()
         self.assertFalse(window._game_guard_timer.isActive())
         self.assertTrue(window.isVisible())
+
+class DarwinCollectionTests(unittest.TestCase):
+    def test_darwin_collector_parses_osascript_output(self):
+        """macOS 检测（2026-09-10）：osascript 路径 → 关键词判定。"""
+        from unittest.mock import patch
+
+        with patch("subprocess.run") as run:
+            run.return_value.returncode = 0
+            run.return_value.stdout = (
+                "Macintosh HD:Users:me:Library:Application Support:"
+                "Steam:steamapps:common:SomeGame:Game.app:"
+            )
+            info = game_guard._collect_darwin()
+        self.assertIsNotNone(info)
+        self.assertIn("steamapps", info["exe"])
+        self.assertTrue(game_guard.is_game_present(info))
+
+    def test_darwin_collector_non_game_app(self):
+        from unittest.mock import patch
+
+        with patch("subprocess.run") as run:
+            run.return_value.returncode = 0
+            run.return_value.stdout = (
+                "Macintosh HD:Applications:Safari.app:"
+            )
+            info = game_guard._collect_darwin()
+        self.assertFalse(game_guard.is_game_present(info))
+
+    def test_darwin_collector_osascript_failure(self):
+        from unittest.mock import patch
+
+        with patch("subprocess.run") as run:
+            run.return_value.returncode = 1
+            run.return_value.stdout = ""
+            self.assertIsNone(game_guard._collect_darwin())
+

@@ -119,6 +119,13 @@ HOME_FURNITURE_PATHS = {
     "home_sofa": os.path.join(HOME_FURNITURE_DIR, "sofa.png"),
     "home_plant": os.path.join(HOME_FURNITURE_DIR, "plant.png"),
     "home_wall_art": os.path.join(HOME_FURNITURE_DIR, "wall_art.png"),
+    # 家具扩充（2026-09-10）。
+    "home_lamp": os.path.join(HOME_FURNITURE_DIR, "lamp.png"),
+    "home_bookshelf": os.path.join(HOME_FURNITURE_DIR, "bookshelf.png"),
+    "home_round_table": os.path.join(
+        HOME_FURNITURE_DIR, "round_table.png"),
+    "home_toy_basket": os.path.join(
+        HOME_FURNITURE_DIR, "toy_basket.png"),
 }
 HOME_DECORATION_CATEGORIES = (
     ("all", "全部"),
@@ -126,6 +133,8 @@ HOME_DECORATION_CATEGORIES = (
     ("sofa", "沙发"),
     ("plant", "绿植"),
     ("wall_art", "墙饰"),
+    ("furniture", "家具"),
+    ("toy", "玩具"),
 )
 HOME_DECORATION_CATEGORY_BY_ID = {
     "home_rug": "rug",
@@ -133,6 +142,10 @@ HOME_DECORATION_CATEGORY_BY_ID = {
     "home_plant": "plant",
     "home_wall_art": "wall_art",
     "home_status_card": "wall_art",
+    "home_lamp": "furniture",
+    "home_bookshelf": "furniture",
+    "home_round_table": "furniture",
+    "home_toy_basket": "toy",
 }
 
 
