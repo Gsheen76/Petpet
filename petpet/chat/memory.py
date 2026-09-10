@@ -5,9 +5,137 @@ from __future__ import annotations
 from copy import deepcopy
 import json
 import os
+import re
 from typing import Callable
 
 from petpet.app.pets import DEFAULT_PET_ID, load_pet_registry
+
+# 结构化主人档案（2026-09-10 长期记忆轮）：分栏 + 每栏条数上限。
+PROFILE_BUCKETS = ("称呼", "作息", "喜欢", "讨厌", "重要的事", "其他")
+PROFILE_BUCKET_CAPS = {
+    "称呼": 3,
+    "作息": 4,
+    "喜欢": 8,
+    "讨厌": 6,
+    "重要的事": 8,
+    "其他": 4,
+}
+
+
+def _clean_fact(value: object) -> str | None:
+    """单条事实清洗：非空字符串、去首尾、限长。"""
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text or len(text) > 60:
+        return None
+    return text
+
+
+def merge_profile_facts(current: dict, extracted: dict) -> dict:
+    """把新抽取的事实合并进现有档案。
+
+    规则：仅接受已知分栏；条目去重保序；称呼栏新值在前（最新称呼
+    优先），其余栏旧值在前（先认识的优先）；每栏截断到上限。
+    """
+    result = {}
+    for bucket in PROFILE_BUCKETS:
+        cap = PROFILE_BUCKET_CAPS[bucket]
+        existing = [
+            fact for fact in (
+                _clean_fact(item)
+                for item in (current.get(bucket) or [])
+            ) if fact
+        ]
+        incoming = [
+            fact for fact in (
+                _clean_fact(item)
+                for item in ((extracted or {}).get(bucket) or [])
+            ) if fact
+        ]
+        if bucket == "称呼":
+            merged = incoming + [
+                fact for fact in existing if fact not in incoming
+            ]
+            result[bucket] = merged[:cap]
+        else:
+            merged = existing + [
+                fact for fact in incoming if fact not in existing
+            ]
+            # 满栏丢最旧：取尾部 cap 条，新抽取的事实永远保留。
+            result[bucket] = merged[-cap:]
+    return result
+
+
+def render_profile_facts(facts: dict) -> str:
+    """档案 → system prompt 注入文本（分栏中文可读行）。"""
+    lines = []
+    for bucket in PROFILE_BUCKETS:
+        items = [
+            _clean_fact(item)
+            for item in ((facts or {}).get(bucket) or [])
+        ]
+        items = [item for item in items if item]
+        if items:
+            lines.append(f"{bucket}：" + "、".join(items))
+    if not lines:
+        return "（还不了解主人，慢慢聊就会记住啦）"
+    return "\n".join(lines)
+
+
+def parse_profile_extraction(raw: object) -> dict:
+    """解析 LLM 抽取输出（容忍 ```json 包裹/前后废话）→ 合法分栏 dict。"""
+    if not isinstance(raw, str) or not raw.strip():
+        return {}
+    text = raw.strip()
+    fence = re.search(r"```(?:json)?\s*(.+?)\s*```", text, re.DOTALL)
+    if fence:
+        text = fence.group(1)
+    start, end = text.find("{"), text.rfind("}")
+    if start < 0 or end <= start:
+        return {}
+    try:
+        data = json.loads(text[start:end + 1])
+    except (ValueError, TypeError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    cleaned = {}
+    for bucket in PROFILE_BUCKETS:
+        raw_items = data.get(bucket)
+        if isinstance(raw_items, str):
+            raw_items = [raw_items]
+        if isinstance(raw_items, (list, tuple)):
+            items = [
+                fact for fact in (
+                    _clean_fact(item) for item in raw_items
+                ) if fact
+            ]
+            if items:
+                cleaned[bucket] = items
+    return cleaned
+
+
+def ensure_profile_facts(mem: dict) -> dict:
+    """档案初始化/迁移：旧 user_profile 字符串一次性转入「其他」栏。"""
+    facts = mem.get("profile_facts")
+    if not isinstance(facts, dict):
+        facts = {}
+    legacy = mem.get("user_profile")
+    if isinstance(legacy, str) and legacy.strip():
+        legacy_text = legacy.strip()
+        existing_other = [
+            fact for fact in (
+                _clean_fact(item) for item in facts.get("其他") or []
+            ) if fact
+        ]
+        # 默认占位文案不算真实记忆；超长旧总结截断到 60 字。
+        if "还不知道" not in legacy_text and legacy_text not in existing_other:
+            existing_other.append(legacy_text[:60])
+        facts = {**facts, "其他": existing_other[:PROFILE_BUCKET_CAPS["其他"]]}
+    mem["profile_facts"] = facts
+    return mem
+
 
 def normalize_memory_pet_id(value: object) -> str:
     """Return a registered pet ID, mapping old profile names to lunch meat."""

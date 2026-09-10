@@ -174,7 +174,8 @@ class PetWindow(QWidget):
         # sound effects
         self.sounds = {}
         if _dependency("HAS_SOUND"):
-            for name in ["bark", "eat", "sleep", "pet", "bounce"]:
+            for name in ["bark", "eat", "sleep", "pet", "bounce",
+                         "drink", "rest", "stand"]:
                 p = os.path.join(SOUNDS_DIR, f"{name}.wav")
                 if os.path.exists(p):
                     se = _dependency("QSoundEffect")(self)
@@ -645,7 +646,10 @@ class PetWindow(QWidget):
         drink_min = s.get("remind_drink_min", 60)
         rest_min = s.get("remind_rest_min", 90)
         stand_min = s.get("remind_stand_min", 45)
+        # 提醒音效（2026-09-10）：喝水/活动/休息各有专属音，多类同发
+        # 时取最后触发的一类；play_sound 内部尊重 sound_enabled 开关。
         msgs = []
+        fired_sound = None
         if drink_min > 0 and now - self._last_drink_t > drink_min * 60:
             msgs.append(random.choice([
                 "主人，该喝口水啦～💧",
@@ -653,6 +657,7 @@ class PetWindow(QWidget):
                 "汪…你已经很久没喝水了💧",
             ]))
             self._last_drink_t = now
+            fired_sound = "drink"
         if stand_min > 0 and now - self._last_stand_t > stand_min * 60:
             msgs.append(random.choice([
                 "站起来活动一下呀！🧘",
@@ -660,6 +665,7 @@ class PetWindow(QWidget):
                 "汪汪！陪我站着玩一会儿？",
             ]))
             self._last_stand_t = now
+            fired_sound = "stand"
         if rest_min > 0 and now - self._last_rest_t > rest_min * 60:
             msgs.append(random.choice([
                 "眼睛累了，看看远处休息一下👀",
@@ -667,7 +673,10 @@ class PetWindow(QWidget):
                 "屏幕看久了不好，歇会儿吧",
             ]))
             self._last_rest_t = now
+            fired_sound = "rest"
         if msgs:
+            if fired_sound:
+                self.play_sound(fired_sound)
             self.say(random.choice(msgs), 4500)
 
     def add_xp(self, amount, *, apply_bonus=True):

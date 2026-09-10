@@ -2,6 +2,8 @@
 
 import time
 
+from petpet.chat.memory import ensure_profile_facts, render_profile_facts
+
 
 PERSONA = """你是一只名叫 Sheen 的虚拟陪伴小狗。你不是 AI 助手，你是一只真正陪伴主人的小狗。
 
@@ -88,8 +90,14 @@ def build_messages(
     elif mood == "angry":
         mood_hint = "\n\n# 主人现在的情绪\n主人在生气/烦躁，先认可ta的情绪，不要急着讲道理或让ta冷静。"
 
+    # 结构化长期记忆（2026-09-10）：优先分栏档案渲染；无档案时回退
+    # 旧 user_profile 字符串。
+    facts = ensure_profile_facts(memory).get("profile_facts") or {}
+    rendered = render_profile_facts(facts)
+    if "还不了解" in rendered:
+        rendered = memory.get("user_profile", "（还没了解主人）")
     system = PERSONA.replace("Sheen", pet_name).format(
-        user_profile=memory.get("user_profile", "（还没了解主人）"),
+        user_profile=rendered,
         now=now_description(),
     )
     if personality:
