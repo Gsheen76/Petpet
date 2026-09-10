@@ -5,6 +5,7 @@ import threading
 import time
 
 from petpet.chat import api as ai
+from petpet.chat.memory import render_profile_facts
 from petpet.app.paths import SHOP_UI_DIR
 from petpet.app.pets import pet_asset_path, pet_avatar_path, pet_definition
 from PyQt5.QtCore import QPoint, QRect, QRectF, QSize, Qt, QTimer
@@ -333,10 +334,26 @@ class ChatWindow(QWidget):
         )
         self.avatar_btn.clicked.connect(self.show_player_avatar_menu)
 
+        # 档案入口（2026-09-11）：查看/编辑长期记忆六栏档案。
+        self.profile_btn = QPushButton("档案")
+        self.profile_btn.setObjectName("avatarEdit")
+        self.profile_btn.setCursor(Qt.PointingHandCursor)
+        self.profile_btn.setToolTip("查看和编辑 TA 记住的我")
+        self.profile_btn.setStyleSheet(
+            "QPushButton{background:#fffaf6;color:#8c6252;"
+            "border:1px solid #e6cfc2;border-radius:14px;"
+            "padding:5px 11px;font-weight:700;}"
+            "QPushButton:hover{background:#ffe8dc;border-color:#dda993;}"
+            "QPushButton:disabled{color:#cbb4a4;}"
+        )
+        self.profile_btn.clicked.connect(self.show_memory_profile)
+
         title_row = QHBoxLayout()
         title_row.setContentsMargins(0, 0, 8, 0)
         title_row.setSpacing(0)
         title_row.addWidget(self.title, 1)
+        title_row.addWidget(self.profile_btn)
+        title_row.addSpacing(6)
         title_row.addWidget(self.avatar_btn)
         title_row.addSpacing(6)
         title_row.addWidget(self.close_btn)
@@ -538,6 +555,7 @@ class ChatWindow(QWidget):
         self.settings_btn.setEnabled(not self.busy)
         self.image_btn.setEnabled(not self.busy)
         self.clear_btn.setEnabled(not self.busy)
+        self.profile_btn.setEnabled(not self.busy)
         self.personal_setup_dot.setVisible(ai.needs_personal_setup_reminder())
         self.personal_setup_dot.raise_()
         self._refresh_image_upload_state()
@@ -954,6 +972,30 @@ class ChatWindow(QWidget):
         self._avatar_popup.add_action("选择头像", self.select_player_avatar)
         self._avatar_popup.add_action("恢复默认", self.reset_player_avatar)
         self._avatar_popup.popup_below(self.avatar_btn)
+
+    def show_memory_profile(self):
+        """查看/编辑长期记忆六栏档案（2026-09-11）。
+
+        保存后同步 legacy ``user_profile`` 字符串并立即落盘；流式回复
+        期间后台抽取可能并发写档案，故忙时不开。
+        """
+        from petpet.ui.memory_profile import MemoryProfileDialog
+
+        if self.busy:
+            return
+        dialog = MemoryProfileDialog(
+            self.mem.get("profile_facts") or {},
+            pet_name=self._pet_name(),
+            parent=self,
+        )
+        if dialog.exec_() != QDialog.Accepted:
+            return
+        facts = dialog.result_facts
+        if facts is None:
+            return
+        self.mem["profile_facts"] = facts
+        self.mem["user_profile"] = render_profile_facts(facts)
+        ai.save_memory(self.mem, pet_id=self.pet_id)
 
     def select_player_avatar(self):
         path, _ = QFileDialog.getOpenFileName(

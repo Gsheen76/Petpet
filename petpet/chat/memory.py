@@ -67,6 +67,23 @@ def merge_profile_facts(current: dict, extracted: dict) -> dict:
     return result
 
 
+def sanitize_edited_facts(facts: dict) -> dict:
+    """手动编辑档案的清洗网：逐条清洗、去重保序、每栏截前 cap 条。
+
+    编辑 UI 本身限制长度/条数，这里兜底 IME 粘贴超长、程序化赋值等
+    旁路输入，保证落盘档案与 LLM 抽取路径遵守同一份契约。
+    """
+    result = {}
+    for bucket in PROFILE_BUCKETS:
+        seen: list[str] = []
+        for item in (facts or {}).get(bucket) or []:
+            fact = _clean_fact(item)
+            if fact and fact not in seen:
+                seen.append(fact)
+        result[bucket] = seen[: PROFILE_BUCKET_CAPS[bucket]]
+    return result
+
+
 def render_profile_facts(facts: dict) -> str:
     """档案 → system prompt 注入文本（分栏中文可读行）。"""
     lines = []
