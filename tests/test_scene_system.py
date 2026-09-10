@@ -3,6 +3,7 @@ import unittest
 from PyQt5.QtCore import QPoint, QRect
 
 import scene_system
+from petpet.home import rendering
 
 
 class HomeSceneGeometryTests(unittest.TestCase):
@@ -14,11 +15,17 @@ class HomeSceneGeometryTests(unittest.TestCase):
         self.assertEqual(scene_system.camera_x_for_dog(900, 190), 645)
         self.assertEqual(scene_system.camera_x_for_dog(1800, 190), 1100)
 
-    def test_manual_view_pan_moves_in_fixed_steps_and_clamps(self):
-        self.assertEqual(scene_system.pan_viewport_x(450, "left", 220), 230)
-        self.assertEqual(scene_system.pan_viewport_x(230, "left", 220), 10)
-        self.assertEqual(scene_system.pan_viewport_x(10, "left", 220), 0)
-        self.assertEqual(scene_system.pan_viewport_x(1100, "right", 220), 1100)
+    def test_decoration_geometry_shows_whole_world_beside_sidebar(self):
+        """全景装修窗口（2026-09-10）：左栏 + 整幅世界 1:1，右缘贴屏。"""
+        screen = QRect(0, 0, 2560, 1440)
+        rect = rendering.decoration_scene_window_geometry(screen)
+        self.assertEqual((rect.width(), rect.height()), (338 + 1800, 768))
+        self.assertEqual(rect.x(), 2560 - 338 - 1800)
+        self.assertEqual(rect.y(), 1440 - 768)
+        # 窄屏钳到左缘：宁可窗口溢出右缘也不裁掉世界。
+        narrow = rendering.decoration_scene_window_geometry(QRect(0, 0, 1280, 720))
+        self.assertEqual(narrow.x(), 0)
+        self.assertEqual(narrow.width(), 338 + 1800)
 
     def test_home_decoration_transform_is_normalized(self):
         self.assertEqual(

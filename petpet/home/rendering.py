@@ -24,7 +24,11 @@ from petpet.app.paths import (
     HOME_SCENES_DIR,
 )
 from petpet.progression import core as progression
-from petpet.home.geometry import HOME_VIEWPORT_SIZE, scene_rect_for_screen
+from petpet.home.geometry import (
+    HOME_VIEWPORT_SIZE,
+    HOME_WORLD_SIZE,
+    scene_rect_for_screen,
+)
 
 
 SCENES_DIR = HOME_SCENES_DIR
@@ -415,3 +419,11 @@ def scene_window_geometry(screen_rect: QRect) -> QRect:
         board.width() + HOME_DECORATION_SIDEBAR_WIDTH,
         board.height(),
     )
+
+
+def decoration_scene_window_geometry(screen_rect: QRect) -> QRect:
+    """全景装修窗口（2026-09-10）：左栏 + 整幅世界 1:1 展示，无需平移。"""
+    board = board_geometry(screen_rect)
+    width = HOME_DECORATION_SIDEBAR_WIDTH + HOME_WORLD_SIZE[0]
+    x = max(screen_rect.left(), board.right() + 1 - width)
+    return QRect(x, board.y(), width, board.height())

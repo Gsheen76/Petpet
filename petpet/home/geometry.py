@@ -14,8 +14,6 @@ from PyQt5.QtCore import QPoint, QPointF, QRect, QRectF
 
 HOME_VIEWPORT_SIZE = (700, 768)
 HOME_WORLD_SIZE = (1800, 768)
-HOME_CAMERA_PAN_STEP = 220
-HOME_CAMERA_REPEAT_STEP = 18
 HOME_DECORATION_SCALE_MIN = 0.5
 HOME_DECORATION_SCALE_MAX = 1.5
 HOME_DECORATION_ROTATION_MIN = -180.0
@@ -32,16 +30,6 @@ HOME_FURNITURE_SIZES = {
     "home_wall_art": (220, 285),
     "home_status_card": (420, 270),
 }
-
-
-def _clamp_viewport_x(value: Any) -> int:
-    return max(
-        0,
-        min(
-            HOME_WORLD_SIZE[0] - HOME_VIEWPORT_SIZE[0],
-            _finite_int(value, 0),
-        ),
-    )
 
 
 def _as_bool(value: Any, default: bool = False) -> bool:
@@ -89,16 +77,6 @@ def normalize_home_scene(value: Mapping[str, Any] | None) -> dict[str, Any]:
         "viewport_pinned": _as_bool(source.get("viewport_pinned"), False),
         "decorating": _as_bool(source.get("decorating"), False),
     }
-
-
-def pan_viewport_x(viewport_x: Any, direction: str, step: int = HOME_CAMERA_PAN_STEP) -> int:
-    """Move the home viewport left or right while respecting world edges."""
-    delta = abs(_finite_int(step, HOME_CAMERA_PAN_STEP))
-    if direction == "left":
-        delta = -delta
-    elif direction != "right":
-        return _clamp_viewport_x(viewport_x)
-    return _clamp_viewport_x(_finite_int(viewport_x, 0) + delta)
 
 
 def normalize_home_decoration_transform(value: Mapping[str, Any] | None) -> dict[str, float]:

@@ -31,13 +31,11 @@ from petpet.home.pet import (
     serialize_home_pet_position,
 )
 from petpet.home.geometry import (
-    HOME_CAMERA_PAN_STEP,
-    HOME_CAMERA_REPEAT_STEP,
     HOME_VIEWPORT_SIZE,
+    HOME_WORLD_SIZE,
     camera_x_for_dog,
     home_decoration_bounds,
     home_decoration_handles,
-    pan_viewport_x,
     rotation_from_pointer,
     scene_rect_for_screen,
     scale_from_handle,
@@ -62,7 +60,10 @@ class HomeSceneWindow(QWidget):
         self.pet = pet
         self.state = pet.state
         self.save_state = save_state
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Tool)
+        # 小屋恢复置顶（2026-09-10 用户定稿）。
+        self.setWindowFlags(
+            Qt.FramelessWindowHint | Qt.Tool | Qt.WindowStaysOnTopHint
+        )
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WA_ShowWithoutActivating, True)
         self.setFixedHeight(HOME_VIEWPORT_SIZE[1])
@@ -123,7 +124,6 @@ class HomeSceneWindow(QWidget):
         self._drag_offset = QPoint()
         self._camera_x = camera_x_for_dog(self.home_pet.position[0], 0)
         self._manual_camera = False
-        self._pan_direction = None
         self._selected_furniture = None
         self._editing_gesture = None
         self._decoration_category = "all"
@@ -144,9 +144,6 @@ class HomeSceneWindow(QWidget):
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._sync_scene)
         self._timer.start(33)
-        self._pan_timer = QTimer(self)
-        self._pan_timer.setInterval(55)
-        self._pan_timer.timeout.connect(self._repeat_pan)
         self._sync_scene()
 
     def _screen_rect(self):
@@ -158,9 +155,7 @@ class HomeSceneWindow(QWidget):
     def _sync_scene(self):
         if not self.isVisible():
             return
-        rect = scene_window_geometry(self._screen_rect())
-        if self.geometry() != rect:
-            self.setGeometry(rect)
+        self._apply_scene_geometry()
         self._advance_home_pet(time.monotonic())
         if not self.is_decorating() or not self._manual_camera:
             self._camera_x = camera_x_for_dog(self.home_pet.position[0], 0)
@@ -169,8 +164,23 @@ class HomeSceneWindow(QWidget):
             follow()
         self.update()
 
+    def _target_scene_geometry(self):
+        if self.is_decorating():
+            return decoration_scene_window_geometry(self._screen_rect())
+        return scene_window_geometry(self._screen_rect())
+
+    def _apply_scene_geometry(self):
+        rect = self._target_scene_geometry()
+        if self.geometry() != rect:
+            self.setGeometry(rect)
+
     def scene_canvas_rect(self):
-        """Return the right-hand scene canvas in this window's local coordinates."""
+        """装修时画布 1:1 铺满整幅世界（全景），平时仍是 700 视口。"""
+        if self.is_decorating():
+            return QRect(
+                HOME_DECORATION_SIDEBAR_WIDTH, 0,
+                HOME_WORLD_SIZE[0], self.height(),
+            )
         return QRect(
             max(0, self.width() - HOME_VIEWPORT_SIZE[0]),
             0,
@@ -550,34 +560,6 @@ class HomeSceneWindow(QWidget):
                 self._last_persisted_home_target = target_before
         return events
 
-    def pan_view(self, direction, step=HOME_CAMERA_PAN_STEP):
-        """Pan the authored world viewport and persist the new camera position."""
-        if not self.view_pan_enabled():
-            return self._camera_x
-        self._camera_x = pan_viewport_x(self._camera_x, direction, step)
-        self._manual_camera = True
-        home_scene = self.state.setdefault("home_scene", {})
-        home_scene["viewport_x"] = self._camera_x
-        home_scene["viewport_pinned"] = True
-        self.save_state(self.state)
-        self.update()
-        return self._camera_x
-
-    def begin_pan(self, direction):
-        if direction not in ("left", "right") or not self.view_pan_enabled():
-            return
-        self._pan_direction = direction
-        self.pan_view(direction)
-        self._pan_timer.start()
-
-    def _repeat_pan(self):
-        if self._pan_direction is not None:
-            self.pan_view(self._pan_direction, HOME_CAMERA_REPEAT_STEP)
-
-    def end_pan(self):
-        self._pan_direction = None
-        self._pan_timer.stop()
-
     def _set_pet_visible(self, visible):
         action = getattr(self.pet, "show" if visible else "hide", None)
         if callable(action):
@@ -610,9 +592,6 @@ class HomeSceneWindow(QWidget):
             self._draw_furniture(painter, item_id, position)
         if self.is_decorating() and self._selected_furniture is not None:
             self._draw_selection(painter, self._selected_furniture)
-        if self.view_pan_enabled():
-            self._draw_scene_button(painter, self.left_view_button_rect(), "左移")
-            self._draw_scene_button(painter, self.right_view_button_rect(), "右移")
         if self._menu_open:
             menu_labels = {"shop": "商店", "pets": "宠物", "decorate": "装修", "exit": "退出"}
             for action, rect in self.menu_item_rects().items():
@@ -683,13 +662,14 @@ class HomeSceneWindow(QWidget):
         hide_overlays = getattr(self.pet, "hide_overlays", None)
         if callable(hide_overlays):
             hide_overlays()
-        self.end_pan()
         self.state["home_scene"]["decorating"] = False
         self._selected_furniture = None
         self._clear_manual_destination()
         self.home_pet.cancel_target()
         self._save_home_pet_position()
         self.hide()
+        # 装修全景中直接关小屋：隐藏时就把窗口缩回常规几何，避免下次 show 闪宽窗。
+        self._apply_scene_geometry()
         self._set_pet_visible(True)
         show_treasure = getattr(self.pet, "_show_pending_dig_bubble", None)
         if callable(show_treasure):
@@ -788,23 +768,6 @@ class HomeSceneWindow(QWidget):
     def home_interaction_action_rects(self):
         return self.interaction_item_rects()
 
-    def left_view_button_rect(self):
-        return QRect(
-            self._scene_content_offset() + 14,
-            max(14, (self.height() - 44) // 2),
-            68,
-            44,
-        )
-
-    def right_view_button_rect(self):
-        canvas = self.scene_canvas_rect()
-        return QRect(
-            canvas.right() - 68 + 1,
-            max(14, (self.height() - 44) // 2),
-            68,
-            44,
-        )
-
     def decoration_panel_close_button_rect(self):
         panel = self._panel_rect()
         size = 30
@@ -819,8 +782,6 @@ class HomeSceneWindow(QWidget):
     @staticmethod
     def scene_button_label(button):
         return {
-            "left": "左移",
-            "right": "右移",
             "menu": "菜单⌃",
             "shop": "商店",
             "interaction": "互动",
@@ -965,10 +926,6 @@ class HomeSceneWindow(QWidget):
     def is_decorating(self):
         return bool(self.state.get("home_scene", {}).get("decorating", False))
 
-    def view_pan_enabled(self):
-        """Manual home viewport controls are available only while decorating."""
-        return self.is_decorating()
-
     def toggle_decoration_mode(self):
         decorating = not self.is_decorating()
         self._menu_open = False
@@ -981,17 +938,19 @@ class HomeSceneWindow(QWidget):
                 hide_overlays()
             self._clear_manual_destination()
             self.home_pet.cancel_target()
+            # 全景（2026-09-10）：整幅世界 1:1 铺满画布，镜头归零，不再平移。
             self._manual_camera = True
-            home_scene["viewport_x"] = self._camera_x
+            self._camera_x = 0
+            home_scene["viewport_x"] = 0
             home_scene["viewport_pinned"] = True
         else:
-            self.end_pan()
             self._manual_camera = False
             home_scene["viewport_pinned"] = False
             self._camera_x = camera_x_for_dog(self.home_pet.position[0], 0)
             self._selected_furniture = None
             self._dragging_item = None
             self._editing_gesture = None
+        self._apply_scene_geometry()
         self.save_state(self.state)
         self.update()
         return decorating
@@ -1980,12 +1939,6 @@ class HomeSceneWindow(QWidget):
             self._menu_open = False
             self.update()
             return True
-        if self.view_pan_enabled() and self.left_view_button_rect().contains(point):
-            self.begin_pan("left")
-            return True
-        if self.view_pan_enabled() and self.right_view_button_rect().contains(point):
-            self.begin_pan("right")
-            return True
         if self.is_decorating():
             if self._handle_decoration_panel_click(point):
                 return True
@@ -2006,11 +1959,6 @@ class HomeSceneWindow(QWidget):
         if self._menu_open and any(
             rect.contains(point)
             for rect in self.menu_item_rects().values()
-        ):
-            return True
-        if self.view_pan_enabled() and (
-            self.left_view_button_rect().contains(point)
-            or self.right_view_button_rect().contains(point)
         ):
             return True
         return self.is_decorating() and self._panel_rect().contains(point)
@@ -2313,10 +2261,6 @@ class HomeSceneWindow(QWidget):
                 self._deferred_click_point = None
                 self._button_recover_until = 0.0
                 self.update()
-            event.accept()
-            return
-        if self._pan_direction is not None:
-            self.end_pan()
             event.accept()
             return
         if self._editing_gesture is None:

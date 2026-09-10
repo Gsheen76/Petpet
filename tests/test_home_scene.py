@@ -463,13 +463,9 @@ class HomeSceneAssetTests(unittest.TestCase):
         self.addCleanup(scene.close)
         scene.resize(900, 768)
         canvas = scene.scene_canvas_rect()
-        self.assertLess(scene.left_view_button_rect().right(), canvas.left() + 100)
-        self.assertGreater(scene.right_view_button_rect().left(), canvas.right() - 100)
         toggle = scene.home_action_toggle_rect()
         self.assertLessEqual(toggle.right(), canvas.right() - 14)
         self.assertLessEqual(toggle.bottom(), canvas.bottom() - 14)
-        self.assertEqual(scene.scene_button_label("left"), "左移")
-        self.assertEqual(scene.scene_button_label("right"), "右移")
         self.assertEqual(scene.scene_button_label("decorate"), "装修")
         self.assertEqual(scene.scene_button_label("exit"), "退出")
         self.assertEqual(scene.scene_button_label("shop"), "商店")
@@ -746,7 +742,7 @@ class HomeSceneAssetTests(unittest.TestCase):
         self.assertEqual(progression.home_decoration_position(state, "home_sofa"), original)
         save.assert_not_called()
 
-    def test_viewport_pans_only_while_decorating_then_follows_internal_pet(self):
+    def test_decorating_shows_whole_world_panorama_then_follows_internal_pet(self):
         state = progression.ensure_progression({"home_scene_dog_world_x": 900})
         pet = SimpleNamespace(
             state=state,
@@ -760,18 +756,45 @@ class HomeSceneAssetTests(unittest.TestCase):
         self.addCleanup(scene.close)
         scene._camera_x = 300
 
-        self.assertFalse(scene.view_pan_enabled())
-        self.assertEqual(scene.pan_view("right"), 300)
         scene.toggle_decoration_mode()
-        self.assertTrue(scene.view_pan_enabled())
-        self.assertEqual(scene.pan_view("right"), 520)
+        self.assertTrue(scene.is_decorating())
         self.assertTrue(scene._manual_camera)
+        # 全景（2026-09-10）：镜头归零，画布一比一铺满整幅世界，无需平移。
+        self.assertEqual(scene._camera_x, 0)
+        self.assertEqual(
+            scene.scene_canvas_rect(),
+            QRect(338, 0, 1800, 768),
+        )
+        self.assertEqual(scene.geometry().width(), 338 + 1800)
 
         scene.toggle_decoration_mode()
-        self.assertFalse(scene.view_pan_enabled())
+        self.assertFalse(scene.is_decorating())
         self.assertFalse(scene._manual_camera)
         self.assertEqual(scene.home_pet.position[0], 900.0)
         self.assertEqual(scene._camera_x, 550)
+        self.assertEqual(scene.scene_canvas_rect().width(), 700)
+        self.assertEqual(scene.geometry().width(), 338 + 700)
+
+    def test_home_window_stays_on_top_and_pan_controls_are_gone(self):
+        state = progression.ensure_progression({})
+        pet = SimpleNamespace(
+            state=state,
+            width=lambda: 190,
+            height=lambda: 220,
+            move=Mock(),
+            current_screen_rect=lambda: QRect(0, 0, 1280, 720),
+            raise_=Mock(),
+        )
+        scene = home_scene.HomeSceneWindow(pet, Mock())
+        self.addCleanup(scene.close)
+        # 小屋恢复置顶（2026-09-10 用户定稿）。
+        self.assertTrue(scene.windowFlags() & Qt.WindowStaysOnTopHint)
+        # 全景装修落地后，左右平移链路整体移除。
+        for gone in (
+            "begin_pan", "end_pan", "pan_view", "view_pan_enabled",
+            "left_view_button_rect", "right_view_button_rect",
+        ):
+            self.assertFalse(hasattr(scene, gone), gone)
 
     def test_scene_tick_camera_follows_the_updated_internal_pet_position(self):
         state = progression.ensure_progression({"energy": 100.0})
