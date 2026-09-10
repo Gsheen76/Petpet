@@ -47,7 +47,29 @@ def test_shop_pages_include_pets_before_outfits(shop_window):
     shop_window.refresh()
 
     assert shop_window.page_ids() == (
-        "pets", "outfits", "home", "upgrades"
+        "pets", "outfits", "home", "upgrades", "gifts"
+    )
+
+
+def test_scrollbar_gutter_keeps_content_width_constant(shop_window):
+    """滚动条常驻：有/无溢出的页视口与内容宽度一致（卡片等宽）。
+
+    用 viewportMargins 预留 gutter 的方案已被否（与 QSS 样式化的
+    QScrollArea 冲突，真机把内容压扁、滚动失效）——见 2026-09-07
+    开发记录。像素级两页等宽验证走 Windows 平台脚本（offscreen 字体
+    缺失会让卡高塌陷，溢出断言在此平台不可靠）。
+    """
+    from PyQt5.QtCore import Qt
+
+    assert shop_window.scroll.verticalScrollBarPolicy() == (
+        Qt.ScrollBarAlwaysOn
+    )
+    assert shop_window.content_layout.contentsMargins().right() == 15
+    # widgetResizable 下内容铺满视口（常驻滚动条已计入视口宽度）。
+    shop_window.show()
+    QApplication.processEvents()
+    assert shop_window.content.width() == (
+        shop_window.scroll.viewport().width()
     )
 
 
@@ -208,9 +230,15 @@ def test_outfit_pet_selector_is_framed_and_switches_checked_state(shop_window):
     lunch_button = shop_window.findChild(ui.QPushButton, "outfitPet_lunch_meat")
     ice_button = shop_window.findChild(ui.QPushButton, "outfitPet_ice_cream")
     assert selector is not None
-    assert selector.property("outfitPetSelector") is True
+    # 2026-09-08：分栏托盘样式抽成通用 chipBar/chipTab（套装/礼物共用）。
+    assert selector.property("chipBar") is True
     assert lunch_button.isChecked() is True
     assert ice_button.isChecked() is False
+    # 等分铺满整行：两枚分栏按钮等宽（2026-09-08 用户定稿；
+    # 允许 1px 布局取整差，奇数宽度两列分 318/317）。
+    shop_window.show()
+    QApplication.processEvents()
+    assert abs(lunch_button.width() - ice_button.width()) <= 1
 
     ice_button.click()
     QApplication.sendPostedEvents(None, QEvent.DeferredDelete)

@@ -16,14 +16,17 @@ from PIL import Image as PILImage
 from PyQt5.QtCore import (QEasingCurve, QRect, QSize, Qt, QTimer,
                           pyqtSignal, QVariantAnimation)
 from PyQt5.QtGui import QColor, QFont, QIcon, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap
-from PyQt5.QtWidgets import (QApplication, QHBoxLayout, QLabel,
+from PyQt5.QtWidgets import (QApplication, QGraphicsOpacityEffect,
+                             QGridLayout, QHBoxLayout, QLabel,
                              QPushButton, QScrollArea, QStackedWidget,
                              QVBoxLayout, QWidget)
 
 from petpet.app.fonts import APP_FONT_FAMILY
+from petpet.app.paths import GIFTS_UI_DIR
 from petpet.app import pets as pet_registry
 from petpet.app import state as app_state
 from petpet.progression import core as progression
+from petpet.progression.ui import PurchasePopup
 
 _NAME_DIALOG_FACTORY = None
 
@@ -82,6 +85,7 @@ RENAME_BUTTON_AT = (700, 581, 113, 66)   # 原生 94x55 × 1.2 等比（不被�
 TAB_SLOTS = {
     "简介": "tab_intro.png",
     "套装": "tab_outfit.png",
+    "礼物": "tab_gift.png",
 }
 TAB_BAR_AT = (264, 723, 758, 130)
 CONTENT_AT = (264, 737, 758, 614)   # 第六十六轮：整块下移 5 显示px（+8 art）
@@ -1013,8 +1017,10 @@ class PetProfileWindow(QWidget):
         self._content.setContentsMargins(22, 6, 22, 10)
         self._intro_page = self._build_intro_page()
         self._outfit_page = self._build_outfit_page()
+        self._gift_page = self._build_gift_page()
         self._content.addWidget(self._intro_page)
         self._content.addWidget(self._outfit_page)
+        self._content.addWidget(self._gift_page)
         self._show_tab("简介")
 
     def _tab_qss(self):
@@ -1033,25 +1039,31 @@ class PetProfileWindow(QWidget):
             "QPushButton:checked:hover{background:#f28f76;}"
         )
 
-    def _scroll_qss(self):
-        """商店同款滚动条样式（progression/ui PANEL_STYLE）。"""
+    def _scroll_qss(self, bar_right_shift=0):
+        """商店同款滚动条样式（progression/ui PANEL_STYLE）。
+
+        bar_right_shift：滚动条右移量（px）。QSS 负 margin 让滚动条
+        越出视口右缘绘制——这是唯一能穿透 QStackedWidget 硬性
+        contentsMargins 的办法（容器负边距对它无效，实测）。
+        """
+        shift = f"margin:4px {bar_right_shift}px 4px 0;" if bar_right_shift else "margin:4px 0;"
         return (
             "QScrollArea{border:0;background:transparent;}"
             "QScrollArea>QWidget>QWidget{background:transparent;border:0;}"
-            "QScrollBar:vertical{background:transparent;width:11px;"
-            "margin:4px 0;}"
+            f"QScrollBar:vertical{{background:transparent;width:11px;"
+            f"{shift}}}"
             "QScrollBar::handle:vertical{background:#e8bfa8;"
             "border-radius:5px;min-height:38px;}"
             "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{"
             "height:0;width:0;}"
         )
 
-    # 简介各节的图标素材（第三十六轮）。
+    # 简介各节的图标素材（第三十六轮）。偏好节沿用星星图标（原等级节）。
     SECTION_ICONS = {
-        "level": "icon_star_level.png",
         "affection": "icon_heart_affection.png",
         "attrs": "icon_paw_attributes.png",
         "personality": "icon_leaf_personality.png",
+        "gifts": "icon_star_level.png",
     }
 
     def _build_intro_page(self):
@@ -1070,10 +1082,13 @@ class PetProfileWindow(QWidget):
         self._intro_sections = {}
         self._intro_heads = {}
         # 第五十四轮：图标竖跨两行（左），节名/数值两行文字（右）。
+        # 偏好轮：等级节删除（等级随宠物卡/状态卡展示），改为「偏好」
+        # 节置底，显示该宠物每档的最爱礼物（registry gift_preferences）。
         sections = (
-            ("等级", "level"),
             ("好感", "affection"),
             ("属性", "attrs"),
+            ("性格", "personality"),
+            ("偏好", "gifts"),
         )
         for title, key in sections:
             row, value = self._intro_section(title, key, k)
@@ -1084,10 +1099,6 @@ class PetProfileWindow(QWidget):
             # 四模块铺满内容区（原尾部堆一堆空白不美观）。
             layout.addSpacing(8)
             layout.addStretch(1)
-        row, value = self._intro_section("性格", "personality", k)
-        layout.addWidget(row)
-        self._intro_heads["personality"] = row
-        self._intro_sections["personality"] = value
         scroll.setWidget(host)
         return scroll
 
@@ -1145,9 +1156,20 @@ class PetProfileWindow(QWidget):
 
     def _show_tab(self, name):
         """切换分栏（同步选中态 + 区域背景图随页切换）。"""
-        pages = {"简介": self._intro_page, "套装": self._outfit_page}
+        pages = {
+            "简介": self._intro_page,
+            "套装": self._outfit_page,
+            "礼物": self._gift_page,
+        }
         page = pages.get(name, self._intro_page)
         self._content.setCurrentWidget(page)
+        # 礼物页滚动条贴缘（2026-09-09）：切到礼物页时把内容栈右边距
+        # 22→0（滚动条 QSS 负 margin 11px 已吃进这 22px 空间，剩余 11
+        # 为视觉间隙）；切回其他页恢复，避免简介/套装页布局变化。
+        if name == "礼物":
+            self._content.setContentsMargins(22, 6, 0, 10)
+        else:
+            self._content.setContentsMargins(22, 6, 22, 10)
         for label, button in self._tab_buttons.items():
             button.setChecked(label == name)
 
@@ -1205,14 +1227,16 @@ class PetProfileWindow(QWidget):
 
         self._refresh_intro(snapshot)
         self._refresh_outfits(snapshot)
+        self._refresh_gifts()
 
     def _refresh_intro(self, snapshot):
-        """简介页（第十九轮）：分节数值；名字在名字牌，进度条已删。"""
+        """简介页：分节数值；名字在名字牌。
+
+        偏好轮：等级节删除，「偏好」节置底显示该宠物每档最爱
+        （registry gift_preferences，按档 1→3）。未声明偏好的宠物
+        显示「还没有特别的偏好」。
+        """
         self._name_label.setText(snapshot["name"])
-        self._intro_sections["level"].setText(
-            f"Lv.{snapshot['level']}　经验 {snapshot['xp']} / "
-            f"{snapshot['xp_next']}"
-        )
         self._intro_sections["affection"].setText(
             f"Lv.{snapshot['affection_level']}　"
             f"{snapshot['affection_points']} / {snapshot['affection_next']}"
@@ -1223,6 +1247,17 @@ class PetProfileWindow(QWidget):
             f"精力 {snapshot['energy']}"
         )
         self._intro_sections["personality"].setText(snapshot["description"])
+
+        favorites = progression.preferred_gift_ids(snapshot["id"])
+        if favorites:
+            self._intro_sections["gifts"].setText(
+                " · ".join(
+                    progression.GIFT_DEFINITIONS[g]["name"]
+                    for g in favorites
+                )
+            )
+        else:
+            self._intro_sections["gifts"].setText("还没有特别的偏好")
 
     def _refresh_outfits(self, snapshot):
         """套装页（第二十七轮）：商店同款横版卡（左图右文+卡内装备钮）。"""
@@ -1345,6 +1380,268 @@ class PetProfileWindow(QWidget):
                 {"pixmap": pixmap_label, "button": button,
                  "idle": idle, "outfit_id": outfit["id"]},
             )
+    # ---- 礼物分栏（2026-09-07 礼物系统轮） ----
+
+    def _build_gift_page(self):
+        """礼物页：与套装页同骨架（纵向滚动），内容随 refresh 重建。
+
+        滚动条右移走 QSS 负 margin（见下方实现注释），页面仍是
+        直接的 QScrollArea。
+        """
+        self._gift_widgets = {}
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        # 滚动条右移走 QSS 负 margin（_scroll_qss 的 bar_right_shift）：
+        # page 在 QStackedWidget 内，容器负边距被其硬性 contentsMargins
+        # 钳住无效（-8/-22/-44 三轮实测）。33px = 内容栈右边距 22 +
+        # 滚动条宽 11：bar 右缘 768 → 801（region_background 右缘），
+        # 2026-09-09 真机几何实测定值。
+        scroll.setStyleSheet(self._scroll_qss(bar_right_shift=33))
+        self._gift_host = QWidget()
+        self._gift_layout = QVBoxLayout(self._gift_host)
+        # 右边距 4→8：给右移后的滚动条留 ~3px+ 间隙。
+        self._gift_layout.setContentsMargins(2, 10, 8, 10)
+        self._gift_layout.setSpacing(12)
+        self._gift_layout.addStretch(1)
+        scroll.setWidget(self._gift_host)
+        return scroll
+
+    def _refresh_gifts(self):
+        """按共享背包重建礼物卡；空背包显示引导文案。
+
+        简略三列网格（2026-09-08 用户定稿）：一行三个、图标+名称+
+        最爱/好感/数量+送出键，三列等宽（最爱与否占位一致）。
+        """
+        while self._gift_layout.count() > 1:
+            item = self._gift_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+        self._gift_widgets = {}
+        state = self.pet.state
+        inventory = progression.gift_inventory(state)
+        if not inventory:
+            empty = QLabel(
+                "背包里还没有礼物\n可以去商店的「礼物」页挑选心意"
+            )
+            empty.setObjectName("giftEmptyHint")
+            empty.setAlignment(Qt.AlignCenter)
+            empty.setWordWrap(True)
+            empty.setStyleSheet(
+                f"font-family:'{APP_FONT_FAMILY}';"
+                f"font-size:{round(23 * _SX * _FIT)}px;"
+                "color:#b08a5e;background:transparent;border:0;"
+            )
+            self._gift_layout.insertWidget(0, empty)
+            return
+        stocked = [
+            gift_id for gift_id in progression.GIFT_DEFINITIONS
+            if int(inventory.get(gift_id, 0)) > 0
+        ]
+        grid_host = QWidget()
+        grid = QGridLayout(grid_host)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(10)
+        grid.setVerticalSpacing(10)
+        for column in range(3):
+            grid.setColumnStretch(column, 1)
+        for index, gift_id in enumerate(stocked):
+            card = self._gift_card(
+                gift_id, int(inventory.get(gift_id, 0)),
+            )
+            grid.addWidget(card, index // 3, index % 3)
+            self._gift_widgets[gift_id] = card
+        self._gift_layout.insertWidget(0, grid_host)
+
+    def _gift_card(self, gift_id, count):
+        """简略竖卡：图标/名称/最爱标记/好感×数量/送出键，整体居中。"""
+        definition = progression.GIFT_DEFINITIONS[gift_id]
+        _base, affection, preferred = progression.gift_affection_for(
+            self._active_pet_id(), gift_id,
+        )
+        card = QWidget()
+        # 选择器必须 objectName 限定（第五十五轮坑位：裸 QWidget 会把
+        # 边框传染给卡内 QLabel）。
+        card.setObjectName("giftCard")
+        card.setStyleSheet(
+            "QWidget#giftCard{background:transparent;"
+            f"border:2px dashed #d6a880;border-radius:16px;}}"
+        )
+        col = QVBoxLayout(card)
+        col.setContentsMargins(8, 8, 8, 8)
+        col.setSpacing(4)
+
+        icon = QLabel()
+        icon.setAlignment(Qt.AlignCenter)
+        icon_px = round(82 * _FIT)
+        icon.setFixedSize(icon_px, icon_px)
+        art = QPixmap(os.path.join(
+            GIFTS_UI_DIR, definition.get("icon", ""),
+        ))
+        if not art.isNull():
+            icon.setPixmap(art.scaled(
+                icon.width(), icon.height(),
+                Qt.KeepAspectRatio, Qt.SmoothTransformation,
+            ))
+        col.addWidget(icon, 0, Qt.AlignHCenter)
+
+        name = QLabel(definition.get("name", gift_id))
+        name.setObjectName(f"giftName_{gift_id}")
+        name.setAlignment(Qt.AlignCenter)
+        name.setStyleSheet(
+            f"font-family:'{APP_FONT_FAMILY}';"
+            f"font-size:{round(24 * _SX * _FIT)}px;font-weight:600;"
+            "color:#a8742c;background:transparent;border:0;"
+        )
+        col.addWidget(name, 0, Qt.AlignHCenter)
+
+        # 数值行不带 ♥ 字符：幼圆缺该字形会回退到更高字体（30 vs 27px）
+        # 导致最爱卡整卡比普通卡高（2026-09-09 用户反馈）；最爱只用
+        # 珊瑚色表达，普通卡琥珀色。
+        count_label = QLabel(
+            f"+{affection} ×{count}"
+        )
+        count_label.setObjectName(f"giftCount_{gift_id}")
+        count_label.setAlignment(Qt.AlignCenter)
+        count_label.setStyleSheet(
+            f"font-family:'{APP_FONT_FAMILY}';"
+            f"font-size:{round(22 * _SX * _FIT)}px;font-weight:600;"
+            + ("color:#ef7a5f;" if preferred else "color:#d29a38;")
+            + "background:transparent;border:0;"
+        )
+        col.addWidget(count_label, 0, Qt.AlignHCenter)
+        col.addStretch(1)
+
+        send = _ArtButton(
+            card, _pp_pixmap("send_gift_button.png"),
+            lambda gid=gift_id: self._give_gift(gid),
+        )
+        send.setObjectName(f"sendGift_{gift_id}")
+        send.setFixedSize(round(150 * _SX * _FIT), round(54 * _SY * _FIT))
+        col.addWidget(send, 0, Qt.AlignHCenter)
+        return card
+
+    def _give_gift(self, gift_id):
+        """送出按钮：确认弹窗 → 扣库存加好感 → 存档/气泡/心心/刷新。"""
+        state = self.pet.state
+        if progression.gift_count(state, gift_id) <= 0:
+            return
+        if not self._confirm_send_gift(gift_id):
+            return
+        result = progression.give_gift(
+            state, self._active_pet_id(), gift_id,
+        )
+        say = getattr(self.pet, "say", None)
+        message = result.get("message", "")
+        if result.get("ok"):
+            self._save_state(state)
+            self._play_gift_hearts()
+        if callable(say) and message:
+            try:
+                self.pet.say(message, 2100)
+            except RuntimeError:
+                pass
+        self.refresh()
+
+    def _confirm_send_gift(self, gift_id):
+        """送礼确认弹窗（复用商店 PurchasePopup，双键确认）。"""
+        definition = progression.GIFT_DEFINITIONS.get(gift_id, {})
+        name = definition.get("name", gift_id)
+        _base, affection, preferred = progression.gift_affection_for(
+            self._active_pet_id(), gift_id,
+        )
+        affection_line = (
+            f"好感 +{affection}（TA的最爱！）"
+            if preferred else f"好感 +{affection}"
+        )
+        state = self.pet.state
+        pet_name = (
+            state.get("name") or state.get("pet_name")
+            or pet_registry.pet_definition(
+                self._active_pet_id(),
+            ).get("default_name", self._active_pet_id())
+        )
+        popup = PurchasePopup(
+            "送出礼物",
+            [f"把「{name}」送给 {pet_name} 吗？", affection_line],
+            self,
+            confirm_text="送出",
+            cancel_text="再想想",
+        )
+        geometry = self.frameGeometry()
+        popup.move(
+            geometry.center().x() - popup.width() // 2,
+            geometry.center().y() - popup.height() // 2,
+        )
+        return popup.exec_() == PurchasePopup.Accepted
+
+    def _play_gift_hearts(self):
+        """送礼成功：待机动画区上错峰飘起 5 颗心（抬升+淡出后自删）。
+
+        槽内异常会静默终止进程（AGENTS 坑位），全部兜 RuntimeError。
+        """
+        try:
+            base_rect = self._idle_label.geometry()
+            for index in range(5):
+                QTimer.singleShot(
+                    index * 130,
+                    lambda i=index: self._spawn_gift_heart(base_rect, i),
+                )
+        except RuntimeError:
+            pass
+
+    def _spawn_gift_heart(self, base_rect, index):
+        try:
+            size = round((30 + (index % 3) * 9) * _FIT)
+            heart = QLabel("♥", self)
+            heart.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+            heart.setStyleSheet(
+                f"font-family:'{APP_FONT_FAMILY}';font-size:{size}px;"
+                "font-weight:600;color:#ef7a5f;background:transparent;"
+            )
+            x = base_rect.x() + round(
+                (0.18 + 0.16 * index) * base_rect.width()
+            )
+            y0 = base_rect.y() + round(base_rect.height() * 0.62)
+            heart.move(x, y0)
+            heart.adjustSize()
+            heart.show()
+            heart.raise_()
+            effect = QGraphicsOpacityEffect(heart)
+            heart.setGraphicsEffect(effect)
+            lift = round(95 * _FIT)
+            anim = QVariantAnimation(
+                self, startValue=0.0, endValue=1.0,
+                duration=900 + index * 120,
+            )
+            anim.setEasingCurve(QEasingCurve.OutCubic)
+
+            def on_step(value, heart=heart, y0=y0, lift=lift):
+                try:
+                    heart.move(heart.x(), y0 - round(value * lift))
+                except RuntimeError:
+                    pass
+
+            def on_fade(value, effect=effect):
+                try:
+                    effect.setOpacity(1.0 - value)
+                except RuntimeError:
+                    pass
+
+            def on_finish(heart=heart):
+                try:
+                    heart.deleteLater()
+                except RuntimeError:
+                    pass
+
+            anim.valueChanged.connect(on_step)
+            anim.valueChanged.connect(on_fade)
+            anim.finished.connect(on_finish)
+            anim.start(QVariantAnimation.DeleteWhenStopped)
+        except RuntimeError:
+            pass
+
     def _toggle_outfit(self, outfit_id):
         """点击装备按钮：未装备→装备，已装备→卸下；保存并同步桌面/小屋。"""
         if self.pet.state.get("equipped_outfit") == outfit_id:

@@ -248,6 +248,9 @@ class PetWindow(QWidget):
         self._settings_applied_cb = None
         self._app_action_cb = None
         self._user_hidden = False
+        # 游戏中自动隐藏（2026-09-08）：仅自动隐藏过的场合才自动恢复，
+        # 不与手动隐藏（set_user_visible）互相覆盖。
+        self._game_auto_hidden = False
         self._presence_guard_t = 0.0
 
         # Speech uses a detached top-level window so it can wrap outside the
@@ -298,6 +301,11 @@ class PetWindow(QWidget):
         self._health_timer = QTimer(self)
         self._health_timer.timeout.connect(self.on_health_check)
         self._health_timer.start(30000)  # check every 30s
+
+        # 游戏中自动隐藏：2 秒轮询前台窗口（设置 hide_in_game 控制启停）。
+        self._game_guard_timer = QTimer(self)
+        self._game_guard_timer.timeout.connect(self._on_game_guard_tick)
+        self._sync_game_guard_timer()
 
         # Prime the first-use menu paints away from the user's click path.
         self._prewarmed_bubble_menus = {}
@@ -890,6 +898,9 @@ class PetWindow(QWidget):
         """Recover accidental hides and periodically reassert topmost order."""
         if self.__dict__.get("_user_hidden", False):
             return False
+        # 游戏自动隐藏是主动行为，不能被存在守卫 5 秒后拉回来。
+        if self.__dict__.get("_game_auto_hidden", False):
+            return False
         if self.play_scene is not None or self._home_scene_active():
             return False
 
@@ -913,10 +924,50 @@ class PetWindow(QWidget):
         self.raise_()
         return True
 
+    def _sync_game_guard_timer(self):
+        """按设置 hide_in_game 启停游戏检测轮询；关闭时恢复被藏的小狗。"""
+        enabled = bool(self.settings.get("hide_in_game", True))
+        try:
+            if enabled:
+                self._game_guard_timer.start(2000)
+            else:
+                self._game_guard_timer.stop()
+                if self._game_auto_hidden:
+                    self._game_auto_hidden = False
+                    if not self.isVisible() and not self._user_hidden:
+                        self.show()
+                        self.raise_()
+        except RuntimeError:
+            pass
+
+    def _on_game_guard_tick(self):
+        """前台进入/离开游戏 → 自动隐藏/恢复（仅自动隐藏的场合恢复）。"""
+        try:
+            from petpet.app import game_guard
+
+            present = game_guard.is_game_present(
+                game_guard.collect_foreground_info(),
+                own_hwnds=(int(self.winId()),),
+                own_exe_markers=game_guard.own_exe_markers(),
+            )
+            if present:
+                if self.isVisible() and not self._game_auto_hidden:
+                    self._game_auto_hidden = True
+                    self.hide_overlays()
+                    self.hide()
+            elif self._game_auto_hidden:
+                self._game_auto_hidden = False
+                if not self.isVisible():
+                    self.show()
+                    self.raise_()
+        except RuntimeError:
+            pass
+
     def apply_runtime_settings(self, previous=None):
         """Apply every user-facing setting immediately after save/reset."""
         previous = previous or {}
         self.apply_window_flags()
+        self._sync_game_guard_timer()
 
         now = time.time()
         reminder_keys = (

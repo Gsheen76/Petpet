@@ -43,6 +43,8 @@ RECORD_DEFAULTS = {
     "coins_dug": 0,
     "minigame_rounds": 0,
     "coins_minigames": 0,
+    "gifts_bought": 0,
+    "gifts_given": 0,
 }
 
 # Digging is an occasional bonus, not a replacement for achievements.
@@ -257,6 +259,94 @@ OUTFIT_DEFINITIONS = {
         "pet_id": "lunch_meat",
     },
 }
+
+# 礼物是消耗品：购买进玩家共享库存（gift_inventory），在宠物详情
+# 面板「礼物」分栏送给指定宠物换取好感（无冷却，币价即门槛）。
+# 目录三档 × 每档三选一；名目保持宠物中性（后续会加小猫等），
+# 不用骨头/毛线球/小鱼干这类犬猫专属意象。
+GIFT_TIER_META = {
+    1: {"label": "小小心意", "price": 80, "affection": 10},
+    2: {"label": "真挚款待", "price": 200, "affection": 30},
+    3: {"label": "豪华大礼", "price": 480, "affection": 80},
+}
+GIFT_DEFINITIONS = {
+    "sweet_cookie": {
+        "name": "甜心曲奇",
+        "tier": 1,
+        "price": 80,
+        "affection": 10,
+        "summary": "酥脆小曲奇，甜甜心意。",
+        "icon": "sweet_cookie.png",
+    },
+    "milk_pudding": {
+        "name": "元气布丁",
+        "tier": 1,
+        "price": 80,
+        "affection": 10,
+        "summary": "嫩滑布丁，入口即化。",
+        "icon": "milk_pudding.png",
+    },
+    "cheese_cubes": {
+        "name": "香香起司",
+        "tier": 1,
+        "price": 80,
+        "affection": 10,
+        "summary": "浓香起司，闻着就馋。",
+        "icon": "cheese_cubes.png",
+    },
+    "meat_can": {
+        "name": "肉肉罐头",
+        "tier": 2,
+        "price": 200,
+        "affection": 30,
+        "summary": "开罐即食，满满肉香。",
+        "icon": "meat_can.png",
+    },
+    "plush_ball": {
+        "name": "毛绒小球",
+        "tier": 2,
+        "price": 200,
+        "affection": 30,
+        "summary": "软软的抱抱小球。",
+        "icon": "plush_ball.png",
+    },
+    "berry_basket": {
+        "name": "莓莓小篮",
+        "tier": 2,
+        "price": 200,
+        "affection": 30,
+        "summary": "一小篮酸甜小惊喜。",
+        "icon": "berry_basket.png",
+    },
+    "love_box": {
+        "name": "爱心礼盒",
+        "tier": 3,
+        "price": 480,
+        "affection": 80,
+        "summary": "装满心意的豪华礼盒。",
+        "icon": "love_box.png",
+    },
+    "warm_blanket": {
+        "name": "暖暖小毯",
+        "tier": 3,
+        "price": 480,
+        "affection": 80,
+        "summary": "绒绒的午睡小毯。",
+        "icon": "warm_blanket.png",
+    },
+    "shiny_medal": {
+        "name": "亮晶晶奖牌",
+        "tier": 3,
+        "price": 480,
+        "affection": 80,
+        "summary": "闪闪发光的荣誉证明。",
+        "icon": "shiny_medal.png",
+    },
+}
+
+# 每只宠物对礼物有偏好：每档一个最爱（注册表 gift_preferences，
+# 按档位 1→3 排列）。最爱礼物好感 ×1.5。
+GIFT_PREFERENCE_MULTIPLIER = 1.5
 
 DECORATION_TRANSFORM_LIMITS = {
     "x": (-0.15, 1.15),
@@ -585,6 +675,24 @@ def ensure_progression(state):
         for item in raw_owned_outfits
         if str(item) in OUTFIT_DEFINITIONS
     ))
+    raw_gift_inventory = state.get("gift_inventory")
+    if not isinstance(raw_gift_inventory, dict):
+        raw_gift_inventory = {}
+    gift_inventory = {}
+    for gift_id in GIFT_DEFINITIONS:
+        count = _safe_int(raw_gift_inventory.get(gift_id, 0), minimum=0)
+        if count > 0:
+            gift_inventory[gift_id] = count
+    # 旧目录迁移：骨头饼干已随中性化目录（后续加小猫等）下架，
+    # 存量折算为同档同价的甜心曲奇，玩家库存不蒸发。
+    legacy_bones = _safe_int(
+        raw_gift_inventory.get("bone_cookie", 0), minimum=0
+    )
+    if legacy_bones > 0:
+        gift_inventory["sweet_cookie"] = (
+            gift_inventory.get("sweet_cookie", 0) + legacy_bones
+        )
+    state["gift_inventory"] = gift_inventory
     equipped_outfit = state.get("equipped_outfit")
     state["equipped_outfit"] = (
         equipped_outfit
@@ -708,6 +816,31 @@ def affection_to_next(level):
     return min(200, 20 + level * 10)
 
 
+def _apply_affection(holder, amount):
+    """在一个含好感字段的 dict（门面或宠物 profile）上加点并升级。
+
+    返回本次升了几级；records 由调用方自行落账。
+    """
+    holder["affection_level"] = _safe_int(
+        holder.get("affection_level", 1), default=1, minimum=1
+    )
+    holder["affection_points"] = _safe_int(
+        holder.get("affection_points", 0)
+    )
+    holder["affection_points"] += amount
+    levels_gained = 0
+    while (
+        holder["affection_points"]
+        >= affection_to_next(holder["affection_level"])
+    ):
+        holder["affection_points"] -= affection_to_next(
+            holder["affection_level"]
+        )
+        holder["affection_level"] += 1
+        levels_gained += 1
+    return levels_gained
+
+
 def add_affection(state, amount):
     """Add affection and return the resulting level-up information."""
     ensure_progression(state)
@@ -719,18 +852,8 @@ def add_affection(state, amount):
             "levels_gained": 0,
             "level": state["affection_level"],
         }
-    state["affection_points"] += amount
+    levels_gained = _apply_affection(state, amount)
     state["records"]["affection_earned"] += amount
-    levels_gained = 0
-    while (
-        state["affection_points"]
-        >= affection_to_next(state["affection_level"])
-    ):
-        state["affection_points"] -= affection_to_next(
-            state["affection_level"]
-        )
-        state["affection_level"] += 1
-        levels_gained += 1
     state["records"]["affection_level_ups"] += levels_gained
     return {
         "gained": amount,
@@ -1230,6 +1353,136 @@ def purchase_outfit(state, outfit_id):
     }
 
 
+def gift_inventory(state):
+    """Return the normalized shared gift inventory (gift_id -> count)."""
+    ensure_progression(state)
+    return state["gift_inventory"]
+
+
+def gift_count(state, gift_id):
+    return int(gift_inventory(state).get(gift_id, 0))
+
+
+def preferred_gift_ids(pet_id):
+    """该宠物每档的最爱礼物（注册表 gift_preferences，档位 1→3 排列）。"""
+    definition = _load_pet_registry().get(pet_id)
+    raw = definition.get("gift_preferences") if definition else None
+    if not isinstance(raw, (list, tuple)):
+        return ()
+    return tuple(
+        gift_id for gift_id in raw if gift_id in GIFT_DEFINITIONS
+    )
+
+
+def gift_affection_for(pet_id, gift_id):
+    """(基础好感, 实得好感, 是否最爱)：最爱按倍率取整加成。"""
+    base = int(GIFT_DEFINITIONS[gift_id]["affection"])
+    if gift_id in preferred_gift_ids(pet_id):
+        return (
+            base,
+            round(base * GIFT_PREFERENCE_MULTIPLIER),
+            True,
+        )
+    return base, base, False
+
+
+def purchase_gift(state, gift_id):
+    """Buy one consumable gift into the shared player inventory."""
+    ensure_progression(state)
+    definition = GIFT_DEFINITIONS.get(gift_id)
+    if definition is None:
+        return {"ok": False, "message": "没有找到这件礼物。"}
+    price = int(definition.get("price", 0))
+    coins = _shared_pet_coins(state)
+    if coins["pet_coins"] < price:
+        return {
+            "ok": False,
+            "price": price,
+            "message": f"还差 {price - coins['pet_coins']} 枚 Pet币。",
+        }
+    coins["pet_coins"] -= price
+    if coins is not state:
+        state["pet_coins"] = coins["pet_coins"]
+    state["records"]["coins_spent"] += price
+    state["records"]["gifts_bought"] += 1
+    inventory = state["gift_inventory"]
+    inventory[gift_id] = int(inventory.get(gift_id, 0)) + 1
+    return {
+        "ok": True,
+        "price": price,
+        "count": inventory[gift_id],
+        "message": f"已购买 {definition['name']}，去宠物面板送出吧！",
+    }
+
+
+def give_gift(state, pet_id, gift_id):
+    """Give one stocked gift to a pet and grant its affection.
+
+    当前宠物走门面 add_affection（records 由其落账）；其他宠物直接在
+    该宠物 profile 上加点，records 在共享层补记。
+    """
+    ensure_progression(state)
+    definition = GIFT_DEFINITIONS.get(gift_id)
+    if definition is None:
+        return {"ok": False, "message": "没有找到这件礼物。"}
+    count = int(state["gift_inventory"].get(gift_id, 0))
+    if count <= 0:
+        return {
+            "ok": False,
+            "message": "背包里还没有这件礼物，先去商店看看吧。",
+        }
+    target_pet_id = (
+        state.get("active_pet_id") if pet_id is None else pet_id
+    )
+    base_amount, amount, preferred = gift_affection_for(
+        target_pet_id, gift_id,
+    )
+    if amount <= 0:
+        return {"ok": False, "message": "这件礼物暂时送不出去。"}
+    active_pet_id = state.get("active_pet_id")
+    pets = state.get("pets")
+    # 无 pets 字典的旧扁平存档：门面即唯一宠物，直接走门面加点。
+    if (
+        pet_id is None
+        or pet_id == active_pet_id
+        or not isinstance(pets, dict)
+    ):
+        affection = add_affection(state, amount)
+    else:
+        profile = pets.get(pet_id) if isinstance(pets, dict) else None
+        if not isinstance(profile, dict):
+            return {"ok": False, "message": "还没有这只宠物。"}
+        levels_gained = _apply_affection(profile, amount)
+        state["records"]["affection_earned"] += amount
+        state["records"]["affection_level_ups"] += levels_gained
+        affection = {
+            "gained": amount,
+            "leveled": levels_gained > 0,
+            "levels_gained": levels_gained,
+            "level": profile["affection_level"],
+        }
+    if count == 1:
+        state["gift_inventory"].pop(gift_id, None)
+    else:
+        state["gift_inventory"][gift_id] = count - 1
+    state["records"]["gifts_given"] += 1
+    if preferred:
+        message = (
+            f"送出了 {definition['name']}，TA 超喜欢！好感 +{amount}！"
+        )
+    else:
+        message = f"送出了 {definition['name']}，好感 +{amount}！"
+    if affection["levels_gained"] > 0:
+        message += f" 好感升到 Lv.{affection['level']} 啦！"
+    return {
+        "ok": True,
+        "affection": affection,
+        "preferred": preferred,
+        "base_affection": base_amount,
+        "message": message,
+    }
+
+
 def equip_outfit(state, outfit_id):
     """Equip one owned outfit, replacing the previous complete outfit."""
     ensure_progression(state)
@@ -1598,6 +1851,16 @@ def achievement_catalog(state, now=None):
             "achievements_claimed", "成就", "claim",
             [(1, 10, "领取第一份奖励"), (10, 35, "成就收集者"),
              (25, 80, "满满荣誉")],
+        ),
+        (
+            "gifts_bought", "礼物", "gift",
+            [(1, 15, "第一份心意"), (5, 35, "礼物常客"),
+             (15, 70, "挑礼小行家")],
+        ),
+        (
+            "gifts_given", "礼物", "give",
+            [(1, 15, "第一次送礼"), (5, 40, "心意满满"),
+             (15, 75, "送礼达人"), (40, 130, "最好的伙伴")],
         ),
     ]
     for record_key, category, prefix, tiers in series:

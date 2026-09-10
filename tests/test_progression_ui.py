@@ -94,7 +94,7 @@ class ProgressionWindowUiTests(unittest.TestCase):
             button.text() for button in shop.findChildren(QPushButton)
             if button.objectName() == "tabButton" and not button.isHidden()
         ]
-        self.assertEqual(tab_texts, ["套装", "家居", "强化"])
+        self.assertEqual(tab_texts, ["套装", "家居", "强化", "礼物"])
         self.assertIn("套装商店", outfit_text)
         self.assertIn("小恐龙套装", outfit_text)
         self.assertIn("600 Pet币", outfit_text)

@@ -243,11 +243,13 @@ class MenuUiTests(unittest.TestCase):
             interface_anchor_rect=lambda: anchor,
             interface_screen_rect=lambda: screen,
         )
-        menu = SimpleNamespace(pet=pet_host, W=590, H=112, move=Mock())
+        menu = SimpleNamespace(pet=pet_host, W=590, H=130, move=Mock())
 
         pet.BubbleMenu._place(menu)
 
-        menu.move.assert_called_once_with(874, 527)
+        # 菜单下移两轮（+12/+20，2026-09-09）：+19→+51，H=130 → 620+51-130=541
+        # 三轮下移累计 +71（+19→+31→+51→+71，2026-09-09），H=130 → 620+71-130=561
+        menu.move.assert_called_once_with(874, 561)
 
         stats = SimpleNamespace(
             pet=pet_host,
@@ -258,7 +260,8 @@ class MenuUiTests(unittest.TestCase):
 
         pet.StatBubble._place(stats)
 
-        stats.move.assert_called_once_with(859, 92)
+        # -37：资料卡累计下移 90px（2026-09-10 用户精调）→ 620-416-37=167
+        stats.move.assert_called_once_with(859, 167)
 
     def test_say_uses_visible_home_interface_when_desktop_pet_is_hidden(self):
         speech = SimpleNamespace(isVisible=lambda: True, show_text=Mock())

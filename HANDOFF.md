@@ -1,8 +1,8 @@
 # Petpet 项目交接文档
 
-**版本**：v1.7.0
+**版本**：v1.7.0（+ 未发布：礼物系统，2026-09-07）
 **日期**：2026-09-07
-**核心分支**：main（与远端一致；v1.7.0 已发布，工作树干净）
+**核心分支**：main（v1.7.0 已发布；礼物系统改动在工作树待提交）
 
 ---
 
@@ -47,7 +47,15 @@ D:\Agent_project\Petpet
 
 ## 3. 最近主要变更
 
-### v1.7.0（当前，2026-09-07 已公开发布）
+### v1.7.0 后（未发布，2026-09-07→08）
+
+| 领域 | 内容 |
+|------|------|
+| **气泡按键贴图** | 右键气泡菜单三页 18 键 emoji→AI 贴图（2026-09-09 哑光奶油 v3 稿，`assets/runtime/ui/bubble_menu/<action>.png`，`_bubble_icon()` 缓存、缺失回退 emoji；拆分器 `tools/split_button_sheet.py`，**gutter 检测版**——等分对 AI 图栅格漂移不可靠，本图行界偏 37px 曾致第二行图标被切/混邻居，共享模块 `tools/sheet_utils.py` 白隙中线下刀）；**按键形态=图标即按键**（无底板无常驻文字：常态 52px，悬浮 58px+珊瑚高亮+奶油名称胶囊，按住缩小压暗；button_h 92、菜单 H 130/218、StatBubble 锚点 -115；主菜单行宽=卡宽 620 精确对齐（按钮 96/隙 8.8、菜单 W 620——**透明窗口宽度影响钳位同步，对齐要求窗口宽=行宽=卡宽**）。提示词三轮迭代教训：**生图 AI 会把"高光"放大成亮面反光——要哑光平涂就在提示词里全面封杀高光/反光/立体感**。 |
+| **游戏自动隐藏** | **检测到其他游戏运行时自动隐藏小狗，游戏退出自动回来；设置页开关 `hide_in_game`（默认开）**（2026-09-08）。判定**游戏路径单信号**（`petpet/app/game_guard.py` 纯函数可测；2026-09-09 收紧定稿）：前台进程路径命中游戏平台/直装目录关键词（steamapps/Epic/WeGame/riot/\games\ + 米哈游系/库洛系等，小写归一）+ 非游戏黑名单双保险（浏览器/播放器/PPT/远程等）；**全屏覆盖不再独立触发**（初版信号，因 ZCode 等 Electron IDE 全屏误隐藏被用户否决——"只有启动游戏才隐藏"）；排除自身窗口/进程、Progman/WorkerW、explorer。直装且无已知目录关键词的游戏需在 MARKERS 补一行。PetWindow 2 秒轮询 `_on_game_guard_tick`：隐藏置 `_game_auto_hidden`，游戏结束只恢复**自己藏的**（与手动隐藏 `_user_hidden` 互不覆盖）；`_maintain_desktop_presence` 对自动隐藏放行（否则 5 秒存在守卫会顶回来）；`apply_runtime_settings→_sync_game_guard_timer` 随开关启停（关闭时立即恢复）。非 Windows 采集恒 None＝空转。坑位：**同进程造全屏窗口测试无效**（自身进程排除是正确行为，端到端须独立进程辅助窗，且辅助窗启动有 ~1.5s 竞态要等稳）；采集/判定分离才可离线测。验证：offscreen 全量 **756 passed**（新 12 条）+ 跨进程全屏辅助窗真隐藏/恢复 PASS + **用户真实英雄联盟会话实战生效**（前台 League of Legends.exe 全屏双命中，宠物即隐）。详见 Obsidian `宠物系统\游戏自动隐藏设计` |
+| **礼物系统** | **商店第 5 页「礼物」+ 宠物详情面板第 3 分栏「礼物」**：消耗品礼物**三档 × 每档三选一**（档表 `GIFT_TIER_META`：小小心意 80 币/+10、真挚款待 200/+30、豪华大礼 480/+80；目录 9 项全中性——无骨头/毛线/鱼干等犬猫专属意象，为后续小猫等宠物留位，守卫测试锁词）；**每宠每档一个最爱**（注册表 `pets/manifest.json` 的 `gift_preferences`，午餐肉=曲奇/罐头/礼盒、冰淇淋=布丁/莓篮/小毯），最爱礼好感 **×1.5**（15/45/120），`preferred_gift_ids`/`gift_affection_for` 在 core.py；玩家共享背包 `gift_inventory`（PLAYER_FIELDS，schema v3→v4；`bone_cookie` 存量一次性折算 `sweet_cookie`）；`purchase_gift`/`give_gift`（当前宠物走门面 `add_affection`，其他宠物直接落 profile——`_apply_affection` 纯函数双路径复用，偏好两路同生效）；records 增 `gifts_bought/gifts_given`；好感无冷却无上限。商店礼物页为**页内四分栏（总共/三档，2026-09-08 起与套装页宠物选择器共用 chipBar/chipTab 托盘样式——奶油托盘、圆角钮**等分铺满整行**（有几键分几等分）互斥）+ 两列竖版卡网格**，**不显示最爱**（偏好只在宠物面板送礼时体现）；面板简介页等级节删除、新增「偏好」节置底显示三档最爱名（图标沿用星星）；面板礼物页 2026-09-08 定稿**简略三列网格**（一行三卡：图标/名称/+15 ×1 好感行（最爱珊瑚色带 ♥，普通琥珀色，「♥ 最爱」独立行已删）/送出键，无描述；三列等 stretch 最爱与否恒等宽等高——数值行不带 ♥ 字符（幼圆缺字形回退行高 30vs27px 曾使最爱卡高 3px，2026-09-09 修复，仅珊瑚/琥珀双色表最爱）；2026-09-09 滚动条贴缘终版=滚动条 QSS 负 margin 33px + `_show_tab` 切礼物页时内容栈右边距动态 22→0（**坑位：QStackedWidget 内子页容器负边距被栈硬性 margins 钳住无效，-8/-22/-44 三轮实测**）；送礼 `PurchasePopup` 双键确认（`confirm_text/cancel_text` 可选参数，默认行为不变）→ 扣库存加好感存档 + 气泡（最爱「TA 超喜欢！」）+ 待机区 5 心飘动 → 刷新。分栏键素材：简介/礼物两键为用户素材裁剪版（`tab_intro.png` 淡紫/`tab_gift.png` 粉，2026-09-07 偏好展示轮），套装键 tab_outfit.png 仍为旧参考图裁切。占位礼物图标 9 枚由 `tools/generate_gift_assets.py` 生成——正式稿同名替换。商店家居卡名字居中、名/简介间距 6→2。**滚动区统一（2026-09-08）**：CozyProgressWindow 滚动条常驻（AlwaysOn，QSS 槽透明、无溢出手柄零宽＝隐形）+ 内容右边距常设 15px——有/无溢出的页内容恒等宽；同日 body 负右边距 -8 使滚动条右移更贴窗口缘（坑位：**setViewportMargins 预留 gutter 会与 QSS 样式化 QScrollArea 冲突把内容压扁，勿用**；布局测量一律干净时序构造→定页→show→grab→一次测量，show 后再 refresh 的中间值会误导）。坑位：测试裸 state 无 active_pet_id 时 give_gift 需回退门面路径；Git Bash 内联 powershell 的 `$_` 被 bash 吞——脚本落 Temp\*.ps1 再 -File；**无 BOM UTF-8 的 .ps1 带中文注释会被 PS5.1 按 GBK 误读吞掉赋值行——重启/击杀脚本一律纯 ASCII**；**重启验证假阳性事故**：击杀查询静默未命中旧实例、新实例被单实例顶掉、名字反查把旧进程报成成功——**必须 `Start-Process -PassThru` 追踪自启 PID**（当前实例 PID 31312/23:09:26）。验证：offscreen 全量 **743 passed** + Windows 五截图视觉验收 + PassThru 重启验证。详见 Obsidian `宠物系统\礼物系统设计`、`宠物系统\礼物系统实施记录`、`开发记录\2026-09-07 礼物偏好展示与商店礼物页分栏` |
+
+### v1.7.0（当前已发布，2026-09-07）
 
 发布提交 `70b5444`（tag v1.7.0，[GitHub Release](https://github.com/Gsheen76/Petpet/releases/tag/v1.7.0)）。本版内容 = 下表「v1.6.3 后」全部条目 + 版本锚点 bump（version.py/README/game_knowledge.json/release-gate 测试 9 条）。发布说明 `docs/RELEASE_NOTES_v1.7.0.md`；SHA256 下载件与本地逐条比对一致。
 
@@ -129,13 +137,31 @@ assets/runtime/ui/shop/
 ├── status_owned.png        # 已拥有徽章（裁剪 47px 高）
 ├── status_in_use.png       # 使用中徽章（裁剪 47px 高）
 ├── switch_pet_button.png   # 切换宠物按钮（115×50）
-├── tab_bar_bg.png          # 标签栏底
+├── tab_bar_bg.png          # 标签栏底（2026-09-09 换 5 槽版：对齐 5 页签，原稿归档 source/references）
+├── filter_bar_bg.png       # 礼物页四分栏托盘（旧 4 槽药丸复用，2026-09-10）
 ├── active_tab_bg.png       # 选中标签
 ├── close_button.png        # 关闭按钮
 ├── pet_tab_icon.png        # 宠物标签图标
 ├── gift_icon.png           # 套装标签图标
 ├── furniture_tab_icon.png  # 家居标签图标
 └── upgrade_tab_icon.png    # 强化标签图标
+```
+
+```
+assets/runtime/ui/gifts/          # 礼物图标（商店卡+面板背包共用，GIFT_DEFINITIONS["icon"]）
+├── sweet_cookie.png              # 甜心曲奇（档一 80 币/+10）
+├── milk_pudding.png              # 元气布丁（档一）
+├── cheese_cubes.png              # 香香起司（档一）
+├── meat_can.png                  # 肉肉罐头（档二 200/+30）
+├── plush_ball.png                # 毛绒小球（档二）
+├── berry_basket.png              # 莓莓小篮（档二）
+├── love_box.png                  # 爱心礼盒（档三 480/+80）
+├── warm_blanket.png              # 暖暖小毯（档三）
+└── shiny_medal.png               # 亮晶晶奖牌（档三）
+# 同轮新增：ui/shop/gift_tab_icon.png（商店页签）、
+#          ui/pet_profile_new/tab_gift.png（面板第三分栏）、send_gift_button.png（送出键）
+# 偏好声明：pets/manifest.json 每宠 gift_preferences（每档一个最爱，×1.5 好感）
+# 正式图标：2026-09-09 用户 AI 九宫格稿经 tools/split_gift_sheet.py 拆分落位（原稿归档 source/references/gift_sheet_9_source.png；占位生成器 tools/generate_gift_assets.py 保留作重建参考）
 ```
 
 ---
@@ -150,7 +176,7 @@ assets/runtime/ui/shop/
 | 版本发布 | 更新 `version.py` + README + 发布说明 → `scripts/release.ps1 -Version X.Y.Z` |
 
 **测试约束**：
-- `QT_QPA_PLATFORM=offscreen` 跑全量（~80s，707 passed）
+- `QT_QPA_PLATFORM=offscreen` 跑全量（~1.5–5min，**757 passed**，2026-09-08 礼物页三列网格后基准）
 - Windows 平台截图需真实字体库（offscreen 无字体数据库，渲染会缺字）
 - `setPixmap` 会清空 `QLabel.text()` → 必须用 `PreservedTextLabel` 保留文本
 
@@ -188,6 +214,7 @@ assets/runtime/ui/shop/
 - **Obsidian 文档规范**（写库前必读，归类/命名/流程的唯一规则源）：`D:\Github Desktop\My-Obsidian\项目\Petpet\文档规范.md`
 - **Obsidian 总档案**：`D:\Github Desktop\My-Obsidian\项目\Petpet\Petpet 总档案.md`（只放项目级总览；2026-09-01 已拆分瘦身，日志类内容全部在各分类目录）
 - **Obsidian 开发记录**：`D:\Github Desktop\My-Obsidian\项目\Petpet\开发记录\`（按日命名 `YYYY-MM-DD 主题.md`；最新：`2026-09-07 商店徽标缩小与按键反馈统一.md`（v1.7.0 期）、`2026-09-05 小屋宠物按键新素材.md`、`2026-09-01 小屋按键两段式按压反馈.md`、`2026-08-27 成就分类筛选与弹窗交互完善.md` 含 v1.6.1→v1.6.3 全部迭代细节）
+- **礼物系统文档**：`宠物系统\礼物系统设计.md` + `宠物系统\礼物系统实施记录.md`（2026-09-07，目录数值/数据模型/好感双路径/交互决策与坑位）
 - **版本规划索引**：`D:\Github Desktop\My-Obsidian\项目\Petpet\发布系统\版本规划与发布索引.md`
 - **最新 Release**：https://github.com/Gsheen76/Petpet/releases/tag/v1.7.0
 

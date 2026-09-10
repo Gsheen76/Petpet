@@ -320,11 +320,18 @@ class ProfileWindowShellTests(unittest.TestCase):
         state["pet_name"] = "烟花"
         window, _ = self._window(state)
         html = self._intro_text(window)
-        # 模块化分节：等级 / 好感度 / 属性 / 性格 各节标签（第十九轮删名字标题）。
+        # 偏好轮：等级节删除，「偏好」节置底显示每档最爱礼物。
         self.assertNotIn("烟花", window._name_label.styleSheet())
-        for key in ("level", "affection", "attrs", "personality"):
+        for key in ("affection", "attrs", "personality", "gifts"):
             self.assertIn(key, window._intro_sections)
-        self.assertIn("经验", html, "介绍应更详细（含经验）")
+        self.assertNotIn("level", window._intro_sections)
+        self.assertIn("甜心曲奇", html, "偏好节应显示午餐肉档一最爱")
+        self.assertIn("肉肉罐头", html)
+        self.assertIn("爱心礼盒", html)
+        # 偏好节应排在最后（置底）。
+        self.assertEqual(
+            list(window._intro_sections)[-1], "gifts",
+        )
 
     def test_intro_icon_spans_title_and_value_rows(self):
         """第五十四轮：图标竖跨两行，节名与数值同处图标右侧一组。"""

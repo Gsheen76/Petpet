@@ -37,6 +37,62 @@ from PyQt5.QtWidgets import (
 
 from petpet.ui.common import independent_font_px, independent_pixel_font
 
+# 大头照裁剪框缓存（按源图尺寸；2026-09-10 聊天头像大头照轮）。
+_ASSISTANT_HEAD_RECTS = {}
+
+
+def _assistant_head_rect(image):
+    """整身帧 → 头部方形裁剪框（含耳朵）。
+
+    头部按 alpha 内容 bbox 相对推算：方形边长 ≈ 内容宽的 0.62，
+    顶对内容上缘、水平居中；缩样扫描求 bbox（一次后按尺寸缓存），
+    结果钳制在图像范围内。
+    """
+    key = (image.width(), image.height())
+    cached = _ASSISTANT_HEAD_RECTS.get(key)
+    if cached is not None:
+        return cached
+    small = image.scaled(
+        160, 200, Qt.KeepAspectRatio, Qt.FastTransformation
+    )
+    sw, sh = small.width(), small.height()
+    rows = []  # (y, min_x, max_x) 每行的非透明范围
+    for y in range(sh):
+        row_xs = [
+            x for x in range(sw)
+            if ((small.pixel(x, y) >> 24) & 0xFF) > 12
+        ]
+        if row_xs:
+            rows.append((y, min(row_xs), max(row_xs)))
+    if not rows:
+        rect = QRect(0, 0, image.width(), image.height())
+        _ASSISTANT_HEAD_RECTS[key] = rect
+        return rect
+    top = rows[0][0]
+    bottom = rows[-1][0]
+    left = min(r[1] for r in rows)
+    right = max(r[2] for r in rows)
+    # 头部中心 = 头部区域（内容上 45%）最宽一行的中点——整身 bbox
+    # 中心会被尾巴/后腿拉偏（实测歪 9%），这里只信头部实测。
+    head_band = [r for r in rows if r[0] <= top + (bottom - top) * 0.45]
+    widest = max(head_band, key=lambda r: r[2] - r[1])
+    head_cx = (widest[1] + widest[2] + 1) / 2
+    content_w = (right - left + 1) * image.width() / sw
+    # 0.80：2026-09-10 用户定稿「里面小狗缩小」——视野拉远露出头+胸，
+    # 此前 0.62/0.56/0.50 是误解为裁剪变小（越裁越近景，方向反了）。
+    side = int(content_w * 0.80)
+    x0 = int(head_cx * image.width() / sw - side / 2)
+    x0 = max(0, min(x0, image.width() - side))
+    # 视角上移（2026-09-10 用户精调）：框上提 side*0.09（0.18 提多了，
+    # 回一半——耳尖贴框、脸略居中偏下）。
+    y0 = max(
+        0,
+        int(image.height() * top / sh) - int(side * 0.09),
+    )
+    rect = QRect(x0, y0, side, side)
+    _ASSISTANT_HEAD_RECTS[key] = rect
+    return rect
+
 
 class ChatWindow(QWidget):
     """A small chat panel that floats beside the pet.
@@ -841,26 +897,31 @@ class ChatWindow(QWidget):
         painter.setClipPath(path)
         painter.fillRect(canvas.rect(), QColor("#f3ded0"))
         if not image.isNull():
-            square_image = (
-                abs(image.width() - image.height())
-                <= min(image.width(), image.height()) * 0.2
-            )
-            if role == "assistant" and not square_image:
-                edge = min(image.width(), max(1, int(image.height() * 0.68)))
-                source_rect = QRect(
-                    (image.width() - edge) // 2,
-                    max(0, int(image.height() * 0.04)),
-                    edge,
-                    edge,
-                )
+            if role == "assistant":
+                # 大头照（2026-09-10 用户定稿）：只取头部方形区域，
+                # 替代旧的"顶部 68% 高"整身方裁。
+                source_rect = _assistant_head_rect(image)
             else:
-                edge = min(image.width(), image.height())
-                source_rect = QRect(
-                    (image.width() - edge) // 2,
-                    (image.height() - edge) // 2,
-                    edge,
-                    edge,
+                square_image = (
+                    abs(image.width() - image.height())
+                    <= min(image.width(), image.height()) * 0.2
                 )
+                if square_image:
+                    edge = min(image.width(), image.height())
+                    source_rect = QRect(
+                        (image.width() - edge) // 2,
+                        (image.height() - edge) // 2,
+                        edge,
+                        edge,
+                    )
+                else:
+                    edge = min(image.width(), max(1, int(image.height() * 0.68)))
+                    source_rect = QRect(
+                        (image.width() - edge) // 2,
+                        max(0, int(image.height() * 0.04)),
+                        edge,
+                        edge,
+                    )
             painter.drawImage(QRect(0, 0, size, size), image, source_rect)
         else:
             painter.setBrush(QColor("#d99a7f"))

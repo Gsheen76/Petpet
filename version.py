@@ -1,3 +1,3 @@
 """Single source of truth for Petpet's public version."""
 
-VERSION = "1.7.0"
+VERSION = "1.7.1"

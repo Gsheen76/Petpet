@@ -6,7 +6,7 @@ from copy import deepcopy
 from typing import Callable
 
 
-STATE_SCHEMA_VERSION = 3
+STATE_SCHEMA_VERSION = 4
 DEFAULT_PET_ID = "lunch_meat"
 _FACADE_SNAPSHOT_KEY = "_active_pet_facade_snapshot"
 _DEFAULT_PET_NAME_KEY = "_default_pet_name"
@@ -18,7 +18,7 @@ PLAYER_FIELDS = (
     "upgrades", "owned_decorations", "owned_outfits",
     "owned_home_decorations", "home_scene", "home_decoration_positions",
     "home_stored_decorations", "home_decoration_transforms",
-    "claimed_achievements",
+    "claimed_achievements", "gift_inventory",
 )
 
 PET_FIELDS = (
@@ -39,6 +39,7 @@ _PLAYER_DEFAULTS = {
     "owned_home_decorations": [], "home_scene": {},
     "home_decoration_positions": {}, "home_stored_decorations": [],
     "home_decoration_transforms": {}, "claimed_achievements": [],
+    "gift_inventory": {},
 }
 
 _PET_DEFAULTS = {

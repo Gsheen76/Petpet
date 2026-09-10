@@ -37,7 +37,13 @@ from PyQt5.QtWidgets import (
 
 from petpet.progression import core as progression
 from petpet.ui import decorations as decoration_renderer
-from petpet.app.paths import DECORATIONS_DIR, OUTFITS_DIR, POSES_DIR, SHOP_UI_DIR
+from petpet.app.paths import (
+    DECORATIONS_DIR,
+    GIFTS_UI_DIR,
+    OUTFITS_DIR,
+    POSES_DIR,
+    SHOP_UI_DIR,
+)
 from petpet.app.fonts import APP_FONT_FAMILY
 from petpet.app.pets import (
     load_pet_registry,
@@ -160,6 +166,13 @@ SHOP_THEME_STYLE = """
         border-image: url("%(active_tab)s") 20 32 20 32 stretch;
         color: #ffffff;
     }
+    /* 礼物页四分栏托盘（2026-09-09）：复用旧 4 槽药丸素材（正好四格，
+       槽线 25/50/75%% 与等分按钮边界对齐）。仅商店主题加载本样式。 */
+    QFrame#giftFilterBar {
+        background: transparent;
+        border: 0;
+        border-image: url("%(filter_bar4)s");
+    }
     QFrame#petTabBar {
         background: #f7e8d8;
         border: 1px solid #eed3ba;
@@ -280,6 +293,7 @@ SHOP_THEME_STYLE = """
     }
 """ % {
     "tab_bar": _shop_asset("tab_bar_bg.png").replace("\\", "/"),
+    "filter_bar4": _shop_asset("filter_bar_bg.png").replace("\\", "/"),
     "active_tab": _shop_asset("active_tab_bg.png").replace("\\", "/"),
     "close_button": _shop_asset("close_button.png").replace("\\", "/"),
     "switch_button": _shop_asset("switch_pet_button.png").replace("\\", "/"),
@@ -467,12 +481,14 @@ PANEL_STYLE = """
         border: 1px solid #edcfb8;
         border-radius: 15px;
     }
-    QFrame[outfitPetSelector="true"] {
+    /* 通用胶囊分栏（2026-09-08）：套装页宠物选择器与礼物页档位筛选
+       共用同一套托盘+圆角钮样式（原 outfitPetSelector/outfitPetTab）。 */
+    QFrame[chipBar="true"] {
         background: #f4e2d2;
         border: 1px solid #e9c9b1;
         border-radius: 18px;
     }
-    QPushButton[outfitPetTab="true"] {
+    QPushButton[chipTab="true"] {
         background: transparent;
         color: #9c6b58;
         border: 0;
@@ -482,11 +498,11 @@ PANEL_STYLE = """
         font-size: 19px;
         font-weight: 900;
     }
-    QPushButton[outfitPetTab="true"]:hover {
+    QPushButton[chipTab="true"]:hover {
         background: #ffece1;
         color: #8c5948;
     }
-    QPushButton[outfitPetTab="true"]:checked {
+    QPushButton[chipTab="true"]:checked {
         background: #f28f76;
         color: #ffffff;
     }
@@ -820,9 +836,14 @@ class CoinPillLabel(QLabel):
 
 
 class PurchasePopup(QDialog):
-    """Cute shop-themed popup confirming a transaction."""
+    """Cute shop-themed popup confirming a transaction.
 
-    def __init__(self, title, lines, parent=None):
+    cancel_text 为 None 时保持单键 informational 行为；传入后变成
+    确认/取消双键（exec_ 返回 Accepted / Rejected）。
+    """
+
+    def __init__(self, title, lines, parent=None,
+                 confirm_text="好的", cancel_text=None):
         super().__init__(
             parent,
             Qt.Dialog | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint,
@@ -885,10 +906,20 @@ class PurchasePopup(QDialog):
             detail.setWordWrap(True)
             layout.addWidget(detail)
         layout.addStretch(1)
-        button = FeedbackButton("好的")
+        button_row = QWidget()
+        row_layout = QHBoxLayout(button_row)
+        row_layout.setContentsMargins(0, 0, 0, 0)
+        row_layout.setSpacing(14)
+        if cancel_text:
+            cancel = FeedbackButton(cancel_text)
+            cancel.setObjectName("popupCancelButton")
+            cancel.clicked.connect(self.reject)
+            row_layout.addWidget(cancel)
+        button = FeedbackButton(confirm_text)
         button.setProperty("coralPill", True)
         button.clicked.connect(self.accept)
-        layout.addWidget(button, 0, Qt.AlignCenter)
+        row_layout.addWidget(button)
+        layout.addWidget(button_row, 0, Qt.AlignCenter)
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
@@ -1055,9 +1086,15 @@ class CozyProgressWindow(QWidget):
         self.scroll.setWidgetResizable(True)
         self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.scroll.setFrameShape(QFrame.NoFrame)
+        # 滚动条常驻（用户反馈轮 2026-09-07）：视口宽度恒定，有/无溢出
+        # 的页卡片等宽。槽体 QSS 透明、无溢出时手柄零宽，平时不可见。
+        # 注意：不能用 setViewportMargins 预留 gutter——QSS 样式化的
+        # QScrollArea 会与它冲突，实测把内容压扁、滚动失效。
+        self.scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
         self.content = QWidget()
         self.content_layout = QVBoxLayout(self.content)
-        self.content_layout.setContentsMargins(1, 5, 10, 5)
+        # 右边距常设 15：内容与滚动条带（11px）保持 ~4px 间隙。
+        self.content_layout.setContentsMargins(1, 5, 15, 5)
         self.content_layout.setSpacing(11)
         self.content_layout.setAlignment(Qt.AlignTop)
         self.scroll.setWidget(self.content)
@@ -1065,7 +1102,9 @@ class CozyProgressWindow(QWidget):
             # Fixed page body: scroll region ends 30px above window bottom.
             page_body = QWidget()
             body_layout = QVBoxLayout(page_body)
-            body_layout.setContentsMargins(0, 0, 0, 0)
+            # 2026-09-08：滚动区主体右移 8px（负右边距吃进根布局 25px 内
+            # 边距），滚动条更贴窗口右缘（用户"翻滚条右移一点"）。
+            body_layout.setContentsMargins(0, 0, -8, 0)
             body_layout.setSpacing(0)
             body_layout.addWidget(self.scroll, 1)
             self.status_label.setFixedHeight(30)
@@ -1444,7 +1483,8 @@ class RecordsWindow(CozyProgressWindow):
 ACHIEVEMENT_FILTER_GROUPS = (
     ("all", "全部", None),
     ("interact", "互动",
-     {"pet", "feed", "play", "sleep", "interaction", "catch", "wake"}),
+     {"pet", "feed", "play", "sleep", "interaction", "catch", "wake",
+      "gift", "give"}),
     ("chat", "聊天", {"chat", "reply"}),
     ("games", "游戏", {"minigame", "coins", "stroll"}),
     ("dressup", "换装强化", {"collect", "outfit", "upgrade"}),
@@ -1999,6 +2039,7 @@ class ShopWindow(CozyProgressWindow):
         self.save_callback = save_callback
         self.page = "pets" if isinstance(pet.state.get("pets"), dict) else "outfits"
         self.decoration_category = "neck"
+        self.gift_filter = "all"
         self.outfit_pet_id = "lunch_meat"
         self.adjust_window = None
         self.preview_window = None
@@ -2014,6 +2055,7 @@ class ShopWindow(CozyProgressWindow):
             "outfits": _shop_asset("gift_icon.png"),
             "home": _shop_asset("furniture_tab_icon.png"),
             "upgrades": _shop_asset("upgrade_tab_icon.png"),
+            "gifts": _shop_asset("gift_tab_icon.png"),
         }
         self._tab_buttons = {}
         self._build_tab_bar()
@@ -2032,6 +2074,7 @@ class ShopWindow(CozyProgressWindow):
             ("outfits", "套装"),
             ("home", "家居"),
             ("upgrades", "强化"),
+            ("gifts", "礼物"),
         ):
             button = FeedbackButton(text)
             button.setObjectName("tabButton")
@@ -2069,6 +2112,8 @@ class ShopWindow(CozyProgressWindow):
             self._build_outfits_page()
         elif self.page == "home":
             self._build_home_page()
+        elif self.page == "gifts":
+            self._build_gifts_page()
         else:
             self._build_upgrades_page()
         self.content_layout.addStretch(1)
@@ -2083,7 +2128,7 @@ class ShopWindow(CozyProgressWindow):
 
     @staticmethod
     def page_ids():
-        return ("pets", "outfits", "home", "upgrades")
+        return ("pets", "outfits", "home", "upgrades", "gifts")
 
     def _build_pets_page(self):
         title = QLabel("宠物商店")
@@ -2348,7 +2393,7 @@ class ShopWindow(CozyProgressWindow):
 
         selector = QFrame()
         selector.setObjectName("outfitPetSelector")
-        selector.setProperty("outfitPetSelector", True)
+        selector.setProperty("chipBar", True)
         selector_layout = QHBoxLayout(selector)
         selector_layout.setContentsMargins(5, 5, 5, 5)
         selector_layout.setSpacing(7)
@@ -2357,14 +2402,16 @@ class ShopWindow(CozyProgressWindow):
         for pet_id, text in (("lunch_meat", "午餐肉"), ("ice_cream", "冰淇淋")):
             button = FeedbackButton(text)
             button.setObjectName(f"outfitPet_{pet_id}")
-            button.setProperty("outfitPetTab", True)
+            button.setProperty("chipTab", True)
+            # 2026-09-08：分栏等分铺满整行（有几个分几等分）。
+            button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             button.setCheckable(True)
             button.setChecked(self.outfit_pet_id == pet_id)
             button.setCursor(Qt.PointingHandCursor)
             selector_group.addButton(button)
             button.clicked.connect(lambda _checked=False, selected=pet_id: self._set_outfit_pet(selected))
             selector_layout.addWidget(button)
-        selector_layout.addStretch(1)
+        # 2026-09-08：等分铺满整行（原尾部 stretch 左对齐已按用户指示移除）。
         self.content_layout.addWidget(selector)
 
         outfits = [
@@ -2771,13 +2818,12 @@ class ShopWindow(CozyProgressWindow):
         layout.addWidget(preview, 0, Qt.AlignCenter)
 
         info = QVBoxLayout()
-        info.setSpacing(6)
-        title_row = QHBoxLayout()
+        # 家居卡（用户反馈轮）：名字居中、名字与简介间距收紧（6→2）。
+        info.setSpacing(2)
         title = QLabel(definition["name"])
         title.setObjectName("cardTitle")
-        title_row.addWidget(title)
-        title_row.addStretch(1)
-        info.addLayout(title_row)
+        title.setAlignment(Qt.AlignCenter)
+        info.addWidget(title, 0, Qt.AlignCenter)
 
         description = QLabel(definition["description"])
         description.setObjectName("muted")
@@ -2955,6 +3001,168 @@ class ShopWindow(CozyProgressWindow):
             )
         else:
             message = result.get("message", "暂时无法强化。")
+            self.pet.say(message, 1900)
+        self.refresh()
+        self.status_label.setText(message)
+
+    # ---- 礼物页（消耗品：买了进背包，去宠物详情面板送出） ----
+    # 偏好轮交互定稿：商店不显示最爱（偏好只在宠物面板送礼时体现），
+    # 页内做四个分栏（总共/三档），每行两张竖版礼物卡。
+
+    GIFT_FILTERS = (
+        ("all", "总共"),
+        ("t1", "小小心意"),
+        ("t2", "真挚款待"),
+        ("t3", "豪华大礼"),
+    )
+
+    def _build_gifts_page(self):
+        title = QLabel("礼物商店")
+        title.setObjectName("sectionTitle")
+        title.setAlignment(Qt.AlignCenter)
+        self._add_page_header(title)
+
+        # 分栏托盘与套装页宠物选择器同款（chipBar/chipTab 通用样式）：
+        # 奶油托盘 + 左对齐圆角钮 + 互斥选中，2026-09-08 用户指示模仿套装页。
+        bar = QFrame()
+        bar.setObjectName("giftFilterBar")
+        # 托盘走 QFrame#giftFilterBar 专属 border-image 规则（旧 4 槽
+        # 药丸素材），不再设 chipBar 属性（避免托盘样式叠加）。
+        bar_layout = QHBoxLayout(bar)
+        bar_layout.setContentsMargins(5, 5, 5, 5)
+        bar_layout.setSpacing(7)
+        bar_group = QButtonGroup(bar)
+        bar_group.setExclusive(True)
+        for key, label in self.GIFT_FILTERS:
+            button = FeedbackButton(label)
+            button.setObjectName(f"giftFilter_{key}")
+            button.setProperty("chipTab", True)
+            button.setCheckable(True)
+            button.setChecked(self.gift_filter == key)
+            button.setCursor(Qt.PointingHandCursor)
+            # 等分铺满整行：四个分栏各占 1/4。
+            button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            bar_group.addButton(button)
+            button.clicked.connect(
+                lambda _checked=False, selected=key:
+                self._set_gift_filter(selected)
+            )
+            bar_layout.addWidget(button)
+        self.content_layout.addWidget(bar)
+
+        grid_host = QWidget()
+        grid = QGridLayout(grid_host)
+        grid.setObjectName("giftGrid")
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(12)
+        grid.setVerticalSpacing(12)
+        index = 0
+        for gift_id, definition in progression.GIFT_DEFINITIONS.items():
+            if self.gift_filter != "all" and (
+                    f"t{definition.get('tier')}" != self.gift_filter):
+                continue
+            grid.addWidget(
+                self._gift_card(gift_id), index // 2, index % 2,
+            )
+            index += 1
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
+        self.content_layout.addWidget(grid_host)
+
+    def _set_gift_filter(self, key):
+        if key == self.gift_filter:
+            return
+        self.gift_filter = key
+        self.status_label.clear()
+        self.scroll.verticalScrollBar().setValue(0)
+        self.refresh()
+
+    def _gift_card(self, gift_id):
+        state = self.pet.state
+        definition = progression.GIFT_DEFINITIONS[gift_id]
+        price = int(definition.get("price", 0))
+        owned = progression.gift_count(state, gift_id)
+
+        card = QFrame()
+        card.setObjectName(f"giftCard_{gift_id}")
+        card.setProperty("shopCard", True)
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(10, 12, 10, 10)
+        layout.setSpacing(6)
+
+        preview = RoundedPixmapLabel(radius=22)
+        preview.setObjectName(f"giftPreview_{gift_id}")
+        preview.setFixedSize(92, 92)
+        preview.setAlignment(Qt.AlignCenter)
+        icon_path = os.path.join(GIFTS_UI_DIR, definition.get("icon", ""))
+        pixmap = QPixmap(icon_path) if os.path.exists(icon_path) else QPixmap()
+        if pixmap.isNull():
+            preview.setStyleSheet("background: #f4d6b5; border-radius: 8px;")
+        else:
+            preview.setPixmap(pixmap.scaled(
+                preview.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation,
+            ))
+        layout.addWidget(preview, 0, Qt.AlignHCenter)
+
+        name = QLabel(definition.get("name", gift_id))
+        name.setObjectName(f"giftName_{gift_id}")
+        name.setProperty("cardTitle", True)
+        name.setAlignment(Qt.AlignCenter)
+        layout.addWidget(name)
+
+        count_label = QLabel(f"持有 {owned}")
+        count_label.setObjectName(f"giftCount_{gift_id}")
+        count_label.setAlignment(Qt.AlignCenter)
+        count_label.setStyleSheet(
+            f"font-family:'{APP_FONT_FAMILY}';font-size:15px;font-weight:600;"
+            "color:#a8742c;background:transparent;"
+        )
+        layout.addWidget(count_label)
+
+        summary = QLabel(definition.get("summary", ""))
+        summary.setObjectName(f"giftSummary_{gift_id}")
+        summary.setProperty("mutedText", True)
+        # 一行简介（2026-09-09 用户定稿）：文案已精简到 ≤13 字，
+        # 不再预留两行高度；wordWrap 仅作超长兜底；文字居中。
+        summary.setWordWrap(True)
+        summary.setAlignment(Qt.AlignCenter)
+        layout.addWidget(summary)
+
+        effect = QLabel(f"送出后好感 +{int(definition.get('affection', 0))}")
+        effect.setObjectName(f"giftEffect_{gift_id}")
+        effect.setProperty("mutedText", True)
+        effect.setAlignment(Qt.AlignCenter)
+        layout.addWidget(effect)
+        layout.addStretch(1)
+
+        bottom = QHBoxLayout()
+        bottom.setSpacing(8)
+        bottom.addWidget(self._price_tag(
+            f"{price} Pet币", "normal", f"giftPrice_{gift_id}",
+        ))
+        bottom.addStretch(1)
+        button = FeedbackButton("购买")
+        button.setObjectName(f"buyGift_{gift_id}")
+        button.setProperty("coralPill", True)
+        button.setEnabled(_coin_balance(state) >= price)
+        button.clicked.connect(
+            lambda _checked=False, selected=gift_id:
+            self._purchase_gift(selected)
+        )
+        bottom.addWidget(button)
+        layout.addLayout(bottom)
+        return card
+
+    def _purchase_gift(self, gift_id):
+        result = progression.purchase_gift(self.pet.state, gift_id)
+        if result.get("ok"):
+            self.save_callback(self.pet.state)
+            self.pet.say(result["message"], 2100)
+            message = (
+                f"✓ {result['message']}  消耗 {result['price']} Pet币"
+            )
+        else:
+            message = result.get("message", "暂时无法购买。")
             self.pet.say(message, 1900)
         self.refresh()
         self.status_label.setText(message)

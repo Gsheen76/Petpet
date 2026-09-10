@@ -19,7 +19,12 @@
       "walk_right": "pets/lunch_meat/home/animations/walk_right.png",
       "walk_right_dinosaur": "pets/lunch_meat/home/animations/walk_right_dinosaur.png",
       "walk_right_strawberry": "pets/lunch_meat/home/animations/walk_right_strawberry.png"
-    }
+    },
+    "gift_preferences": [
+      "sweet_cookie",
+      "meat_can",
+      "love_box"
+    ]
   },
   "ice_cream": {
     "id": "ice_cream",
@@ -42,6 +47,11 @@
       "walk_back_right": "pets/ice_cream/home/poses/home_pet_walk_back_right.png",
       "sleep": "pets/ice_cream/home/poses/home_pet_sleep.png"
     },
-    "facing": "left"
+    "facing": "left",
+    "gift_preferences": [
+      "milk_pudding",
+      "berry_basket",
+      "warm_blanket"
+    ]
   }
 }

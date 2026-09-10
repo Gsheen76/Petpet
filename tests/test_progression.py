@@ -404,6 +404,31 @@ class AchievementTests(unittest.TestCase):
         self.assertIn("upgrade_1", completed_ids)
         self.assertIn("collect_1", completed_ids)
 
+    def test_gift_records_have_matching_achievements(self):
+        """礼物轮（2026-09-09）：购买/送出计数器应有对应成就梯度。"""
+        state = fresh_state(pet_coins=9999)
+        progression.purchase_gift(state, "sweet_cookie")
+        progression.give_gift(state, "lunch_meat", "sweet_cookie")
+
+        items = progression.achievement_catalog(state)
+        completed_ids = {
+            item["id"] for item in items if item["completed"]
+        }
+        all_ids = {item["id"] for item in items}
+
+        self.assertIn("gift_1", completed_ids)
+        self.assertIn("give_1", completed_ids)
+        # 更高梯度存在但未达成。
+        self.assertIn("gift_15", all_ids)
+        self.assertIn("give_40", all_ids)
+        self.assertNotIn("gift_15", completed_ids)
+        self.assertNotIn("give_40", completed_ids)
+
+        claimable = progression.claimable_achievements(state)
+        claimable_ids = {item["id"] for item in claimable}
+        self.assertIn("gift_1", claimable_ids)
+        self.assertIn("give_1", claimable_ids)
+
 
 class UpgradeBalanceTests(unittest.TestCase):
     def test_sleeping_upgrade_summary_only_claims_hunger_cost_reduction(self):

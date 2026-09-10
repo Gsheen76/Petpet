@@ -17,13 +17,17 @@ DEFAULT_SETTINGS = {
     "ui_font_size": 24,
     "always_on_top": True,
     "auto_check_updates": True,
+    "hide_in_game": True,
     "remind_drink_min": 60,
     "remind_rest_min": 90,
     "remind_stand_min": 45,
     "sound_enabled": True,
-    "decay_hunger": 0.14,
-    "decay_energy": 0.10,
-    "decay_mood": 0.08,
+    # 三属性清醒消耗（2026-09-09 定稿：无强化待机 2 小时、持久活力满级
+    # 4 小时——实际速率 = 此值 × 0.5 全局系数 × 强化减伤，三值统一
+    # 0.0556：0.0278/2s = 0.833/分 = 100 点整 120 分钟）。
+    "decay_hunger": 0.0556,
+    "decay_energy": 0.0556,
+    "decay_mood": 0.0556,
     "decay_hunger_sleeping": 0.08,
     "decay_energy_sleeping_gain": 4,
     "needy_speak_chance": 0.13,

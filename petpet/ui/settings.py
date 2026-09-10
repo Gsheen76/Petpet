@@ -141,6 +141,7 @@ class SettingsWindow(QWidget):
         ("always_on_top", "小狗始终置顶", "关闭后允许其他窗口遮挡小狗"),
         ("sound_enabled", "互动音效", "喂食、玩耍和抚摸时播放声音"),
         ("auto_check_updates", "启动时检查更新", "开启后每次启动都会检查 GitHub 最新版本"),
+        ("hide_in_game", "游戏中自动隐藏", "检测到其他游戏运行时藏起小狗，游戏退出后自动回来"),
     ]
 
     def __init__(self, pet_window):

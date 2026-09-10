@@ -1,6 +1,7 @@
 """Desktop pet status, menu, reward, interaction, and speech surfaces."""
 
 import math
+import os
 import time
 
 from petpet.chat import api as ai
@@ -14,10 +15,26 @@ from PyQt5.QtGui import (
     QPainterPath,
     QPen,
     QPolygonF,
+    QPixmap,
 )
 from PyQt5.QtWidgets import QApplication, QWidget
 
 from petpet.ui.common import pixel_font
+
+# 气泡按键贴图（2026-09-09 素材轮）：按 action 名加载，缺失回退 emoji。
+_BUBBLE_ICON_CACHE = {}
+
+def _bubble_icon(action):
+    """按 action 名取 240² 贴图；缺失返回空 QPixmap（调用方回退 emoji）。"""
+    icon = _BUBBLE_ICON_CACHE.get(action)
+    if icon is not None:
+        return icon
+    from petpet.app.paths import BUBBLE_MENU_DIR
+
+    path = os.path.join(BUBBLE_MENU_DIR, f"{action}.png")
+    icon = QPixmap(path) if os.path.isfile(path) else QPixmap()
+    _BUBBLE_ICON_CACHE[action] = icon
+    return icon
 
 
 _dependency_resolver = None
@@ -154,7 +171,9 @@ class StatBubble(QWidget):
         scr = pet_interface_screen_rect(self.pet)
         w, h = self.width(), self.height()
         x = g.center().x() - w // 2
-        y = g.top() - h - 112
+        # 菜单高 130：顶缘 = 宠物顶 -37（2026-09-10 用户精调：资料卡
+        # 累计下移 90px，-127→-77→-37，贴近按键行）。
+        y = g.top() - h - 37
         x = max(scr.left(), min(x, scr.right() - w))
         y = max(scr.top(), min(y, scr.bottom() - h))
         move_window_if_needed(self, x, y)
@@ -528,8 +547,12 @@ class BubbleMenu(QWidget):
         self.setAttribute(Qt.WA_DeleteOnClose, True)
 
         # Larger hit targets with room for both icon and label.
-        self.W = 700 if self.page == "primary" else (590 if self.page == "more" else 470)
-        self.H = 200 if self.page == "more" else 112
+        # 主菜单窗口宽=资料卡 620（行宽同 620 精确对齐；窗口透明，
+        # 缩宽只影响居中/贴边钳位行为，使其与卡片完全同步）。
+        self.W = 620 if self.page == "primary" else (
+            590 if self.page == "more" else 470)
+        # 图标即按键（2026-09-09）：按钮高 78→92，菜单高度同步 +18。
+        self.H = 218 if self.page == "more" else 130
         self.resize(self.W, self.H)
         self._bubble_rects = []
         self._hover = -1
@@ -583,10 +606,11 @@ class BubbleMenu(QWidget):
                 pass
 
     def _place(self):
-        """Position the row of bubbles just above the pet's head."""
+        """Position the row of bubbles just above the pet."""
         g = pet_interface_anchor_rect(self.pet)
         x = g.center().x() - self.W // 2
-        y = g.top() - self.H + 19
+        # +71（2026-09-09 用户多轮精调：+19→+31→+51→+71，逐轮贴近小狗）。
+        y = g.top() - self.H + 71
         scr = pet_interface_screen_rect(self.pet)
         x = max(scr.left(), min(x, scr.right() - self.W))
         y = max(scr.top(), min(y, scr.bottom() - self.H))
@@ -601,9 +625,14 @@ class BubbleMenu(QWidget):
         p.setRenderHint(QPainter.Antialiasing)
         self._bubble_rects = []
         n = len(self.actions)
-        button_w = 102
-        button_h = 78
-        gap = 10
+        # 主菜单（2026-09-09 用户定稿）：行宽 6×96+5×8.8=620 与上方
+        # 资料卡（620）精确对齐；其余页沿用 102/10。
+        if self.page == "primary":
+            button_w, gap = 96, 8.8
+        else:
+            button_w, gap = 102, 10
+        # 图标即按键（2026-09-09）：图标 52/58px + 悬浮名称胶囊 22px。
+        button_h = 92
         columns = self.PAGE_COLUMNS[self.page]
         rows = int(math.ceil(n / columns))
         total_w = columns * button_w + (columns - 1) * gap
@@ -631,6 +660,7 @@ class BubbleMenu(QWidget):
             column = i % columns
             bx = start_x + column * (button_w + gap)
             by = start_y + row * (button_h + gap)
+            hovered = self._hover == i
             scale = 1.0 + self._hover_scales[i] * 0.07
             if self._press == i:
                 scale *= 0.96
@@ -643,38 +673,58 @@ class BubbleMenu(QWidget):
             )
             self._bubble_rects.append((i, rect, action, color, emoji))
 
-            # Warm soft shadow.
-            p.setBrush(QColor(92, 60, 42, 48))
-            p.setPen(Qt.NoPen)
-            p.drawRoundedRect(rect.adjusted(2, 4, 2, 4), 23, 23)
+            # 图标即按键（2026-09-09 用户定稿）：去掉糖果底板与常驻文字，
+            # 悬浮时放大 + 珊瑚描边高亮 + 底部名称胶囊；按住缩小压暗。
+            # 高亮框用未缩放基准几何（2026-09-09 精调）：主菜单行宽=画布
+            # 620，放大矩形（×1.07）会越出首尾按键外侧被裁。
+            if hovered:
+                # inset 3：描边外半宽 1.1 后仍离画布缘 ~2px，首尾按键不贴边。
+                halo = QRectF(bx + 3, by + 2, button_w - 6, button_h - 24)
+                p.setBrush(QColor(242, 143, 118, 34))
+                p.setPen(QPen(QColor("#f28f76"), 2.2))
+                p.drawRoundedRect(halo, 18, 18)
 
-            # Pastel candy surface.
-            c = QColor(color)
-            grad = QLinearGradient(rect.topLeft(), rect.bottomRight())
-            grad.setColorAt(0.0, c.lighter(145))
-            grad.setColorAt(1.0, c.lighter(108))
-            p.setBrush(grad)
-            p.setPen(QPen(c.darker(120), 1.2))
-            p.drawRoundedRect(rect, 23, 23)
+            icon = _bubble_icon(action)
+            icon_px = 58 if hovered else 52
+            icon_band = QRectF(
+                rect.x(), rect.y() - (4 if hovered else 0),
+                rect.width(), rect.height() - (22 if hovered else 0),
+            )
+            if not icon.isNull():
+                scaled = icon.scaled(
+                    icon_px, icon_px,
+                    Qt.KeepAspectRatio, Qt.SmoothTransformation,
+                )
+                p.drawPixmap(
+                    QPointF(icon_band.center().x() - scaled.width() / 2,
+                            icon_band.center().y() - scaled.height() / 2),
+                    scaled,
+                )
+                if self._press == i:
+                    p.setBrush(QColor(70, 42, 28, 60))
+                    p.setPen(Qt.NoPen)
+                    p.drawRoundedRect(
+                        QRectF(icon_band.center().x() - scaled.width() / 2,
+                               icon_band.center().y() - scaled.height() / 2,
+                               scaled.width(), scaled.height()),
+                        12, 12,
+                    )
+            else:
+                p.setPen(QColor("#8a5a3c"))
+                p.setFont(pixel_font(24 if hovered else 22, QFont.Bold))
+                p.drawText(icon_band, Qt.AlignCenter, emoji)
 
-            # Top gloss makes each button feel like a soft candy.
-            gloss = QRectF(rect.x() + 8, rect.y() + 5,
-                           rect.width() - 16, rect.height() * 0.38)
-            gloss_grad = QLinearGradient(gloss.topLeft(), gloss.bottomLeft())
-            gloss_grad.setColorAt(0.0, QColor(255, 255, 255, 105))
-            gloss_grad.setColorAt(1.0, QColor(255, 255, 255, 0))
-            p.setBrush(gloss_grad)
-            p.setPen(Qt.NoPen)
-            p.drawRoundedRect(gloss, 16, 16)
-
-            p.setPen(QColor(255, 255, 255))
-            p.setFont(pixel_font(17, QFont.Bold))
-            p.drawText(QRectF(rect.x(), rect.y() + 7, rect.width(), 34),
-                       Qt.AlignCenter, emoji)
-            p.setFont(pixel_font(10, QFont.Bold))
-            p.drawText(QRectF(rect.x() + 5, rect.y() + 43,
-                              rect.width() - 10, 25),
-                       Qt.AlignCenter | Qt.TextSingleLine, label)
+            # 悬浮名称胶囊（仅 hover 时出现，替代常驻标签）。
+            if hovered:
+                pill = QRectF(rect.x() + 6, rect.bottom() - 24,
+                              rect.width() - 12, 22)
+                p.setBrush(QColor(255, 246, 232, 240))
+                p.setPen(QPen(QColor("#f2c9a8"), 1.2))
+                p.drawRoundedRect(pill, 11, 11)
+                p.setPen(QColor("#a8742c"))
+                # 2026-09-09 用户精调：名称字号 13→12→10（两轮）。
+                p.setFont(pixel_font(10, QFont.Bold))
+                p.drawText(pill, Qt.AlignCenter | Qt.TextSingleLine, label)
 
             # Claimable achievements place a clear red reminder on both the
             # primary "更多" entry and the secondary "成就" entry.

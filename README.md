@@ -6,7 +6,15 @@
   <img src="assets/runtime/pets/lunch_meat/desktop/poses/idle.png" width="280" alt="Pet陪它桌面小狗">
 </p>
 
-当前版本：`v1.7.0`
+当前版本：`v1.7.1`
+
+## v1.7.1 更新亮点
+
+- **礼物系统**：商店新增「礼物」页（三档 × 每档三选一共 9 种，全宠物中性），买了送礼涨好感；宠物面板新增第三分栏管理背包与赠送，每只小狗每档各有最爱（好感 ×1.5）。送礼成就同步上线（购买/送出共 7 项梯度）。
+- **游戏中自动隐藏**：检测到其他游戏前台运行时小狗自动藏起、游戏退出自动回来；设置页新增开关（默认开启）。
+- **右键菜单全新图标**：三页 18 个按键全部换上哑光奶油贴图，图标即按键——悬浮显示功能名，界面更干净。
+- **待机更从容**：三项属性消耗速度整体下调，无强化可待机约 2 小时，「持久活力」强化满级约 4 小时。
+- **界面细节**：商店页签栏换 5 槽新素材、礼物分栏复用 4 槽素材（槽线对齐）、滚动条贴边统一、聊天宠物头像改为大头照。
 
 ## v1.7.0 更新亮点
 
@@ -47,7 +55,7 @@
 
 ## v1.6.0 发布
 
-完整资产通过 `scripts/release.ps1 -Version 1.7.0` 一键构建、校验并发布。
+完整资产通过 `scripts/release.ps1 -Version 1.7.1` 一键构建、校验并发布。
 
 支持平台：Windows 10/11、macOS Apple 芯片（arm64）
 
@@ -100,9 +108,9 @@
 | 平台 | 文件 |
 | --- | --- |
 | Windows 直接运行 | `Petpet.exe` |
-| Windows 便携包 | `Petpet-v1.7.0-windows.zip` |
-| macOS Apple 芯片 | `Petpet-v1.7.0-macOS-arm64.zip` |
-| 校验和 | `Petpet-v1.7.0-SHA256SUMS.txt` |
+| Windows 便携包 | `Petpet-v1.7.1-windows.zip` |
+| macOS Apple 芯片 | `Petpet-v1.7.1-macOS-arm64.zip` |
+| 校验和 | `Petpet-v1.7.1-SHA256SUMS.txt` |
 
 Windows 下载 ZIP 后解压并运行 `Petpet.exe`。直接下载的 `Petpet.exe` 也可以独立运行，程序不会弹出命令行窗口。
 
@@ -334,7 +342,7 @@ dist/Petpet.app
 发布前应先更新 `version.py`、`docs/RELEASE_NOTES_v<版本>.md` 和 README，并提交全部改动。在干净工作树中运行：
 
 ```powershell
-.\scripts\release.ps1 -Version 1.7.0
+.\scripts\release.ps1 -Version 1.7.1
 ```
 
 脚本会依次检查版本和工作树、运行全量测试、编译检查、构建并冒烟验证 Windows 版本、生成 Windows 便携包和 SHA256 校验文件，然后同步 `main`、创建或继续草稿 Release，并触发 macOS arm64 构建工作流。
@@ -342,8 +350,8 @@ dist/Petpet.app
 公开 Release 必须包含以下三项非空正式资产；校验和文件也会一并上传：
 
 - `Petpet.exe`
-- `Petpet-v1.7.0-windows.zip`
-- `Petpet-v1.7.0-macOS-arm64.zip`
+- `Petpet-v1.7.1-windows.zip`
+- `Petpet-v1.7.1-macOS-arm64.zip`
 
 中途失败时 Release 会保持草稿。修复问题后可以重复运行同一版本命令；脚本不会强推、覆盖已存在的标签或删除 worktree。已公开且完整的 Release 会先验证远端资产，避免重复修改。
 
