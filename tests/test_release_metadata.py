@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_public_version_has_one_source_of_truth():
-    assert VERSION == "1.7.1"
+    assert VERSION == "1.7.2"
     assert pet.VERSION == VERSION
 
 

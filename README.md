@@ -6,7 +6,20 @@
   <img src="assets/runtime/pets/lunch_meat/desktop/poses/idle.png" width="280" alt="Pet陪它桌面小狗">
 </p>
 
-当前版本：`v1.7.1`
+当前版本：`v1.7.2`
+
+## v1.7.2 更新亮点
+
+- **聊天长期记忆档案**：TA 会自动从聊天里记住你——称呼、作息、喜欢、讨厌、重要的事、其他六栏；聊天窗新增「档案」入口，随时查看 / 改正 / 删除，保存立即生效（改名后 TA 马上换称呼叫你）。
+- **主动搭话会叫你**：空闲提醒基于档案生成，知道你的称呼和喜好（「小明，久坐不好，起来活动一下吧～」），深夜还会提醒你该睡了。
+- **家园全景装修**：装修模式整间小屋一屏铺满，家具直接拖放不再左右平移；装修分栏合并为 全部 / 家具 / 装饰 / 玩具。
+- **家具扩充与重制**：新增奶油落地灯、矮矮小书架、圆润小茶几、玩具小藤篮四件新家具；原有地毯 / 沙发 / 绿植 / 墙画四件统一风格重制。
+- **小屋窗口恢复置顶**，不被其他窗口挡住。
+- **存档一键备份**：设置页新增「存档备份」——一键备份或导出副本（进度、聊天记忆、设置；不含 API Key，自动保留最近 5 份）。
+- **提醒专属音效**：喝水、护眼、起身活动各有提示音。
+- **macOS 游戏自动隐藏**：Mac 端同样支持检测前台游戏自动藏起。
+- **按键反馈全应用统一**：聊天窗、设置页、新手引导等全部按键接入统一手感；修复一处按住显示 API Key 后不恢复密文的潜在问题；修复依赖清单缺失导致的全新环境启动失败。
+- 全量 795 项自动化测试，GitHub Actions 每次 push 自动回归。
 
 ## v1.7.1 更新亮点
 
@@ -55,7 +68,7 @@
 
 ## v1.6.0 发布
 
-完整资产通过 `scripts/release.ps1 -Version 1.7.1` 一键构建、校验并发布。
+完整资产通过 `scripts/release.ps1 -Version 1.7.2` 一键构建、校验并发布。
 
 支持平台：Windows 10/11、macOS Apple 芯片（arm64）
 
@@ -108,9 +121,9 @@
 | 平台 | 文件 |
 | --- | --- |
 | Windows 直接运行 | `Petpet.exe` |
-| Windows 便携包 | `Petpet-v1.7.1-windows.zip` |
-| macOS Apple 芯片 | `Petpet-v1.7.1-macOS-arm64.zip` |
-| 校验和 | `Petpet-v1.7.1-SHA256SUMS.txt` |
+| Windows 便携包 | `Petpet-v1.7.2-windows.zip` |
+| macOS Apple 芯片 | `Petpet-v1.7.2-macOS-arm64.zip` |
+| 校验和 | `Petpet-v1.7.2-SHA256SUMS.txt` |
 
 Windows 下载 ZIP 后解压并运行 `Petpet.exe`。直接下载的 `Petpet.exe` 也可以独立运行，程序不会弹出命令行窗口。
 
@@ -350,8 +363,8 @@ dist/Petpet.app
 公开 Release 必须包含以下三项非空正式资产；校验和文件也会一并上传：
 
 - `Petpet.exe`
-- `Petpet-v1.7.1-windows.zip`
-- `Petpet-v1.7.1-macOS-arm64.zip`
+- `Petpet-v1.7.2-windows.zip`
+- `Petpet-v1.7.2-macOS-arm64.zip`
 
 中途失败时 Release 会保持草稿。修复问题后可以重复运行同一版本命令；脚本不会强推、覆盖已存在的标签或删除 worktree。已公开且完整的 Release 会先验证远端资产，避免重复修改。
 
