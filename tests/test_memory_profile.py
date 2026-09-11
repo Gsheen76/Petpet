@@ -14,8 +14,67 @@ from petpet.chat.memory import (
     PROFILE_BUCKET_CAPS,
     facts_differ,
     first_fact,
+    nudge_lines,
     sanitize_edited_facts,
 )
+
+
+class NudgeLinesTests(unittest.TestCase):
+    FACTS = {
+        "称呼": ["小明"],
+        "喜欢": ["咖啡"],
+        "重要的事": ["9 月 20 日生日"],
+        "作息": ["晚上 12 点睡"],
+    }
+
+    def test_alias_replaces_master_and_facts_get_quoted(self):
+        lines = nudge_lines(self.FACTS, "烟花", 2400, 15)
+        self.assertTrue(any(line.startswith("小明") for line in lines))
+        self.assertTrue(any("喜欢咖啡" in line for line in lines))
+        self.assertTrue(any("9 月 20 日生日" in line for line in lines))
+        self.assertFalse(any("主人" in line for line in lines))
+
+    def test_empty_facts_fall_back_to_time_of_day_lines(self):
+        lines = nudge_lines({}, "烟花", 2400, 9)
+        self.assertTrue(lines)
+        self.assertTrue(any("早安" in line for line in lines))
+        self.assertTrue(any("主人" in line for line in lines))
+
+    def test_routine_line_appears_only_at_night(self):
+        facts = {"作息": ["晚上 12 点睡"]}
+        self.assertTrue(any(
+            "晚上 12 点睡" in line
+            for line in nudge_lines(facts, "烟花", 100, 23)))
+        self.assertFalse(any(
+            "晚上 12 点睡" in line
+            for line in nudge_lines(facts, "烟花", 100, 14)))
+
+    def test_long_idle_uses_alias_and_pet_name(self):
+        lines = nudge_lines(self.FACTS, "烟花", 7 * 3600, 15)
+        self.assertTrue(any(line.startswith("小明？") for line in lines))
+        self.assertTrue(any("烟花想你" in line for line in lines))
+
+
+class MaybeNudgeProfileTests(unittest.TestCase):
+    def test_maybe_nudge_picks_from_profile_aware_lines(self):
+        import time as time_mod
+        from unittest.mock import patch
+
+        from petpet.chat import api
+        from petpet.chat.memory import nudge_lines
+
+        mem = {"profile_facts": {"称呼": ["小明"]}, "last_nudge_t": 0}
+        fake_local = time_mod.struct_time(
+            (2026, 9, 11, 15, 0, 0, 4, 254, 0))
+        with patch.object(api.time, "localtime", return_value=fake_local), \
+                patch.object(api, "save_memory") as save:
+            msg = api.maybe_nudge(mem, 4000, idle_min=1800, gap_min=60,
+                                  pet_name="烟花")
+        expected = set(nudge_lines(
+            {"称呼": ["小明"]}, "烟花", 4000, 15))
+        self.assertIn(msg, expected)
+        self.assertGreater(mem["last_nudge_t"], 0)
+        save.assert_called_once()
 
 
 class FactHelpersTests(unittest.TestCase):

@@ -823,24 +823,15 @@ def maybe_nudge(mem, idle_seconds, pet_state=None, idle_min=1800,
     if 0 <= h < 7:
         return None  # let user sleep
 
-    # vary line by idle duration + time
-    if idle_seconds > 6 * 3600:
-        opts = ["主人？好久没见到你了，你还好吗？",
-                "你回来啦！Sheen 想你了好久了🐶",
-                "终于等到你啦，今天过得怎么样？"]
-    elif 5 <= h < 11:
-        opts = ["早安呀主人~今天也要加油哦！", "早上好！吃早饭了没？"]
-    elif 11 <= h < 14:
-        opts = ["中午啦，记得吃饭呀~", "午饭吃了没？别饿着肚子忙。"]
-    elif 17 <= h < 22:
-        opts = ["今天累不累呀？Sheen 等你呢。", "晚上好~要不要聊聊今天的事？"]
-    else:
-        opts = ["还没睡呀…Sheen 陪着你。", "夜深了，注意休息哦。"]
-
+    # 档案感知台词（2026-09-11）：称呼/喜欢/作息/重要的事驱动，
+    # 无档案自然回退分时段通用问候。
     pet_name = normalize_pet_name(
         pet_name or mem.get("pet_name", DEFAULT_PET_NAME)
     )
-    msg = opts[int(time.time()) % len(opts)].replace("Sheen", pet_name)
+    opts = chat_memory.nudge_lines(
+        mem.get("profile_facts") or {}, pet_name, idle_seconds, h,
+    )
+    msg = opts[int(time.time()) % len(opts)]
     mem["last_nudge_t"] = time.time()
     save_memory(mem, pet_id, profile=profile)
     return msg

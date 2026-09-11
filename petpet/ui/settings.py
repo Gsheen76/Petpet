@@ -1,6 +1,7 @@
 """Static presets used by Petpet's settings window."""
 
 import os
+import time
 
 from PyQt5.QtCore import QPoint, QRectF, Qt, QTimer, pyqtSignal
 from PyQt5.QtGui import (
@@ -15,6 +16,7 @@ from PyQt5.QtGui import (
 from PyQt5.QtWidgets import (
     QApplication,
     QComboBox,
+    QFileDialog,
     QFrame,
     QGroupBox,
     QHBoxLayout,
@@ -25,6 +27,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+from petpet.app import backup
 from petpet.app.fonts import APP_FONT_FAMILY
 from petpet.app.paths import SHOP_UI_DIR
 from petpet.app.settings import DEFAULT_SETTINGS, save_settings
@@ -441,6 +444,7 @@ class SettingsWindow(QWidget):
              "nudge_idle_min", "nudge_gap_min"),
             self.PERSONALITY_PRESETS,
         ))
+        content_layout.addWidget(self._backup_group())
         scroll.setWidget(content)
         root.addWidget(scroll, 1)
 
@@ -478,6 +482,63 @@ class SettingsWindow(QWidget):
     def _title_bar_release(self, event):
         self._drag_offset = None
         event.accept()
+
+    def _backup_group(self):
+        """存档备份（2026-09-11）：一键备份 + 导出副本，防手滑。"""
+        group = QGroupBox()
+        layout = QVBoxLayout(group)
+        layout.setSpacing(9)
+        group_title = QLabel("💾 存档备份")
+        group_title.setObjectName("settingsGroupTitle")
+        layout.addWidget(group_title)
+
+        row = QWidget()
+        row_layout = QHBoxLayout(row)
+        row_layout.setContentsMargins(0, 0, 0, 0)
+        row_layout.setSpacing(10)
+        backup_btn = FeedbackButton("一键备份")
+        backup_btn.setMinimumHeight(38)
+        backup_btn.clicked.connect(self.backup_now)
+        export_btn = FeedbackButton("导出副本…")
+        export_btn.setMinimumHeight(38)
+        export_btn.clicked.connect(self.export_backup)
+        row_layout.addWidget(backup_btn)
+        row_layout.addWidget(export_btn)
+        row_layout.addStretch(1)
+        hint = QLabel(
+            "备份存档、聊天记忆和设置到 backups/ 目录（自动保留最近 5 份）；"
+            "导出副本可另存到任意位置。不含 API Key。")
+        hint.setWordWrap(True)
+        hint.setObjectName("settingDescription")
+        layout.addWidget(row)
+        layout.addWidget(hint)
+        return group
+
+    def backup_now(self):
+        try:
+            path, count = backup.backup_now()
+        except OSError as exc:
+            self.status_label.setText(f"备份失败：{exc}")
+            return
+        self.status_label.setText(f"已备份 {count} 个文件到 {path}")
+
+    def export_backup(self):
+        suggested = os.path.join(
+            os.path.expanduser("~"), "Desktop",
+            f"petpet-backup-{time.strftime('%Y%m%d-%H%M%S')}.zip",
+        )
+        path, _filter = QFileDialog.getSaveFileName(
+            self, "导出存档副本", suggested, "Zip 压缩包 (*.zip)")
+        if not path:
+            return
+        if not path.lower().endswith(".zip"):
+            path += ".zip"
+        try:
+            count = backup.create_backup_zip(path)
+        except OSError as exc:
+            self.status_label.setText(f"导出失败：{exc}")
+            return
+        self.status_label.setText(f"已导出 {count} 个文件到 {path}")
 
     def _interface_group(self):
         group = QGroupBox()

@@ -32,6 +32,46 @@ def _clean_fact(value: object) -> str | None:
     return text
 
 
+def nudge_lines(facts, pet_name, idle_seconds, hour):
+    """档案感知的主动搭话候选台词（2026-09-11）。
+
+    纯模板、确定性：称呼栏优先取代「主人」；喜欢/作息/重要的事
+    用安全引述框（任意名词都不产生病句）；无档案回退到分时段
+    通用问候。pet_name 为宠物名。
+    """
+    alias = first_fact(facts, "称呼")
+    who = alias or "主人"
+    lines = []
+
+    likes = _clean_bucket(facts, "喜欢")
+    routine = _clean_bucket(facts, "作息")
+    important = _clean_bucket(facts, "重要的事")
+    if likes:
+        lines.append(f"突然想起来，你喜欢{likes[int(idle_seconds) % len(likes)]}呢。")
+    if important:
+        lines.append(f"我一直记着你说的：{important[0]}。")
+    if routine and (hour >= 21 or hour < 6):
+        lines.append(f"你说过「{routine[0]}」，差不多到点啦？")
+
+    if idle_seconds > 6 * 3600:
+        lines += [
+            f"{who}？好久没见到你了，你还好吗？",
+            f"你回来啦！{pet_name}想你了好久了🐶",
+            "终于等到你啦，今天过得怎么样？",
+        ]
+    else:
+        lines.append(f"{who}，久坐不好，起来活动一下吧～")
+        if 5 <= hour < 11:
+            lines += [f"早安呀{who}~今天也要加油哦！", "早上好！吃早饭了没？"]
+        elif 11 <= hour < 14:
+            lines += ["中午啦，记得吃饭呀~", "午饭吃了没？别饿着肚子忙。"]
+        elif 17 <= hour < 22:
+            lines += [f"今天累不累呀？{pet_name}等你呢。", "晚上好~要不要聊聊今天的事？"]
+        else:
+            lines += ["还没睡呀…陪着你。", "夜深了，注意休息哦。"]
+    return lines
+
+
 def _clean_bucket(facts: dict, bucket: str) -> list[str]:
     """某栏清洗后的条目列表（去空、限长；保序不去重）。"""
     return [
