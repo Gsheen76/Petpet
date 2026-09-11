@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+from petpet.progression.ui import FeedbackButton
 from petpet.chat import api as ai
 from petpet.ui.common import independent_pixel_font
 
@@ -157,7 +158,7 @@ class TutorialWindow(QWidget):
         brand = QLabel("🌼 Pet陪它 · 新手教程")
         brand.setFont(independent_pixel_font(18, QFont.Bold))
         brand.setStyleSheet("font-weight:900; color:#93624f;")
-        self.later_button = QPushButton("稍后再说")
+        self.later_button = FeedbackButton("稍后再说")
         self.later_button.setObjectName("later")
         self.later_button.clicked.connect(self.close)
         top.addWidget(brand)
@@ -208,10 +209,10 @@ class TutorialWindow(QWidget):
 
         controls = QHBoxLayout()
         controls.setSpacing(12)
-        self.back_button = QPushButton("上一步")
+        self.back_button = FeedbackButton("上一步")
         self.back_button.setObjectName("secondary")
         self.back_button.clicked.connect(self._back)
-        self.next_button = QPushButton("下一步")
+        self.next_button = FeedbackButton("下一步")
         self.next_button.clicked.connect(self._next)
         controls.addWidget(self.back_button)
         controls.addStretch(1)

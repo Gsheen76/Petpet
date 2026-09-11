@@ -13,6 +13,8 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+from petpet.progression.ui import FeedbackButton
+
 
 class ToggleSwitch(QAbstractButton):
     """Compact iOS-style on/off control used for boolean settings."""
@@ -115,7 +117,7 @@ class ThreeLevelSlider(QWidget):
         self._value = 0
         self.level_buttons = []
         for index, text in enumerate(labels):
-            button = QPushButton(text)
+            button = FeedbackButton(text)
             button.setObjectName("threeLevelOption")
             button.setCheckable(True)
             button.setCursor(Qt.PointingHandCursor)

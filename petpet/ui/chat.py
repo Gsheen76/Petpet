@@ -30,7 +30,6 @@ from PyQt5.QtWidgets import (
     QLabel,
     QLineEdit,
     QMessageBox,
-    QPushButton,
     QScrollArea,
     QSizePolicy,
     QVBoxLayout,
@@ -382,7 +381,7 @@ class ChatWindow(QWidget):
             f"跟 {self._pet_name()} 说点什么…"
         )
         self.input.returnPressed.connect(self.send)
-        self.send_btn = QPushButton("发送")
+        self.send_btn = FeedbackButton("发送")
         self.send_btn.setObjectName("send")
         self.send_btn.setCursor(Qt.PointingHandCursor)
         self.send_btn.clicked.connect(self.send)
@@ -413,7 +412,7 @@ class ChatWindow(QWidget):
         self.image_preview_name = QLabel()
         self.image_preview_name.setObjectName("imagePreviewName")
         self.image_preview_name.setStyleSheet("color:#805e50;font-weight:700;")
-        self.image_remove_btn = QPushButton("×")
+        self.image_remove_btn = FeedbackButton("×")
         self.image_remove_btn.setObjectName("imageRemove")
         self.image_remove_btn.setToolTip("移除这张图片")
         self.image_remove_btn.setCursor(Qt.PointingHandCursor)
@@ -434,8 +433,8 @@ class ChatWindow(QWidget):
         mode_row = QHBoxLayout(self.mode_frame)
         mode_row.setContentsMargins(3, 3, 3, 3)
         mode_row.setSpacing(2)
-        self.free_mode_btn = QPushButton("免费")
-        self.personal_mode_btn = QPushButton("自定义")
+        self.free_mode_btn = FeedbackButton("免费")
+        self.personal_mode_btn = FeedbackButton("自定义")
         self.mode_group = QButtonGroup(self)
         self.mode_group.setExclusive(True)
         segment_font = independent_pixel_font(17, QFont.DemiBold)
@@ -467,25 +466,25 @@ class ChatWindow(QWidget):
         )
         self.personal_setup_dot.move(segment_width - 13, 4)
 
-        self.model_btn = QPushButton("GLM-4.6V")
+        self.model_btn = FeedbackButton("GLM-4.6V")
         self.model_btn.setObjectName("chatTool")
         self.model_btn.setCursor(Qt.PointingHandCursor)
         self.model_btn.setToolTip("当前模型：GLM-4.6V-Flash")
         self.model_btn.clicked.connect(self.configure_api_key)
 
-        self.image_btn = QPushButton("上传")
+        self.image_btn = FeedbackButton("上传")
         self.image_btn.setObjectName("chatTool")
         self.image_btn.setCursor(Qt.PointingHandCursor)
         self.image_btn.setToolTip("上传图片")
         self.image_btn.clicked.connect(self.select_image)
 
-        self.settings_btn = QPushButton("⚙")
+        self.settings_btn = FeedbackButton("⚙")
         self.settings_btn.setObjectName("roundTool")
         self.settings_btn.setToolTip("API 设置")
         self.settings_btn.setCursor(Qt.PointingHandCursor)
         self.settings_btn.clicked.connect(self.configure_api_key)
 
-        self.clear_btn = QPushButton("DEL")
+        self.clear_btn = FeedbackButton("DEL")
         self.clear_btn.setObjectName("clearTool")
         self.clear_btn.setMinimumWidth(44)
         self.clear_btn.setMaximumWidth(44)
@@ -747,7 +746,7 @@ class ChatWindow(QWidget):
         privacy.setFont(independent_pixel_font(15))
         privacy.setWordWrap(True)
 
-        show_btn = QPushButton("按住显示")
+        show_btn = FeedbackButton("按住显示")
         show_btn.setCursor(Qt.PointingHandCursor)
         show_btn.pressed.connect(
             lambda: key_edit.setEchoMode(QLineEdit.Normal)
@@ -756,10 +755,10 @@ class ChatWindow(QWidget):
             lambda: key_edit.setEchoMode(QLineEdit.Password)
         )
 
-        cancel_btn = QPushButton("取消")
+        cancel_btn = FeedbackButton("取消")
         cancel_btn.setCursor(Qt.PointingHandCursor)
         cancel_btn.clicked.connect(dialog.reject)
-        save_btn = QPushButton("保存")
+        save_btn = FeedbackButton("保存")
         save_btn.setObjectName("saveKey")
         save_btn.setCursor(Qt.PointingHandCursor)
 
@@ -776,7 +775,7 @@ class ChatWindow(QWidget):
 
         save_btn.clicked.connect(accept_key)
         key_edit.returnPressed.connect(accept_key)
-        remove_btn = QPushButton("移除本机 Key")
+        remove_btn = FeedbackButton("移除本机 Key")
         remove_btn.setObjectName("removeKey")
         remove_btn.setCursor(Qt.PointingHandCursor)
         remove_btn.setVisible(ai.load_config().get("api_key", "") != "")

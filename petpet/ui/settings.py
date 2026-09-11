@@ -28,6 +28,7 @@ from PyQt5.QtWidgets import (
 from petpet.app.fonts import APP_FONT_FAMILY
 from petpet.app.paths import SHOP_UI_DIR
 from petpet.app.settings import DEFAULT_SETTINGS, save_settings
+from petpet.progression.ui import FeedbackButton
 from petpet.ui.common import independent_pixel_font
 from petpet.ui.controls import StepperControl, ThreeLevelSlider, ToggleSwitch
 
@@ -450,11 +451,11 @@ class SettingsWindow(QWidget):
 
         btn_row = QHBoxLayout()
         btn_row.setSpacing(14)
-        reset_btn = QPushButton("恢复全部默认值")
+        reset_btn = FeedbackButton("恢复全部默认值")
         reset_btn.setObjectName("reset")
         reset_btn.setMinimumHeight(44)
         reset_btn.clicked.connect(self.reset_defaults)
-        ok_btn = QPushButton("保存并立即应用")
+        ok_btn = FeedbackButton("保存并立即应用")
         ok_btn.setMinimumHeight(44)
         ok_btn.clicked.connect(self.apply)
         btn_row.addWidget(reset_btn)

@@ -82,6 +82,40 @@ class ProgressionWindowUiTests(unittest.TestCase):
         self.assertEqual(records.pos().y(), expected_y)
         self.pet.interface_window_position.assert_not_called()
 
+    def test_feedback_button_deferred_click_still_emits_released(self):
+        """拦截 click 的分支必须补发 released（2026-09-11 回归）。
+
+        chat「按住显示」键依赖 released 复位回显模式：松开在键内时
+        若不补发，API Key 会永久明文。
+        """
+        from PyQt5.QtCore import QEvent, QPointF, Qt
+
+        from PyQt5.QtGui import QMouseEvent
+
+        from petpet.progression.ui import FeedbackButton
+
+        button = FeedbackButton("按住显示")
+        button.setFixedSize(90, 32)
+        button.show()
+        self.addCleanup(button.close)
+        released = []
+        button.released.connect(lambda: released.append(1))
+
+        press = QMouseEvent(
+            QEvent.MouseButtonPress, QPointF(45, 16),
+            Qt.LeftButton, Qt.LeftButton, Qt.NoModifier,
+        )
+        button.mousePressEvent(press)
+        release = QMouseEvent(
+            QEvent.MouseButtonRelease, QPointF(45, 16),
+            Qt.LeftButton, Qt.LeftButton, Qt.NoModifier,
+        )
+        button.mouseReleaseEvent(release)
+
+        # 键内松开：click 被延迟（回弹 40ms 后），released 必须立即补发。
+        self.assertTrue(button._pending_fire)
+        self.assertEqual(released, [1])
+
     def test_shop_lists_complete_outfits_and_keeps_upgrade_page(self):
         shop = ShopWindow(self.pet, Mock())
         self.windows = [shop]

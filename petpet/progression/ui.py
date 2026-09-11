@@ -742,8 +742,12 @@ class FeedbackButton(QPushButton):
         if (not self.isCheckable() and self.isEnabled() and self.isDown()
                 and self.rect().contains(event.pos())):
             # 拦截原生 click：回弹段播完再触发（与宠物面板/家园一致）。
+            # released 信号由原生 mouseReleaseEvent 发射，拦截后须补发
+            # ——「按住显示」类 pressed/released 键依赖它复位（2026-09-11
+            # chat show_btn 回归：松开不复位导致 API Key 永久明文）。
             self.setDown(False)
             self._pending_fire = True
+            self.released.emit()
             event.accept()
             self.update()
             self._fire_timer.start(self.RECOVER_MS)
