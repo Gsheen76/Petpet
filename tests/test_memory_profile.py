@@ -7,11 +7,30 @@ MemoryProfileDialog 编辑行为（offscreen）、ChatWindow.show_memory_profile
 
 import unittest
 
+from unittest.mock import Mock
+
 from petpet.chat.memory import (
     PROFILE_BUCKETS,
     PROFILE_BUCKET_CAPS,
+    facts_differ,
+    first_fact,
     sanitize_edited_facts,
 )
+
+
+class FactHelpersTests(unittest.TestCase):
+    def test_first_fact_reads_current_alias(self):
+        self.assertEqual(first_fact({"称呼": ["小明", "老板"]}, "称呼"), "小明")
+        self.assertIsNone(first_fact({}, "称呼"))
+        self.assertIsNone(first_fact({"称呼": []}, "称呼"))
+
+    def test_facts_differ_compares_cleaned_items_per_bucket(self):
+        old = {"称呼": ["小明"], "喜欢": ["咖啡"]}
+        same = {"称呼": ["小明"], "喜欢": ["咖啡"], "其他": []}
+        self.assertFalse(facts_differ(old, same))
+        self.assertTrue(facts_differ(old, {"称呼": ["老板"], "喜欢": ["咖啡"]}))
+        # 等价但未清洗的输入不算差异。
+        self.assertFalse(facts_differ(old, {"称呼": [" 小明 "], "喜欢": ["咖啡"]}))
 
 
 class SanitizeEditedFactsTests(unittest.TestCase):
@@ -108,8 +127,10 @@ class ChatWindowProfileEntryTests(unittest.TestCase):
         window = ChatWindow.__new__(ChatWindow)
         window.busy = False
         window.pet_id = "lunch_meat"
-        # 未初始化的 PyQt 壳访问属性会抛 RuntimeError，给足 _pet_name 依赖。
-        window.pet = SimpleNamespace(pet_name="烟花", state={})
+        # 未初始化的 PyQt 壳访问属性会抛 RuntimeError，给足 _pet_name/say 依赖。
+        window.pet = SimpleNamespace(
+            pet_name="烟花", state={}, say=Mock(),
+        )
         window.mem = {
             "profile_facts": {"称呼": ["小明"]},
             "user_profile": "称呼：小明",
@@ -143,6 +164,8 @@ class ChatWindowProfileEntryTests(unittest.TestCase):
         self.assertEqual(window.mem["profile_facts"], new_facts)
         self.assertIn("称呼：老板", window.mem["user_profile"])
         self.assertIn("喜欢：咖啡", window.mem["user_profile"])
+        # A3（2026-09-11）：称呼变化 → 气泡复述新称呼。
+        window.pet.say.assert_called_once_with("好的，以后就叫你老板啦！", 3000)
         save_memory.assert_called_once_with(
             window.mem, pet_id="lunch_meat")
 
@@ -176,6 +199,48 @@ class ChatWindowProfileEntryTests(unittest.TestCase):
             window.show_memory_profile()
         save_memory.assert_not_called()
         self.assertEqual(window.mem["profile_facts"], {"称呼": ["小明"]})
+        window.pet.say.assert_not_called()
+
+    def test_profile_change_without_alias_reply_uses_generic_line(self):
+        from unittest.mock import patch
+
+        from petpet.ui.memory_profile import MemoryProfileDialog
+
+        window = self._window()
+        new_facts = sanitize_edited_facts(
+            {"称呼": ["小明"], "喜欢": ["咖啡"]})  # 称呼未变，喜欢新增
+
+        class FakeDialog:
+            def __init__(self, *args, **kwargs):
+                self.result_facts = new_facts
+
+            def exec_(self):
+                return MemoryProfileDialog.Accepted
+
+        with patch(
+            "petpet.ui.memory_profile.MemoryProfileDialog", FakeDialog,
+        ), patch.object(
+            __import__("petpet.ui.chat", fromlist=["ai"]).ai, "save_memory",
+        ):
+            window.show_memory_profile()
+        window.pet.say.assert_called_once_with("嗯嗯，这些我都记住啦！", 3000)
+
+        # 完全无变化 → 不吭声。
+        window.pet.say.reset_mock()
+
+        class SameDialog(FakeDialog):
+            def __init__(self, *a, **k):
+                super().__init__(*a, **k)
+                self.result_facts = sanitize_edited_facts(
+                    {"称呼": ["小明"], "喜欢": ["咖啡"]})
+
+        with patch(
+            "petpet.ui.memory_profile.MemoryProfileDialog", SameDialog,
+        ), patch.object(
+            __import__("petpet.ui.chat", fromlist=["ai"]).ai, "save_memory",
+        ):
+            window.show_memory_profile()
+        window.pet.say.assert_not_called()
 
 
 if __name__ == "__main__":

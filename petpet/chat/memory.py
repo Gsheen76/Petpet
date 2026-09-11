@@ -67,6 +67,24 @@ def merge_profile_facts(current: dict, extracted: dict) -> dict:
     return result
 
 
+def first_fact(facts: dict, bucket: str) -> str | None:
+    """返回档案某一栏的第一条（无则 None）——称呼栏的当前值。"""
+    items = (facts or {}).get(bucket) or []
+    return items[0] if items else None
+
+
+def facts_differ(old: dict, new: dict) -> bool:
+    """两份档案是否有实质差异（逐栏比较清洗后的条目）。"""
+    for bucket in PROFILE_BUCKETS:
+        if [
+            fact for fact in (_clean_fact(i) for i in (old or {}).get(bucket) or []) if fact
+        ] != [
+            fact for fact in (_clean_fact(i) for i in (new or {}).get(bucket) or []) if fact
+        ]:
+            return True
+    return False
+
+
 def sanitize_edited_facts(facts: dict) -> dict:
     """手动编辑档案的清洗网：逐条清洗、去重保序、每栏截前 cap 条。
 

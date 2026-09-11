@@ -5,7 +5,8 @@ import threading
 import time
 
 from petpet.chat import api as ai
-from petpet.chat.memory import render_profile_facts
+from petpet.chat.memory import facts_differ, first_fact, render_profile_facts
+from petpet.progression.ui import FeedbackButton
 from petpet.app.paths import SHOP_UI_DIR
 from petpet.app.pets import pet_asset_path, pet_avatar_path, pet_definition
 from PyQt5.QtCore import QPoint, QRect, QRectF, QSize, Qt, QTimer
@@ -195,17 +196,16 @@ class ChatWindow(QWidget):
                 background:transparent;
             }}
             QScrollBar:vertical {{
-                background:#f5efea;
-                width:10px;
-                margin:8px 4px 8px 0;
-                border-radius:5px;
+                background:transparent;
+                width:11px;
+                margin:4px 0;
             }}
             QScrollBar::handle:vertical {{
-                background:#d8c5b8;
-                min-height:34px;
+                background:#e8bfa8;
                 border-radius:5px;
+                min-height:38px;
             }}
-            QScrollBar::handle:vertical:hover {{ background:#c9ad9d; }}
+            QScrollBar::handle:vertical:hover {{ background:#d9ab90; }}
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
                 height:0;
             }}
@@ -311,7 +311,9 @@ class ChatWindow(QWidget):
         self.title.mouseMoveEvent = self._title_move
         self.title.mouseReleaseEvent = lambda e: setattr(self, "_drag_off", None)
 
-        self.close_btn = QPushButton("×")
+        # 标题行按键（2026-09-11 A1）：接全应用按键反馈规范
+        # （悬浮放大+白洗、按住内缩压暗、键内回弹 40ms 后触发）。
+        self.close_btn = FeedbackButton("×")
         self.close_btn.setFixedSize(28, 28)
         self.close_btn.setCursor(Qt.PointingHandCursor)
         self.close_btn.setToolTip("关闭")
@@ -322,7 +324,7 @@ class ChatWindow(QWidget):
         )
         self.close_btn.clicked.connect(self.close)
 
-        self.avatar_btn = QPushButton("头像")
+        self.avatar_btn = FeedbackButton("头像")
         self.avatar_btn.setObjectName("avatarEdit")
         self.avatar_btn.setCursor(Qt.PointingHandCursor)
         self.avatar_btn.setToolTip("编辑我的头像")
@@ -335,7 +337,7 @@ class ChatWindow(QWidget):
         self.avatar_btn.clicked.connect(self.show_player_avatar_menu)
 
         # 档案入口（2026-09-11）：查看/编辑长期记忆六栏档案。
-        self.profile_btn = QPushButton("档案")
+        self.profile_btn = FeedbackButton("档案")
         self.profile_btn.setObjectName("avatarEdit")
         self.profile_btn.setCursor(Qt.PointingHandCursor)
         self.profile_btn.setToolTip("查看和编辑 TA 记住的我")
@@ -993,9 +995,25 @@ class ChatWindow(QWidget):
         facts = dialog.result_facts
         if facts is None:
             return
+        old_facts = self.mem.get("profile_facts") or {}
         self.mem["profile_facts"] = facts
         self.mem["user_profile"] = render_profile_facts(facts)
         ai.save_memory(self.mem, pet_id=self.pet_id)
+        self._announce_profile_change(old_facts, facts)
+
+    def _announce_profile_change(self, old_facts, new_facts):
+        """保存档案后让宠物用气泡回应（2026-09-11 A3）。
+
+        称呼栏变化优先复述新称呼；其余变化用通用确认；无变化不吭声。
+        """
+        if not facts_differ(old_facts, new_facts):
+            return
+        old_alias = first_fact(old_facts, "称呼")
+        new_alias = first_fact(new_facts, "称呼")
+        if new_alias and new_alias != old_alias:
+            self.pet.say(f"好的，以后就叫你{new_alias}啦！", 3000)
+        else:
+            self.pet.say("嗯嗯，这些我都记住啦！", 3000)
 
     def select_player_avatar(self):
         path, _ = QFileDialog.getOpenFileName(

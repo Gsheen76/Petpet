@@ -352,13 +352,13 @@ class SettingsWindow(QWidget):
             }}
             QScrollBar:vertical {{
                 background:transparent;
-                width:10px;
+                width:11px;
                 margin:4px 0;
             }}
             QScrollBar::handle:vertical {{
                 background:#e8bfa8;
                 border-radius:5px;
-                min-height:36px;
+                min-height:38px;
             }}
             QScrollBar::add-line:vertical,
             QScrollBar::sub-line:vertical {{
