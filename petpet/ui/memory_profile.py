@@ -17,7 +17,6 @@ from PyQt5.QtWidgets import (
     QLabel,
     QLineEdit,
     QScrollArea,
-    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -32,6 +31,8 @@ from petpet.chat.memory import (
 from petpet.progression.ui import FeedbackButton
 
 _DIALOG_W, _DIALOG_H = 850, 960
+_EDIT_EXTRA_PX = 52   # 输入框比文字多出的余量（2026-09-11 用户定稿）
+_EDIT_MIN_PX = 150
 _BUCKET_HINTS = {
     "称呼": "你希望 TA 怎么称呼你",
     "作息": "起床、睡觉、上下班时间",
@@ -63,7 +64,7 @@ QPushButton#profileClose {{ background:transparent; border:0;
 QPushButton#profileClose:hover {{ background:#ffcfc5; color:#bf5c52;
     border-radius:14px; }}
 QPushButton#addFact {{ background:#fffaf6; color:#c07a52;
-    border:1px solid #eccdb9; border-radius:12px; padding:3px 12px;
+    border:1px solid #eccdb9; border-radius:15px; padding:6px 20px;
     font-size:15px; font-weight:700;
     font-family:'{APP_FONT_FAMILY}'; }}
 QPushButton#addFact:hover {{ background:#ffe8dc; border-color:#dda993; }}
@@ -85,6 +86,9 @@ QPushButton#cancelProfile:hover {{ background:#ffe8dc;
     border-color:#dda993; }}
 QPushButton#cancelProfile:pressed {{ background:#ffdcd0; }}
 QScrollArea#profileScroll {{ background:transparent; border:0; }}
+QScrollBar:vertical {{ background:transparent; width:11px; margin:4px 0; }}
+QScrollBar::handle:vertical {{ background:#e8bfa8; border-radius:5px; min-height:38px; }}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height:0; }}
 QWidget#profileScrollBody {{ background:transparent; }}
 QFrame#bucketCard {{ background:#fffdf7; border:1px solid #f0e0d0;
     border-radius:16px; }}
@@ -102,6 +106,9 @@ class MemoryProfileDialog(QDialog):
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setModal(True)
         self.setFixedSize(_DIALOG_W, _DIALOG_H)
+        # 与聊天窗同位置同大小（2026-09-11 用户定稿）：显式钉到父窗左上角。
+        if parent is not None:
+            self.move(parent.geometry().topLeft())
         self.result_facts = None
         self._facts = {
             bucket: [str(item) for item in ((facts or {}).get(bucket) or [])]
@@ -120,7 +127,7 @@ class MemoryProfileDialog(QDialog):
             os.path.join(SHOP_UI_DIR, "background.png"))
 
         outer = QVBoxLayout(root)
-        outer.setContentsMargins(34, 26, 34, 22)
+        outer.setContentsMargins(40, 30, 40, 22)
         outer.setSpacing(12)
         outer.addLayout(self._build_title_row(pet_name))
 
@@ -129,15 +136,17 @@ class MemoryProfileDialog(QDialog):
         scroll.setFrameShape(QFrame.NoFrame)
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        # 滚动条常驻（2026-09-11 用户定稿）：有/无溢出内容恒等宽；
+        # 样式与商店一致（槽透明 + 珊瑚棕圆角手柄）。
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
         body = QWidget()
         body.setObjectName("profileScrollBody")
         self._body_layout = QVBoxLayout(body)
         self._body_layout.setContentsMargins(6, 4, 6, 4)
         self._body_layout.setSpacing(12)
         for bucket in PROFILE_BUCKETS:
-            card = self._build_bucket_card(bucket)
-            card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-            self._body_layout.addWidget(card)
+            self._body_layout.addWidget(self._build_bucket_card(bucket))
+        self._body_layout.addStretch(1)
         for bucket in PROFILE_BUCKETS:
             self._refresh_bucket_chrome(bucket)
         scroll.setWidget(body)
@@ -158,7 +167,7 @@ class MemoryProfileDialog(QDialog):
         self._close_btn.clicked.connect(self.reject)
 
         title_col = QVBoxLayout()
-        title_col.setSpacing(0)
+        title_col.setSpacing(8)
         title_col.addWidget(title)
         title_col.addWidget(hint)
 
@@ -191,7 +200,7 @@ class MemoryProfileDialog(QDialog):
         card = QFrame()
         card.setObjectName("bucketCard")
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(22, 16, 22, 18)
+        layout.setContentsMargins(18, 12, 18, 14)
         layout.setSpacing(10)
 
         head = QHBoxLayout()
@@ -232,9 +241,12 @@ class MemoryProfileDialog(QDialog):
         delete.setFixedSize(26, 26)
         delete.setCursor(Qt.PointingHandCursor)
         row = QHBoxLayout()
-        row.setSpacing(6)
-        row.addWidget(edit, 1)
+        row.setSpacing(8)
+        row.addWidget(edit)
         row.addWidget(delete)
+        row.addStretch(1)
+        edit.textChanged.connect(lambda _t, e=edit: self._fit_edit(e))
+        self._fit_edit(edit)
 
         def remove(_checked=False, b=bucket, e=edit):
             for entry in list(self._rows[b]):
@@ -267,6 +279,12 @@ class MemoryProfileDialog(QDialog):
         add = self._add_buttons.get(bucket)
         if add is not None:
             add.setEnabled(n < cap)
+
+    def _fit_edit(self, edit):
+        """输入框宽度贴内容：比文字略宽一点（2026-09-11 用户定稿）。"""
+        text_w = edit.fontMetrics().horizontalAdvance(edit.text())
+        edit.setFixedWidth(max(
+            _EDIT_MIN_PX, text_w + _EDIT_EXTRA_PX))
 
     def collect_edits(self):
         """读 UI 当前内容 → 原始 facts dict（未清洗）。"""
