@@ -78,12 +78,23 @@ def _is_restorable(name: str) -> bool:
 
 
 def inspect_backup_zip(zip_path: str) -> list[str]:
-    """列出备份包内可还原的文件；白名单外条目一律拒绝。"""
+    """列出备份包内可还原的文件；白名单外/带路径条目一律拒绝。
+
+    校验先于任何写入：fnmatch 的 ``*`` 可跨分隔符，目录穿越条目
+    （如 ``memory-../../evil.json``）在这里拦下，restore 只处理已
+    验证的平铺文件名。
+    """
     with zipfile.ZipFile(zip_path) as bundle:
         names = [n for n in bundle.namelist() if not n.endswith("/")]
     unknown = sorted(n for n in names if not _is_restorable(n))
     if unknown:
         raise ValueError(f"备份包含未知文件，拒绝还原：{unknown[:3]}")
+    bad_paths = sorted(
+        n for n in names
+        if "/" in n or n.replace("\\", "/") != n or n.startswith("..")
+    )
+    if bad_paths:
+        raise ValueError(f"备份包含异常路径条目，拒绝还原：{bad_paths[:3]}")
     return names
 
 

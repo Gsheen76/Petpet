@@ -2909,13 +2909,16 @@ class PetWindow(QWidget):
         """
         if getattr(sys, "frozen", False):
             args = [sys.executable]
+            cwd = os.path.dirname(sys.executable)
         else:
-            args = [sys.executable, os.path.abspath(
-                os.path.join(os.path.dirname(__file__), "..", "pet.py"))]
+            # pet.py 与工作目录都在仓库根：petpet/app/ 上两级。
+            root = os.path.abspath(
+                os.path.join(os.path.dirname(__file__), "..", ".."))
+            args = [sys.executable, os.path.join(root, "pet.py")]
+            cwd = root
         try:
             subprocess.Popen(
-                args, cwd=os.path.abspath(
-                    os.path.join(os.path.dirname(__file__), "..")),
+                args, cwd=cwd,
                 creationflags=0x08000000 if sys.platform == "win32" else 0,
                 close_fds=True,
             )

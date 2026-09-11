@@ -57,6 +57,32 @@ class RestoreBackupTests(unittest.TestCase):
             self.assertEqual(
                 backup.inspect_backup_zip(zpath), ["memory-ice_cream.json"])
 
+    def test_traversal_entry_rejected_before_any_write(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            # fnmatch 的 * 能跨分隔符：memory-../evil.json 命中
+            # memory*.json 模式，必须在写入前被路径校验拦下。
+            zpath = self._make_zip(tmp, [
+                "pet_state.json", "memory-../evil.json",
+            ])
+            with self.assertRaises(ValueError):
+                backup.restore_backup_zip(zpath, data_dir=tmp)
+            self.assertFalse(os.path.exists(
+                os.path.join(tmp, "memory-../evil.json")))
+
+    def test_autostart_launcher_points_at_real_pet_py(self):
+        import re
+
+        from petpet.app import autostart
+
+        if not autostart.is_supported():
+            self.skipTest("Windows only")
+        command = autostart._launcher_path()
+        match = re.search(r'"([^"]+pet\.py)"', command)
+        self.assertIsNotNone(match, command)
+        self.assertTrue(os.path.isfile(match.group(1)), command)
+
 
 class AutostartTests(unittest.TestCase):
     def test_roundtrip_enable_disable_registry(self):

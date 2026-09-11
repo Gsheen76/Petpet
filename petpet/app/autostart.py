@@ -23,8 +23,9 @@ def _launcher_path() -> str:
     python_dir = os.path.dirname(sys.executable)
     pythonw = os.path.join(python_dir, "pythonw.exe")
     interpreter = pythonw if os.path.isfile(pythonw) else sys.executable
+    # pet.py 在仓库根：petpet/app/ 要上两级。
     pet = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", "pet.py"))
+        os.path.join(os.path.dirname(__file__), "..", "..", "pet.py"))
     return f'"{interpreter}" "{pet}"'
 
 
