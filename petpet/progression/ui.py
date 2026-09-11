@@ -173,6 +173,13 @@ SHOP_THEME_STYLE = """
         border: 0;
         border-image: url("%(filter_bar4)s");
     }
+    /* 套装页宠物选择器（二分栏，2026-09-11）：新千层药丸素材，
+       分隔刻度已归一化到精确 50%%（chip_bar_2seg.png）。 */
+    QFrame#outfitPetSelector {
+        background: transparent;
+        border: 0;
+        border-image: url("%(chip_bar2)s");
+    }
     QFrame#petTabBar {
         background: #f7e8d8;
         border: 1px solid #eed3ba;
@@ -294,6 +301,7 @@ SHOP_THEME_STYLE = """
 """ % {
     "tab_bar": _shop_asset("tab_bar_bg.png").replace("\\", "/"),
     "filter_bar4": _shop_asset("filter_bar_bg.png").replace("\\", "/"),
+    "chip_bar2": _shop_asset("chip_bar_2seg.png").replace("\\", "/"),
     "active_tab": _shop_asset("active_tab_bg.png").replace("\\", "/"),
     "close_button": _shop_asset("close_button.png").replace("\\", "/"),
     "switch_button": _shop_asset("switch_pet_button.png").replace("\\", "/"),
@@ -481,13 +489,10 @@ PANEL_STYLE = """
         border: 1px solid #edcfb8;
         border-radius: 15px;
     }
-    /* 通用胶囊分栏（2026-09-08）：套装页宠物选择器与礼物页档位筛选
-       共用同一套托盘+圆角钮样式（原 outfitPetSelector/outfitPetTab）。 */
-    QFrame[chipBar="true"] {
-        background: #f4e2d2;
-        border: 1px solid #e9c9b1;
-        border-radius: 18px;
-    }
+    /* 通用胶囊分栏圆角钮（2026-09-08）：chipTab 按钮样式仍由套装页
+       宠物选择器与礼物页档位筛选共用；托盘自 2026-09-11 起各自走
+       objectName 专属素材规则（outfitPetSelector 二分栏药丸 /
+       giftFilterBar 四分栏药丸），chipBar 托盘 QSS 已删。 */
     QPushButton[chipTab="true"] {
         background: transparent;
         color: #9c6b58;
@@ -2393,7 +2398,8 @@ class ShopWindow(CozyProgressWindow):
 
         selector = QFrame()
         selector.setObjectName("outfitPetSelector")
-        selector.setProperty("chipBar", True)
+        # 二分栏走 QFrame#outfitPetSelector 专属 border-image 药丸素材
+        # （2026-09-11），不再叠 chipBar 托盘样式。
         selector_layout = QHBoxLayout(selector)
         selector_layout.setContentsMargins(5, 5, 5, 5)
         selector_layout.setSpacing(7)

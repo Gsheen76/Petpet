@@ -17,6 +17,7 @@ from PyQt5.QtWidgets import (
     QLabel,
     QLineEdit,
     QScrollArea,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -30,7 +31,7 @@ from petpet.chat.memory import (
 )
 from petpet.progression.ui import FeedbackButton
 
-_DIALOG_W, _DIALOG_H = 620, 760
+_DIALOG_W, _DIALOG_H = 850, 960
 _BUCKET_HINTS = {
     "称呼": "你希望 TA 怎么称呼你",
     "作息": "起床、睡觉、上下班时间",
@@ -42,43 +43,44 @@ _BUCKET_HINTS = {
 
 _PANEL_QSS = f"""
 QWidget#profileRoot {{ background: transparent; }}
-QLabel#profileTitle {{ color:#8c5a3c; font-size:24px; font-weight:700;
+QLabel#profileTitle {{ color:#8c5a3c; font-size:30px; font-weight:700;
     font-family:'{APP_FONT_FAMILY}'; }}
-QLabel#profileHint {{ color:#b08a72; font-size:13px;
+QLabel#profileHint {{ color:#b08a72; font-size:16px;
     font-family:'{APP_FONT_FAMILY}'; }}
-QLabel#bucketName {{ color:#a8643e; font-size:17px; font-weight:700;
+QLabel#bucketName {{ color:#a8643e; font-size:24px; font-weight:700;
     font-family:'{APP_FONT_FAMILY}'; }}
-QLabel#bucketCount {{ color:#c4a48e; font-size:13px;
+QLabel#bucketCount {{ color:#c4a48e; font-size:16px;
     font-family:'{APP_FONT_FAMILY}'; }}
-QLabel#bucketHint {{ color:#c9ab94; font-size:12px;
+QLabel#bucketHint {{ color:#c19b7f; font-size:15px;
     font-family:'{APP_FONT_FAMILY}'; }}
 QLineEdit#factEdit {{ background:#fffaf4; color:#6b4632;
-    border:1px solid #ecd9c8; border-radius:14px; padding:6px 14px;
-    font-size:15px; font-family:'{APP_FONT_FAMILY}'; }}
+    border:1px solid #ecd9c8; border-radius:14px; padding:8px 16px;
+    min-height:34px;
+    font-size:20px; font-family:'{APP_FONT_FAMILY}'; }}
 QLineEdit#factEdit:focus {{ border:1px solid #f28f76; background:#fff; }}
 QPushButton#profileClose {{ background:transparent; border:0;
-    color:#a47b69; font-size:24px; font-weight:700; padding:0; }}
+    color:#a47b69; font-size:26px; font-weight:700; padding:0; }}
 QPushButton#profileClose:hover {{ background:#ffcfc5; color:#bf5c52;
     border-radius:14px; }}
 QPushButton#addFact {{ background:#fffaf6; color:#c07a52;
     border:1px solid #eccdb9; border-radius:12px; padding:3px 12px;
-    font-size:13px; font-weight:700;
+    font-size:15px; font-weight:700;
     font-family:'{APP_FONT_FAMILY}'; }}
 QPushButton#addFact:hover {{ background:#ffe8dc; border-color:#dda993; }}
 QPushButton#addFact:disabled {{ color:#d8c4b4; border-color:#eee0d3;
     background:#faf3ec; }}
 QPushButton#delFact {{ background:transparent; border:0; color:#c9a48e;
-    font-size:18px; font-weight:700; padding:0; }}
+    font-size:20px; font-weight:700; padding:0; }}
 QPushButton#delFact:hover {{ background:#ffcfc5; color:#bf5c52;
     border-radius:11px; }}
 QPushButton#saveProfile {{ background:#f28f76; color:#ffffff;
-    border:0; border-radius:18px; padding:9px 34px; font-size:16px;
+    border:0; border-radius:20px; padding:11px 44px; font-size:20px;
     font-weight:700; font-family:'{APP_FONT_FAMILY}'; }}
 QPushButton#saveProfile:hover {{ background:#e19179; }}
 QPushButton#saveProfile:pressed {{ background:#c66e5b; }}
 QPushButton#cancelProfile {{ background:#fffaf6; color:#8c6252;
     border:1px solid #e6cfc2; border-radius:18px; padding:9px 30px;
-    font-size:16px; font-weight:700; font-family:'{APP_FONT_FAMILY}'; }}
+    font-size:20px; font-weight:700; font-family:'{APP_FONT_FAMILY}'; }}
 QPushButton#cancelProfile:hover {{ background:#ffe8dc;
     border-color:#dda993; }}
 QPushButton#cancelProfile:pressed {{ background:#ffdcd0; }}
@@ -118,8 +120,8 @@ class MemoryProfileDialog(QDialog):
             os.path.join(SHOP_UI_DIR, "background.png"))
 
         outer = QVBoxLayout(root)
-        outer.setContentsMargins(26, 22, 26, 20)
-        outer.setSpacing(10)
+        outer.setContentsMargins(34, 26, 34, 22)
+        outer.setSpacing(12)
         outer.addLayout(self._build_title_row(pet_name))
 
         scroll = QScrollArea()
@@ -130,11 +132,12 @@ class MemoryProfileDialog(QDialog):
         body = QWidget()
         body.setObjectName("profileScrollBody")
         self._body_layout = QVBoxLayout(body)
-        self._body_layout.setContentsMargins(4, 2, 4, 2)
-        self._body_layout.setSpacing(10)
+        self._body_layout.setContentsMargins(6, 4, 6, 4)
+        self._body_layout.setSpacing(12)
         for bucket in PROFILE_BUCKETS:
-            self._body_layout.addWidget(self._build_bucket_card(bucket))
-        self._body_layout.addStretch(1)
+            card = self._build_bucket_card(bucket)
+            card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            self._body_layout.addWidget(card)
         for bucket in PROFILE_BUCKETS:
             self._refresh_bucket_chrome(bucket)
         scroll.setWidget(body)
@@ -150,7 +153,7 @@ class MemoryProfileDialog(QDialog):
         hint.setObjectName("profileHint")
         self._close_btn = FeedbackButton("×")
         self._close_btn.setObjectName("profileClose")
-        self._close_btn.setFixedSize(28, 28)
+        self._close_btn.setFixedSize(32, 32)
         self._close_btn.setCursor(Qt.PointingHandCursor)
         self._close_btn.clicked.connect(self.reject)
 
@@ -188,11 +191,11 @@ class MemoryProfileDialog(QDialog):
         card = QFrame()
         card.setObjectName("bucketCard")
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(14, 10, 14, 12)
-        layout.setSpacing(8)
+        layout.setContentsMargins(22, 16, 22, 18)
+        layout.setSpacing(10)
 
         head = QHBoxLayout()
-        head.setSpacing(8)
+        head.setSpacing(10)
         name = QLabel(bucket)
         name.setObjectName("bucketName")
         count = QLabel()
@@ -226,7 +229,7 @@ class MemoryProfileDialog(QDialog):
         edit.setMaxLength(60)
         delete = FeedbackButton("×")
         delete.setObjectName("delFact")
-        delete.setFixedSize(22, 22)
+        delete.setFixedSize(26, 26)
         delete.setCursor(Qt.PointingHandCursor)
         row = QHBoxLayout()
         row.setSpacing(6)
