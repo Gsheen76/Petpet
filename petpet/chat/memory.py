@@ -32,6 +32,15 @@ def _clean_fact(value: object) -> str | None:
     return text
 
 
+def _clean_bucket(facts: dict, bucket: str) -> list[str]:
+    """某栏清洗后的条目列表（去空、限长；保序不去重）。"""
+    return [
+        fact for fact in (
+            _clean_fact(item) for item in (facts or {}).get(bucket) or []
+        ) if fact
+    ]
+
+
 def merge_profile_facts(current: dict, extracted: dict) -> dict:
     """把新抽取的事实合并进现有档案。
 
@@ -41,18 +50,8 @@ def merge_profile_facts(current: dict, extracted: dict) -> dict:
     result = {}
     for bucket in PROFILE_BUCKETS:
         cap = PROFILE_BUCKET_CAPS[bucket]
-        existing = [
-            fact for fact in (
-                _clean_fact(item)
-                for item in (current.get(bucket) or [])
-            ) if fact
-        ]
-        incoming = [
-            fact for fact in (
-                _clean_fact(item)
-                for item in ((extracted or {}).get(bucket) or [])
-            ) if fact
-        ]
+        existing = _clean_bucket(current, bucket)
+        incoming = _clean_bucket(extracted, bucket)
         if bucket == "称呼":
             merged = incoming + [
                 fact for fact in existing if fact not in incoming
@@ -76,11 +75,7 @@ def first_fact(facts: dict, bucket: str) -> str | None:
 def facts_differ(old: dict, new: dict) -> bool:
     """两份档案是否有实质差异（逐栏比较清洗后的条目）。"""
     for bucket in PROFILE_BUCKETS:
-        if [
-            fact for fact in (_clean_fact(i) for i in (old or {}).get(bucket) or []) if fact
-        ] != [
-            fact for fact in (_clean_fact(i) for i in (new or {}).get(bucket) or []) if fact
-        ]:
+        if _clean_bucket(old, bucket) != _clean_bucket(new, bucket):
             return True
     return False
 
@@ -94,9 +89,8 @@ def sanitize_edited_facts(facts: dict) -> dict:
     result = {}
     for bucket in PROFILE_BUCKETS:
         seen: list[str] = []
-        for item in (facts or {}).get(bucket) or []:
-            fact = _clean_fact(item)
-            if fact and fact not in seen:
+        for fact in _clean_bucket(facts, bucket):
+            if fact not in seen:
                 seen.append(fact)
         result[bucket] = seen[: PROFILE_BUCKET_CAPS[bucket]]
     return result
@@ -106,11 +100,7 @@ def render_profile_facts(facts: dict) -> str:
     """档案 → system prompt 注入文本（分栏中文可读行）。"""
     lines = []
     for bucket in PROFILE_BUCKETS:
-        items = [
-            _clean_fact(item)
-            for item in ((facts or {}).get(bucket) or [])
-        ]
-        items = [item for item in items if item]
+        items = _clean_bucket(facts, bucket)
         if items:
             lines.append(f"{bucket}：" + "、".join(items))
     if not lines:
@@ -145,7 +135,7 @@ def parse_profile_extraction(raw: object) -> dict:
                 fact for fact in (
                     _clean_fact(item) for item in raw_items
                 ) if fact
-            ]
+            ]  # raw_items 已非 (facts,bucket) 形态，保持原地清洗
             if items:
                 cleaned[bucket] = items
     return cleaned

@@ -758,7 +758,6 @@ class HomeSceneAssetTests(unittest.TestCase):
 
         scene.toggle_decoration_mode()
         self.assertTrue(scene.is_decorating())
-        self.assertTrue(scene._manual_camera)
         # 全景（2026-09-10）：镜头归零，画布一比一铺满整幅世界，无需平移。
         self.assertEqual(scene._camera_x, 0)
         self.assertEqual(
@@ -769,7 +768,6 @@ class HomeSceneAssetTests(unittest.TestCase):
 
         scene.toggle_decoration_mode()
         self.assertFalse(scene.is_decorating())
-        self.assertFalse(scene._manual_camera)
         self.assertEqual(scene.home_pet.position[0], 900.0)
         self.assertEqual(scene._camera_x, 550)
         self.assertEqual(scene.scene_canvas_rect().width(), 700)

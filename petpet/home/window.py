@@ -123,7 +123,6 @@ class HomeSceneWindow(QWidget):
         self._dragging_item = None
         self._drag_offset = QPoint()
         self._camera_x = camera_x_for_dog(self.home_pet.position[0], 0)
-        self._manual_camera = False
         self._selected_furniture = None
         self._editing_gesture = None
         self._decoration_category = "all"
@@ -157,7 +156,7 @@ class HomeSceneWindow(QWidget):
             return
         self._apply_scene_geometry()
         self._advance_home_pet(time.monotonic())
-        if not self.is_decorating() or not self._manual_camera:
+        if not self.is_decorating():
             self._camera_x = camera_x_for_dog(self.home_pet.position[0], 0)
         follow = getattr(self.pet, "follow_interface_overlays", None)
         if callable(follow):
@@ -387,7 +386,6 @@ class HomeSceneWindow(QWidget):
         self._clear_manual_destination()
         self._last_persisted_home_target = None
         self._camera_x = camera_x_for_dog(self.home_pet.position[0], 0)
-        self._manual_camera = False
         self.furniture["home_status_card"] = render_home_status_card(self.state)
         self.update()
 
@@ -643,8 +641,6 @@ class HomeSceneWindow(QWidget):
         self.state.setdefault("home_scene", {})["enabled"] = True
         saved_scene = self.state["home_scene"]
         saved_scene["decorating"] = False
-        saved_scene["viewport_pinned"] = False
-        self._manual_camera = False
         self._camera_x = camera_x_for_dog(self.home_pet.position[0], 0)
         hide_overlays = getattr(self.pet, "hide_overlays", None)
         if callable(hide_overlays):
@@ -939,13 +935,8 @@ class HomeSceneWindow(QWidget):
             self._clear_manual_destination()
             self.home_pet.cancel_target()
             # 全景（2026-09-10）：整幅世界 1:1 铺满画布，镜头归零，不再平移。
-            self._manual_camera = True
             self._camera_x = 0
-            home_scene["viewport_x"] = 0
-            home_scene["viewport_pinned"] = True
         else:
-            self._manual_camera = False
-            home_scene["viewport_pinned"] = False
             self._camera_x = camera_x_for_dog(self.home_pet.position[0], 0)
             self._selected_furniture = None
             self._dragging_item = None

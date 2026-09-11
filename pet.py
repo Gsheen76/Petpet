@@ -257,8 +257,10 @@ class SingleInstanceServer(QObject):
             self.is_primary = True
             return True
 
-        # Resolve the narrow race where two processes start together.
-        return False if self._notify_existing() else False
+        # Resolve the narrow race where two processes start together:
+        # retry the notify so the winning process still gets activated.
+        self._notify_existing()
+        return False
 
     def _notify_existing(self):
         socket = QLocalSocket()
