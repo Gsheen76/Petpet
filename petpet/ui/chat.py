@@ -115,6 +115,7 @@ class ChatWindow(QWidget):
         self.memory_profile = self.pet_id  # compatibility attribute
         self.mem = ai.load_memory(pet_id=self.pet_id)
         self.busy = False
+        self._abort_requested = False
         self._pending_user = None
         self._pending_image = None
         self._streaming = ""
@@ -384,7 +385,14 @@ class ChatWindow(QWidget):
         self.send_btn = FeedbackButton("发送")
         self.send_btn.setObjectName("send")
         self.send_btn.setCursor(Qt.PointingHandCursor)
-        self.send_btn.clicked.connect(self.send)
+        # 流式期间同一颗键变「停止」（2026-09-12）；旁边加重新生成键。
+        self.send_btn.clicked.connect(self._send_or_stop)
+
+        self.regen_btn = FeedbackButton("↻")
+        self.regen_btn.setObjectName("roundTool")
+        self.regen_btn.setCursor(Qt.PointingHandCursor)
+        self.regen_btn.setToolTip("重新生成上一条回复")
+        self.regen_btn.clicked.connect(self._regenerate)
 
         self.chat_notice = QLabel()
         self.chat_notice.setObjectName("chatNotice")
@@ -503,6 +511,7 @@ class ChatWindow(QWidget):
         row = QHBoxLayout()
         row.setSpacing(8)
         row.addWidget(self.input, 1)
+        row.addWidget(self.regen_btn)
         row.addWidget(self.send_btn)
 
         self.tools_frame = QFrame()
@@ -557,6 +566,14 @@ class ChatWindow(QWidget):
         self.image_btn.setEnabled(not self.busy)
         self.clear_btn.setEnabled(not self.busy)
         self.profile_btn.setEnabled(not self.busy)
+        # 发送/停止同一颗键；重新生成仅在空闲且最后一条是回复时可用。
+        self.send_btn.setText("停止" if self.busy else "发送")
+        history = self.mem.get("history") or []
+        self.regen_btn.setEnabled(
+            not self.busy
+            and bool(history)
+            and history[-1].get("role") == "assistant"
+        )
         self.personal_setup_dot.setVisible(ai.needs_personal_setup_reminder())
         self.personal_setup_dot.raise_()
         self._refresh_image_upload_state()
@@ -1202,19 +1219,45 @@ class ChatWindow(QWidget):
             if choice != QMessageBox.Yes:
                 return
             ai.set_default_chat_consent(True)
-        self.chat_notice.hide()
         # A real sent message counts as a chat interaction. Merely opening
         # and closing the panel no longer grants affection.
         self._progression_service.record_action(self.pet.state, "chats_opened")
         self._save_state_callback(self.pet.state)
         self.input.clear()
-        # add user bubble immediately
         attachment = self._pending_image
         display_text = text
         if attachment and not display_text:
             display_text = f"我发送了一张图片：{attachment['filename']}"
+        self._begin_reply(text, attachment, display_text)
+
+    def _send_or_stop(self):
+        """发送/停止同一颗键（2026-09-12）：流式期间点击=请求中断。"""
+        if self.busy:
+            self._abort_requested = True
+            return
+        self.send()
+
+    def _regenerate(self):
+        """重新生成上一条回复（2026-09-12）：弹掉尾部问答对重发。"""
+        if self.busy:
+            return
+        history = self.mem.get("history") or []
+        if not history or history[-1].get("role") != "assistant":
+            return
+        history.pop()
+        if not history or history[-1].get("role") != "user":
+            return
+        user_entry = history.pop()
+        ai.save_memory(self.mem, pet_id=self.pet_id)
+        self.mem = ai.load_memory(pet_id=self.pet_id)
+        # 重新生成不重复计一次聊天互动。
+        self._begin_reply(user_entry["content"], None, user_entry["content"])
+
+    def _begin_reply(self, text, attachment, display_text):
+        self.chat_notice.hide()
         self._pending_user = display_text
         self._streaming = ""
+        self._abort_requested = False
         self._set_log_messages(
             self._history_messages()
             + [("user", display_text,
@@ -1222,7 +1265,6 @@ class ChatWindow(QWidget):
                ("assistant", "…")]
         )
         self.busy = True
-        self.send_btn.setEnabled(False)
         self._refresh_ai_tool_buttons()
         self.input.setPlaceholderText(f"{self._pet_name()} 正在思考…")
         # run AI in background thread so GUI doesn't freeze
@@ -1234,20 +1276,37 @@ class ChatWindow(QWidget):
     def _ai_thread(self, user_text, image_attachment=None):
         full = []
         err = None
-        for kind, payload in ai.chat_stream(
-                user_text, mem=self.mem,
-                pet_name=self._pet_name(), image_attachment=image_attachment,
-                pet_id=self.pet_id):
-            if kind == "token":
-                full.append(payload)
-                self._bridge_provider().token.emit(payload)
-            elif kind == "done":
-                full = [payload]
-                break
-            elif kind == "error":
-                err = payload
-                break
-        if err:
+        aborted = False
+        stream = ai.chat_stream(
+            user_text, mem=self.mem,
+            pet_name=self._pet_name(), image_attachment=image_attachment,
+            pet_id=self.pet_id)
+        try:
+            for kind, payload in stream:
+                if self._abort_requested:
+                    aborted = True
+                    break
+                if kind == "token":
+                    full.append(payload)
+                    self._bridge_provider().token.emit(payload)
+                elif kind == "done":
+                    full = [payload]
+                    break
+                elif kind == "error":
+                    err = payload
+                    break
+        finally:
+            close = getattr(stream, "close", None)
+            if callable(close):
+                try:
+                    close()
+                except Exception:
+                    pass
+        if aborted:
+            # 已收到的部分即答案；一个字都没收到时如实标注已停止。
+            self._bridge_provider().done.emit(
+                "".join(full) if full else "（已停止）")
+        elif err:
             if err in ai.DEFAULT_CHAT_ERRORS:
                 reply = err
             else:
@@ -1299,7 +1358,6 @@ class ChatWindow(QWidget):
         self.clear_pending_image(keep_history=True)
         self._streaming = ""
         self.busy = False
-        self.send_btn.setEnabled(True)
         self._refresh_ai_tool_buttons()
         self.input.setPlaceholderText(
             f"跟 {self._pet_name()} 说点什么…"
@@ -1361,7 +1419,6 @@ class ChatWindow(QWidget):
         self.clear_pending_image(keep_history=True)
         self._streaming = ""
         self.busy = False
-        self.send_btn.setEnabled(True)
         self._refresh_ai_tool_buttons()
         self.input.setPlaceholderText(
             f"跟 {self._pet_name()} 说点什么…"
@@ -1375,7 +1432,6 @@ class ChatWindow(QWidget):
         self.clear_pending_image(keep_history=keep_history_image)
         self._streaming = ""
         self.busy = False
-        self.send_btn.setEnabled(True)
         self._refresh_ai_tool_buttons()
         self.input.setPlaceholderText(
             f"跟 {self._pet_name()} 说点什么…"

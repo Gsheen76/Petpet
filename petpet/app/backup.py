@@ -68,3 +68,39 @@ def backup_now(data_dir: str | None = None) -> tuple[str, int]:
     count = create_backup_zip(path, data_dir)
     rotate_backups(data_dir=data_dir)
     return path, count
+
+
+def _is_restorable(name: str) -> bool:
+    """文件名是否命中备份模式（memory*.json 等通配也接受）。"""
+    import fnmatch
+
+    return any(fnmatch.fnmatch(name, pat) for pat in BACKUP_PATTERNS)
+
+
+def inspect_backup_zip(zip_path: str) -> list[str]:
+    """列出备份包内可还原的文件；白名单外条目一律拒绝。"""
+    with zipfile.ZipFile(zip_path) as bundle:
+        names = [n for n in bundle.namelist() if not n.endswith("/")]
+    unknown = sorted(n for n in names if not _is_restorable(n))
+    if unknown:
+        raise ValueError(f"备份包含未知文件，拒绝还原：{unknown[:3]}")
+    return names
+
+
+def restore_backup_zip(zip_path: str, data_dir: str | None = None) -> list[str]:
+    """把备份包内容还原到数据目录（覆盖同名文件），返回还原清单。
+
+    仅接受备份模式内的文件名（防伪造包写入任意路径）；调用方应先
+    做一次安全快照（backup_now）再调用。
+    """
+    root = data_dir or DATA_DIR
+    names = inspect_backup_zip(zip_path)
+    root_abs = os.path.abspath(root)
+    with zipfile.ZipFile(zip_path) as bundle:
+        for name in names:
+            target = os.path.abspath(os.path.join(root, name))
+            if os.path.dirname(target) != root_abs:
+                raise ValueError(f"异常路径条目：{name}")
+            with bundle.open(name) as src, open(target, "wb") as dst:
+                dst.write(src.read())
+    return names

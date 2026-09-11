@@ -467,13 +467,13 @@ class ChatToolsTests(unittest.TestCase):
 
     def test_quota_error_unlocks_chat_and_shows_neutral_notice(self):
         self.window.busy = True
-        self.window.send_btn.setEnabled(False)
         self.window._pending_user = "你好"
 
         self.window.on_error("default_quota_exhausted")
 
         self.assertFalse(self.window.busy)
-        self.assertTrue(self.window.send_btn.isEnabled())
+        # 2026-09-12：发送/停止同一颗键，错误恢复后文案回到「发送」。
+        self.assertEqual(self.window.send_btn.text(), "发送")
         self.assertIsNone(self.window._pending_user)
         self.assertFalse(self.window.chat_notice.isHidden())
         self.assertEqual(
@@ -484,7 +484,6 @@ class ChatToolsTests(unittest.TestCase):
 
     def test_provider_error_uses_one_short_player_facing_sentence(self):
         self.window.busy = True
-        self.window.send_btn.setEnabled(False)
         self.window._pending_user = "你好"
 
         self.window.on_error("default_provider_unavailable")

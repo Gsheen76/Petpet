@@ -4,6 +4,8 @@ import json
 import math
 import os
 import random
+import subprocess
+import sys
 import threading
 import time
 from collections import OrderedDict
@@ -2898,6 +2900,29 @@ class PetWindow(QWidget):
         else:
             self.settings_win.s = self.settings
         self.settings_win.show_near_pet()
+
+    def restart_app(self):
+        """退出并立即重启本程序（存档还原后使用，2026-09-12）。
+
+        源码运行走当前解释器（无窗口标志位防控制台闪出），打包版
+        直接重启自身 exe。
+        """
+        if getattr(sys, "frozen", False):
+            args = [sys.executable]
+        else:
+            args = [sys.executable, os.path.abspath(
+                os.path.join(os.path.dirname(__file__), "..", "pet.py"))]
+        try:
+            subprocess.Popen(
+                args, cwd=os.path.abspath(
+                    os.path.join(os.path.dirname(__file__), "..")),
+                creationflags=0x08000000 if sys.platform == "win32" else 0,
+                close_fds=True,
+            )
+        except OSError:
+            return False
+        QApplication.instance().quit()
+        return True
 
     def check_ai_nudge(self):
         """Called from autonomy timer; maybe send a proactive AI nudge."""

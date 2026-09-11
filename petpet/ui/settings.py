@@ -2,6 +2,7 @@
 
 import os
 import time
+import zipfile
 
 from PyQt5.QtCore import QPoint, QRectF, Qt, QTimer, pyqtSignal
 from PyQt5.QtGui import (
@@ -21,13 +22,14 @@ from PyQt5.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QVBoxLayout,
     QWidget,
 )
 
-from petpet.app import backup
+from petpet.app import autostart, backup
 from petpet.app.fonts import APP_FONT_FAMILY
 from petpet.app.paths import SHOP_UI_DIR
 from petpet.app.settings import DEFAULT_SETTINGS, save_settings
@@ -502,8 +504,12 @@ class SettingsWindow(QWidget):
         export_btn = FeedbackButton("导出副本…")
         export_btn.setMinimumHeight(38)
         export_btn.clicked.connect(self.export_backup)
+        restore_btn = FeedbackButton("从备份恢复…")
+        restore_btn.setMinimumHeight(38)
+        restore_btn.clicked.connect(self.restore_backup)
         row_layout.addWidget(backup_btn)
         row_layout.addWidget(export_btn)
+        row_layout.addWidget(restore_btn)
         row_layout.addStretch(1)
         hint = QLabel(
             "备份存档、聊天记忆和设置到 backups/ 目录（自动保留最近 5 份）；"
@@ -540,6 +546,37 @@ class SettingsWindow(QWidget):
             return
         self.status_label.setText(f"已导出 {count} 个文件到 {path}")
 
+    def restore_backup(self):
+        """从备份包还原存档（2026-09-12）：安全快照 → 覆盖 → 自动重启。"""
+        path, _filter = QFileDialog.getOpenFileName(
+            self, "选择备份文件", backup.backup_dir(), "Petpet 备份 (*.zip)")
+        if not path:
+            return
+        try:
+            names = backup.inspect_backup_zip(path)
+        except (OSError, ValueError, zipfile.BadZipFile) as exc:
+            self.status_label.setText(f"无法读取备份：{exc}")
+            return
+        choice = QMessageBox.question(
+            self, "恢复确认",
+            f"该备份包含 {len(names)} 个文件，恢复会覆盖当前数据"
+            "（会先自动做一次安全快照），完成后程序将自动重启。继续？",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        if choice != QMessageBox.Yes:
+            return
+        try:
+            backup.backup_now()
+            restored = backup.restore_backup_zip(path)
+        except (OSError, ValueError, zipfile.BadZipFile) as exc:
+            self.status_label.setText(f"恢复失败：{exc}")
+            return
+        self.status_label.setText(
+            f"已恢复 {len(restored)} 个文件，正在重启…")
+        restart = getattr(self.pet, "restart_app", None)
+        if callable(restart):
+            QTimer.singleShot(600, restart)
+
     def _interface_group(self):
         group = QGroupBox()
         layout = QVBoxLayout(group)
@@ -570,6 +607,22 @@ class SettingsWindow(QWidget):
             control_layout.addWidget(state)
             control_layout.addWidget(switch)
             self._add_row(layout, label, hint, control)
+        if autostart.is_supported():
+            auto = ToggleSwitch()
+            auto.setChecked(autostart.is_enabled())
+
+            def _toggle_autostart(checked):
+                if autostart.set_enabled(checked):
+                    return
+                auto.blockSignals(True)
+                auto.setChecked(not checked)
+                auto.blockSignals(False)
+                self.status_label.setText("写入开机自启动失败")
+
+            auto.toggled.connect(_toggle_autostart)
+            self._add_row(
+                layout, "开机自动启动",
+                "开机后自动把 TA 叫到桌面上（仅 Windows）", auto)
         return group
 
     def _preference_group(self, title, hint, key, labels, field_keys, presets):
