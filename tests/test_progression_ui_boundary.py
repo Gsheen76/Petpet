@@ -230,9 +230,9 @@ def test_outfit_pet_selector_is_framed_and_switches_checked_state(shop_window):
     lunch_button = shop_window.findChild(ui.QPushButton, "outfitPet_lunch_meat")
     ice_button = shop_window.findChild(ui.QPushButton, "outfitPet_ice_cream")
     assert selector is not None
-    # 2026-09-11：二分栏托盘换 chip_bar_2seg 药丸素材（border-image 走
-    # QFrame#outfitPetSelector 专属规则），不再叠 chipBar QSS 托盘属性。
-    assert selector.property("chipBar") is None
+    # 2026-09-11 复原：二分栏药丸素材方案被否决，恢复 chipBar/chipTab
+    # 通用 QSS 托盘（套装/礼物共用）。
+    assert selector.property("chipBar") is True
     assert lunch_button.isChecked() is True
     assert ice_button.isChecked() is False
     # 等分铺满整行：两枚分栏按钮等宽（2026-09-08 用户定稿；
