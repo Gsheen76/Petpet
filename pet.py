@@ -15,21 +15,6 @@ Run: python pet.py
 """
 import sys, os, math, time, json, random, threading
 
-# 原生崩溃转储（2026-09-14 闪退排查轮）：Qt 层访问违例发生时
-# faulthandler 把 Python 栈落到数据目录 crash_dump.log——下一次
-# 崩溃即确诊调用方。启用失败不影响启动。
-try:
-    import faulthandler
-    _crash_log = os.path.join(
-        os.environ.get("LOCALAPPDATA", os.path.expanduser("~")),
-        "Petpet", "crash_dump.log",
-    )
-    os.makedirs(os.path.dirname(_crash_log), exist_ok=True)
-    faulthandler.enable(file=open(_crash_log, "a", encoding="utf-8"),
-                        all_threads=True)
-except Exception:
-    pass
-
 from app_paths import (
     ANIMATIONS_DIR,
     APP_NAME,
@@ -41,6 +26,15 @@ from app_paths import (
     RESOURCE_DIR,
     SOUNDS_DIR,
 )
+
+try:
+    import faulthandler
+    _crash_log = os.path.join(DATA_DIR, "crash_dump.log")
+    os.makedirs(os.path.dirname(_crash_log), exist_ok=True)
+    faulthandler.enable(file=open(_crash_log, "a", encoding="utf-8"),
+                        all_threads=True)
+except Exception:
+    pass
 from petpet.app import state as app_state
 from petpet.app.pets import load_pet_registry
 from petpet.app import pet_window as pet_window_controller

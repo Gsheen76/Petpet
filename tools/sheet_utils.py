@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import numpy as np
 from PIL import Image
-from scipy import ndimage
 
 
 def nonwhite_mask(rgba: Image.Image, threshold: int = 240) -> np.ndarray:
@@ -126,8 +125,8 @@ def soft_matte_from_white(cell: Image.Image, fill_thresh: int = 15,
     # 的相邻像素，直到撞上彩色（色度>25）或深色（<200）屏障；被
     # 彩色轮廓包围的白色内衬（床垫绒面/画框衬纸）不与外部连通，
     # 自动保全。引擎已统一画接地软影，生成图自带阴影直接并入背景。
-    # （旧 ①b「全局无条件清色度≤12 近白」已删——无连通判断会误杀
-    # 家具内部纯白部分，月牙改由本条连通吸收兜底。）
+    # 注：曾有一条「全局无条件清色度≤12 近白」规则，无连通判断
+    # 会误杀家具内部纯白（单元测试抓出后删除），由本条兜底。
     chroma0 = arr0.max(axis=2) - arr0.min(axis=2)
     absorbable = (arr0.min(axis=2) >= 200) & (chroma0 <= 25)
     frontier = bg & absorbable
@@ -141,32 +140,6 @@ def soft_matte_from_white(cell: Image.Image, fill_thresh: int = 15,
         frontier = grown & absorbable & ~absorbed
         absorbed |= frontier
     bg = absorbed
-    # ①c 浅暖白残底（2026-09-12 深夜轮二：茶几腿间 3745px 撕边状白底
-    # 色度 20 出头，逃过 ①b 的色度≤12；且与主体同处一行区间，行界
-    # 判据无效）。判别式：**与彩色主体连通的浅白 = 家具白色部分
-    # （保留）；不与彩色主体连通的孤立浅白块 = 背景残底（清除）**。
-    light_warm = (
-        (arr0.min(axis=2) >= 195)
-        & (chroma0 <= 30)
-        & ~bg
-    )
-    if light_warm.any():
-        # 彩色种子：色度 > 45 的明确彩色主体像素
-        colored = (chroma0 > 45) & ~bg
-        # 把彩色区域膨胀 3px 作为「连通保护带」，浅白块与之相邻即保留
-        protected = colored.copy()
-        for _ in range(3):
-            grown = protected.copy()
-            grown[1:, :] |= protected[:-1, :]
-            grown[:-1, :] |= protected[1:, :]
-            grown[:, 1:] |= protected[:, :-1]
-            grown[:, :-1] |= protected[:, 1:]
-            protected = grown
-        lab, cnt = ndimage.label(light_warm)
-        for k in range(1, cnt + 1):
-            block = lab == k
-            if not (block & protected).any():
-                bg |= block
     if bg.all():
         return Image.new("RGBA", cell.size, (0, 0, 0, 0))
 

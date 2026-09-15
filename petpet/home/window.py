@@ -1001,10 +1001,7 @@ class HomeSceneWindow(QWidget):
         暖棕软影接地。墙面件（挂画/挂钟/状态卡）与地毯不接地，
         返回 None。
         """
-        if decoration_id in {
-            "home_wall_art", "home_wall_clock", "home_status_card",
-            "home_rug",
-        }:
+        if decoration_id in self.WALL_DECORATIONS | {"home_rug"}:
             return None
         definition = progression.HOME_DECORATION_DEFINITIONS.get(
             decoration_id)
@@ -1710,10 +1707,13 @@ class HomeSceneWindow(QWidget):
             self._draw_attention_dot(painter, body.topRight())
         painter.restore()
 
+    # 墙面件集合（2026-09-14 审查清理）：深度层与接地阴影两处共用。
+    WALL_DECORATIONS = frozenset({
+        "home_wall_art", "home_status_card", "home_wall_clock",
+    })
+
     def _furniture_depth_key(self, decoration_id):
-        if decoration_id in {
-            "home_wall_art", "home_status_card", "home_wall_clock",
-        }:
+        if decoration_id in self.WALL_DECORATIONS:
             return (0, 0.0)
         if decoration_id == "home_rug":
             return (1, 0.0)
@@ -1913,8 +1913,6 @@ class HomeSceneWindow(QWidget):
 
     def _deco_max_scroll(self):
         """装修卡片列表的最大滚动偏移（内容不超出则 0）。"""
-        import math
-
         panel = self._panel_rect()
         items = self._visible_decoration_ids()
         rows = max(1, math.ceil(len(items) / 2))
@@ -2011,8 +2009,6 @@ class HomeSceneWindow(QWidget):
         # 提示可滚（滚轮滚动见 wheelEvent）。
         max_scroll = self._deco_max_scroll()
         if max_scroll > 0:
-            import math
-
             items = self._visible_decoration_ids()
             rows = max(1, math.ceil(len(items) / 2))
             content_h = rows * HOME_DECORATION_CARD_STEP

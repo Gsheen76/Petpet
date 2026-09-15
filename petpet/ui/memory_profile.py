@@ -112,6 +112,7 @@ class MemoryProfileDialog(QDialog):
     """查看并编辑「TA 记住的我」六栏档案；accept 后读 result_facts。"""
 
     def __init__(self, facts, pet_name="", parent=None):
+        self._pet_name = str(pet_name or "")
         super().__init__(
             parent,
             Qt.Dialog | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint,
@@ -336,7 +337,8 @@ class MemoryProfileDialog(QDialog):
             self, "导出档案", default_name, "JSON 文件 (*.json)")
         if not path:
             return
-        payload = facts_to_json(self.collect_edits(), pet_name="")
+        payload = facts_to_json(
+            self.collect_edits(), pet_name=self._pet_name)
         try:
             with open(path, "w", encoding="utf-8") as handle:
                 handle.write(payload)

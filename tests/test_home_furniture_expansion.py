@@ -118,6 +118,7 @@ class CozyBatch2FurnitureTests(unittest.TestCase):
         self.assertEqual(
             HomeSceneWindow._furniture_depth_key(
                 SimpleNamespace(
+                    WALL_DECORATIONS=HomeSceneWindow.WALL_DECORATIONS,
                     selection_bounds=lambda _id: SimpleNamespace(
                         bottom=lambda: 9999),
                 ),
