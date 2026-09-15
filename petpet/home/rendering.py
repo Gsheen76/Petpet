@@ -10,6 +10,7 @@ from PyQt5.QtCore import QPointF, QRect, QRectF, Qt
 from PyQt5.QtGui import (
     QBitmap,
     QColor,
+    QFont,
     QLinearGradient,
     QPainter,
     QPen,
@@ -85,8 +86,18 @@ HOME_PET_SLEEP_CONTENT_RECT = QRect(24, 176, 592, 288)
 HOME_NAV_PAW_CONTENT_RECT = QRect(118, 166, 1019, 943)
 HOME_NAV_TARGET_CONTENT_RECT = QRect(218, 113, 1379, 636)
 HOME_NAV_ARROW_CONTENT_RECT = QRect(178, 169, 668, 1144)
-HOME_STATUS_CARD_SIZE = (420, 270)
+HOME_STATUS_CARD_SIZE = (420, 278)
 HOME_STATUS_CARD_RENDER_SCALE = 2
+# 状态卡新底板（2026-09-13 用户定稿素材：暖木挂牌 + 三条凹槽）。
+_STATUS_CARD_ART_PATH = os.path.join(SCENES_DIR, "status_card.png")
+# 凹槽区（按 status_card.png 420×278 实测，y 区间 × 横向布局）：
+# 三槽 y 95-135 / 147-186 / 199-238，左侧圆图标 cx≈70，槽内右缘 x≈378。
+STATUS_CARD_GROOVES = (
+    QRectF(52, 95, 328, 40),
+    QRectF(52, 147, 328, 40),
+    QRectF(52, 199, 328, 40),
+)
+STATUS_CARD_GROOVE_ICON_CX = 71
 HOME_PET_BACK_WALK_FRAME_TOPS = (68, 73, 79, 73, 57, 47, 47, 61)
 HOME_PET_FRONT_CONTACTS = (
     (0.5547, 0.1523, 0.9784),
@@ -130,6 +141,12 @@ HOME_FURNITURE_PATHS = {
         HOME_FURNITURE_DIR, "round_table.png"),
     "home_toy_basket": os.path.join(
         HOME_FURNITURE_DIR, "toy_basket.png"),
+    # 家具第二批（2026-09-12）。
+    "home_wall_clock": os.path.join(HOME_FURNITURE_DIR, "clock.png"),
+    "home_cat_tree": os.path.join(HOME_FURNITURE_DIR, "cat_tree.png"),
+    "home_pet_bed": os.path.join(HOME_FURNITURE_DIR, "pet_bed.png"),
+    "home_rocking_chair": os.path.join(
+        HOME_FURNITURE_DIR, "rocking_chair.png"),
 }
 # 分栏合并（2026-09-10）：7 类归并为 家具/装饰/玩具。
 HOME_DECORATION_CATEGORIES = (
@@ -148,17 +165,13 @@ HOME_DECORATION_CATEGORY_BY_ID = {
     "home_bookshelf": "furniture",
     "home_round_table": "furniture",
     "home_toy_basket": "toy",
+    # 家具第二批（2026-09-12）：挂钟归装饰（墙面）、猫爬架归玩具，
+    # 软垫小床与摇椅归家具。
+    "home_wall_clock": "decor",
+    "home_cat_tree": "toy",
+    "home_pet_bed": "furniture",
+    "home_rocking_chair": "furniture",
 }
-
-
-def home_status_card_value_rects(size=HOME_STATUS_CARD_SIZE):
-    """Return logical value columns wide enough for a full 100% label."""
-
-    width = int(size[0])
-    return tuple(
-        QRectF(width - 98, 80 + index * 57, 68, 45)
-        for index in range(3)
-    )
 
 
 _STATUS_CARD_CACHE: dict[str, object] = {}
@@ -188,6 +201,80 @@ def render_home_status_card(state, size=HOME_STATUS_CARD_SIZE):
     return pixmap
 
 
+_STATUS_CARD_ART_CACHE = {}
+
+
+def render_status_card_art(size=HOME_STATUS_CARD_SIZE):
+    """状态卡底板图（用户定稿素材，无任何文字）。
+
+    家园场景按显示尺寸取图后**以场景画笔实时叠画状态内容**——
+    文字按最终显示分辨率栅格化，不经过位图缩放，任何缩放下都清晰
+    （2026-09-14 模糊修复核心）。
+    """
+    key = (int(size[0]), int(size[1]))
+    art = _STATUS_CARD_ART_CACHE.get(key)
+    if art is None:
+        art = QPixmap(_STATUS_CARD_ART_PATH)
+        if not art.isNull() and (art.width(), art.height()) != key:
+            art = art.scaled(
+                key[0], key[1], Qt.KeepAspectRatioByExpanding,
+                Qt.SmoothTransformation,
+            )
+        _STATUS_CARD_ART_CACHE[key] = art
+    return art
+
+
+def draw_status_card_overlay(painter, state, size=HOME_STATUS_CARD_SIZE):
+    """在已画好的状态卡底板上实时绘制状态内容（圆点/标签/进度条）。
+
+    由家园场景以场景画笔直接调用：文字按最终显示分辨率栅格化。
+    无名字、无百分比（2026-09-14 用户修订）。
+    """
+    painter.save()
+    painter.setRenderHint(QPainter.TextAntialiasing)
+    font = painter.font()
+    font.setFamily("Microsoft YaHei")
+    stats = (
+        ("饱腹", state.get("hunger", 0), QColor("#f2a166")),
+        ("心情", state.get("mood", 0), QColor("#ef91a2")),
+        ("精力", state.get("energy", 0), QColor("#9a8bd5")),
+    )
+    for index, (label, raw_value, color) in enumerate(stats):
+        try:
+            value = max(0.0, min(100.0, float(raw_value)))
+        except (TypeError, ValueError, OverflowError):
+            value = 0.0
+        groove = STATUS_CARD_GROOVES[index]
+        center_y = groove.center().y()
+        # 槽内左圆是图里自带的图标位：点一颗状态色圆点。
+        painter.setPen(QPen(QColor(255, 252, 246, 220), 1.5))
+        painter.setBrush(color)
+        painter.drawEllipse(QRectF(
+            STATUS_CARD_GROOVE_ICON_CX - 9, center_y - 9, 18, 18))
+        # 2026-09-14 模糊二修（用户方向）：去加粗（小字号粗体中文
+        # 笔画粘连发糊）+ 21px + 像素网格对齐（半像素偏移会让小字
+        # 发虚——y 取整，文字矩形贴整数栅格）。
+        font.setPixelSize(21)
+        font.setBold(False)
+        font.setWeight(QFont.Normal)
+        painter.setFont(font)
+        painter.setPen(QColor("#5a3d28"))
+        text_y = round(center_y) - 11
+        painter.drawText(
+            QRectF(88, text_y, 60, 22), Qt.AlignVCenter, label)
+        track = QRectF(152, center_y - 7, 216, 14)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(120, 82, 60, 40))
+        painter.drawRoundedRect(track, 7, 7)
+        fill = QRectF(
+            track.left(), track.top(),
+            track.width() * value / 100.0, track.height(),
+        )
+        painter.setBrush(color)
+        painter.drawRoundedRect(fill, 7, 7)
+    painter.restore()
+
+
 def _render_status_card_uncached(state, size=HOME_STATUS_CARD_SIZE):
 
     width, height = (int(size[0]), int(size[1]))
@@ -201,73 +288,13 @@ def _render_status_card_uncached(state, size=HOME_STATUS_CARD_SIZE):
     painter.setRenderHint(QPainter.TextAntialiasing)
     painter.scale(HOME_STATUS_CARD_RENDER_SCALE, HOME_STATUS_CARD_RENDER_SCALE)
 
-    shadow = QRectF(7, 9, width - 14, height - 15)
-    painter.setPen(Qt.NoPen)
-    painter.setBrush(QColor(105, 67, 48, 42))
-    painter.drawRoundedRect(shadow, 24, 24)
-
-    card = QRectF(4, 4, width - 14, height - 15)
-    background = QLinearGradient(card.topLeft(), card.bottomRight())
-    background.setColorAt(0.0, QColor("#fffdf6"))
-    background.setColorAt(1.0, QColor("#fff1df"))
-    painter.setBrush(background)
-    painter.setPen(QPen(QColor("#edc4aa"), 2.5))
-    painter.drawRoundedRect(card, 24, 24)
-
-    font = painter.font()
-    font.setFamily("Microsoft YaHei")
-    font.setPixelSize(26)
-    font.setBold(True)
-    painter.setFont(font)
-    painter.setPen(QColor("#7b4d3a"))
-    name = str(state.get("pet_name", "小狗")).strip() or "小狗"
-    painter.drawText(QRectF(28, 18, width - 56, 38), Qt.AlignVCenter, name)
-    painter.setPen(QPen(QColor("#f4ba95"), 1.5))
-    painter.drawLine(QPointF(28, 65), QPointF(width - 30, 65))
-
-    stats = (
-        ("饱腹", state.get("hunger", 0), QColor("#f2a166")),
-        ("心情", state.get("mood", 0), QColor("#ef91a2")),
-        ("精力", state.get("energy", 0), QColor("#9a8bd5")),
-    )
-    font.setPixelSize(18)
-    font.setBold(True)
-    painter.setFont(font)
-    value_rects = home_status_card_value_rects(size)
-    for index, (label, raw_value, color) in enumerate(stats):
-        try:
-            value = max(0.0, min(100.0, float(raw_value)))
-        except (TypeError, ValueError, OverflowError):
-            value = 0.0
-        top = 80 + index * 57
-        row = QRectF(22, top, width - 44, 45)
-        tint = QColor(color)
-        tint.setAlpha(32)
-        painter.setBrush(tint)
-        painter.setPen(QPen(QColor(color).lighter(125), 1.2))
-        painter.drawRoundedRect(row, 15, 15)
-        icon = QRectF(32, top + 7, 31, 31)
-        painter.setBrush(QColor(255, 255, 255, 210))
-        painter.setPen(Qt.NoPen)
-        painter.drawEllipse(icon)
-        painter.setBrush(color)
-        painter.drawEllipse(QRectF(icon.center().x() - 7, icon.center().y() - 7, 14, 14))
-        painter.setPen(QColor("#79584a"))
-        painter.drawText(QRectF(75, top, 54, 45), Qt.AlignVCenter, label)
-        value_rect = value_rects[index]
-        track = QRectF(134, top + 18, value_rect.left() - 148, 11)
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor("#f4e4d9"))
-        painter.drawRoundedRect(track, 5.5, 5.5)
-        fill = QRectF(track.left(), track.top(), track.width() * value / 100.0, track.height())
-        painter.setBrush(color)
-        painter.drawRoundedRect(fill, 5.5, 5.5)
-        painter.setPen(QColor("#8f6857"))
-        painter.drawText(
-            value_rect,
-            Qt.AlignRight | Qt.AlignVCenter,
-            f"{int(round(value))}%",
+    art = render_status_card_art((width, height))
+    if not art.isNull():
+        painter.drawPixmap(
+            QRectF(0, 0, width, height), art,
+            QRectF(0, 0, art.width(), art.height()),
         )
+    draw_status_card_overlay(painter, state, size)
     painter.end()
     return pixmap
 

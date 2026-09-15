@@ -527,12 +527,10 @@ class HomeSceneAssetTests(unittest.TestCase):
         after = home_scene.render_home_status_card(state).toImage()
 
         self.assertFalse(before.isNull())
-        self.assertEqual(before.size(), QSize(840, 540))
+        self.assertEqual(before.size(), QSize(840, 556))
         self.assertEqual(before.size(), after.size())
         self.assertNotEqual(before, after)
-        self.assertEqual(home_scene.HOME_STATUS_CARD_SIZE, (420, 270))
-        for rect in home_scene.home_status_card_value_rects():
-            self.assertGreaterEqual(rect.width(), 64)
+        self.assertEqual(home_scene.HOME_STATUS_CARD_SIZE, (420, 278))
 
     def test_home_action_buttons_are_compact_vertical_controls_with_a_shared_width(self):
         state = progression.ensure_progression({})
@@ -608,17 +606,21 @@ class HomeSceneAssetTests(unittest.TestCase):
         self.assertFalse(scene._menu_open)
 
     def test_furniture_assets_match_their_authored_scene_sizes(self):
-        expected_sizes = {
-            "home_rug": (440, 270),
-            "home_sofa": (360, 225),
-            "home_plant": (190, 340),
-            "home_wall_art": (220, 285),
-        }
-        for decoration_id, expected_size in expected_sizes.items():
+        # 尺寸以定义为单一事实源（2026-09-12 起素材按实测比例重制，
+        # 硬编码尺寸表会随每轮素材漂移腐化）。
+        for decoration_id in (
+            "home_rug", "home_sofa", "home_plant", "home_wall_art",
+        ):
+            expected_size = tuple(
+                progression.HOME_DECORATION_DEFINITIONS[decoration_id]["size"]
+            )
             pixmap = home_scene.QPixmap(
                 home_scene.HOME_FURNITURE_PATHS[decoration_id]
             )
-            self.assertEqual((pixmap.width(), pixmap.height()), expected_size)
+            self.assertEqual(
+                (pixmap.width(), pixmap.height()), expected_size,
+                decoration_id,
+            )
 
     def test_board_geometry_uses_scene_math_and_saved_position(self):
         rect = home_scene.board_geometry(QRect(0, 0, 1920, 1080))
@@ -700,6 +702,7 @@ class HomeSceneAssetTests(unittest.TestCase):
     def test_dragged_furniture_is_saved_in_world_coordinates(self):
         state = progression.ensure_progression({"pet_coins": 500})
         progression.purchase_home_decoration(state, "home_sofa")
+        progression.place_home_decoration(state, "home_sofa")
         pet = SimpleNamespace(
             state=state,
             x=lambda: 400,
@@ -728,6 +731,7 @@ class HomeSceneAssetTests(unittest.TestCase):
     def test_furniture_cannot_move_when_decoration_mode_is_off(self):
         state = progression.ensure_progression({"pet_coins": 500})
         progression.purchase_home_decoration(state, "home_sofa")
+        progression.place_home_decoration(state, "home_sofa")
         pet = SimpleNamespace(
             state=state,
             width=lambda: 190,
@@ -1183,6 +1187,7 @@ class HomeSceneAssetTests(unittest.TestCase):
     def test_home_sleep_target_prefers_placed_rug_center_and_tracks_moves(self):
         state = progression.ensure_progression({"pet_coins": 500})
         progression.purchase_home_decoration(state, "home_rug")
+        progression.place_home_decoration(state, "home_rug")
         pet = SimpleNamespace(
             state=state,
             width=lambda: 190,
@@ -1194,7 +1199,7 @@ class HomeSceneAssetTests(unittest.TestCase):
         scene = home_scene.HomeSceneWindow(pet, Mock())
         self.addCleanup(scene.close)
 
-        self.assertEqual(scene.home_sleep_target(), (840.0, 565.0))
+        self.assertEqual(scene.home_sleep_target(), (845.0, 528.0))
 
         progression.set_home_decoration_position(
             state,
@@ -1202,11 +1207,12 @@ class HomeSceneAssetTests(unittest.TestCase):
             700,
             430,
         )
-        self.assertEqual(scene.home_sleep_target(), (920.0, 565.0))
+        self.assertEqual(scene.home_sleep_target(), (925.0, 528.0))
 
     def test_home_sleep_target_falls_back_when_rug_is_stored(self):
         state = progression.ensure_progression({"pet_coins": 500})
         progression.purchase_home_decoration(state, "home_rug")
+        progression.place_home_decoration(state, "home_rug")
         progression.store_home_decoration(state, "home_rug")
         pet = SimpleNamespace(
             state=state,
@@ -1286,6 +1292,7 @@ class HomeSceneAssetTests(unittest.TestCase):
             {"energy": 100.0, "pet_coins": 500}
         )
         progression.purchase_home_decoration(state, "home_rug")
+        progression.place_home_decoration(state, "home_rug")
         pet = SimpleNamespace(
             state=state,
             width=lambda: 190,
@@ -1487,6 +1494,7 @@ class HomeSceneAssetTests(unittest.TestCase):
             "home_wall_art",
         ):
             progression.purchase_home_decoration(state, item_id)
+            progression.place_home_decoration(state, item_id)
         pet = SimpleNamespace(
             state=state,
             width=lambda: 190,
@@ -1653,7 +1661,9 @@ class HomeSceneAssetTests(unittest.TestCase):
     def test_navigation_layer_sits_above_rug_and_below_pet_and_sofa(self):
         state = progression.ensure_progression({"pet_coins": 1000})
         progression.purchase_home_decoration(state, "home_rug")
+        progression.place_home_decoration(state, "home_rug")
         progression.purchase_home_decoration(state, "home_sofa")
+        progression.place_home_decoration(state, "home_sofa")
         pet = SimpleNamespace(
             state=state,
             width=lambda: 190,
@@ -1755,7 +1765,9 @@ class HomeSceneAssetTests(unittest.TestCase):
     def test_decoration_panel_is_a_left_sidebar_with_image_cards(self):
         state = progression.ensure_progression({"pet_coins": 1000})
         progression.purchase_home_decoration(state, "home_sofa")
+        progression.place_home_decoration(state, "home_sofa")
         progression.purchase_home_decoration(state, "home_plant")
+        progression.place_home_decoration(state, "home_plant")
         pet = SimpleNamespace(
             state=state,
             width=lambda: 190,
@@ -1791,6 +1803,7 @@ class HomeSceneAssetTests(unittest.TestCase):
     def test_selection_overlay_uses_warm_rounded_controls(self):
         state = progression.ensure_progression({"pet_coins": 500})
         progression.purchase_home_decoration(state, "home_sofa")
+        progression.place_home_decoration(state, "home_sofa")
         pet = SimpleNamespace(
             state=state,
             width=lambda: 190,
@@ -1825,6 +1838,7 @@ class HomeSceneAssetTests(unittest.TestCase):
         state = progression.ensure_progression({"pet_coins": 2000})
         for item_id in ("home_rug", "home_sofa", "home_plant", "home_wall_art"):
             progression.purchase_home_decoration(state, item_id)
+            progression.place_home_decoration(state, item_id)
         pet = SimpleNamespace(
             state=state,
             width=lambda: 190,
@@ -1874,6 +1888,7 @@ class HomeSceneAssetTests(unittest.TestCase):
     def test_selected_furniture_supports_ppt_style_move_scale_and_rotation(self):
         state = progression.ensure_progression({"pet_coins": 500})
         progression.purchase_home_decoration(state, "home_sofa")
+        progression.place_home_decoration(state, "home_sofa")
         pet = SimpleNamespace(
             state=state,
             width=lambda: 190,
@@ -1901,7 +1916,8 @@ class HomeSceneAssetTests(unittest.TestCase):
         self.assertTrue(scene.begin_furniture_gesture(handles["se"].center().toPoint()))
         scene.end_furniture_gesture(bounds.center().toPoint() + QPoint(216, 135))
         self.assertAlmostEqual(
-            progression.home_decoration_transform(state, "home_sofa")["scale"], 1.2
+            # 沙发新高 197（2026-09-12 重制）→ 纵轴主导比例 ≈1.376
+            progression.home_decoration_transform(state, "home_sofa")["scale"], 1.376
             , places=2
         )
 
@@ -1920,6 +1936,7 @@ class HomeSceneAssetTests(unittest.TestCase):
     def test_decoration_mode_can_store_and_transform_owned_furniture(self):
         state = progression.ensure_progression({"pet_coins": 500})
         progression.purchase_home_decoration(state, "home_sofa")
+        progression.place_home_decoration(state, "home_sofa")
         pet = SimpleNamespace(
             state=state,
             width=lambda: 190,
@@ -1943,6 +1960,7 @@ class HomeSceneAssetTests(unittest.TestCase):
     def test_owned_furniture_can_be_rendered_with_a_transform(self):
         state = progression.ensure_progression({"pet_coins": 500})
         progression.purchase_home_decoration(state, "home_sofa")
+        progression.place_home_decoration(state, "home_sofa")
         pet = SimpleNamespace(
             state=state,
             width=lambda: 190,
@@ -1968,6 +1986,7 @@ class HomeSceneAssetTests(unittest.TestCase):
     def test_decoration_draws_bottom_panel_and_selected_handles(self):
         state = progression.ensure_progression({"pet_coins": 500})
         progression.purchase_home_decoration(state, "home_sofa")
+        progression.place_home_decoration(state, "home_sofa")
         pet = SimpleNamespace(
             state=state,
             width=lambda: 190,
@@ -2112,3 +2131,352 @@ class HomeMenuPetProfileTests(unittest.TestCase):
         self.assertTrue(scene.handle_scene_click(rects["pets"].center()))
         pet.open_pet_profile.assert_called_once_with()
         self.assertFalse(scene._menu_open)
+
+
+class FurnitureOcclusionTests(unittest.TestCase):
+    """家具前后遮挡（2026-09-12 优化轮）。
+
+    契约：① 装修模式中选中/拖拽中的家具置顶渲染（定位时不被别的
+    家具半遮）；② 宠物按脚底 y 与家具底边排序，夹在后景与前景
+    家具之间。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def _scene(self, owned, positions=None):
+        state = progression.ensure_progression({})
+        state["owned_home_decorations"] = list(owned)
+        state["home_decoration_positions"] = dict(positions or {})
+        pet = SimpleNamespace(
+            state=state,
+            width=lambda: 190,
+            height=lambda: 220,
+            current_screen_rect=lambda: QRect(0, 0, 1920, 1080),
+        )
+        scene = home_scene.HomeSceneWindow(pet, Mock())
+        self.addCleanup(scene.close)
+        return scene
+
+    def test_selected_furniture_renders_on_top_while_decorating(self):
+        scene = self._scene(["home_rug", "home_sofa", "home_lamp"])
+        scene.state["home_scene"]["decorating"] = True
+        scene._selected_furniture = "home_rug"
+
+        entries = scene._scene_render_entries()
+
+        ids = [item_id for _key, kind, item_id in entries
+               if kind == "furniture"]
+        self.assertEqual(ids[-1], "home_rug",
+                         "选中/拖拽中的家具应最后绘制（置顶）")
+
+    def test_pet_sorts_between_back_and_front_furniture(self):
+        # 位置=左上角；底边：灯 100+330=430（后） < 宠物脚 500
+        # < 藤篮 560+150=710（前）。
+        scene = self._scene(
+            ["home_lamp", "home_toy_basket"],
+            {"home_lamp": {"x": 60, "y": 100},
+             "home_toy_basket": {"x": 470, "y": 560}},
+        )
+        scene.home_pet.position = (400.0, 500.0)
+        with patch.object(scene, "home_pet_visible", return_value=True):
+            entries = scene._scene_render_entries()
+
+        keys = {item_id: key for key, kind, item_id in entries}
+        order = [item_id for _key, kind, item_id in entries]
+        self.assertEqual(
+            order.index("home_lamp") < order.index("home_pet")
+            < order.index("home_toy_basket"),
+            True,
+            "宠物应夹在后景家具与前景家具之间",
+        )
+        self.assertLess(keys["home_lamp"], keys["home_pet"])
+        self.assertLess(keys["home_pet"], keys["home_toy_basket"])
+
+
+class OcclusionFlipLogTests(unittest.TestCase):
+    """遮挡闪烁排查埋点（2026-09-12 排查轮）。
+
+    深度键翻转（宠物与家具相对层变化）必须落一行日志；
+    无翻转的帧零输出——埋点不改变渲染行为。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_flip_writes_log_line_and_stable_frames_are_silent(self):
+        import tempfile
+
+        state = progression.ensure_progression({})
+        state["owned_home_decorations"] = ["home_lamp"]
+        state["home_decoration_positions"] = {
+            "home_lamp": {"x": 60, "y": 100},   # 底边 430
+        }
+        pet = SimpleNamespace(
+            state=state,
+            width=lambda: 190,
+            height=lambda: 220,
+            current_screen_rect=lambda: QRect(0, 0, 1920, 1080),
+        )
+        scene = home_scene.HomeSceneWindow(pet, Mock())
+        self.addCleanup(scene.close)
+        with tempfile.TemporaryDirectory() as tmp:
+            log_path = os.path.join(tmp, "occl.log")
+            with patch.object(scene, "_occlusion_log_path",
+                              return_value=log_path), \
+                    patch.object(scene, "home_pet_visible",
+                                 return_value=True):
+                # 第一帧（建立基线）：宠物在后（500 < 430? 否——500>430 前景）
+                scene.home_pet.position = (400.0, 500.0)
+                scene._scene_render_entries()
+                self.assertFalse(os.path.exists(log_path),
+                                 "首帧只建基线，不应有翻转日志")
+                # 同层稳定几帧：零输出
+                scene.home_pet.position = (400.0, 501.0)
+                scene._scene_render_entries()
+                scene.home_pet.position = (400.0, 502.0)
+                scene._scene_render_entries()
+                self.assertFalse(os.path.exists(log_path),
+                                 "层未翻转的帧必须零输出")
+                # 翻转：宠物退到灯后（400 < 430）
+                scene.home_pet.position = (400.0, 400.0)
+                scene._scene_render_entries()
+                self.assertTrue(os.path.exists(log_path))
+                with open(log_path, encoding="utf-8") as handle:
+                    content = handle.read()
+                self.assertIn("home_lamp", content)
+                self.assertIn("flip", content)
+                # 稳定帧后再次翻转回到前景：第二行
+                scene.home_pet.position = (400.0, 500.0)
+                scene._scene_render_entries()
+                with open(log_path, encoding="utf-8") as handle:
+                    self.assertEqual(len(handle.read().strip().splitlines()), 2)
+
+
+class FurnitureGroundShadowTests(unittest.TestCase):
+    """家具引擎级接地软影（2026-09-12「像没抠干净」治本轮）。
+
+    新素材家具主体大面积亮白且无绘制阴影，压在奶油地板上糊成
+    一片——统一在引擎侧给地面家具脚下画软影（墙面件/地毯除外）。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def _scene(self):
+        state = progression.ensure_progression({})
+        pet = SimpleNamespace(
+            state=state,
+            width=lambda: 190,
+            height=lambda: 220,
+            current_screen_rect=lambda: QRect(0, 0, 1920, 1080),
+        )
+        scene = home_scene.HomeSceneWindow(pet, Mock())
+        self.addCleanup(scene.close)
+        return scene
+
+    def test_floor_furniture_gets_shadow_grounding(self):
+        from PyQt5.QtCore import QRectF
+
+        scene = self._scene()
+        for item_id in ("home_sofa", "home_lamp", "home_rocking_chair"):
+            rect = scene._furniture_shadow_rect(item_id)
+            self.assertIsInstance(rect, QRectF, item_id)
+            definition = progression.HOME_DECORATION_DEFINITIONS[item_id]
+            w, h = definition["size"]
+            self.assertGreater(rect.width(), w * 0.6, item_id)
+            self.assertLess(rect.height(), h * 0.4, item_id)
+
+    def test_wall_and_rug_furniture_get_no_shadow(self):
+        scene = self._scene()
+        for item_id in ("home_wall_art", "home_wall_clock",
+                        "home_status_card", "home_rug"):
+            self.assertIsNone(scene._furniture_shadow_rect(item_id), item_id)
+
+
+class DecoPanelScrollTests(unittest.TestCase):
+    """装修面板滚动（2026-09-13 修复：13 件家具超出面板可视区且无法
+    滚动，底部卡片不可达）。契约：卡位随滚动偏移上移、偏移钳制在
+    内容高度内、类目切换归零。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def _scene(self, owned):
+        state = progression.ensure_progression({})
+        state["owned_home_decorations"] = list(owned)
+        state["home_decoration_positions"] = {}
+        pet = SimpleNamespace(
+            state=state,
+            width=lambda: 190,
+            height=lambda: 220,
+            current_screen_rect=lambda: QRect(0, 0, 1920, 1080),
+        )
+        scene = home_scene.HomeSceneWindow(pet, Mock())
+        self.addCleanup(scene.close)
+        return scene
+
+    ALL12 = (
+        "home_rug", "home_sofa", "home_plant", "home_wall_art",
+        "home_lamp", "home_bookshelf", "home_round_table",
+        "home_toy_basket", "home_wall_clock", "home_cat_tree",
+        "home_pet_bed", "home_rocking_chair",
+    )
+
+    def test_full_inventory_overflows_and_scrolls(self):
+        from petpet.home.rendering import (
+            HOME_DECORATION_CARD_STEP, HOME_DECORATION_CARD_TOP,
+        )
+
+        scene = self._scene(self.ALL12)
+        scene.resize(938, 768)
+        self.assertGreater(
+            scene._deco_max_scroll(), 0, "13 件应超出可视区需要滚动")
+        top_before = scene._item_card_rects()["home_rug"].y()
+        scene._apply_deco_scroll(1)
+        self.assertEqual(scene._deco_scroll, HOME_DECORATION_CARD_STEP)
+        self.assertEqual(
+            scene._item_card_rects()["home_rug"].y(),
+            top_before - HOME_DECORATION_CARD_STEP,
+        )
+        # 过滚钳制
+        scene._apply_deco_scroll(99)
+        self.assertEqual(scene._deco_scroll, scene._deco_max_scroll())
+        scene._apply_deco_scroll(-99)
+        self.assertEqual(scene._deco_scroll, 0)
+
+    def test_category_switch_resets_scroll(self):
+        scene = self._scene(self.ALL12)
+        scene.resize(938, 768)
+        scene._apply_deco_scroll(2)
+        scene._decoration_category = "furniture"
+        scene._sync_deco_scroll()
+        self.assertEqual(scene._deco_scroll, 0)
+
+    def test_small_inventory_has_no_scroll(self):
+        scene = self._scene(("home_rug", "home_sofa", "home_lamp"))
+        scene.resize(938, 768)
+        self.assertEqual(scene._deco_max_scroll(), 0)
+        scene._apply_deco_scroll(3)
+        self.assertEqual(scene._deco_scroll, 0)
+
+
+class StatusCardOverlayAlignmentTests(unittest.TestCase):
+    """状态卡 overlay 对齐（2026-09-14 修复轮）。
+
+    坑位：_draw_furniture 的坐标系是中心锚定（底图画在
+    (-w/2,-h/2)~(w/2,h/2)），overlay 曾按 (0,0) 起点画，全部内容
+    偏移 (+w/2,+h/2)。契约：饱腹彩点必须落在卡内图标位
+    （卡左上角 + (71,115)）上——用像素颜色断言，不依赖字体。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_hunger_dot_paints_inside_card_groove(self):
+        state = progression.ensure_progression(
+            {"hunger": 90, "mood": 50, "energy": 50})
+        state["owned_home_decorations"] = ["home_status_card"]
+        state["home_decoration_positions"] = {
+            "home_status_card": {"x": 100, "y": 100},
+        }
+        pet = SimpleNamespace(
+            state=state,
+            width=lambda: 190,
+            height=lambda: 220,
+            current_screen_rect=lambda: QRect(0, 0, 1920, 1080),
+        )
+        scene = home_scene.HomeSceneWindow(pet, Mock())
+        self.addCleanup(scene.close)
+        scene.resize(938, 768)
+        scene._camera_x = 0
+
+        image = scene.grab().toImage()
+        # 卡左上角 = (画布偏移+100, 100)；彩点中心 = (+71, +115)。
+        offset_x = scene._scene_content_offset()
+        dot = image.pixelColor(offset_x + 171, 215)
+        self.assertGreater(dot.red(), 180, f"彩点未落在图标位: {dot.name()}")
+        self.assertLess(dot.blue(), 150, f"该处不是橙色圆点: {dot.name()}")
+
+
+class OcclusionHysteresisTests(unittest.TestCase):
+    """遮挡滞回带（2026-09-14 闪烁修复）。
+
+    日志实锤：翻转时键差中位 1.1px——宠物在家具底线附近 ±几像素
+    晃动即来回换层（肉眼=闪烁）。契约：相对层确立后，|diff|<6px
+    内保持上一帧层级；越带才翻转。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def _scene(self):
+        state = progression.ensure_progression({})
+        state["owned_home_decorations"] = ["home_lamp", "home_toy_basket"]
+        state["home_decoration_positions"] = {
+            "home_lamp": {"x": 60, "y": 100},        # 底边 430
+            "home_toy_basket": {"x": 470, "y": 660},  # 底边 810（对照组）
+        }
+        pet = SimpleNamespace(
+            state=state,
+            width=lambda: 190,
+            height=lambda: 220,
+            current_screen_rect=lambda: QRect(0, 0, 1920, 1080),
+        )
+        scene = home_scene.HomeSceneWindow(pet, Mock())
+        self.addCleanup(scene.close)
+        return scene
+
+    def _order(self, scene):
+        return [item_id for _k, kind, item_id in scene._scene_render_entries()]
+
+    def test_rank_holds_inside_band_and_flips_beyond(self):
+        scene = self._scene()
+        with patch.object(scene, "home_pet_visible", return_value=True):
+            # 远在前（diff=+30）确立「宠物在前」
+            scene.home_pet.position = (400.0, 460.0)
+            scene._scene_render_entries()
+            order = self._order(scene)
+            self.assertLess(order.index("home_lamp"), order.index("home_pet"))
+
+            # 退回带内（diff=-2）：必须保持宠物在前（滞回）
+            scene.home_pet.position = (400.0, 428.0)
+            order_hold = self._order(scene)
+            self.assertLess(
+                order_hold.index("home_lamp"),
+                order_hold.index("home_pet"),
+                "带内必须保持上一帧层级",
+
+            )
+            # 越带（diff=-10）：允许翻转成宠物在后
+            scene.home_pet.position = (400.0, 420.0)
+            order_flip = self._order(scene)
+            self.assertLess(
+                order_flip.index("home_pet"),
+                order_flip.index("home_lamp"),
+                "越带后应正常翻转",
+            )
+
+            # 再带内回晃（diff=+4）：保持「宠物在后」不回跳
+            scene.home_pet.position = (400.0, 434.0)
+            order_hold2 = self._order(scene)
+            self.assertLess(
+                order_hold2.index("home_pet"),
+                order_hold2.index("home_lamp"),
+                "带内回晃不得回跳",
+            )
+
+    def test_control_item_sorts_normally(self):
+        scene = self._scene()
+        with patch.object(scene, "home_pet_visible", return_value=True):
+            scene.home_pet.position = (400.0, 460.0)
+            scene._scene_render_entries()
+            order = self._order(scene)
+            # 藤篮底边 810 >> pet 460：宠物在藤篮后
+            self.assertLess(order.index("home_pet"), order.index("home_toy_basket"))

@@ -294,17 +294,30 @@ class AiConfigTests(unittest.TestCase):
             ai.clean_assistant_reply("我在呀（摇摇"), "我在呀"
         )
 
-    def test_clean_assistant_reply_collapses_only_extra_blank_lines(self):
+    def test_clean_assistant_reply_merges_all_line_breaks(self):
         self.assertEqual(
-            ai.clean_assistant_reply("第一句\n\n  第二句"), "第一句\n第二句"
+            ai.clean_assistant_reply("第一句\n\n  第二句"), "第一句第二句"
         )
 
-    def test_clean_assistant_reply_collapses_inline_spaces_and_tabs_per_line(self):
+    def test_clean_assistant_reply_merges_break_after_first_sentence(self):
+        self.assertEqual(
+            ai.clean_assistant_reply(
+                "那可不行，你要是生气不理我，我会很难过的。\n快过来让我抱抱。"
+            ),
+            "那可不行，你要是生气不理我，我会很难过的。快过来让我抱抱。",
+        )
+
+    def test_clean_assistant_reply_merges_lines_without_losing_inline_spaces(self):
         self.assertEqual(
             ai.clean_assistant_reply(
                 "  第一句  有空格\t\t还有  \r\n\t第二句\t  也有  "
             ),
-            "第一句 有空格 还有\n第二句 也有",
+            "第一句 有空格 还有第二句 也有",
+        )
+
+    def test_clean_assistant_reply_joins_ascii_words_with_a_space(self):
+        self.assertEqual(
+            ai.clean_assistant_reply("hello\nworld"), "hello world"
         )
 
     def test_api_uses_pet_id_personality_after_pet_is_renamed(self):

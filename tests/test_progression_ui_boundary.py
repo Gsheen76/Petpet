@@ -327,3 +327,48 @@ def test_pet_card_switches_through_callbacks(shop_window):
 
     shop_window.pet.set_active_pet.assert_called_once_with("ice_cream")
     shop_window.save_callback.assert_not_called()
+
+
+def test_home_page_has_decoration_category_chips(shop_window):
+    """家居页分栏（2026-09-12 用户指示）：与装修面板同四栏。"""
+    from PyQt5.QtWidgets import QFrame, QPushButton
+
+    from petpet.home.rendering import (
+        HOME_DECORATION_CATEGORIES,
+        HOME_DECORATION_CATEGORY_BY_ID,
+    )
+
+    shop_window._set_page("home")
+    bar = shop_window.findChild(QFrame, "homeCategoryBar")
+    assert bar is not None, "家居页应有类目分栏托盘"
+    chips = {
+        button.text(): button
+        for button in bar.findChildren(QPushButton)
+    }
+    assert set(chips) == {label for _key, label in HOME_DECORATION_CATEGORIES}
+
+    # 默认「全部」：全部家具卡都在（含状态卡）。
+    all_cards = [
+        frame for frame in shop_window.findChildren(QFrame)
+        if frame.objectName().startswith("homeDecorationCard_")
+    ]
+    assert len(all_cards) == len(progression.HOME_DECORATION_DEFINITIONS)
+    assert shop_window.home_category == "all"
+
+    # 切到「家具」：只剩 furniture 类目项（deleteLater 的冲刷要显式
+    # sendPostedEvents，processEvents 不处理 DeferredDelete）。
+    shop_window._set_home_category("furniture")
+    QApplication.instance().sendPostedEvents(
+        None, QEvent.DeferredDelete)
+    visible = {
+        decoration_id
+        for decoration_id in progression.HOME_DECORATION_DEFINITIONS
+        if HOME_DECORATION_CATEGORY_BY_ID.get(decoration_id) == "furniture"
+    }
+    for decoration_id in progression.HOME_DECORATION_DEFINITIONS:
+        card = shop_window.findChild(
+            QFrame, f"homeDecorationCard_{decoration_id}")
+        if decoration_id in visible:
+            assert card is not None, f"{decoration_id} 应显示"
+        else:
+            assert card is None, f"{decoration_id} 应被过滤掉"

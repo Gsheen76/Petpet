@@ -71,7 +71,7 @@ class MaybeNudgeProfileTests(unittest.TestCase):
             msg = api.maybe_nudge(mem, 4000, idle_min=1800, gap_min=60,
                                   pet_name="烟花")
         expected = set(nudge_lines(
-            {"称呼": ["小明"]}, "烟花", 4000, 15))
+            {"称呼": ["小明"]}, "烟花", 4000, 15, month=9, day=11))
         self.assertIn(msg, expected)
         self.assertGreater(mem["last_nudge_t"], 0)
         save.assert_called_once()
@@ -304,3 +304,109 @@ class ChatWindowProfileEntryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MaybeNudgeReminderTests(unittest.TestCase):
+    def test_maybe_nudge_fires_due_reminder_once_per_day(self):
+        import time as time_mod
+        from unittest.mock import patch
+
+        from petpet.chat import api
+
+        mem = {"profile_facts": {"重要的事": ["小明的生日是9月11日"]},
+               "last_nudge_t": 0}
+        fake_local = time_mod.struct_time(
+            (2026, 9, 11, 15, 0, 0, 4, 254, 0))
+
+        def run(idle, gap):
+            with patch.object(api.time, "localtime",
+                              return_value=fake_local), \
+                    patch.object(api.time, "time",
+                                 return_value=1750000000.0), \
+                    patch.object(api, "save_memory"):
+                return api.maybe_nudge(
+                    mem, idle, idle_min=1800, gap_min=gap, pet_name="烟花")
+
+        # 生日提醒不受久坐门槛限制（一年只有一次，必须能冒出来）。
+        msg = run(60, 60)
+        self.assertIsNotNone(msg)
+        self.assertIn("小明的生日是9月11日", msg)
+        self.assertEqual(
+            mem["reminder_fired"]["小明的生日是9月11日"], "2026-09-11")
+
+        # 当日已发：久坐不足时安静，充足时回落普通搭话。
+        self.assertIsNone(run(60, 60))
+        normal = run(4000, 0)
+        self.assertIsNotNone(normal)
+        self.assertNotIn("生日", normal)
+
+    def test_maybe_nudge_without_due_reminder_unchanged(self):
+        import time as time_mod
+        from unittest.mock import patch
+
+        from petpet.chat import api
+
+        mem = {"profile_facts": {"重要的事": ["小明的生日是6月18日"]},
+               "last_nudge_t": 0}
+        fake_local = time_mod.struct_time(
+            (2026, 9, 11, 15, 0, 0, 4, 254, 0))
+        with patch.object(api.time, "localtime", return_value=fake_local), \
+                patch.object(api.time, "time",
+                             return_value=1750000000.0), \
+                patch.object(api, "save_memory"):
+            msg = api.maybe_nudge(mem, 4000, idle_min=1800, gap_min=0,
+                                  pet_name="烟花")
+        self.assertIsNotNone(msg)
+        self.assertNotIn("生日", msg)
+        self.assertNotIn("6月18日", msg)
+
+
+class MemoryProfilePortabilityTests(unittest.TestCase):
+    """档案弹窗导入/导出（2026-09-12 四项功能轮）。"""
+
+    @classmethod
+    def setUpClass(cls):
+        from PyQt5.QtWidgets import QApplication
+        cls.app = QApplication.instance() or QApplication([])
+
+    def _dialog(self, facts=None):
+        from petpet.ui.memory_profile import MemoryProfileDialog
+        dialog = MemoryProfileDialog(
+            facts or {"称呼": ["小明"], "喜欢": ["咖啡", "猫"]},
+            pet_name="烟花",
+        )
+        self.addCleanup(dialog.deleteLater)
+        return dialog
+
+    def test_action_row_has_import_and_export_buttons(self):
+        dialog = self._dialog()
+        self.assertEqual(dialog.export_btn.text(), "导出")
+        self.assertEqual(dialog.import_btn.text(), "导入")
+
+    def test_apply_facts_rebuilds_rows_per_bucket(self):
+        dialog = self._dialog()
+        incoming = {
+            "称呼": ["老板"],
+            "喜欢": ["奶茶"],
+            "重要的事": ["生日是6月18日"],
+        }
+        dialog._apply_facts(incoming)
+        self.assertEqual(
+            [e.text() for e, _ in dialog._rows["称呼"]], ["老板"])
+        self.assertEqual(
+            [e.text() for e, _ in dialog._rows["喜欢"]], ["奶茶"])
+        self.assertEqual(
+            [e.text() for e, _ in dialog._rows["重要的事"]],
+            ["生日是6月18日"])
+        # 没提到的栏清空，不再是旧内容。
+        self.assertEqual(dialog._rows["讨厌"], [])
+        self.assertEqual(dialog._rows["其他"], [])
+
+    def test_apply_facts_round_trips_through_collect_edits(self):
+        from petpet.chat.memory import facts_to_json, facts_from_json
+
+        dialog = self._dialog()
+        payload = facts_to_json({"称呼": ["小明"], "喜欢": ["猫"]})
+        dialog._apply_facts(facts_from_json(payload))
+        self.assertEqual(dialog.collect_edits()["称呼"], ["小明"])
+        self.assertEqual(dialog.collect_edits()["喜欢"], ["猫"])

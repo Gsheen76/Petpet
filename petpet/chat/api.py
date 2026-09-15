@@ -183,7 +183,16 @@ def clean_assistant_reply(text: str) -> str:
     cleaned = cleaned.replace("\r\n", "\n").replace("\r", "\n")
     lines = [re.sub(r"[ \t]+", " ", line.strip())
              for line in cleaned.split("\n")]
-    return "\n".join(line for line in lines if line).strip()
+    # 回复一律单段呈现（2026-09-11 用户定稿）：换行整体合并，
+    # 中文等非 ASCII 边界直接相连，两侧都是 ASCII 时补一个空格防粘连。
+    merged = ""
+    for line in lines:
+        if not line:
+            continue
+        if merged and merged[-1].isascii() and line[0].isascii():
+            merged += " "
+        merged += line
+    return merged.strip()
 
 
 def _default_memory():
@@ -810,6 +819,30 @@ def maybe_nudge(mem, idle_seconds, pet_state=None, idle_min=1800,
     idle_min: minimum idle seconds before first nudge.
     gap_min: minimum seconds between two nudges.
     """
+    now = time.localtime()
+    h = now.tm_hour
+    if pet_state and pet_state.get("sleeping"):
+        return None
+    if 0 <= h < 7:
+        return None  # let user sleep
+
+    # 生日/纪念日提醒（2026-09-12）：一年一次的事不受久坐/间隔门槛
+    # 限制，当日只发第一条，发过即存 mem["reminder_fired"]。
+    pet_name = normalize_pet_name(
+        pet_name or mem.get("pet_name", DEFAULT_PET_NAME)
+    )
+    due = chat_memory.due_reminder(
+        mem.get("profile_facts") or {}, now.tm_mon, now.tm_mday)
+    if due:
+        today_key = time.strftime("%Y-%m-%d", now)
+        fired = dict(mem.get("reminder_fired") or {})
+        if fired.get(due["fact"]) != today_key:
+            fired[due["fact"]] = today_key
+            mem["reminder_fired"] = fired
+            mem["last_nudge_t"] = time.time()
+            save_memory(mem, pet_id, profile=profile)
+            return chat_memory.reminder_line(due["fact"], pet_name)
+
     if idle_seconds < idle_min:
         return None
     # don't nudge more than once per gap_min
@@ -817,19 +850,11 @@ def maybe_nudge(mem, idle_seconds, pet_state=None, idle_min=1800,
     if time.time() - last < gap_min:
         return None
 
-    h = time.localtime().tm_hour
-    if pet_state and pet_state.get("sleeping"):
-        return None
-    if 0 <= h < 7:
-        return None  # let user sleep
-
     # 档案感知台词（2026-09-11）：称呼/喜欢/作息/重要的事驱动，
-    # 无档案自然回退分时段通用问候。
-    pet_name = normalize_pet_name(
-        pet_name or mem.get("pet_name", DEFAULT_PET_NAME)
-    )
+    # 无档案自然回退分时段通用问候；节日/季节见 nudge_lines（09-12）。
     opts = chat_memory.nudge_lines(
         mem.get("profile_facts") or {}, pet_name, idle_seconds, h,
+        month=now.tm_mon, day=now.tm_mday,
     )
     msg = opts[int(time.time()) % len(opts)]
     mem["last_nudge_t"] = time.time()

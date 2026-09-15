@@ -21,6 +21,7 @@ from PyQt5.QtGui import (
 from PyQt5.QtWidgets import QWidget
 
 from petpet.progression import core as progression
+from petpet.app.paths import DATA_DIR
 from petpet.app.pets import pet_asset_path, pet_definition
 from petpet.home.pet import (
     HOME_DEFAULT_SLEEP_POINT,
@@ -111,7 +112,8 @@ class HomeSceneWindow(QWidget):
             item_id: QPixmap(path)
             for item_id, path in HOME_FURNITURE_PATHS.items()
         }
-        self.furniture["home_status_card"] = render_home_status_card(self.state)
+        self.furniture["home_status_card"] = render_status_card_art(
+            HOME_STATUS_CARD_SIZE)
         self.action_button_pixmaps = {
             name: QPixmap(path)
             for name, path in HOME_BUTTON_PATHS.items()
@@ -386,7 +388,8 @@ class HomeSceneWindow(QWidget):
         self._clear_manual_destination()
         self._last_persisted_home_target = None
         self._camera_x = camera_x_for_dog(self.home_pet.position[0], 0)
-        self.furniture["home_status_card"] = render_home_status_card(self.state)
+        self.furniture["home_status_card"] = render_status_card_art(
+            HOME_STATUS_CARD_SIZE)
         self.update()
 
     def home_pet_asset_state(self) -> dict:
@@ -990,12 +993,35 @@ class HomeSceneWindow(QWidget):
         self.update()
         return result
 
-    def _draw_furniture(self, painter, decoration_id, position):
-        pixmap = (
-            render_home_status_card(self.state)
-            if decoration_id == "home_status_card"
-            else self.furniture.get(decoration_id)
+    def _furniture_shadow_rect(self, decoration_id):
+        """地面家具的接地软影矩形（家具本地坐标，中心为原点）。
+
+        2026-09-12「像没抠干净」治本：新素材家具主体大面积亮白且
+        无绘制阴影，压在奶油地板上糊成一片——引擎统一在脚下画
+        暖棕软影接地。墙面件（挂画/挂钟/状态卡）与地毯不接地，
+        返回 None。
+        """
+        if decoration_id in {
+            "home_wall_art", "home_wall_clock", "home_status_card",
+            "home_rug",
+        }:
+            return None
+        definition = progression.HOME_DECORATION_DEFINITIONS.get(
+            decoration_id)
+        if definition is None:
+            return None
+        width, height = definition["size"]
+        shadow_w = width * 0.86
+        shadow_h = max(10.0, height * 0.2)
+        return QRectF(
+            -shadow_w / 2,
+            height / 2 - shadow_h,
+            shadow_w,
+            shadow_h,
         )
+
+    def _draw_furniture(self, painter, decoration_id, position):
+        pixmap = self.furniture.get(decoration_id)
         if pixmap is None or pixmap.isNull():
             return
         transform = progression.home_decoration_transform(self.state, decoration_id)
@@ -1012,6 +1038,11 @@ class HomeSceneWindow(QWidget):
         )
         painter.rotate(transform["rotation"])
         painter.scale(transform["scale"], transform["scale"])
+        shadow = self._furniture_shadow_rect(decoration_id)
+        if shadow is not None:
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor(120, 82, 60, 46))
+            painter.drawEllipse(shadow)
         painter.drawPixmap(
             QRectF(
                 -logical_width / 2,
@@ -1022,6 +1053,15 @@ class HomeSceneWindow(QWidget):
             pixmap,
             QRectF(0, 0, pixmap.width(), pixmap.height()),
         )
+        if decoration_id == "home_status_card":
+            # 状态内容（圆点/标签/进度条）以场景画笔按最终分辨率
+            # 实时叠画——不经过位图缩放，文字任何缩放下都清晰。
+            # 坑位（2026-09-14 错位修复）：本坐标系中心锚定（底图在
+            # (-w/2,-h/2) 起），overlay 按 (0,0) 起点画——须先平移。
+            painter.save()
+            painter.translate(-logical_width / 2, -logical_height / 2)
+            draw_status_card_overlay(painter, self.state)
+            painter.restore()
         painter.restore()
 
     def home_pet_draw_rect(
@@ -1671,15 +1711,25 @@ class HomeSceneWindow(QWidget):
         painter.restore()
 
     def _furniture_depth_key(self, decoration_id):
-        if decoration_id in {"home_wall_art", "home_status_card"}:
+        if decoration_id in {
+            "home_wall_art", "home_status_card", "home_wall_clock",
+        }:
             return (0, 0.0)
         if decoration_id == "home_rug":
             return (1, 0.0)
         return (2, float(self.selection_bounds(decoration_id).bottom()))
 
+    # 遮挡滞回带（2026-09-14 闪烁修复）：翻转时键差中位仅 1.1px
+    # （日志 1542 次实测），宠物在家具底线 ±几像素晃动即逐帧换层。
+    # 相对层确立后须越出 ±6px 才允许翻转；带内保持上一帧层级。
+    OCCLUSION_HYSTERESIS_PX = 6.0
+
     def _scene_render_entries(self):
         """Return normal scene entries in deterministic 2.5D paint order."""
 
+        pet_visible = self.home_pet_visible()
+        pet_y = float(self.home_pet.position[1]) if pet_visible else None
+        prev_ranks = getattr(self, "_occlusion_prev_ranks", None)
         entries = []
         for item_id in self.state.get("owned_home_decorations", []):
             if item_id in self.state.get("home_stored_decorations", []):
@@ -1691,12 +1741,94 @@ class HomeSceneWindow(QWidget):
             )
             if pixmap is None or pixmap.isNull():
                 continue
-            entries.append((self._furniture_depth_key(item_id), "furniture", item_id))
+            # 拖拽/选中置顶（2026-09-12 遮挡优化）：装修模式里正在定位
+            # 的家具最后绘制，不被任何家具半遮；装修态宠物本就隐藏，
+            # 该层不会盖到宠物。
+            if (
+                self.is_decorating()
+                and item_id == self._selected_furniture
+            ):
+                entries.append(((3, 0.0), "furniture", item_id))
+                continue
+            key = self._furniture_depth_key(item_id)
+            if pet_y is not None and key[0] == 2 and prev_ranks:
+                prev_rank = prev_ranks.get(item_id)
+                diff = pet_y - key[1]
+                rank = 1 if diff > 0 else (-1 if diff < 0 else 0)
+                if (
+                    prev_rank in (1, -1) and rank in (1, -1)
+                    and rank != prev_rank
+                    and abs(diff) < self.OCCLUSION_HYSTERESIS_PX
+                ):
+                    # 带内保持上一帧层级：键挪到宠物同侧 1px。
+                    key = (
+                        (2, pet_y - 1.0) if prev_rank == 1
+                        else (2, pet_y + 1.0)
+                    )
+            entries.append((key, "furniture", item_id))
         if self.navigation_feedback() is not None:
             entries.append(((1, 1.0), "navigation", "home_navigation"))
-        if self.home_pet_visible():
-            entries.append(((2, float(self.home_pet.position[1])), "pet", "home_pet"))
-        return sorted(entries, key=lambda entry: entry[0])
+        if pet_visible:
+            entries.append(((2, pet_y), "pet", "home_pet"))
+        entries = sorted(entries, key=lambda entry: entry[0])
+        self._log_occlusion_flips(entries)
+        return entries
+
+    # 遮挡闪烁排查埋点（2026-09-12，排查轮）：宠物与地面家具的深度键
+    # （脚底 y vs 底边）在临界值附近反复穿越会让绘制顺序逐帧翻转，
+    # 观感即"闪烁"。本方法只在**相对层发生翻转**时向数据目录的
+    # occlusion_debug.log 追加一行（pythonw 无控制台，print 不可见）；
+    # 干净的单次前后切换每件家具只记一行，正常行走出带只产生
+    # 1-2 行，复现后把日志取回即可定位是哪件家具、键差多少。
+    _OCCLUSION_LOG_MAX_BYTES = 2 * 1024 * 1024
+
+    def _occlusion_log_path(self):
+        return os.path.join(DATA_DIR, "occlusion_debug.log")
+
+    def _log_occlusion_flips(self, entries):
+        pet_keys = [key for key, kind, _id in entries if kind == "pet"]
+        if not pet_keys:
+            self._occlusion_prev_ranks = None
+            return
+        pet_y = pet_keys[0][1]
+        ranks = {}
+        bottoms = {}
+        for key, kind, item_id in entries:
+            if kind != "furniture" or key[0] != 2:
+                continue
+            bottoms[item_id] = key[1]
+            diff = pet_y - key[1]
+            ranks[item_id] = 1 if diff > 0 else (-1 if diff < 0 else 0)
+        prev = getattr(self, "_occlusion_prev_ranks", None)
+        flips = [
+            (item_id, prev.get(item_id), ranks[item_id],
+             round(pet_y - bottoms[item_id], 1))
+            for item_id in ranks
+            if prev is not None
+            and prev.get(item_id) is not None
+            and prev[item_id] != ranks[item_id]
+        ]
+        self._occlusion_prev_ranks = ranks
+        if not flips:
+            return
+        try:
+            path = self._occlusion_log_path()
+            if (os.path.exists(path)
+                    and os.path.getsize(path)
+                    > self._OCCLUSION_LOG_MAX_BYTES):
+                os.remove(path)   # 超限重开，防无限增长
+            stamp = time.strftime("%H:%M:%S")
+            lines = "".join(
+                f"[{stamp}] flip {item_id}: "
+                f"{'后' if old == -1 else '前' if old == 1 else old}"
+                f"->{'后' if new == -1 else '前' if new == 1 else new} "
+                f"pet_y={pet_y:.1f} diff={diff:+.1f}\n"
+                for item_id, old, new, diff in flips
+            )
+            with open(path, "a", encoding="utf-8") as handle:
+                handle.write(lines)
+        except OSError:
+            pass   # 排查埋点绝不影响正常渲染
 
     def _furniture_transform_rect(self, decoration_id):
         return self.selection_bounds(decoration_id).toAlignedRect()
@@ -1771,12 +1903,43 @@ class HomeSceneWindow(QWidget):
                 panel.x() + 12 + (index % 2) * (card_width + 8),
                 panel.y()
                 + HOME_DECORATION_CARD_TOP
-                + (index // 2) * HOME_DECORATION_CARD_STEP,
+                + (index // 2) * HOME_DECORATION_CARD_STEP
+                - getattr(self, "_deco_scroll", 0),
                 card_width,
                 HOME_DECORATION_CARD_HEIGHT,
             )
             for index, item_id in enumerate(items)
         }
+
+    def _deco_max_scroll(self):
+        """装修卡片列表的最大滚动偏移（内容不超出则 0）。"""
+        import math
+
+        panel = self._panel_rect()
+        items = self._visible_decoration_ids()
+        rows = max(1, math.ceil(len(items) / 2))
+        content_bottom = (
+            HOME_DECORATION_CARD_TOP
+            + rows * HOME_DECORATION_CARD_STEP
+        )
+        viewport_bottom = panel.height() - 20
+        return max(0, content_bottom - viewport_bottom)
+
+    def _apply_deco_scroll(self, rows):
+        """按卡片行数滚动装修列表（钳制到 [0, max]）。"""
+        target = getattr(self, "_deco_scroll", 0) + int(rows) * HOME_DECORATION_CARD_STEP
+        self._deco_scroll = max(0, min(target, self._deco_max_scroll()))
+        self.update()
+        return self._deco_scroll
+
+    def _sync_deco_scroll(self):
+        """列表内容变化（类目切换/家具增减）后钳制滚动偏移。"""
+        scroll = min(
+            getattr(self, "_deco_scroll", 0), self._deco_max_scroll(),
+        )
+        if getattr(self, "_deco_scroll", 0) != scroll:
+            self._deco_scroll = scroll
+            self.update()
 
     @staticmethod
     def _item_thumbnail_rect(card):
@@ -1844,6 +2007,29 @@ class HomeSceneWindow(QWidget):
                 painter.drawRoundedRect(rect, 7, 7)
             painter.setPen(QColor("#65483b"))
             painter.drawText(rect, Qt.AlignCenter, label)
+        # 滚动指示条（2026-09-13 修复轮）：内容超出可视区时右缘细条
+        # 提示可滚（滚轮滚动见 wheelEvent）。
+        max_scroll = self._deco_max_scroll()
+        if max_scroll > 0:
+            import math
+
+            items = self._visible_decoration_ids()
+            rows = max(1, math.ceil(len(items) / 2))
+            content_h = rows * HOME_DECORATION_CARD_STEP
+            track_h = panel.height() - HOME_DECORATION_CARD_TOP - 20
+            track_y = panel.y() + HOME_DECORATION_CARD_TOP
+            thumb_h = max(36, int(track_h * track_h / max(content_h, 1)))
+            thumb_y = track_y + int(
+                (track_h - thumb_h)
+                * getattr(self, "_deco_scroll", 0) / max_scroll
+            )
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor(231, 201, 173, 160))
+            painter.drawRoundedRect(
+                QRect(panel.right() - 8, track_y, 4, track_h), 2, 2)
+            painter.setBrush(QColor(200, 158, 122, 220))
+            painter.drawRoundedRect(
+                QRect(panel.right() - 8, thumb_y, 4, thumb_h), 2, 2)
         for item_id, card in self._item_card_rects().items():
             stored = item_id in self.state.get("home_stored_decorations", [])
             name = progression.HOME_DECORATION_DEFINITIONS[item_id]["name"]
@@ -2011,6 +2197,7 @@ class HomeSceneWindow(QWidget):
         for category, rect in self._category_rects().items():
             if rect.contains(point):
                 self._decoration_category = category
+                self._deco_scroll = 0   # 类目切换回顶（2026-09-13 滚动轮）
                 self.update()
                 return True
         for item_id, card in self._item_card_rects().items():
@@ -2171,6 +2358,20 @@ class HomeSceneWindow(QWidget):
         if self._hover_button == name:
             return "hover"
         return None
+
+    def wheelEvent(self, event):
+        # 装修面板滚轮（2026-09-13 修复：13 件家具超出可视区不可滚动）。
+        # 仅装修态且指针在左栏内生效；每档滚 2 卡片行。
+        if (
+            self.is_decorating()
+            and self._panel_rect().contains(event.pos())
+        ):
+            steps = event.angleDelta().y() / 120
+            if steps:
+                self._apply_deco_scroll(-int(steps) * 2)
+            event.accept()
+            return
+        super().wheelEvent(event)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.RightButton:

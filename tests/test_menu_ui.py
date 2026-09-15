@@ -1076,3 +1076,102 @@ class MenuUiTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BubbleMenuPaintPerfTests(unittest.TestCase):
+    """悬浮卡顿优化（2026-09-12）：每帧重活必须只算一次。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    HOST = SimpleNamespace(
+        state=progression.ensure_progression({}),
+        pet_name="烟花",
+        interface_anchor_rect=lambda: QRect(900, 700, 190, 220),
+        interface_screen_rect=lambda: QRect(0, 0, 1920, 1080),
+        set_pet_name=Mock(),
+    )
+
+    def test_paint_computes_attention_flags_once(self):
+        from petpet.progression import core as prog_core
+
+        menu = pet.BubbleMenu(self.HOST, show_window=False)
+        self.addCleanup(menu._close)
+
+        with patch.object(
+            prog_core, "has_claimable_achievements",
+            side_effect=lambda state, now=None: [],
+        ) as scan, patch.object(
+            prog_core, "zero_stat_interaction_actions",
+            side_effect=lambda state: set(),
+        ) as zeros:
+            # grab() 对未 show 的控件也会同步走 paintEvent（repaint 对
+            # 隐藏控件是 no-op）。
+            for _ in range(5):
+                menu.grab()
+        self.assertEqual(scan.call_count, 1)
+        self.assertEqual(zeros.call_count, 1)
+
+    def test_bubble_icon_caches_scaled_variant_per_size(self):
+        from petpet.ui.desktop import _bubble_icon
+
+        first = _bubble_icon("chat", 52)
+        second = _bubble_icon("chat", 52)
+        self.assertIs(first, second)
+
+    def test_hover_change_triggers_immediate_repaint(self):
+        menu = pet.BubbleMenu(self.HOST, show_window=False)
+        self.addCleanup(menu._close)
+        with patch.object(menu, "update") as upd:
+            menu._bubble_rects = [
+                (0, QRectF(0, 0, 96, 92), "chat", "#fff", "💬"),
+            ]
+            menu.mouseMoveEvent(
+                SimpleNamespace(pos=lambda: QPoint(48, 46))
+            )
+        upd.assert_called_once()
+
+
+class BonusBubbleKeepAliveTests(unittest.TestCase):
+    """BonusBubble 自持保活（2026-09-14 闪退根因修复）。
+
+    崩溃链（Qt5Core qt_static_metacall AV，三天三次）：无父
+    BonusBubble 创建后不保引用（升级/好感升级两处裸创建）→
+    Python GC 连 C++ 一起回收 → 33ms 动画定时器事件投递给已
+    释放接收者。契约：类级注册表保活到 closeEvent 真正发生。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_bubble_survives_gc_until_closed(self):
+        import gc
+        import weakref
+
+        from PyQt5 import sip
+
+        pet = SimpleNamespace(
+            state=progression.ensure_progression({}),
+            pet_name="烟花",
+            interface_anchor_rect=lambda: QRect(900, 700, 190, 220),
+            interface_screen_rect=lambda: QRect(0, 0, 1920, 1080),
+        )
+        from petpet.ui.desktop import BonusBubble
+
+        bubble = BonusBubble("+25", 900, 600, "#ffcc00")
+        bubble.__dict__.pop("_self_guard", None)
+        ref = weakref.ref(bubble)
+        del bubble
+        gc.collect()
+        QApplication.processEvents()
+
+        self.assertIsNotNone(ref(), "无外部引用时气泡必须由类级注册表保活")
+        self.assertFalse(sip.isdeleted(ref()), "C++ 对象不得被 GC 回收")
+
+        ref().close()
+        QApplication.processEvents()
+        gc.collect()
+        self.assertNotIn(ref(), BonusBubble._keep_alive,
+                         "close 后必须从保活表移除")

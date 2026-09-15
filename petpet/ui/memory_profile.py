@@ -7,15 +7,18 @@
 from __future__ import annotations
 
 import os
+import time
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPainter, QPainterPath, QPixmap
 from PyQt5.QtWidgets import (
     QDialog,
+    QFileDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QScrollArea,
     QVBoxLayout,
     QWidget,
@@ -26,6 +29,8 @@ from petpet.app.paths import SHOP_UI_DIR
 from petpet.chat.memory import (
     PROFILE_BUCKETS,
     PROFILE_BUCKET_CAPS,
+    facts_from_json,
+    facts_to_json,
     sanitize_edited_facts,
 )
 from petpet.progression.ui import FeedbackButton
@@ -85,6 +90,14 @@ QPushButton#cancelProfile {{ background:#fffaf6; color:#8c6252;
 QPushButton#cancelProfile:hover {{ background:#ffe8dc;
     border-color:#dda993; }}
 QPushButton#cancelProfile:pressed {{ background:#ffdcd0; }}
+QPushButton#profileExport, QPushButton#profileImport {{
+    background:#fffaf6; color:#8c6252;
+    border:1px solid #e6cfc2; border-radius:18px; padding:9px 26px;
+    font-size:20px; font-weight:700; font-family:'{APP_FONT_FAMILY}'; }}
+QPushButton#profileExport:hover, QPushButton#profileImport:hover {{
+    background:#ffe8dc; border-color:#dda993; }}
+QPushButton#profileExport:pressed, QPushButton#profileImport:pressed {{
+    background:#ffdcd0; }}
 QScrollArea#profileScroll {{ background:transparent; border:0; }}
 QScrollBar:vertical {{ background:transparent; width:11px; margin:4px 0; }}
 QScrollBar::handle:vertical {{ background:#e8bfa8; border-radius:5px; min-height:38px; }}
@@ -187,10 +200,24 @@ class MemoryProfileDialog(QDialog):
         cancel.setObjectName("cancelProfile")
         cancel.setCursor(Qt.PointingHandCursor)
         cancel.clicked.connect(self.reject)
+        export = FeedbackButton("导出")
+        export.setObjectName("profileExport")
+        export.setCursor(Qt.PointingHandCursor)
+        export.setToolTip("把六栏档案存成 JSON 文件")
+        export.clicked.connect(self._export_facts)
+        import_btn = FeedbackButton("导入")
+        import_btn.setObjectName("profileImport")
+        import_btn.setCursor(Qt.PointingHandCursor)
+        import_btn.setToolTip("从 JSON 文件读入档案（导入后仍需保存生效）")
+        import_btn.clicked.connect(self._import_facts)
+        self.export_btn = export
+        self.import_btn = import_btn
 
         row = QHBoxLayout()
         row.setContentsMargins(6, 4, 6, 0)
         row.setSpacing(12)
+        row.addWidget(export)
+        row.addWidget(import_btn)
         row.addStretch(1)
         row.addWidget(cancel)
         row.addWidget(save)
@@ -299,6 +326,60 @@ class MemoryProfileDialog(QDialog):
     def _on_save(self):
         self.result_facts = sanitize_edited_facts(self.collect_edits())
         self.accept()
+
+    # ------------------------------------------------------- 导入 / 导出
+
+    def _export_facts(self):
+        """当前编辑中的六栏 → JSON 文件（2026-09-12）。"""
+        default_name = time.strftime("Petpet档案_%Y%m%d_%H%M.json")
+        path, _ = QFileDialog.getSaveFileName(
+            self, "导出档案", default_name, "JSON 文件 (*.json)")
+        if not path:
+            return
+        payload = facts_to_json(self.collect_edits(), pet_name="")
+        try:
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(payload)
+        except OSError:
+            QMessageBox.warning(self, "导出失败", "文件写入失败，请稍后再试。")
+            return
+        QMessageBox.information(self, "已导出", os.path.basename(path))
+
+    def _import_facts(self):
+        """JSON 文件 → 铺进 UI（清洗后逐栏重建；仍需按「保存」才生效）。"""
+        path, _ = QFileDialog.getOpenFileName(
+            self, "导入档案", "", "JSON 文件 (*.json)")
+        if not path:
+            return
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                text = handle.read()
+            facts = facts_from_json(text)
+        except OSError:
+            QMessageBox.warning(self, "导入失败", "文件读取失败。")
+            return
+        except ValueError as exc:
+            QMessageBox.warning(self, "导入失败", str(exc))
+            return
+        self._apply_facts(facts)
+
+    def _apply_facts(self, facts):
+        """把一份档案整体铺进 UI：清掉现行行，逐栏按内容重建。"""
+        for bucket in PROFILE_BUCKETS:
+            for edit, delete in list(self._rows.get(bucket) or []):
+                edit.deleteLater()
+                delete.deleteLater()
+            self._rows[bucket] = []
+            layout = self._cards[bucket].layout()
+            while layout.count() > 1:   # 第 0 项是栏头行，保留
+                item = layout.takeAt(1)
+                sub = item.layout()
+                if sub is not None:
+                    while sub.count():
+                        sub.takeAt(0)
+            for fact in facts.get(bucket) or []:
+                layout.addLayout(self._make_fact_row(bucket, str(fact)))
+            self._refresh_bucket_chrome(bucket)
 
     # ---------------------------------------------------------------- paint
 

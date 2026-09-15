@@ -51,7 +51,12 @@ from petpet.app.pets import (
     pet_avatar_path,
     pet_definition,
 )
-from petpet.home.rendering import HOME_FURNITURE_PATHS, render_home_status_card
+from petpet.home.rendering import (
+    HOME_DECORATION_CATEGORIES,
+    HOME_DECORATION_CATEGORY_BY_ID,
+    HOME_FURNITURE_PATHS,
+    render_home_status_card,
+)
 
 
 def _shop_asset(name):
@@ -2047,6 +2052,7 @@ class ShopWindow(CozyProgressWindow):
         self.decoration_category = "neck"
         self.gift_filter = "all"
         self.outfit_pet_id = "lunch_meat"
+        self.home_category = "all"
         self.adjust_window = None
         self.preview_window = None
         super().__init__(
@@ -2778,6 +2784,33 @@ class ShopWindow(CozyProgressWindow):
         title.setAlignment(Qt.AlignCenter)
         self._add_page_header(title)
 
+        # 家居分栏（2026-09-12 用户指示）：与装修面板同四栏
+        # （全部/家具/装饰/玩具），复用 chipBar/chipTab 通用样式
+        # （套装页宠物选择器同款实现，等分铺满）。
+        selector = QFrame()
+        selector.setObjectName("homeCategoryBar")
+        selector.setProperty("chipBar", True)
+        selector_layout = QHBoxLayout(selector)
+        selector_layout.setContentsMargins(5, 5, 5, 5)
+        selector_layout.setSpacing(7)
+        selector_group = QButtonGroup(selector)
+        selector_group.setExclusive(True)
+        for category, label in HOME_DECORATION_CATEGORIES:
+            button = FeedbackButton(label)
+            button.setObjectName(f"homeCategory_{category}")
+            button.setProperty("chipTab", True)
+            button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            button.setCheckable(True)
+            button.setChecked(self.home_category == category)
+            button.setCursor(Qt.PointingHandCursor)
+            selector_group.addButton(button)
+            button.clicked.connect(
+                lambda _checked=False, selected=category:
+                self._set_home_category(selected)
+            )
+            selector_layout.addWidget(button)
+        self.content_layout.addWidget(selector)
+
         grid_host = QWidget()
         grid = QGridLayout(grid_host)
         grid.setObjectName("homeDecorationGrid")
@@ -2785,7 +2818,14 @@ class ShopWindow(CozyProgressWindow):
         grid.setHorizontalSpacing(12)
         grid.setVerticalSpacing(12)
         items = sorted(
-            progression.HOME_DECORATION_DEFINITIONS.items(),
+            (
+                (decoration_id, definition)
+                for decoration_id, definition
+                in progression.HOME_DECORATION_DEFINITIONS.items()
+                if self.home_category == "all"
+                or HOME_DECORATION_CATEGORY_BY_ID.get(decoration_id)
+                == self.home_category
+            ),
             key=lambda item: int(item[1].get("price", 0)) != 0,
         )
         for index, (decoration_id, definition) in enumerate(items):
@@ -2797,6 +2837,12 @@ class ShopWindow(CozyProgressWindow):
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
         self.content_layout.addWidget(grid_host)
+
+    def _set_home_category(self, category):
+        if category == self.home_category:
+            return
+        self.home_category = category
+        self.refresh()
 
     def _home_decoration_card(self, decoration_id, definition):
         state = self.pet.state
@@ -2881,7 +2927,7 @@ class ShopWindow(CozyProgressWindow):
             price = int(result.get("price", 0))
             self._show_purchase_popup(
                 "家具到手",
-                [f"{name} 已放入你的小家"]
+                [f"{name} 已收入收纳，去装修模式放置吧"]
                 + ([f"消耗 {price} Pet币"] if price > 0 else ["免费领取"]),
             )
             self.save_callback(self.pet.state)

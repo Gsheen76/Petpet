@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (
 )
 
 import buddy_ai as ai
+from petpet.ui import chat as chat_module
 import pet
 import progression
 
@@ -514,7 +515,7 @@ class ChatToolsTests(unittest.TestCase):
 
         self.assertEqual(bubble.text(), "你好")
 
-    def test_assistant_bubble_collapses_blank_lines_but_user_bubble_preserves_them(self):
+    def test_assistant_bubble_is_single_paragraph_but_user_bubble_preserves_them(self):
         self.window._set_log_messages([
             ("assistant", "第一句\n\n第二句"),
             ("user", "第一句\n\n第二句"),
@@ -522,7 +523,7 @@ class ChatToolsTests(unittest.TestCase):
 
         bubbles = self.window.findChildren(QLabel, "chatMessage")
 
-        self.assertEqual(bubbles[0].text(), "第一句\n第二句")
+        self.assertEqual(bubbles[0].text(), "第一句第二句")
         self.assertEqual(bubbles[1].text(), "第一句\n\n第二句")
 
     def test_chat_title_includes_real_name_when_pet_is_renamed(self):
@@ -561,6 +562,51 @@ class ChatToolsTests(unittest.TestCase):
         self.assertLess(
             by_role["assistant"].geometry().left(),
             self.window.findChildren(QLabel, "chatMessage")[0].geometry().left(),
+        )
+
+    def test_lunch_meat_avatar_keeps_legacy_full_body_crop(self):
+        # 2026-09-12 用户还原令：大头照裁剪只属于冰淇凌，午餐肉沿用
+        # v1.7.1 之前的「顶部 68%」整身裁；追调：顶部 4% 让位去除，
+        # 耳尖必须落进圆框内（60px 下原让位使耳尖贴圆边被裁）。
+        self.assertEqual(self.window.pet_id, "lunch_meat")
+        image = QImage(os.path.join(
+            "assets", "runtime", "pets", "lunch_meat",
+            "desktop", "poses", "idle.png",
+        ))
+        self.assertFalse(image.isNull())
+
+        rect = self.window._assistant_source_rect(image)
+
+        edge = min(image.width(), max(1, int(image.height() * 0.68)))
+        self.assertEqual(
+            (rect.x(), rect.y(), rect.width(), rect.height()),
+            (
+                (image.width() - edge) // 2,
+                0,
+                edge,
+                edge,
+            ),
+        )
+        # 耳尖行（双耳齐全处 y=150、宽 783）须在圆框内有余量。
+        ear_u = (150 - rect.y()) / edge
+        ear_half = (783 / 2) / edge
+        circle_half = (0.25 - (0.5 - ear_u) ** 2) ** 0.5
+        self.assertGreater(circle_half, ear_half)
+
+    def test_ice_cream_avatar_keeps_headshot_crop(self):
+        self.window.set_pet_id("ice_cream")
+        image = QImage(os.path.join(
+            "assets", "runtime", "pets", "ice_cream",
+            "desktop", "poses", "idle.png",
+        ))
+        self.assertFalse(image.isNull())
+
+        rect = self.window._assistant_source_rect(image)
+
+        head = chat_module._assistant_head_rect(image)
+        self.assertEqual(
+            (rect.x(), rect.y(), rect.width(), rect.height()),
+            (head.x(), head.y(), head.width(), head.height()),
         )
 
     def test_custom_player_avatar_is_used_for_user_messages(self):
@@ -701,3 +747,22 @@ class ChatToolsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ChatExportButtonTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def _window(self):
+        window = pet.ChatWindow(FakePet())
+        self.addCleanup(window.close)
+        return window
+
+    def test_tools_row_has_history_export_button(self):
+        from petpet.progression.ui import FeedbackButton
+
+        window = self._window()
+        self.assertEqual(window.export_btn.text(), "导出")
+        self.assertEqual(window.export_btn.objectName(), "exportTool")
+        self.assertTrue(isinstance(window.export_btn, FeedbackButton))

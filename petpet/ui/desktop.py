@@ -24,16 +24,31 @@ from petpet.ui.common import pixel_font
 # 气泡按键贴图（2026-09-09 素材轮）：按 action 名加载，缺失回退 emoji。
 _BUBBLE_ICON_CACHE = {}
 
-def _bubble_icon(action):
-    """按 action 名取 240² 贴图；缺失返回空 QPixmap（调用方回退 emoji）。"""
-    icon = _BUBBLE_ICON_CACHE.get(action)
+def _bubble_icon(action, px=None):
+    """按 action 名取 240² 贴图；缺失返回空 QPixmap（调用方回退 emoji）。
+
+    px（2026-09-12 悬浮卡顿优化）：给定目标边长时返回平滑缩放结果，
+    并按 (action, px) 缓存——paintEvent 每帧调用，绝不能每帧重做
+    SmoothTransformation；None 保持旧行为返回原图。
+    """
+    key = (action, px) if px else action
+    icon = _BUBBLE_ICON_CACHE.get(key)
     if icon is not None:
+        return icon
+    if px:
+        source = _bubble_icon(action)
+        if source.isNull():
+            _BUBBLE_ICON_CACHE[key] = source
+            return source
+        icon = source.scaled(
+            px, px, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        _BUBBLE_ICON_CACHE[key] = icon
         return icon
     from petpet.app.paths import BUBBLE_MENU_DIR
 
     path = os.path.join(BUBBLE_MENU_DIR, f"{action}.png")
     icon = QPixmap(path) if os.path.isfile(path) else QPixmap()
-    _BUBBLE_ICON_CACHE[action] = icon
+    _BUBBLE_ICON_CACHE[key] = icon
     return icon
 
 
@@ -559,6 +574,9 @@ class BubbleMenu(QWidget):
         self._press = -1
         self._closing = False
         self._prewarming = False
+        # 红点标记缓存（2026-09-12 悬浮卡顿优化）：None=尚未计算，
+        # 首帧计算后菜单存续期内复用（见 paintEvent）。
+        self._attention_flags = None
         self._hover_scales = [0.0] * len(self.actions)
         self._anim = QTimer(self)
         self._anim.timeout.connect(self._tick)
@@ -639,22 +657,27 @@ class BubbleMenu(QWidget):
         total_h = rows * button_h + (rows - 1) * gap
         start_x = (self.W - total_w) / 2
         start_y = (self.H - total_h) / 2
-        has_claimable = _dependency("progression").has_claimable_achievements(
-            self.pet.state
-        )
-        needs_api_key = self.needs_api_key_configuration()
-        zero_record_actions = _dependency("progression").zero_stat_interaction_actions(
-            self.pet.state
-        )
-        zero_actions = {
-            {
-                "pettings": "pet",
-                "feedings": "feed",
-                "play_sessions": "play",
-                "manual_sleeps": "sleep",
-            }[action]
-            for action in zero_record_actions
-        }
+        # 红点标记三件套（2026-09-12 悬浮卡顿优化）：成就目录扫描是
+        # 全量 Python 计算，paintEvent 每帧跑会卡悬浮跟手——菜单存续
+        # 期内状态不会变，首次绘制算一次后缓存。
+        if self._attention_flags is None:
+            zero_record_actions = _dependency(
+                "progression").zero_stat_interaction_actions(self.pet.state)
+            self._attention_flags = (
+                _dependency("progression").has_claimable_achievements(
+                    self.pet.state),
+                self.needs_api_key_configuration(),
+                {
+                    {
+                        "pettings": "pet",
+                        "feedings": "feed",
+                        "play_sessions": "play",
+                        "manual_sleeps": "sleep",
+                    }[action]
+                    for action in zero_record_actions
+                },
+            )
+        has_claimable, needs_api_key, zero_actions = self._attention_flags
         for i, (emoji, label, action, color) in enumerate(self.actions):
             row = i // columns
             column = i % columns
@@ -684,17 +707,16 @@ class BubbleMenu(QWidget):
                 p.setPen(QPen(QColor("#f28f76"), 2.2))
                 p.drawRoundedRect(halo, 18, 18)
 
-            icon = _bubble_icon(action)
             icon_px = 58 if hovered else 52
+            # 缩放结果按 (action, px) 缓存（2026-09-12 悬浮卡顿优化）：
+            # 每帧对 240² 源图做 SmoothTransformation 是跟手卡顿主因之一。
+            icon = _bubble_icon(action, icon_px)
             icon_band = QRectF(
                 rect.x(), rect.y() - (4 if hovered else 0),
                 rect.width(), rect.height() - (22 if hovered else 0),
             )
             if not icon.isNull():
-                scaled = icon.scaled(
-                    icon_px, icon_px,
-                    Qt.KeepAspectRatio, Qt.SmoothTransformation,
-                )
+                scaled = icon
                 p.drawPixmap(
                     QPointF(icon_band.center().x() - scaled.width() / 2,
                             icon_band.center().y() - scaled.height() / 2),
@@ -748,6 +770,9 @@ class BubbleMenu(QWidget):
                 new_hover = i; break
         if new_hover != self._hover:
             self._hover = new_hover
+            # 立即重绘（2026-09-12 悬浮跟手）：不等 16ms 缓动 tick，
+            # 高亮框/名称胶囊要当帧跟上鼠标。
+            self.update()
 
     def mousePressEvent(self, e):
         if e.button() != Qt.LeftButton:
@@ -917,7 +942,17 @@ class BubbleMenu(QWidget):
 
 class BonusBubble(QWidget):
     """A floating '+25 饱腹' style bubble that drifts up and fades out.
-    Shown after the user interacts with the pet via an InteractiveBubble."""
+    Shown after the user interacts with the pet via an InteractiveBubble.
+
+    自持保活（2026-09-14 闪退根因修复）：本组件无父、多处裸调用创建
+    不留引用（升级/好感升级），Python GC 会连 C++ 一起回收——而 33ms
+    动画定时器事件已在投递，落到已释放接收者上即 Qt5Core
+    qt_static_metacall 访问违例（三天三次的闪退）。类级注册表让对象
+    保活到 closeEvent 真正发生，关闭时移除。
+    """
+
+    _keep_alive = set()
+
     def __init__(self, text, x, y, color="#ff8c42"):
         super().__init__()
         self.setWindowFlags(
@@ -939,7 +974,12 @@ class BonusBubble(QWidget):
         self._t = QTimer(self)
         self._t.timeout.connect(self._tick)
         self._t.start(33)
+        BonusBubble._keep_alive.add(self)
         self.show()
+
+    def closeEvent(self, event):
+        BonusBubble._keep_alive.discard(self)
+        super().closeEvent(event)
 
     def _tick(self):
         self.life += 1

@@ -88,10 +88,15 @@ class PetWindowBoundaryTests(unittest.TestCase):
 
         preview = MagicMock()
         preview.isNull.return_value = False
+        # 大图尺寸（超显示预算）→ 必须走预缩路径（2026-09-12 内存轮）。
+        preview.width.return_value = 4000
+        preview.height.return_value = 4000
         with patch(
             "petpet.app.pet_window.QPixmap", return_value=preview
         ) as pixmap:
-            self.assertIs(window._equipped_outfit_preview(), preview)
+            self.assertIs(
+                window._equipped_outfit_preview(), preview.scaled.return_value)
+            preview.scaled.assert_called_once()
             pixmap.assert_called_once()
 
     def test_drag_preview_is_absent_without_an_equipped_outfit(self):
@@ -293,6 +298,15 @@ class PetWindowBoundaryTests(unittest.TestCase):
             )
             expected_last = expected_last.scaled(
                 384, 384, Qt.KeepAspectRatio, Qt.SmoothTransformation
+            )
+            # 加载链尾还有一道显示预算预缩（2026-09-12 内存第二轮：
+            # 384 上限护栏之后缩到 1.5× 显示尺寸）。
+            budget = window._animation_display_budget_px()
+            expected_first = expected_first.scaled(
+                budget, budget, Qt.KeepAspectRatio, Qt.SmoothTransformation
+            )
+            expected_last = expected_last.scaled(
+                budget, budget, Qt.KeepAspectRatio, Qt.SmoothTransformation
             )
 
             self.assertEqual(len(frames), 8)
@@ -801,3 +815,157 @@ class PetWindowBoundaryTests(unittest.TestCase):
         self.assertEqual(len(window._pet_assets_cache), 2)
 if __name__ == "__main__":
     unittest.main()
+
+
+class StaticPoseMemoryTests(unittest.TestCase):
+    """姿势/预览贴图内存预算（2026-09-12 内存优化轮）。
+
+    源姿势图最大 1728×2166≈15MB/张，7 张全分辨率常驻 +124MB；
+    绘制却每帧缩进 PET_W×DOG_H 窗口——加载时按显示预算预缩。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def _window(self):
+        import copy as copy_mod
+        import pet
+
+        state = copy_mod.deepcopy(pet.DEFAULT_STATE)
+        state.update({"x": 100, "y": 100, "tutorial_completed": True})
+        window = pet.PetWindow(state)
+        self.addCleanup(window.close)
+        return window
+
+    def test_static_poses_are_prescaled_to_display_budget(self):
+        window = self._window()
+        budget = max(window.PET_W, window.DOG_H) * 2
+        self.assertTrue(window.pose_pixmaps)
+        for pixmap in window.pose_pixmaps.values():
+            self.assertLessEqual(
+                max(pixmap.width(), pixmap.height()), budget,
+                "姿势贴图应在加载时预缩到显示预算（×2 余量）",
+            )
+
+    def test_outfit_preview_is_prescaled_to_display_budget(self):
+        window = self._window()
+        budget = max(window.PET_W, window.DOG_H) * 2
+        preview = window._equipped_outfit_preview()
+        if preview is not None:
+            self.assertLessEqual(
+                max(preview.width(), preview.height()), budget)
+
+
+class AnimationFrameMemoryTests(unittest.TestCase):
+    """动画帧内存预算（2026-09-12 内存优化第二轮）。
+
+    常驻动画（idle/pet/eat/play/sleep/dig_reward/drag ≈130 帧）原以
+    384² 上限常驻 ≈77-94MB，而绘制目标恒 ≤190×160（家园借用同帧
+    亦 ≤1 缩放）——加载时预缩到 1.5× 显示预算（DPR 感知），纯加载
+    期动作，不往每帧绘制加任何工作。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_loaded_animation_frames_fit_display_budget(self):
+        import copy as copy_mod
+        import pet
+
+        state = copy_mod.deepcopy(pet.DEFAULT_STATE)
+        state.update({"x": 100, "y": 100, "tutorial_completed": True})
+        window = pet.PetWindow(state)
+        self.addCleanup(window.close)
+
+        budget = window._animation_display_budget_px()
+        self.assertGreater(budget, 200)
+        for name in window.PRELOADED_ANIMATIONS:
+            window._ensure_animation_loaded(name)
+            frames = window.animation_frames.get(name)
+            if not frames:
+                continue
+            for frame in frames:
+                self.assertLessEqual(
+                    max(frame.width(), frame.height()), budget,
+                    f"动画 {name} 的帧应预缩到 1.5× 显示预算",
+                )
+
+
+class FloorCollisionSmoothnessTests(unittest.TestCase):
+    """地板碰撞卡顿修复（2026-09-12）。
+
+    三个成因：① 撞击帧把过冲钳到地面后反弹下一拍才起步（触底死帧）；
+    ② 硬砸时碰撞帧同步新建半透明「哎哟」气泡窗口；③ ~1.7s 一次的
+    随机位置落盘会落在飞行/弹跳帧上同步写盘。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def _falling_window(self, vy=800.0):
+        import copy as copy_mod
+        import pet
+
+        state = copy_mod.deepcopy(pet.DEFAULT_STATE)
+        state.update({"x": 500, "y": 500, "tutorial_completed": True})
+        window = pet.PetWindow(state)
+        self.addCleanup(window.close)
+        screen = window.current_screen_rect()
+        ground_y = screen.bottom() - window.height() - 10
+        window.move(400, int(ground_y) - 4)   # 一帧积分必过冲入地
+        window.dragging = False
+        window.on_ground = False
+        window.behavior = "idle"
+        window.vx = 0.0
+        window.vy = vy
+        return window, int(ground_y)
+
+    def test_impact_frame_starts_bounce_immediately(self):
+        window, ground_y = self._falling_window()
+        moves = []
+        window.move = lambda x, y: moves.append((x, y))
+        with patch.object(window, "play_sound"):
+            window.on_tick()
+
+        self.assertLess(window.vy, 0, "撞击帧应立即反向（已起跳）")
+        self.assertLess(moves[-1][1], ground_y,
+                        "撞击帧不应停在地面（过冲镜像回地上）")
+
+    def test_hard_impact_defers_speech_bubble_off_collision_frame(self):
+        window, _ground = self._falling_window(vy=900.0)
+        with patch.object(window, "play_sound"), \
+                patch.object(window, "say") as say_mock:
+            window.on_tick()
+            say_mock.assert_not_called()   # 碰撞帧绝不新建气泡窗口
+
+            self.assertTrue(callable(window._say_ouch))
+            window._say_ouch()
+            say_mock.assert_called_once_with("哎哟！", 800)
+
+    def test_position_save_skipped_while_airborne_but_runs_at_rest(self):
+        import pet
+
+        window, ground_y = self._falling_window()
+        with patch.object(window, "play_sound"), \
+                patch.object(window, "_capture_desktop_position"), \
+                patch("petpet.app.pet_window.random.random",
+                      return_value=0.01), \
+                patch.object(pet, "save_state") as save:
+            window.on_tick()           # 飞行→撞击帧（随机数钉到必中）
+        save.assert_not_called()
+
+        # 静止相：窗口贴回地面（重力一帧内会被地面分支钳住）。
+        window.move(400, ground_y)
+        window.on_ground = True
+        window.vx = 0.0
+        window.vy = 0.0
+        window.behavior = "idle"
+        with patch.object(window, "_capture_desktop_position"), \
+                patch("petpet.app.pet_window.random.random",
+                      return_value=0.01), \
+                patch.object(pet, "save_state") as save2:
+            window.on_tick()           # 静止帧
+        save2.assert_called_once()

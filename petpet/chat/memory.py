@@ -6,6 +6,7 @@ from copy import deepcopy
 import json
 import os
 import re
+import time
 from typing import Callable
 
 from petpet.app.pets import DEFAULT_PET_ID, load_pet_registry
@@ -32,12 +33,14 @@ def _clean_fact(value: object) -> str | None:
     return text
 
 
-def nudge_lines(facts, pet_name, idle_seconds, hour):
+def nudge_lines(facts, pet_name, idle_seconds, hour, month=None, day=None):
     """档案感知的主动搭话候选台词（2026-09-11）。
 
     纯模板、确定性：称呼栏优先取代「主人」；喜欢/作息/重要的事
     用安全引述框（任意名词都不产生病句）；无档案回退到分时段
-    通用问候。pet_name 为宠物名。
+    通用问候。pet_name 为宠物名。month/day（2026-09-12 季节节日轮）
+    可选：命中公历节日时祝福行置顶，否则按月份混入季节话术；
+    不传则维持旧四参行为。
     """
     alias = first_fact(facts, "称呼")
     who = alias or "主人"
@@ -69,6 +72,13 @@ def nudge_lines(facts, pet_name, idle_seconds, hour):
             lines += [f"今天累不累呀？{pet_name}等你呢。", "晚上好~要不要聊聊今天的事？"]
         else:
             lines += ["还没睡呀…陪着你。", "夜深了，注意休息哦。"]
+
+    if month is not None:
+        festival = festival_name(month, day)
+        if festival:
+            lines.insert(0, f"{who}，{festival}快乐！{pet_name}陪你过节～")
+        else:
+            lines += season_flavor(month, pet_name)
     return lines
 
 
@@ -79,6 +89,131 @@ def _clean_bucket(facts: dict, bucket: str) -> list[str]:
             _clean_fact(item) for item in (facts or {}).get(bucket) or []
         ) if fact
     ]
+
+
+# ---------------- 生日/纪念日提醒 + 季节/节日话术（2026-09-12） ----------------
+
+# 「重要的事」条目要成为提醒，必须同时含周年关键词和公历月日。
+_REMINDER_KIND_RE = re.compile(r"生日|纪念日|周年")
+_REMINDER_DATE_RE = re.compile(r"(\d{1,2})\s*月\s*(\d{1,2})\s*[日号]")
+
+# 公历固定节日（不做农历换算——算错日子比没有更糟，春节/中秋暂不进表）。
+SOLAR_FESTIVALS = {
+    (1, 1): "元旦",
+    (2, 14): "情人节",
+    (5, 1): "劳动节",
+    (6, 1): "儿童节",
+    (10, 1): "国庆节",
+    (12, 25): "圣诞节",
+}
+
+
+def extract_dated_facts(facts) -> list[dict]:
+    """「重要的事」里带周年关键词 + 公历月日的条目 → 提醒候选。
+
+    保守设计：只认「生日/纪念日/周年 + N月N日」同时出现的条目，
+    防止「3月5日要交材料」这类普通日期被误当节日祝贺。
+    """
+    dated = []
+    for fact in _clean_bucket(facts, "重要的事"):
+        if not _REMINDER_KIND_RE.search(fact):
+            continue
+        match = _REMINDER_DATE_RE.search(fact)
+        if not match:
+            continue
+        month, day = int(match.group(1)), int(match.group(2))
+        if not (1 <= month <= 12 and 1 <= day <= 31):
+            continue
+        dated.append({"fact": fact, "month": month, "day": day})
+    return dated
+
+
+def due_reminder(facts, month: int, day: int) -> dict | None:
+    """今天（month/day）到期的第一条提醒；没有则 None。"""
+    for item in extract_dated_facts(facts):
+        if item["month"] == month and item["day"] == day:
+            return item
+    return None
+
+
+def reminder_line(fact: str, pet_name: str) -> str:
+    """到期提醒台词：安全引述原话 + 祝贺。"""
+    return f"「{fact}」是不是就是今天呀？{pet_name}一直记着呢，祝你今天快快乐乐的！"
+
+
+def festival_name(month: int, day: int) -> str | None:
+    """公历节日名；不是节日表里的日子返回 None。"""
+    return SOLAR_FESTIVALS.get((month, day))
+
+
+def season_flavor(month: int, pet_name: str) -> list[str]:
+    """按月份的季节话术（3-5 春 / 6-8 夏 / 9-11 秋 / 12-2 冬）。"""
+    if 3 <= month <= 5:
+        return ["春天来啦，风都是软软的~", f"{pet_name}闻到春天的味道了，出去走走？"]
+    if 6 <= month <= 8:
+        return ["天热啦，记得多喝水别中暑哦。", "夏天就想吃冰的，你想不想呀？"]
+    if 9 <= month <= 11:
+        return ["秋风吹得人懒懒的，歇一会儿吧。", "入秋了，晚上记得添件衣服呀。"]
+    return ["冬天啦，手冷不冷？搓搓手暖和一下。", f"好冷呀，{pet_name}想靠着你了。"]
+
+
+# ---------------- 聊天记录导出 / 档案导入导出（2026-09-12） ----------------
+
+def format_chat_export(entries, pet_display: str) -> str:
+    """聊天历史 → 纯文本导出（时间戳 + 我/宠物 两列）。"""
+    lines = [f"Petpet 聊天记录 — {pet_display}", ""]
+    if not entries:
+        lines.append("（还没有对话记录）")
+        return "\n".join(lines)
+    lines.append(f"导出时间：{time.strftime('%Y-%m-%d %H:%M')}")
+    lines.append("")
+    for item in entries:
+        stamp = time.strftime(
+            "%Y-%m-%d %H:%M", time.localtime(item.get("t") or 0))
+        who = pet_display if str(item.get("role")) == "assistant" else "我"
+        content = str(item.get("content") or "").strip() or "（空）"
+        if item.get("image"):
+            content = "[图片] " + content if content != "（空）" else "[图片]"
+        lines.append(f"[{stamp}] {who}：{content}")
+    return "\n".join(lines)
+
+
+def facts_to_json(facts, pet_name: str = "") -> str:
+    """档案六栏 → JSON 文本（导出用；只含已知栏的清洗条目）。"""
+    payload = {
+        "pet": pet_name,
+        "facts": {
+            bucket: _clean_bucket(facts, bucket)
+            for bucket in PROFILE_BUCKETS
+        },
+    }
+    return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+def facts_from_json(text: str) -> dict:
+    """JSON 文本 → 清洗后的六栏档案（导入用）。
+
+    兼容两种结构：``{"facts": {...}}`` 导出包或裸六栏 dict。结构
+    不对抛 ``ValueError``（中文消息给弹窗用）；未知栏丢弃、条目
+    走 ``sanitize_edited_facts`` 同一张清洗网。
+    """
+    try:
+        data = json.loads(text)
+    except (ValueError, TypeError):
+        raise ValueError("档案文件不是有效的 JSON。")
+    if not isinstance(data, dict):
+        raise ValueError("档案文件结构不对。")
+    raw = data.get("facts") if isinstance(data.get("facts"), dict) else data
+    for bucket in PROFILE_BUCKETS:
+        value = raw.get(bucket)
+        if value is None:
+            continue
+        if not isinstance(value, list):
+            raise ValueError(f"「{bucket}」栏格式不对，应为条目列表。")
+    return sanitize_edited_facts({
+        bucket: raw.get(bucket)
+        for bucket in PROFILE_BUCKETS if raw.get(bucket) is not None
+    })
 
 
 def merge_profile_facts(current: dict, extracted: dict) -> dict:

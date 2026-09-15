@@ -363,7 +363,7 @@ HOME_DECORATION_DEFINITIONS = {
         "asset": "rug.png",
         "description": "为小家的地板添上一层柔软暖意。",
         "default_position": {"x": 620, "y": 430},
-        "size": (440, 270),
+        "size": (450, 196),
     },
     "home_sofa": {
         "name": "舒适沙发",
@@ -372,7 +372,7 @@ HOME_DECORATION_DEFINITIONS = {
         "asset": "sofa.png",
         "description": "一张适合晒太阳和歇脚的双人沙发。",
         "default_position": {"x": 210, "y": 360},
-        "size": (360, 225),
+        "size": (360, 197),
     },
     "home_plant": {
         "name": "绿植盆栽",
@@ -381,7 +381,7 @@ HOME_DECORATION_DEFINITIONS = {
         "asset": "plant.png",
         "description": "让房间多一位安静又有生命力的伙伴。",
         "default_position": {"x": 1500, "y": 305},
-        "size": (190, 340),
+        "size": (280, 340),
     },
     "home_wall_art": {
         "name": "墙面装饰画",
@@ -390,7 +390,7 @@ HOME_DECORATION_DEFINITIONS = {
         "asset": "wall_art.png",
         "description": "给墙面挂上一幅温柔的日落风景。",
         "default_position": {"x": 1110, "y": 95},
-        "size": (220, 285),
+        "size": (285, 285),
     },
     "home_status_card": {
         "name": "小狗状态卡",
@@ -399,7 +399,7 @@ HOME_DECORATION_DEFINITIONS = {
         "asset": None,
         "description": "挂在墙上，随时看看小狗的成长与状态。",
         "default_position": {"x": 760, "y": 105},
-        "size": (420, 270),
+        "size": (420, 278),
     },
     # 家具扩充（2026-09-10）：正式素材待用户 AI 稿经
     # tools/split_furniture_sheet.py 落位，当前为同风格程序占位。
@@ -410,7 +410,7 @@ HOME_DECORATION_DEFINITIONS = {
         "asset": "lamp.png",
         "description": "暖暖的一盏小灯，夜里也陪着小狗。",
         "default_position": {"x": 60, "y": 320},
-        "size": (150, 330),
+        "size": (142, 330),
     },
     "home_bookshelf": {
         "name": "矮矮小书架",
@@ -419,7 +419,7 @@ HOME_DECORATION_DEFINITIONS = {
         "asset": "bookshelf.png",
         "description": "摆着绘本和小摆件的矮书架。",
         "default_position": {"x": 1430, "y": 400},
-        "size": (230, 280),
+        "size": (294, 280),
     },
     "home_round_table": {
         "name": "圆润小茶几",
@@ -428,7 +428,7 @@ HOME_DECORATION_DEFINITIONS = {
         "asset": "round_table.png",
         "description": "放得下一杯热茶的小圆桌。",
         "default_position": {"x": 760, "y": 470},
-        "size": (280, 190),
+        "size": (280, 197),
     },
     "home_toy_basket": {
         "name": "玩具小藤篮",
@@ -437,7 +437,45 @@ HOME_DECORATION_DEFINITIONS = {
         "asset": "toy_basket.png",
         "description": "装着毛线球和小玩具的藤篮。",
         "default_position": {"x": 470, "y": 560},
-        "size": (220, 150),
+        "size": (220, 177),
+    },
+    # 家具第二批（2026-09-12 终稿）：挂钟/猫爬架/软垫小床/摇椅，
+    # 尺寸按用户定稿素材表实测宽高比 0.88/0.66/1.67/0.83 定。
+    "home_wall_clock": {
+        "name": "复古圆挂钟",
+        "category": "home",
+        "price": 160,
+        "asset": "clock.png",
+        "description": "滴答滴答，陪小狗一起数着过的每一天。",
+        "default_position": {"x": 320, "y": 100},
+        "size": (195, 220),
+    },
+    "home_cat_tree": {
+        "name": "猫爬架",
+        "category": "home",
+        "price": 260,
+        "asset": "cat_tree.png",
+        "description": "给未来的小伙伴预留的瞭望台，小狗偶尔也爬。",
+        "default_position": {"x": 1650, "y": 335},
+        "size": (190, 290),
+    },
+    "home_pet_bed": {
+        "name": "宠物软垫小床",
+        "category": "home",
+        "price": 200,
+        "asset": "pet_bed.png",
+        "description": "软乎乎的小圆床，午睡的最佳据点。",
+        "default_position": {"x": 980, "y": 570},
+        "size": (300, 180),
+    },
+    "home_rocking_chair": {
+        "name": "木质小摇椅",
+        "category": "home",
+        "price": 220,
+        "asset": "rocking_chair.png",
+        "description": "摇啊摇，晒着太阳打个盹。",
+        "default_position": {"x": 350, "y": 470},
+        "size": (195, 235),
     },
 }
 
@@ -1718,6 +1756,10 @@ def purchase_home_decoration(state, decoration_id):
         state["pet_coins"] = coins["pet_coins"]
     state["records"]["coins_spent"] += price
     state["owned_home_decorations"].append(decoration_id)
+    # 默认收纳（2026-09-12 用户指示）：新购家具不自动出现在场景，
+    # 先进收纳等用户从装修面板放置；默认位仍记录，放置时直接落位。
+    if decoration_id not in state["home_stored_decorations"]:
+        state["home_stored_decorations"].append(decoration_id)
     state["home_decoration_positions"][decoration_id] = clamp_home_furniture_position(
         decoration_id,
         definition["default_position"]["x"],

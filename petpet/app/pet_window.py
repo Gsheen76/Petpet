@@ -176,7 +176,7 @@ class PetWindow(QWidget):
         # sound effects
         self.sounds = {}
         if _dependency("HAS_SOUND"):
-            for name in ["bark", "eat", "sleep", "pet", "bounce",
+            for name in ["bark", "eat", "sleep", "pet",
                          "drink", "rest", "stand"]:
                 p = os.path.join(SOUNDS_DIR, f"{name}.wav")
                 if os.path.exists(p):
@@ -332,6 +332,60 @@ class PetWindow(QWidget):
             pet_definition(self.state.get("active_pet_id", "lunch_meat"))["id"],
         )
 
+    def _display_budget_px(self):
+        """贴图常驻内存预算（2026-09-12 内存优化轮）。
+
+        绘制目标恒为 PET_W×DOG_H 窗口；源姿势图最大 1728×2166
+        ≈15MB/张、7 张全分辨率常驻 +124MB（实测），加载时按显示
+        尺寸 ×2 余量（含设备像素比）预缩，单张降两个数量级。
+        部分构造的桩对象（边界测试用 __new__）无 QWindow 可询，
+        属性与 DPR 均有兜底。
+        """
+        try:
+            dpr = max(1.0, self.devicePixelRatioF())
+        except RuntimeError:
+            dpr = 1.0
+
+        def _attr(name, default):
+            try:
+                return getattr(self, name)
+            except RuntimeError:
+                return default
+
+        pet_w = _attr("PET_W", 190)
+        dog_h = _attr("DOG_H", 160)
+        return max(1, int(max(pet_w, dog_h) * 2 * dpr))
+
+    def _animation_display_budget_px(self):
+        """动画帧的显示预算：1.5× 显示尺寸（DPR 感知）。
+
+        桌面绘制恒为 PET_W×DOG_H；家园借用同帧走 ≤1 缩放。1.5× 过
+        采样对缩小滤镜已绰绰有余（384 源与 285 源缩到 160 目标视觉
+        无差，验证见 2026-09-12 内存轮测试）。桩对象返回 0 = 不缩。
+        """
+        try:
+            dpr = max(1.0, self.devicePixelRatioF())
+        except RuntimeError:
+            return 0
+
+        def _attr(name, default):
+            try:
+                return getattr(self, name)
+            except RuntimeError:
+                return default
+
+        pet_w = _attr("PET_W", 190)
+        dog_h = _attr("DOG_H", 160)
+        return int(max(pet_w, dog_h) * 1.5 * dpr)
+
+    def _shrink_to_display_budget(self, pixmap):
+        """把贴图预缩到显示预算内（等比、平滑；小图原样返回）。"""
+        budget = self._display_budget_px()
+        if pixmap.width() <= budget and pixmap.height() <= budget:
+            return pixmap
+        return pixmap.scaled(
+            budget, budget, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+
     def _load_static_pose_assets(self):
         """Load the selected pet's static poses, using its idle as fallback."""
         self.pose_pixmaps = {}
@@ -342,7 +396,7 @@ class PetWindow(QWidget):
                 continue
             pixmap = QPixmap(path)
             if not pixmap.isNull():
-                self.pose_pixmaps[idx] = pixmap
+                self.pose_pixmaps[idx] = self._shrink_to_display_budget(pixmap)
         if len(self.pose_pixmaps) == len(_dependency("POSE")):
             self.use_png = True
             return
@@ -1188,6 +1242,16 @@ class PetWindow(QWidget):
                 pixmap = pixmap.scaled(
                     self.ANIMATION_MAX_SIZE, self.ANIMATION_MAX_SIZE,
                     Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            # 动画帧预缩（2026-09-12 内存第二轮）：常驻动画约 130 帧
+            # 以 384² 常驻 ≈77MB+，而绘制目标恒 ≤PET_W×DOG_H（家园
+            # 借用同帧亦 ≤1 缩放）。加载期缩到 1.5× 显示预算，纯加载
+            # 期动作——每帧绘制反而少了过采样滤镜成本。
+            budget = self._animation_display_budget_px()
+            if budget > 0 and (
+                    pixmap.width() > budget or pixmap.height() > budget):
+                pixmap = pixmap.scaled(
+                    budget, budget,
+                    Qt.KeepAspectRatio, Qt.SmoothTransformation)
             pixmap = _dependency("adjust_animation_colors")(
                 pixmap,
                 saturation=spec.get("saturation", 1.0),
@@ -1362,7 +1426,8 @@ class PetWindow(QWidget):
         if not os.path.exists(path):
             return None
         pixmap = QPixmap(path)
-        preview = None if pixmap.isNull() else pixmap
+        preview = None if pixmap.isNull() else self._shrink_to_display_budget(
+            pixmap)
         cache[outfit_id] = preview
         return preview
 
@@ -1916,18 +1981,28 @@ class PetWindow(QWidget):
                         self.vy = 0
                 else:
                     # landing from a fall/fling -> bounce
+                    # 连续碰撞（2026-09-12 卡顿修复）：把过冲量按反弹
+                    # 系数镜像回地面之上——撞击帧立即起跳，消除"触底
+                    # 停一拍再弹起"的顿挫。
+                    # 触底音效已删（2026-09-12 用户指示）：QSoundEffect
+                    # 播放调用会在 UI 线程做音频后端工作，是撞击帧
+                    # 剩余的可疑掉帧源。
+                    penetration = new_y - ground_y
                     new_y = ground_y
                     if abs(self.vy) > 60:
                         self.vy = -self.vy * BOUNCE_FLOOR
-                        self.play_sound("bounce")
+                        new_y = ground_y - penetration * BOUNCE_FLOOR
                         if abs(self.vy) > 250:
-                            self.say("哎哟！", 800)
+                            # 喊疼挪到下一轮事件循环：碰撞帧绝不新建
+                            # 半透明气泡窗口（曾致撞击瞬间掉帧）。
+                            QTimer.singleShot(0, self._say_ouch)
                     else:
                         self.vy = 0
                     # settle to ground if bounce too small
                     if abs(self.vy) < 50:
                         self.vy = 0
                         self.on_ground = True
+                        new_y = ground_y
                     else:
                         # still bouncing, leave airborne
                         self.on_ground = False
@@ -1943,7 +2018,8 @@ class PetWindow(QWidget):
                         now2 = time.time()
                         if not hasattr(self, "_last_wall_t") or now2 - self._last_wall_t > 0.5:
                             self._last_wall_t = now2
-                            self.say("哎哟！", 800)
+                            # 与地板碰撞同款：撞击帧不建气泡（2026-09-12）。
+                            QTimer.singleShot(0, self._say_ouch)
             elif new_x > screen.right() - w:
                 new_x = screen.right() - w
                 if self.vx > 0:
@@ -1952,7 +2028,7 @@ class PetWindow(QWidget):
                         now2 = time.time()
                         if not hasattr(self, "_last_wall_t") or now2 - self._last_wall_t > 0.5:
                             self._last_wall_t = now2
-                            self.say("哎哟！", 800)
+                            QTimer.singleShot(0, self._say_ouch)
 
             # ---- ceiling ----
             if new_y < screen.top():
@@ -1989,11 +2065,21 @@ class PetWindow(QWidget):
             self.blink = False
             self.blink_t = 0
 
-        # save pos occasionally
-        if random.random() < 0.02:
+        # save pos occasionally —— 只在静止时落盘（2026-09-12 卡顿修复：
+        # 原 ~1.7s 一次的随机同步写盘会随机落在飞行/弹跳帧上造成顿挫；
+        # 静止时保存频率不变，位置最终必然持久）。
+        if (self.on_ground and not self.dragging and not is_walking
+                and abs(self.vx) < 0.01 and random.random() < 0.02):
             self._save_desktop_position()
 
         self.update()
+
+    def _say_ouch(self):
+        """碰撞喊疼（延迟到撞击帧之后执行，窗口可能已销毁要兜底）。"""
+        try:
+            self.say("哎哟！", 800)
+        except RuntimeError:
+            pass
 
     def _auto_sleep_corner_x(self):
         screen = self.current_screen_rect()

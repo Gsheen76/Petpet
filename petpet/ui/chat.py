@@ -5,11 +5,18 @@ import threading
 import time
 
 from petpet.chat import api as ai
-from petpet.chat.memory import facts_differ, first_fact, render_profile_facts
+from petpet.chat.memory import (
+    facts_differ,
+    first_fact,
+    format_chat_export,
+    render_profile_facts,
+)
 from petpet.progression.ui import FeedbackButton
 from petpet.app.paths import SHOP_UI_DIR
 from petpet.app.pets import pet_asset_path, pet_avatar_path, pet_definition
-from PyQt5.QtCore import QPoint, QRect, QRectF, QSize, Qt, QTimer
+from PyQt5.QtCore import (
+    QPoint, QRect, QRectF, QSize, QStandardPaths, Qt, QTimer,
+)
 from PyQt5.QtGui import (
     QColor,
     QFont,
@@ -40,6 +47,11 @@ from petpet.ui.common import independent_font_px, independent_pixel_font
 
 # 大头照裁剪框缓存（按源图尺寸；2026-09-10 聊天头像大头照轮）。
 _ASSISTANT_HEAD_RECTS = {}
+
+# 大头照仅冰淇凌（2026-09-12 用户定稿还原）：冰淇凌是方形整身图，
+# 圆框里整只狗太小才引入头部方裁；午餐肉等竖版整身帧沿用 v1.7.1 前
+# 的「顶部 68%」原裁——用户明令「原来的已经很好了，不要改了」。
+PET_HEADSHOT_AVATARS = {"ice_cream"}
 
 
 def _assistant_head_rect(image):
@@ -264,6 +276,18 @@ class ChatWindow(QWidget):
             QPushButton#chatTool:pressed {{
                 background:#efd9cc;
             }}
+            QPushButton#exportTool {{
+                background:#fffdfb; color:#76594b;
+                border:1px solid #e5d5ca; border-radius:20px;
+                padding:0 14px;
+                font-weight:700;
+            }}
+            QPushButton#exportTool:hover {{
+                background:#f8e9e1; color:#8f604e; border-color:#ddbaa8;
+            }}
+            QPushButton#exportTool:pressed {{
+                background:#efd9cc;
+            }}
             QPushButton#roundTool {{
                 min-width:40px; max-width:40px;
                 min-height:38px; max-height:38px;
@@ -486,6 +510,12 @@ class ChatWindow(QWidget):
         self.image_btn.setToolTip("上传图片")
         self.image_btn.clicked.connect(self.select_image)
 
+        self.export_btn = FeedbackButton("导出")
+        self.export_btn.setObjectName("exportTool")
+        self.export_btn.setToolTip("把聊天记录存成文本文件")
+        self.export_btn.setCursor(Qt.PointingHandCursor)
+        self.export_btn.clicked.connect(self.export_chat_history)
+
         self.settings_btn = FeedbackButton("⚙")
         self.settings_btn.setObjectName("roundTool")
         self.settings_btn.setToolTip("API 设置")
@@ -503,7 +533,7 @@ class ChatWindow(QWidget):
         self.clear_btn.clicked.connect(self.confirm_clear_memory)
         for control in (
                 self.model_btn, self.image_btn,
-                self.settings_btn, self.clear_btn):
+                self.settings_btn, self.clear_btn, self.export_btn):
             control.setFont(independent_pixel_font(17, QFont.Bold))
             control.setFixedHeight(40)
         self._refresh_ai_tool_buttons()
@@ -523,6 +553,7 @@ class ChatWindow(QWidget):
         tools_row.addWidget(self.model_btn)
         tools_row.addWidget(self.image_btn)
         tools_row.addStretch(1)
+        tools_row.addWidget(self.export_btn)
         tools_row.addWidget(self.settings_btn)
         tools_row.addWidget(self.clear_btn)
 
@@ -907,6 +938,37 @@ class ChatWindow(QWidget):
             viewport_width = self.width() - 32
         return max(240, int(viewport_width * 0.72))
 
+    def _assistant_source_rect(self, image):
+        """当前宠物的头像裁剪框。
+
+        大头照宠物（``PET_HEADSHOT_AVATARS``，2026-09-10 冰淇凌定稿）
+        取头部方形区域；其余宠物沿用 v1.7.1 前的原裁——近方形图取
+        居中方裁，竖版整身帧取「顶部 68% 高」整身方裁（2026-09-12
+        用户明令午餐肉还原此裁，勿再并入大头照；同日追调：去掉旧
+        4% 顶部让位，耳尖才能落进圆框内——60px 下原让位使耳尖贴圆边）。
+        """
+        if self.pet_id in PET_HEADSHOT_AVATARS:
+            return _assistant_head_rect(image)
+        square_image = (
+            abs(image.width() - image.height())
+            <= min(image.width(), image.height()) * 0.2
+        )
+        if square_image:
+            edge = min(image.width(), image.height())
+            return QRect(
+                (image.width() - edge) // 2,
+                (image.height() - edge) // 2,
+                edge,
+                edge,
+            )
+        edge = min(image.width(), max(1, int(image.height() * 0.68)))
+        return QRect(
+            (image.width() - edge) // 2,
+            0,
+            edge,
+            edge,
+        )
+
     def _avatar_pixmap(self, role, size=60):
         """Build a circular desktop-pet or player avatar pixmap."""
         source = "default"
@@ -934,9 +996,7 @@ class ChatWindow(QWidget):
         painter.fillRect(canvas.rect(), QColor("#f3ded0"))
         if not image.isNull():
             if role == "assistant":
-                # 大头照（2026-09-10 用户定稿）：只取头部方形区域，
-                # 替代旧的"顶部 68% 高"整身方裁。
-                source_rect = _assistant_head_rect(image)
+                source_rect = self._assistant_source_rect(image)
             else:
                 square_image = (
                     abs(image.width() - image.height())
@@ -1437,6 +1497,32 @@ class ChatWindow(QWidget):
             f"跟 {self._pet_name()} 说点什么…"
         )
         self._set_log_messages(self._history_messages())
+
+    def export_chat_history(self):
+        """把全部聊天历史导出为文本文件（2026-09-12，防手滑清空）。"""
+        default_name = time.strftime("Petpet聊天记录_%Y%m%d_%H%M.txt")
+        default_dir = QStandardPaths.writableLocation(
+            QStandardPaths.DocumentsLocation)
+        default_path = (
+            os.path.join(default_dir, default_name) if default_dir
+            else default_name
+        )
+        path, _ = QFileDialog.getSaveFileName(
+            self, "导出聊天记录", default_path, "文本文件 (*.txt)")
+        if not path:
+            return
+        text = format_chat_export(
+            self.mem.get("history") or [], self._pet_name())
+        try:
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(text)
+        except OSError:
+            self.chat_notice.setText("导出失败，请稍后再试。")
+            self.chat_notice.show()
+            return
+        self.chat_notice.setText(
+            f"聊天记录已导出：{os.path.basename(path)}")
+        self.chat_notice.show()
 
     def confirm_clear_memory(self):
         """Ask for confirmation in the pet's voice; on yes, wipe memory."""
