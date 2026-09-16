@@ -2480,3 +2480,5 @@ class OcclusionHysteresisTests(unittest.TestCase):
             order = self._order(scene)
             # 藤篮底边 810 >> pet 460：宠物在藤篮后
             self.assertLess(order.index("home_pet"), order.index("home_toy_basket"))
+
+

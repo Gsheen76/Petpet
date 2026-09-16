@@ -25,31 +25,31 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FURNITURE_DIR = os.path.join(ROOT, "assets", "runtime", "furniture", "home")
 
 # 顺序 = 提示词顺序（行优先）→ (asset 文件名, 定义尺寸)。
+def _definition_sizes():
+    """从 HOME_DECORATION_DEFINITIONS 读 asset 文件名 → 定义尺寸。
+
+    单一事实源（2026-09-15 技术债 C2）：此前尺寸在定义与拆分器
+    双份维护，改一边即静默失同步。
+    """
+    import sys
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if root not in sys.path:
+        sys.path.insert(0, root)
+    from petpet.progression.core import HOME_DECORATION_DEFINITIONS
+    return {
+        definition["asset"]: tuple(definition["size"])
+        for definition in HOME_DECORATION_DEFINITIONS.values()
+        if definition.get("asset")
+    }
+
+
+# 每批只声明拆分顺序（asset 文件名），尺寸一律取定义。
 FURNITURE_SETS = {
-    # 新四件（2026-09-12 终稿重制：尺寸按 22_23_37 表实测比例
-    # 0.43/1.05/1.42/1.24 定，高/宽尽量贴近原值）。
-    "new": (
-        ("lamp.png", (142, 330)),
-        ("bookshelf.png", (294, 280)),
-        ("round_table.png", (280, 197)),
-        ("toy_basket.png", (220, 177)),
-    ),
-    # 旧四件重制（2026-09-12 终稿重制：22_25_15 表实测比例
-    # 2.29/1.83/0.82/1.00）。
-    "legacy": (
-        ("rug.png", (450, 196)),
-        ("sofa.png", (360, 197)),
-        ("plant.png", (280, 340)),
-        ("wall_art.png", (285, 285)),
-    ),
-    # 第二批四件（2026-09-12 终稿：挂钟/猫爬架/软垫小床/摇椅；
-    # 尺寸按用户定稿素材表实测宽高比 0.88/0.66/1.67/0.83 定）。
-    "cozy2": (
-        ("clock.png", (195, 220)),
-        ("cat_tree.png", (190, 290)),
-        ("pet_bed.png", (300, 180)),
-        ("rocking_chair.png", (195, 235)),
-    ),
+    "new": ("lamp.png", "bookshelf.png", "round_table.png",
+            "toy_basket.png"),
+    "legacy": ("rug.png", "sofa.png", "plant.png", "wall_art.png"),
+    "cozy2": ("clock.png", "cat_tree.png", "pet_bed.png",
+              "rocking_chair.png"),
 }
 FURNITURE_ORDER = FURNITURE_SETS["new"]
 
@@ -76,7 +76,11 @@ def split_sheet(sheet_path: str, threshold: int = 240,
     print(f"gutter cuts: cols {[c for c, _ in col_bounds[1:]]} "
           f"rows {[r for r, _ in row_bounds[1:]]}")
     results = []
-    for index, (filename, size) in enumerate(order):
+    sizes = _definition_sizes()
+    for index, filename in enumerate(order):
+        size = sizes.get(filename)
+        if size is None:
+            raise SystemExit(f"定义中找不到 {filename} 的尺寸")
         col, row = index % COLUMNS, index // COLUMNS
         x0, x1 = col_bounds[col]
         y0, y1 = row_bounds[row]

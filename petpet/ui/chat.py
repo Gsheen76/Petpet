@@ -175,7 +175,7 @@ class ChatWindow(QWidget):
         self.mem = ai.load_memory(pet_id=self.pet_id)
         if getattr(self, "_ui_built", False):
             self.refresh_pet_name()
-            self._set_log_messages(self._history_messages())
+            self._refresh_history_view()
         return True
 
     def set_memory_profile(self, profile):
@@ -384,6 +384,14 @@ class ChatWindow(QWidget):
         title_row.addSpacing(6)
         title_row.addWidget(self.close_btn)
 
+        # 聊天记录搜索（2026-09-15 A3）：关键词过滤历史消息，
+        # 清空恢复全部；只影响显示，不动存档。
+        self.search_input = QLineEdit()
+        self.search_input.setObjectName("chatSearch")
+        self.search_input.setPlaceholderText("搜索聊天记录")
+        self.search_input.setClearButtonEnabled(True)
+        self.search_input.textChanged.connect(self._refresh_history_view)
+
         # Real widgets keep each message softly rounded on every platform.
         # QTextEdit's HTML renderer ignores several modern CSS properties.
         self.log = QScrollArea()
@@ -398,7 +406,7 @@ class ChatWindow(QWidget):
         self.log_layout.setSpacing(4)
         self.log.setWidget(self.log_body)
         self._displayed_messages = []
-        self._set_log_messages(self._history_messages())
+        self._refresh_history_view()
 
         # input row
         self.input = QLineEdit()
@@ -563,6 +571,7 @@ class ChatWindow(QWidget):
         card_layout.setContentsMargins(12, 10, 12, 12)
         card_layout.setSpacing(9)
         card_layout.addLayout(title_row)
+        card_layout.addWidget(self.search_input)
         card_layout.addWidget(self.log, 1)
         card_layout.addWidget(self.chat_notice)
         card_layout.addWidget(self.image_preview)
@@ -917,6 +926,21 @@ class ChatWindow(QWidget):
             )
             return
         self._refresh_ai_tool_buttons()
+
+    def _refresh_history_view(self):
+        """按搜索框关键词刷新消息列表（空=全部）。"""
+        keyword = self.search_input.text().strip()
+        if not keyword:
+            self._set_log_messages(self._history_messages())
+            return
+        matched = [
+            (str(item.get("role", "assistant")),
+             str(item.get("content", "")),
+             item.get("image"))
+            for item in self.mem.get("history", [])
+            if keyword in str(item.get("content", ""))
+        ]
+        self._set_log_messages(matched)
 
     def _history_messages(self, exclude_last_assistant=False):
         """Return the recent transcript for the native message widget list."""
@@ -1423,7 +1447,7 @@ class ChatWindow(QWidget):
             f"跟 {self._pet_name()} 说点什么…"
         )
         self.input.setFocus()
-        self._set_log_messages(self._history_messages())
+        self._refresh_history_view()
         # also show a speech bubble on the pet
         short = full if len(full) < 40 else full[:38] + "…"
         self.pet.say(short, 3000)
@@ -1483,7 +1507,7 @@ class ChatWindow(QWidget):
         self.input.setPlaceholderText(
             f"跟 {self._pet_name()} 说点什么…"
         )
-        self._set_log_messages(self._history_messages())
+        self._refresh_history_view()
         self.pet.say(reply[:30], 2000)
 
     def _finish_chat_request(self, keep_history_image=False):
@@ -1496,7 +1520,7 @@ class ChatWindow(QWidget):
         self.input.setPlaceholderText(
             f"跟 {self._pet_name()} 说点什么…"
         )
-        self._set_log_messages(self._history_messages())
+        self._refresh_history_view()
 
     def export_chat_history(self):
         """把全部聊天历史导出为文本文件（2026-09-12，防手滑清空）。"""

@@ -627,7 +627,7 @@ class PetNameEditDialog(QDialog):
     def __init__(self, current_name, on_apply, parent=None):
         super().__init__(parent)
         self.on_apply = on_apply
-        self.setWindowTitle("给小狗改名")
+        self.setWindowTitle("给TA改名")
         self.setModal(True)
         self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
@@ -635,7 +635,7 @@ class PetNameEditDialog(QDialog):
 
         card = QFrame()
         card.setObjectName("petNameEditCard")
-        title = QLabel("给小狗改个名字")
+        title = QLabel("给TA改个名字")
         title.setObjectName("petNameEditTitle")
         title.setFont(independent_pixel_font(21, QFont.Bold))
         hint = QLabel("最多 6 个字符")

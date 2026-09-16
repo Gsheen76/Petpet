@@ -640,6 +640,83 @@ def _clear_layout(layout):
             widget.deleteLater()
 
 
+def weekly_companionship_summary(records):
+    """陪伴周报文案（2026-09-15 A4）：记录页顶部的一行式汇总。
+
+    纯函数：从 records 计数生成 2-3 行中文摘要；数据为空时给
+    温和的引导文案。
+    """
+    def _count(key):
+        try:
+            return int((records or {}).get(key, 0) or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    chats = _count("chats_opened")
+    replies = _count("ai_replies")
+    interactions = (
+        _count("pettings") + _count("feedings") + _count("play_sessions")
+    )
+    gifts = _count("gifts_given")
+    try:
+        hours = max(0, int(_count("active_seconds") // 3600))
+    except Exception:
+        hours = 0
+
+    if not any((chats, replies, interactions, gifts, hours)):
+        return ["这周还没开始记录，去摸摸 TA 吧～"]
+    lines = [f"本周：陪伴 {hours} 小时 · 互动 {interactions} 次"
+             + (f" · 送出礼物 {gifts} 份" if gifts else "")]
+    detail = " · ".join(
+        f"{label} {value}"
+        for label, value in (
+            ("摸摸", _count("pettings")),
+            ("喂饭", _count("feedings")),
+            ("玩耍", _count("play_sessions")),
+        ) if value
+    )
+    if detail:
+        lines.append(detail)
+    if chats or replies:
+        lines.append(f"聊天 {chats} 次，TA 回了你 {replies} 句。")
+    else:
+        lines.append("还没聊天，TA 想听你说话。")
+    return lines
+
+
+def _build_chip_bar(entries, bar_name, *, use_chip_property=True,
+                    margins=(5, 5, 5, 5), spacing=7):
+    """通用胶囊分栏托盘（2026-09-15 技术债 C1：三处同型收敛）。
+
+    entries: [(key, label, objectName, checked, callback)]——callback
+    收 key。等分铺满、互斥选中、FeedbackButton 反馈规范。
+    use_chip_property=False 时不设 chipBar 属性（托盘走专属 QSS 的
+    场景，如 giftFilterBar 的 border-image 规则）。
+    """
+    bar = QFrame()
+    bar.setObjectName(bar_name)
+    if use_chip_property:
+        bar.setProperty("chipBar", True)
+    layout = QHBoxLayout(bar)
+    layout.setContentsMargins(*margins)
+    layout.setSpacing(spacing)
+    group = QButtonGroup(bar)
+    group.setExclusive(True)
+    for key, label, object_name, checked, callback in entries:
+        button = FeedbackButton(label)
+        button.setObjectName(object_name)
+        button.setProperty("chipTab", True)
+        button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        button.setCheckable(True)
+        button.setChecked(bool(checked))
+        button.setCursor(Qt.PointingHandCursor)
+        group.addButton(button)
+        button.clicked.connect(
+            lambda _checked=False, selected=key: callback(selected))
+        layout.addWidget(button)
+    return bar
+
+
 def _coin_balance(state):
     player = state.get("player")
     return (
@@ -1282,6 +1359,21 @@ class RecordsWindow(CozyProgressWindow):
 
         if pets:
             self._add_page_header(self._build_pet_switch_bar(pets))
+
+        # 陪伴周报（2026-09-15 A4）：页顶汇总，一周的数据一眼可读。
+        weekly = QFrame()
+        weekly.setObjectName("weeklySummary")
+        weekly_layout = QVBoxLayout(weekly)
+        weekly_layout.setContentsMargins(14, 10, 14, 10)
+        weekly_layout.setSpacing(2)
+        for line in weekly_companionship_summary(records):
+            label = QLabel(line)
+            label.setWordWrap(True)
+            label.setStyleSheet(
+                "color:#7b564a;font-size:16px;font-weight:600;"
+            )
+            weekly_layout.addWidget(label)
+        self.content_layout.addWidget(weekly)
 
         if self.record_pet_id is not None:
             # Pet tabs only show what belongs to this pet; shared panels
@@ -2403,27 +2495,15 @@ class ShopWindow(CozyProgressWindow):
         products_title.setAlignment(Qt.AlignCenter)
         self._add_page_header(products_title)
 
-        selector = QFrame()
-        selector.setObjectName("outfitPetSelector")
-        selector.setProperty("chipBar", True)
-        selector_layout = QHBoxLayout(selector)
-        selector_layout.setContentsMargins(5, 5, 5, 5)
-        selector_layout.setSpacing(7)
-        selector_group = QButtonGroup(selector)
-        selector_group.setExclusive(True)
-        for pet_id, text in (("lunch_meat", "午餐肉"), ("ice_cream", "冰淇淋")):
-            button = FeedbackButton(text)
-            button.setObjectName(f"outfitPet_{pet_id}")
-            button.setProperty("chipTab", True)
-            # 2026-09-08：分栏等分铺满整行（有几个分几等分）。
-            button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-            button.setCheckable(True)
-            button.setChecked(self.outfit_pet_id == pet_id)
-            button.setCursor(Qt.PointingHandCursor)
-            selector_group.addButton(button)
-            button.clicked.connect(lambda _checked=False, selected=pet_id: self._set_outfit_pet(selected))
-            selector_layout.addWidget(button)
-        # 2026-09-08：等分铺满整行（原尾部 stretch 左对齐已按用户指示移除）。
+        selector = _build_chip_bar(
+            [
+                (pet_id, text, f"outfitPet_{pet_id}",
+                 self.outfit_pet_id == pet_id, self._set_outfit_pet)
+                for pet_id, text in (
+                    ("lunch_meat", "午餐肉"), ("ice_cream", "冰淇淋"))
+            ],
+            "outfitPetSelector",
+        )
         self.content_layout.addWidget(selector)
 
         outfits = [
@@ -2785,30 +2865,15 @@ class ShopWindow(CozyProgressWindow):
         self._add_page_header(title)
 
         # 家居分栏（2026-09-12 用户指示）：与装修面板同四栏
-        # （全部/家具/装饰/玩具），复用 chipBar/chipTab 通用样式
-        # （套装页宠物选择器同款实现，等分铺满）。
-        selector = QFrame()
-        selector.setObjectName("homeCategoryBar")
-        selector.setProperty("chipBar", True)
-        selector_layout = QHBoxLayout(selector)
-        selector_layout.setContentsMargins(5, 5, 5, 5)
-        selector_layout.setSpacing(7)
-        selector_group = QButtonGroup(selector)
-        selector_group.setExclusive(True)
-        for category, label in HOME_DECORATION_CATEGORIES:
-            button = FeedbackButton(label)
-            button.setObjectName(f"homeCategory_{category}")
-            button.setProperty("chipTab", True)
-            button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-            button.setCheckable(True)
-            button.setChecked(self.home_category == category)
-            button.setCursor(Qt.PointingHandCursor)
-            selector_group.addButton(button)
-            button.clicked.connect(
-                lambda _checked=False, selected=category:
-                self._set_home_category(selected)
-            )
-            selector_layout.addWidget(button)
+        # （全部/家具/装饰/玩具），复用 chipBar/chipTab 通用样式。
+        selector = _build_chip_bar(
+            [
+                (category, label, f"homeCategory_{category}",
+                 self.home_category == category, self._set_home_category)
+                for category, label in HOME_DECORATION_CATEGORIES
+            ],
+            "homeCategoryBar",
+        )
         self.content_layout.addWidget(selector)
 
         grid_host = QWidget()
@@ -3074,32 +3139,17 @@ class ShopWindow(CozyProgressWindow):
         title.setAlignment(Qt.AlignCenter)
         self._add_page_header(title)
 
-        # 分栏托盘与套装页宠物选择器同款（chipBar/chipTab 通用样式）：
-        # 奶油托盘 + 左对齐圆角钮 + 互斥选中，2026-09-08 用户指示模仿套装页。
-        bar = QFrame()
-        bar.setObjectName("giftFilterBar")
-        # 托盘走 QFrame#giftFilterBar 专属 border-image 规则（旧 4 槽
-        # 药丸素材），不再设 chipBar 属性（避免托盘样式叠加）。
-        bar_layout = QHBoxLayout(bar)
-        bar_layout.setContentsMargins(5, 5, 5, 5)
-        bar_layout.setSpacing(7)
-        bar_group = QButtonGroup(bar)
-        bar_group.setExclusive(True)
-        for key, label in self.GIFT_FILTERS:
-            button = FeedbackButton(label)
-            button.setObjectName(f"giftFilter_{key}")
-            button.setProperty("chipTab", True)
-            button.setCheckable(True)
-            button.setChecked(self.gift_filter == key)
-            button.setCursor(Qt.PointingHandCursor)
-            # 等分铺满整行：四个分栏各占 1/4。
-            button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-            bar_group.addButton(button)
-            button.clicked.connect(
-                lambda _checked=False, selected=key:
-                self._set_gift_filter(selected)
-            )
-            bar_layout.addWidget(button)
+        # 分栏托盘（chipTab 通用样式）：托盘走 QFrame#giftFilterBar
+        # 专属 border-image 规则，不设 chipBar 属性避免样式叠加。
+        bar = _build_chip_bar(
+            [
+                (key, label, f"giftFilter_{key}",
+                 self.gift_filter == key, self._set_gift_filter)
+                for key, label in self.GIFT_FILTERS
+            ],
+            "giftFilterBar",
+            use_chip_property=False,
+        )
         self.content_layout.addWidget(bar)
 
         grid_host = QWidget()

@@ -766,3 +766,42 @@ class ChatExportButtonTests(unittest.TestCase):
         self.assertEqual(window.export_btn.text(), "导出")
         self.assertEqual(window.export_btn.objectName(), "exportTool")
         self.assertTrue(isinstance(window.export_btn, FeedbackButton))
+
+
+class ChatHistorySearchTests(unittest.TestCase):
+    """聊天记录搜索（2026-09-15 A3）：按关键词过滤历史消息。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def _window(self):
+        window = pet.ChatWindow(FakePet())
+        self.addCleanup(window.close)
+        return window
+
+    def test_search_box_exists_and_filters_history(self):
+        window = self._window()
+        self.assertEqual(window.search_input.placeholderText(), "搜索聊天记录")
+
+        window.mem["history"] = [
+            {"role": "user", "content": "今天天气怎么样"},
+            {"role": "assistant", "content": "今天晴天哦"},
+            {"role": "user", "content": "晚上吃什么"},
+            {"role": "assistant", "content": "吃火锅吧"},
+        ]
+        window.search_input.setText("天气")
+        QApplication.processEvents()
+
+        bubbles = window.findChildren(QLabel, "chatMessage")
+        texts = [b.text() for b in bubbles]
+        self.assertTrue(any("天气" in t for t in texts))
+        self.assertFalse(any("火锅" in t for t in texts),
+                          "不匹配的消息应被过滤")
+
+        # 清空搜索恢复全部
+        window.search_input.clear()
+        QApplication.processEvents()
+        bubbles = window.findChildren(QLabel, "chatMessage")
+        texts = [b.text() for b in bubbles]
+        self.assertTrue(any("火锅" in t for t in texts))

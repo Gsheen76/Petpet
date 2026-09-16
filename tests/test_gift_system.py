@@ -6,6 +6,8 @@ add_affection）或非当前宠物（直接落到该宠物 profile）。
 """
 
 import unittest
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 from PyQt5.QtCore import Qt
 
@@ -556,3 +558,40 @@ class ProfileGiftTabTests(unittest.TestCase):
             progression.gift_count(state, "meat_can"), 1,
         )
         self.assertEqual(state["affection_points"], 0)
+
+
+class GiftReactionTests(unittest.TestCase):
+    """送礼反应（2026-09-15 A2）：送出成功宠物播放开心动作。"""
+
+    def test_successful_gift_triggers_happy_animation(self):
+        state = progression.ensure_progression({
+            "pets": {"lunch_meat": {}},
+            "owned_pet_ids": ["lunch_meat"],
+            "active_pet_id": "lunch_meat",
+        })
+        state["gift_inventory"] = {"plush_ball": 3}
+        from petpet.ui import pet_profile as pp
+
+        window = pp.PetProfileWindow.__new__(pp.PetProfileWindow)
+        window._viewing_pet_id = None
+        window.pet = SimpleNamespace(
+            state=state,
+            say=Mock(),
+            update=Mock(),
+            trigger_animation=Mock(),
+            refresh_pet_assets=Mock(),
+            hide=Mock(),
+            show=Mock(),
+        )
+        window._save_state = Mock()
+        window._play_gift_hearts = Mock()
+        window.refresh = Mock()
+        window._confirm_send_gift = lambda _gid: True
+        window._active_pet_id = lambda: "lunch_meat"
+
+        window._give_gift("plush_ball")
+
+        window.pet.trigger_animation.assert_called_once()
+        args = window.pet.trigger_animation.call_args[0]
+        self.assertEqual(args[0], "play",
+                         "送礼成功应播放玩耍（开心）动画")

@@ -25,8 +25,9 @@ from petpet.app.fonts import APP_FONT_FAMILY
 from petpet.app.paths import GIFTS_UI_DIR
 from petpet.app import pets as pet_registry
 from petpet.app import state as app_state
+from petpet.chat import api as ai
 from petpet.progression import core as progression
-from petpet.progression.ui import PurchasePopup
+from petpet.progression.ui import FeedbackButton, PurchasePopup
 
 _NAME_DIALOG_FACTORY = None
 
@@ -75,10 +76,10 @@ IDLE_FPS = 8
 
 # 图3 名字牌（rename_bg 323x63）+ 改名钮（change_name 94x55）：
 # 垫正下方居中，两素材均放大 50%（第十五轮后续）；改名钮放牌内右端。
-NAME_PLATE_AT = (466, 578, 360, 70)   # 第七十二轮B：下移 5 显示px（+8 art）
+NAME_PLATE_AT = (366, 560, 335, 82)   # 2026-09-15 七调：上移 12；比例 3.93×82，对中心 646
 # 名字在牌内部整体居中（第二十六轮）：可用区 = 牌宽 - 钮宽 - 边距，居中放。
-NAME_ART_AT = (478, 581, 220, 64)   # 居中于牌内可用区（左缘~按钮左缘）
-RENAME_BUTTON_AT = (700, 581, 113, 66)   # 原生 94x55 × 1.2 等比（不被压扁）
+NAME_ART_AT = (407, 573, 188, 64)   # 2026-09-15 十二调：再右移 10
+RENAME_BUTTON_AT = (584, 580, 95, 53)   # 2026-09-15 十调：右移 8
 
 # 分栏（第三十七轮）：参考图裁切的两枚素材按钮（简介/套装），
 # 附着在内容背景图上方；选中态用另一枚按钮互换表示。
@@ -547,9 +548,9 @@ class _TabButton(QWidget):
                 rect.width(), rect.height(),
                 Qt.KeepAspectRatio, Qt.SmoothTransformation,
             )
-            # 未选中透明度（第七十二轮B：0.65→0.55 再降一档）。
+            # 未选中透明度（2026-09-15 用户定稿 0.50）。
             if not (self.checked or self._hovered or self._pressed):
-                painter.setOpacity(0.55)
+                painter.setOpacity(0.50)
             painter.drawPixmap(
                 rect.x() + (rect.width() - scaled.width()) // 2,
                 rect.y() + (rect.height() - scaled.height()) // 2,
@@ -701,10 +702,19 @@ class _ArtButton(QWidget):
     """素材图标按钮（第十九/二十一轮泛化）：悬浮放大+白洗，点击缩小→
     还原后触发回调（两段式，节奏 CLOSE_*_MS）。用于关闭/改名等贴图键。"""
 
-    def __init__(self, parent, art, on_activate):
+    def __init__(self, parent, art, on_activate, margin=0,
+                 hover_wash=True, hover_grow=3):
         super().__init__(parent)
         self._art = art if not art.isNull() else QPixmap()
         self._on_activate = on_activate
+        # 悬浮白洗开关（2026-09-15 用户取消本页白闪）：False 时
+        # 只保留放大/内缩反馈；hover_grow 控制悬浮放大像素。
+        self._hover_wash = bool(hover_wash)
+        self._hover_grow = max(0, int(hover_grow))
+        # 画布余量（2026-09-15 陪我键轮）：休息态贴图内缩 margin，
+        # 悬浮/按压的缩放永远画在 widget 内——悬浮涨幅裁切治本
+        # （AGENTS 按键规范：几何余量按悬浮涨幅预留）。
+        self._margin = max(0, int(margin))
         self.hovered = False
         self._phase = None  # None | "pressed" | "recover"
         self._armed = False      # 按下中（拖走取消判定）
@@ -719,13 +729,17 @@ class _ArtButton(QWidget):
 
     def _art_rect(self):
         """素材绘制区（按钮内居中，按状态缩放）。"""
+        m = self._margin
         full = QRect(0, 0, self.width(), self.height())
-        rect = full
+        base = full.adjusted(m, m, -m, -m) if m else full
         if self._phase == "pressed":
             # 按住持续缩小（第三十四轮：幅度 4→3px 略减）。
-            rect = full.adjusted(3, 3, -3, -3)
+            rect = base.adjusted(3, 3, -3, -3)
         elif self.hovered and self._phase is None:
-            rect = full.adjusted(-3, -3, 3, 3)
+            g = self._hover_grow
+            rect = base.adjusted(-g, -g, g, g)
+        else:
+            rect = base
         return rect
 
     def paintEvent(self, event):
@@ -754,7 +768,7 @@ class _ArtButton(QWidget):
             # 黑闪盖素材实际范围（第三十四轮：alpha 80→60 略减）。
             painter.setBrush(QColor(70, 42, 28, 60))
             painter.drawRoundedRect(art_pos, 10, 10)
-        elif self.hovered:
+        elif self.hovered and self._hover_wash:
             painter.setBrush(QColor(255, 252, 246, 80))
             painter.drawRoundedRect(art_pos, 10, 10)
 
@@ -820,6 +834,9 @@ class PetProfileWindow(QWidget):
         self._drag_offset = None
         self._name_dialog = None
         self._pet_cards = {}
+        # 查看/陪伴分离（2026-09-15）：点头像只切换查看（预览），
+        # 「陪伴」按钮才真正切换出勤。
+        self._viewing_pet_id = None
         self._idle_frames = []
         self._idle_index = 0
 
@@ -843,6 +860,7 @@ class PetProfileWindow(QWidget):
         # 素材逐个接入（base_UI 已于第六轮撤下）。
         self._close_button = _ArtButton(
             self, _pp_pixmap("close_button.png"), self.close,
+            hover_wash=False,
         )
         self._close_button.set_art_rect(CLOSE_BUTTON_AT)
         # 套装装备按钮素材映射（绿=恐龙、橘=草莓），测试与刷新共用。
@@ -934,12 +952,36 @@ class PetProfileWindow(QWidget):
             button.setFixedSize(round(118 * _FIT), round(118 * _FIT))
             button.move(_R(card_x, card_y, 0, 0).topLeft())
             button.clicked.connect(
-                lambda _checked=False, target=pet_id: self._select_pet(target)
+                lambda _checked=False, target=pet_id:
+                self._select_pet_for_view(target)
             )
             # 「使用中」pill 已按用户指示停用（PET_CARD_TAG_AT 保留备用）。
             tag = None
             # 卡下名字已按用户指示删去（PET_CARD_NAME_AT 保留备用）。
             self._pet_cards[pet_id] = {"button": button, "tag": tag}
+
+        # 陪伴按钮（2026-09-15 查看/陪伴分离；同日晚用户素材定稿）：
+        # 查看非出勤宠物时出现——点击让 TA 出勤陪你。用户提供的贴图
+        # 走 _ArtButton（悬浮放大+白洗 / 按住内缩压暗 / 键内回弹触发，
+        # 与面板其他贴图键同款反馈）。位置：待机动画图右侧垂直居中。
+        self._companion_button = _ArtButton(
+            self,
+            _pp_pixmap("companion_button.png"),
+            self._accompany_viewed_pet,
+            margin=6, hover_wash=False, hover_grow=1,
+        )
+        self._companion_button.setObjectName("companionButton")
+        # 2026-09-15 十二调：中心轴对齐基础上再下移 4；
+        # 画布余量 margin*2。
+        art_h = 72
+        art_w = round(art_h * (1075 / 379))
+        row_cy = NAME_PLATE_AT[1] + NAME_PLATE_AT[3] // 2 + 4
+        self._companion_button.set_art_rect((
+            NAME_PLATE_AT[0] + NAME_PLATE_AT[2] + 16,
+            row_cy - art_h // 2 - 6,
+            art_w + 12, art_h + 12,
+        ))
+
 
         # 图2：待机动画位（垫上，底部对齐）。
         self._idle_label = QLabel(self)
@@ -950,10 +992,11 @@ class PetProfileWindow(QWidget):
         # 图3：名字牌（rename_bg）+ 艺术字名字 + 改名钮（change_name 素材，
         # 第二十一轮：与关闭键同款 _ArtButton 交互——悬浮放大/点击缩小还原）。
         self._pixmap_label("rename_bg.png", *NAME_PLATE_AT)
-        self._name_label = _ArtTitle("", self, font_px=34)
+        self._name_label = _ArtTitle("", self, font_px=28)
         self._name_label.setGeometry(_R(*NAME_ART_AT))
         self._rename_button = _ArtButton(
-            self, _pp_pixmap("change_name.png"), self._open_name_dialog,
+            self, _pp_pixmap("rename_icon.png"), self._open_name_dialog,
+            margin=3, hover_wash=False,
         )
         self._rename_button.set_art_rect(RENAME_BUTTON_AT)
 
@@ -1175,9 +1218,13 @@ class PetProfileWindow(QWidget):
 
     def _start_idle_animation(self):
         """加载当前宠物 idle 动画帧并按 8fps 循环播放。"""
-        self._idle_frames = _load_idle_frames(
-            self._active_pet_id(), IDLE_FRAME_HEIGHT,
-        )
+        view_id = self._view_pet_id()
+        self._idle_frames = _load_idle_frames(view_id, IDLE_FRAME_HEIGHT)
+        # 待机动画竖向微调（2026-09-15 五调）：冰淇凌再下一点、
+        # 午餐肉上一点（自统一 +20 基础上分化）。
+        offset_y = 34 if view_id == "ice_cream" else 10
+        self._idle_label.setGeometry(
+            _R(*IDLE_PREVIEW_RECT).translated(0, offset_y))
         self._idle_index = 0
         if self._idle_frames:
             self._idle_label.setPixmap(self._idle_frames[0])
@@ -1199,15 +1246,65 @@ class PetProfileWindow(QWidget):
             "active_pet_id", pet_registry.DEFAULT_PET_ID,
         ))
 
+    def _view_pet_id(self):
+        """当前「查看」的宠物（未选查看时=出勤宠物）。"""
+        return self._viewing_pet_id or self._active_pet_id()
+
+    def _select_pet_for_view(self, pet_id):
+        """点头像：只切换面板查看效果，不动出勤。"""
+        if pet_id != self._view_pet_id():
+            self._viewing_pet_id = pet_id
+        self._start_idle_animation()
+        self.refresh()
+
+    def _accompany_viewed_pet(self):
+        """「陪伴」按钮：让正在查看的宠物出勤陪你。
+
+        切换反馈（2026-09-15 用户复检「要有明确的切换感」）四通道
+        齐发：桌面新出勤宠物开心动作 + 招呼台词 + 音效，面板预览
+        区原位飘字气泡。
+        """
+        target = self._view_pet_id()
+        if target == self._active_pet_id():
+            return
+        snapshot = pet_profile_snapshot(self.pet.state, target)
+        if not snapshot["owned"]:
+            return
+        result = self.pet.set_active_pet(target)
+        if isinstance(result, dict) and result.get("ok") is False:
+            return
+        name = str(snapshot.get("name") or target)
+        trigger = getattr(self.pet, "trigger_animation", None)
+        if callable(trigger):
+            try:
+                trigger("play", 1400)
+            except RuntimeError:
+                pass
+        say = getattr(self.pet, "say", None)
+        if callable(say):
+            try:
+                say(f"{name}来陪你啦！", 2400)
+            except RuntimeError:
+                pass
+        sound = getattr(self.pet, "play_sound", None)
+        if callable(sound):
+            try:
+                sound("pet")
+            except RuntimeError:
+                pass
+        self._viewing_pet_id = None
+        self._start_idle_animation()
+        self.refresh()
+
     # ---- 数据刷新与交互 ----
 
     def refresh(self):
         state = self.pet.state
-        active_id = self._active_pet_id()
-        snapshot = pet_profile_snapshot(state, active_id)
+        view_id = self._view_pet_id()
+        snapshot = pet_profile_snapshot(state, view_id)
 
         owned_ids = set(state.get("owned_pet_ids") or ())
-        owned_ids.add(active_id)
+        owned_ids.add(view_id)
         for pet_id, card in self._pet_cards.items():
             owned = pet_id in owned_ids
             icon_name = SPECIES_RAIL_ICON.get(pet_id)
@@ -1220,10 +1317,10 @@ class PetProfileWindow(QWidget):
             else:
                 icon = _grayscale_pixmap(icon_path) if icon_path else QPixmap()
             card["button"].set_pixmap(icon)
-            card["button"].selected = pet_id == active_id
+            card["button"].selected = pet_id == view_id
             card["button"].update()
             if card.get("tag") is not None:
-                card["tag"].setVisible(pet_id == active_id)
+                card["tag"].setVisible(pet_id == view_id)
 
         self._refresh_intro(snapshot)
         self._refresh_outfits(snapshot)
@@ -1392,6 +1489,9 @@ class PetProfileWindow(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        # 滚动条常驻（2026-09-15 用户定稿）：按需隐藏会让视口宽度
+        # 随行数变化，一行时内容整体偏移——常驻则各行宽度一致。
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
         # 滚动条右移走 QSS 负 margin（_scroll_qss 的 bar_right_shift）：
         # page 在 QStackedWidget 内，容器负边距被其硬性 contentsMargins
         # 钳住无效（-8/-22/-44 三轮实测）。33px = 内容栈右边距 22 +
@@ -1474,13 +1574,19 @@ class PetProfileWindow(QWidget):
             )
             grid.addWidget(card, index // 3, index % 3)
             self._gift_widgets[gift_id] = card
+        # 占位补齐末行空列（2026-09-15 排版统一轮）：网格 stretch
+        # 只作用于有控件的列——1/2 件礼物时卡片会拉宽到整行/半行，
+        # 与多行时的 1/3 宽不一致；透明占位件让三列永远等宽。
+        last_row = (len(stocked) - 1) // 3
+        for column in range(len(stocked) % 3 or 3, 3):
+            grid.addWidget(QWidget(), last_row, column)
         self._gift_layout.insertWidget(0, grid_host)
 
     def _gift_card(self, gift_id, count):
         """简略竖卡：图标/名称/最爱标记/好感×数量/送出键，整体居中。"""
         definition = progression.GIFT_DEFINITIONS[gift_id]
         _base, affection, preferred = progression.gift_affection_for(
-            self._active_pet_id(), gift_id,
+            self._view_pet_id(), gift_id,
         )
         card = QWidget()
         # 选择器必须 objectName 限定（第五十五轮坑位：裸 QWidget 会把
@@ -1552,14 +1658,25 @@ class PetProfileWindow(QWidget):
         if not self._confirm_send_gift(gift_id):
             return
         result = progression.give_gift(
-            state, self._active_pet_id(), gift_id,
+            state, self._view_pet_id(), gift_id,
         )
         say = getattr(self.pet, "say", None)
         message = result.get("message", "")
         if result.get("ok"):
             self._save_state(state)
             self._play_gift_hearts()
-        if callable(say) and message:
+            # 送礼反应（2026-09-15；同日修正）：只在送给出勤宠物时
+            # 播放——桌面那只就是收礼的它；送给未出勤宠物时屏幕上
+            # 不是它，不该由出勤宠替演。
+            if self._view_pet_id() == self._active_pet_id():
+                trigger = getattr(self.pet, "trigger_animation", None)
+                if callable(trigger):
+                    try:
+                        trigger("play")
+                    except RuntimeError:
+                        pass
+        if callable(say) and message and (
+                self._view_pet_id() == self._active_pet_id()):
             try:
                 self.pet.say(message, 2100)
             except RuntimeError:
@@ -1567,27 +1684,48 @@ class PetProfileWindow(QWidget):
         self.refresh()
 
     def _confirm_send_gift(self, gift_id):
-        """送礼确认弹窗（复用商店 PurchasePopup，双键确认）。"""
+        """送礼确认弹窗（复用商店 PurchasePopup，双键确认）。
+
+        2026-09-15 用户修订：名字取**查看宠物** profile（曾误取
+        出勤门面名）；并展示当前好感 → 送后好感，升级时提示。
+        """
         definition = progression.GIFT_DEFINITIONS.get(gift_id, {})
         name = definition.get("name", gift_id)
+        view_id = self._view_pet_id()
         _base, affection, preferred = progression.gift_affection_for(
-            self._active_pet_id(), gift_id,
+            view_id, gift_id,
         )
+        state = self.pet.state
+        pets = state.get("pets") or {}
+        profile = pets.get(view_id) if isinstance(pets, dict) else None
+        if not isinstance(profile, dict):
+            profile = state if view_id == self._active_pet_id() else {}
+        pet_name = str(
+            (profile or {}).get("pet_name")
+            or pet_registry.pet_definition(view_id).get(
+                "default_name", view_id)
+        )
+        cur_level = int((profile or {}).get("affection_level", 1) or 1)
+        cur_points = int((profile or {}).get("affection_points", 0) or 0)
+        # 送后模拟：逐级结算展示结果档位（不落盘）。
+        nxt_level, nxt_points = cur_level, cur_points + affection
+        while nxt_points >= progression.affection_to_next(nxt_level):
+            nxt_points -= progression.affection_to_next(nxt_level)
+            nxt_level += 1
         affection_line = (
             f"好感 +{affection}（TA的最爱！）"
             if preferred else f"好感 +{affection}"
         )
-        state = self.pet.state
-        pet_name = (
-            state.get("name") or state.get("pet_name")
-            or pet_registry.pet_definition(
-                self._active_pet_id(),
-            ).get("default_name", self._active_pet_id())
-        )
+        lines = [
+            f"把「{name}」送给 {pet_name} 吗？",
+            f"当前好感 Lv.{cur_level}（{cur_points}）",
+            f"送后好感 Lv.{nxt_level}（{nxt_points}）",
+            affection_line,
+        ]
+        if nxt_level > cur_level:
+            lines.append(f"🌟 送出后将升到好感 Lv.{nxt_level}！")
         popup = PurchasePopup(
-            "送出礼物",
-            [f"把「{name}」送给 {pet_name} 吗？", affection_line],
-            self,
+            "送出礼物", lines, self,
             confirm_text="送出",
             cancel_text="再想想",
         )
@@ -1691,7 +1829,9 @@ class PetProfileWindow(QWidget):
     def _open_name_dialog(self):
         if _NAME_DIALOG_FACTORY is None:
             return
-        snapshot = pet_profile_snapshot(self.pet.state, self._active_pet_id())
+        # 2026-09-15 修复：改名面向「查看中的宠物」——预填其名字
+        # （此前固定取出勤宠物，查看另一只时预填错名字）。
+        snapshot = pet_profile_snapshot(self.pet.state, self._view_pet_id())
         dialog = _NAME_DIALOG_FACTORY(
             snapshot["name"], self._commit_name, self.window(),
         )
@@ -1700,12 +1840,24 @@ class PetProfileWindow(QWidget):
         self._name_dialog = None
 
     def _commit_name(self, new_name):
+        """提交改名：直接写查看宠物的 profile（set_pet_name 只作用于
+        出勤宠物，查看非出勤宠物时曾误改出勤宠物的名字——2026-09-15）。"""
         if not (isinstance(new_name, str) and new_name.strip()):
             return
-        setter = getattr(self.pet, "set_pet_name", None)
-        if callable(setter):
-            setter(new_name.strip())
-        self._save_state(self.pet.state)
+        name = ai.normalize_pet_name(new_name.strip())
+        target = self._view_pet_id()
+        state = self.pet.state
+        pets = state.setdefault("pets", {})
+        profile = pets.setdefault(target, {})
+        profile["pet_name"] = name
+        if target == self._active_pet_id():
+            state["pet_name"] = name
+            setter = getattr(self.pet, "set_pet_name", None)
+            if callable(setter):
+                setter(name)
+        else:
+            ai.set_pet_name(name, pet_id=target)
+            self._save_state(state)
         self.refresh()
 
     def _select_pet(self, pet_id):

@@ -594,3 +594,139 @@ class BubbleMenuEntryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class ProfileViewingTests(unittest.TestCase):
+    """宠物面板查看/陪伴分离（2026-09-15 用户指示）。
+
+    点头像卡只切换「查看」的宠物（预览其资料/动画），不出勤；
+    「陪伴」按钮才真正切换出勤。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        from PyQt5.QtWidgets import QApplication
+
+        cls.app = QApplication.instance() or QApplication([])
+
+    def _window(self):
+        from petpet.ui.pet_profile import PetProfileWindow
+
+        state = _fresh_state()
+        state["owned_pet_ids"] = ["lunch_meat", "ice_cream"]
+        pet = SimpleNamespace(
+            state=state,
+            set_active_pet=Mock(return_value={"ok": True}),
+            set_pet_name=Mock(),
+            update=Mock(),
+            say=Mock(),
+            home_scene_window=None,
+            open_shop=Mock(),
+        )
+        window = PetProfileWindow(pet, save_state=Mock())
+        self.addCleanup(window.close)
+        return window, pet
+
+    def test_avatar_click_only_views_without_switching(self):
+        window, pet = self._window()
+        pet.set_active_pet.assert_not_called()
+        window._select_pet_for_view("ice_cream")
+        self.assertEqual(window._view_pet_id(), "ice_cream")
+        pet.set_active_pet.assert_not_called()
+        self.assertEqual(window._name_label.text(), "冰淇淋")
+
+    def test_companion_button_switches_active(self):
+        window, pet = self._window()
+        window._select_pet_for_view("ice_cream")
+        window._accompany_viewed_pet()
+        pet.set_active_pet.assert_called_once_with("ice_cream")
+        self.assertEqual(window._view_pet_id(), window._active_pet_id())
+
+
+class CompanionSwitchFeedbackTests(unittest.TestCase):
+    """陪伴切换反馈（2026-09-15 用户复检：切换要有明确的仪式感）。"""
+
+    @classmethod
+    def setUpClass(cls):
+        from PyQt5.QtWidgets import QApplication
+
+        cls.app = QApplication.instance() or QApplication([])
+
+    def _window(self):
+        from petpet.ui.pet_profile import PetProfileWindow
+
+        state = _fresh_state()
+        state["owned_pet_ids"] = ["lunch_meat", "ice_cream"]
+        pet = SimpleNamespace(
+            state=state,
+            set_active_pet=Mock(return_value={"ok": True}),
+            set_pet_name=Mock(),
+            update=Mock(),
+            say=Mock(),
+            play_sound=Mock(),
+            trigger_animation=Mock(),
+            home_scene_window=None,
+            open_shop=Mock(),
+        )
+        window = PetProfileWindow(pet, save_state=Mock())
+        self.addCleanup(window.close)
+        return window, pet
+
+    def test_accompany_gives_clear_multichannel_feedback(self):
+        window, pet = self._window()
+        window._select_pet_for_view("ice_cream")
+        pet.say.reset_mock()
+        window._accompany_viewed_pet()
+
+        pet.trigger_animation.assert_called_once()
+        self.assertEqual(pet.trigger_animation.call_args[0][0], "play")
+        pet.say.assert_called_once()
+        self.assertIn("冰淇淋", pet.say.call_args[0][0])
+        pet.play_sound.assert_called_once_with("pet")
+
+
+class RenameTargetsViewedPetTests(unittest.TestCase):
+    """改名面向查看宠物（2026-09-15 修复：曾误改出勤宠物）。"""
+
+    @classmethod
+    def setUpClass(cls):
+        from PyQt5.QtWidgets import QApplication
+
+        cls.app = QApplication.instance() or QApplication([])
+
+    def _window(self):
+        from petpet.ui.pet_profile import PetProfileWindow
+
+        state = _fresh_state()
+        state["owned_pet_ids"] = ["lunch_meat", "ice_cream"]
+        state["pets"]["ice_cream"] = {"pet_name": "冰淇凌"}
+        pet = SimpleNamespace(
+            state=state,
+            set_active_pet=Mock(return_value={"ok": True}),
+            set_pet_name=Mock(side_effect=lambda v: v),
+            update=Mock(),
+            say=Mock(),
+            play_sound=Mock(),
+            trigger_animation=Mock(),
+            home_scene_window=None,
+            open_shop=Mock(),
+        )
+        window = PetProfileWindow(pet, save_state=Mock())
+        self.addCleanup(window.close)
+        return window, pet
+
+    def test_rename_while_viewing_non_active_pet_writes_that_pet(self):
+        window, pet = self._window()
+        window._select_pet_for_view("ice_cream")
+        window._commit_name("雪糕")
+
+        self.assertEqual(
+            window.pet.state["pets"]["ice_cream"].get("pet_name"), "雪糕")
+        pet.set_pet_name.assert_not_called()
+        # 出勤宠物不受影响
+        self.assertNotEqual(
+            window.pet.state.get("pet_name"), "雪糕")
+
+    def test_rename_while_viewing_active_pet_uses_legacy_setter(self):
+        window, pet = self._window()
+        window._commit_name("午餐丸")
+        pet.set_pet_name.assert_called_once_with("午餐丸")

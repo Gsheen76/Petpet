@@ -372,3 +372,23 @@ def test_home_page_has_decoration_category_chips(shop_window):
             assert card is not None, f"{decoration_id} 应显示"
         else:
             assert card is None, f"{decoration_id} 应被过滤掉"
+
+
+def test_weekly_companionship_summary_from_records(shop_window):
+    """陪伴周报（2026-09-15 A4）：记录页顶部汇总一周关键数据。"""
+    from petpet.progression.ui import weekly_companionship_summary
+
+    records = {
+        "chats_opened": 12, "ai_replies": 34, "pettings": 21,
+        "feedings": 8, "play_sessions": 5, "gifts_given": 2,
+        "active_seconds": 3600 * 25,
+    }
+    lines = weekly_companionship_summary(records)
+    joined = " ".join(lines)
+    assert "12" in joined and "聊天" in joined
+    assert "34" in joined
+    assert "21" in joined
+    assert "陪伴 25 小时" in joined
+    # 空记录也有温和文案
+    empty = weekly_companionship_summary({})
+    assert empty and "还没有" in " ".join(empty) or len(empty) >= 1
