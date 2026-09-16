@@ -133,6 +133,7 @@ D:\Agent_project\Petpet
 | **圆角** | 窗口 `paintEvent` 裁剪 24px；`RoundedPixmapLabel` 头像预览 26px |
 | **按钮反馈** | `FeedbackButton`：悬浮白色半透明提亮、按下暗红半透明、光标手型、禁用态无反馈 |
 | **弹窗** | `PurchasePopup`：360×250、背景取商店背景下半部分 + QPainter 圆角裁切、无 emoji、标题/正文间距 18px |
+| **v1.7.4 首批六项**（2026-09-15） | ① **送礼反应**：成功送出 `trigger_animation("play")`（仅送出勤宠物时播，防张冠李戴）；② **聊天搜索**：标题下 `chatSearch` 框（`_refresh_history_view` 过滤，6 刷新点统一走它；坑：全量替换勿伤函数内自调用）；③ **陪伴周报**：`weekly_companionship_summary` 纯函数+记录页顶部卡；④ **改名组件素材化**：用户胶囊名牌+头像图标键（`rename_icon.png`），名牌 335×82、名字 28px 居中、键常驻；⑤ **查看/陪伴分离+两轮回归修复**：头像只切查看（`_viewing_pet_id`，简介/动画/套装/送礼跟随），「陪我」键才切换出勤；改名曾误改出勤宠物（`_commit_name` 改写查看宠物 profile）、送非出勤曾由出勤宠替演反应（已收敛）；⑥ **礼物排版**：占位补齐空列（三列恒等宽 177px）+滚动条常驻（一行不再偏右）。C 债：拆分器尺寸读定义（单一事实源）、`_build_chip_bar` 三处收敛。**新坑**：QWidget 无 parent 变顶层窗飘出面板（必传 parent；离屏 grab 测不到顶层孤儿，用 parentWidget() 断言）；删块检查块内初始化（font NameError）；冰淇凌默认名是「冰淇淋」（林）；顶层悬浮件吃屏幕坐标（mapToGlobal）。切换反馈=动作/台词/音效三通道（飘字被用户裁定删除）。faulthandler 常驻（Qt5Core AV 三天三次已根除 BonusBubble GC 悬空）。详见 Obsidian 各开发记录 |
 
 ---
 
