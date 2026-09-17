@@ -16,14 +16,13 @@ from PyQt5.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
-    QPushButton,
     QVBoxLayout,
     QWidget,
 )
 
 from petpet.progression import core as progression
 from petpet.app.paths import POSES_DIR
-from petpet.progression.ui import CozyProgressWindow
+from petpet.progression.ui import CozyProgressWindow, FeedbackButton
 
 
 GAME_DEFINITIONS = {
@@ -144,6 +143,10 @@ class CoinCatchCanvas(QWidget):
         if not self.running or event.button() != Qt.LeftButton:
             return super().mousePressEvent(event)
         remaining = max(0.0, self._deadline - time.monotonic())
+        if remaining <= 0.0:
+            # 时间已到但本拍结算 tick（33ms 周期）尚未跑到：计分门是
+            # 时间而非 running 标志，过期点击不计分不奖励。
+            return super().mousePressEvent(event)
         if self._target.contains(QPointF(event.pos())):
             reward_center = QPointF(self._target.center())
             value = self.coin_value_for_remaining(remaining)
@@ -280,7 +283,7 @@ class CoinCatchGameWindow(CozyProgressWindow):
         self.canvas.score_changed.connect(self._score_changed)
         self.canvas.round_finished.connect(self._finish_round)
         self.content_layout.addWidget(self.canvas, 1)
-        self.start_button = QPushButton("开始游戏")
+        self.start_button = FeedbackButton("开始游戏")
         self.start_button.clicked.connect(self._start_round)
         self.content_layout.addWidget(self.start_button)
         self.refresh()
@@ -701,7 +704,7 @@ class LuckyPawsGameWindow(CozyProgressWindow):
         self.canvas.guess_resolved.connect(self._guess_resolved)
         self.content_layout.addWidget(self.canvas, 1)
 
-        self.start_button = QPushButton("开始游戏")
+        self.start_button = FeedbackButton("开始游戏")
         self.start_button.clicked.connect(self._start_game)
         self.content_layout.addWidget(self.start_button)
         self.refresh()
@@ -890,7 +893,7 @@ class MiniGameHubWindow(CozyProgressWindow):
         text_layout.addWidget(description)
         text_layout.addWidget(best_label, 0, Qt.AlignLeft)
         layout.addLayout(text_layout, 1)
-        button = QPushButton("开始")
+        button = FeedbackButton("开始")
         button.clicked.connect(
             lambda _checked=False, selected=game_id:
             self._open_game(selected)

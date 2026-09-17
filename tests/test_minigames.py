@@ -1,11 +1,13 @@
 import os
+import time
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt5.QtCore import QRect
+from PyQt5.QtCore import QEvent, QRect, QPointF, QRectF, Qt
+from PyQt5.QtGui import QMouseEvent
 from PyQt5.QtWidgets import QApplication, QLabel, QPushButton
 
 import progression
@@ -16,6 +18,7 @@ from minigames import (
     MiniGameHubWindow,
     ShellShuffleCanvas,
 )
+from petpet.progression.ui import FeedbackButton
 
 
 class MiniGameProgressionTests(unittest.TestCase):
@@ -145,6 +148,88 @@ class MiniGameUiTests(unittest.TestCase):
 
         self.assertFalse(canvas.resolve_guess(0))
         self.assertEqual(canvas.coin_bowl_id, 0)
+
+
+class MiniGameFeedbackComplianceTests(unittest.TestCase):
+    """按键交互规范（AGENTS.md 定稿）：小游戏全部可交互按键必须接
+    FeedbackButton——2026-09-11 全应用清偿轮漏掉了 minigames 模块。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def setUp(self):
+        self.pet = SimpleNamespace(
+            state=progression.ensure_progression({"pet_coins": 0}),
+            current_screen_rect=Mock(return_value=QRect(0, 0, 1400, 900)),
+            geometry=Mock(return_value=QRect(900, 600, 190, 220)),
+            say=Mock(),
+        )
+        self.windows = []
+
+    def tearDown(self):
+        for window in reversed(self.windows):
+            window.close()
+
+    def test_all_minigame_buttons_are_feedback_buttons(self):
+        hub = MiniGameHubWindow(self.pet, Mock())
+        hub.refresh()
+        coin = CoinCatchGameWindow(self.pet, Mock())
+        lucky = LuckyPawsGameWindow(self.pet, Mock())
+        self.windows = [lucky, coin, hub]
+
+        for window in self.windows:
+            plain = [
+                button for button in window.findChildren(QPushButton)
+                if not isinstance(button, FeedbackButton)
+            ]
+            self.assertEqual(
+                plain,
+                [],
+                f"{type(window).__name__} 存在未接 FeedbackButton 的按键",
+            )
+
+
+class CoinCatchExpiredClickTests(unittest.TestCase):
+    """金币雨截止时序：时间已到但结算 tick（33ms 周期）未跑的间隙里，
+    点击不得计分加币——计分门必须是时间，不是 running 标志。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def _press_at_target(self, canvas):
+        canvas._target = QRectF(0.0, 0.0, 66.0, 66.0)
+        event = QMouseEvent(
+            QEvent.MouseButtonPress,
+            QPointF(30, 30),
+            Qt.LeftButton,
+            Qt.LeftButton,
+            Qt.NoModifier,
+        )
+        canvas.mousePressEvent(event)
+
+    def test_click_after_deadline_but_before_tick_does_not_count(self):
+        canvas = CoinCatchCanvas()
+        self.addCleanup(canvas.deleteLater)
+        canvas.running = True
+        canvas._deadline = time.monotonic() - 0.001
+
+        self._press_at_target(canvas)
+
+        self.assertEqual(canvas.hits, 0, "过期点击不得计分")
+        self.assertEqual(canvas.earned_coins, 0, "过期点击不得加币")
+
+    def test_click_before_deadline_still_counts(self):
+        canvas = CoinCatchCanvas()
+        self.addCleanup(canvas.deleteLater)
+        canvas.running = True
+        canvas._deadline = time.monotonic() + 10.0
+
+        self._press_at_target(canvas)
+
+        self.assertEqual(canvas.hits, 1)
+        self.assertEqual(canvas.earned_coins, 2)
 
 
 if __name__ == "__main__":

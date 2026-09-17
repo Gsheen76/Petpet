@@ -1,7 +1,7 @@
 # Petpet 项目交接文档
 
-**版本**：v1.7.3 已发布（2026-09-15）；**v1.7.4 开发中**（七项：送礼反应/聊天搜索/陪伴周报/改名组件素材化/查看陪伴分离/礼物排版统一/遮挡滞回带二次校准 6→12px——未发，见最近变更表末行）
-**日期**：2026-09-17
+**版本**：v1.7.3 已发布（2026-09-15）；**v1.7.4 开发中**（九项：送礼反应/聊天搜索/陪伴周报/改名组件素材化/查看陪伴分离/礼物排版统一/遮挡滞回带二次校准/小游戏按键反馈补接/金币雨过期点击门——未发，见最近变更表末行）
+**日期**：2026-09-18
 **核心分支**：main（v1.7.3 发布提交 eb5ad93；其后功能提交待随 v1.7.4 推送）
 
 ---
@@ -55,6 +55,7 @@ D:\Agent_project\Petpet
 
 | 领域 | 内容 |
 |------|------|
+| **小游戏漏洞排查与修复**（2026-09-18，v1.7.4 待发布） | 自主排查自建小游戏（金币雨/幸运爪爪/枢纽）确认两漏洞：① **三处裸 QPushButton**（`minigames/ui.py` 枢纽卡×2+两游戏「开始游戏」）——2026-09-11 按键反馈全应用清偿轮**漏掉 minigames 模块**，换 `FeedbackButton`（与 CozyProgressWindow 同源 import）；② **金币雨过期点击窗口**——截止后 33ms 结算 tick 间隙的点击仍计分加币（门是 `running` 标志非时间），`mousePressEvent` 补 `remaining<=0` 提前返回。排除五类疑点（结算一致性/初始化时序/token 取消链/公平性/关闭竞态，取证结论见 Obsidian）。测试：`MiniGameFeedbackComplianceTests`（三窗非 FeedbackButton 残留为零）+ `CoinCatchExpiredClickTests`（过期零计分+存活护栏）。**坑位：给 `mousePressEvent` 喂 Mock 会在 super() 分支被 PyQt5 类型检查炸——测鼠标路径构造真 `QMouseEvent`（五参重载）；改导入行先 grep 块内引用**。验证：TDD RED→GREEN + 全量 **868 passed**（+3）+ 真平台冒烟（按键/点击门/三窗 grab）+ 重启 PID 21404 首查可见。详见 Obsidian `开发记录\2026-09-18 小游戏漏洞排查与修复` |
 | **遮挡滞回带二次校准**（2026-09-17，v1.7.4 待发布） | v1.7.3 发布当晚（09-15 22:48–50）`occlusion_debug.log` 回收 39 行：6px 滞回带被边界晃动**尾部振幅**击穿——`toy_basket` 同秒 −6.4→+10.5 往返、`round_table` 隔 1 秒 +8.1→−6.4（首修带宽按翻转中位 1.1px 校准过窄）。修：`OCCLUSION_HYSTERESIS_PX` **6.0→12.0**（`home/window.py`），按实测振幅覆盖。测试：新增 `test_band_covers_observed_jitter_amplitude` 复刻日志序列（−6.5/+10.5/−10.5 三段保持、−14 越带翻转），旧测越带点 −10→−14（规格变更）。**坑位：按中位数校准阈值会漏尾部——校准类参数要等日志回收复检一次才算闭环**。埋点保留，等新日志验证 12px 带是否仍被击穿（若 >12 的同秒往返再考虑时间维度去抖）。验证：TDD RED 复现→GREEN + 全量 **865 passed**（+1）+ 真平台冒烟（带值/保持/翻转/整帧 grab）+ 重启 PID 16064 召回可见。详见 Obsidian `开发记录\2026-09-17 遮挡滞回带宽按日志实测上调` |
 | **A组一致性收尾**（2026-09-11） | 用户选定 A 组三项：① 聊天标题行 `×`/`头像`/`档案` 三键接 `FeedbackButton`（QSS/objectName 原样，皮肤抓帧自动适配）；② 滚动条全应用统一——盘点确认记录/成就/宠物详情本就是商店同款（PANEL_STYLE/pet_profile），偏差仅 chat（灰槽 #f5efea/宽 10/#d8c5b8 手柄）与 settings（10/36），统一为商店五值（transparent/11/4px 0/#e8bfa8/r5/min38；chat 保留 handle:hover 加深 #d9ab90 属规格外小自由）；③ 档案保存气泡反馈：`memory.first_fact/facts_differ` 纯函数 + `_announce_profile_change`（称呼变→复述新称呼/其他变→通用句/无变→沉默，删称呼走通用句防病句）。验证：**786 passed**（+3）+ 完整 ChatWindow 实例化（三键 isinstance/滚动条宽 11）+ PID 34808。存量债已于同日「继续完善」轮清偿：**chat 全窗 12 键 + settings 底排 2 键 + controls threeLevelOption（checkable）+ tutorial 3 键全部接 FeedbackButton**（checkable 模式段保留原生释放时序），实例化验证 findChildren(QPushButton) 非 FeedbackButton 残留为零。**重要修复（code-review 抓到的真回归）：FeedbackButton 拦截键内松开的分支不调 super() 导致 `released` 信号不发射**——chat「按住显示」键松开后 API Key 会永久明文；修复=拦截分支补 `self.released.emit()`，回归测试钉死（test_feedback_button_deferred_click_still_emits_released）。**规范豁免登记：controls stepButton ±（autoRepeat 按住连发与延迟触发冲突，松开会多发一步）、pet_profile go_shop（2026-09-10 用户定稿自带反馈）**。坑位：往多行括号导入中间插行会 SyntaxError——插导入只认闭合括号后的位置。详见 Obsidian `开发记录6-09-11 A组一致性收尾` |
 | **B组配套完善**（2026-09-12，发版前完成） | 用户改序「先 B 再发 v1.7.2」——半程发布已清理（draft/tag/产物）。**备份还原**：`backup.restore/inspect`（fnmatch 白名单+路径限定防伪造包）+ 设置页「从备份恢复…」（确认→自动安全快照→覆盖→`PetWindow.restart_app()` 600ms 后自动重启，源码版 CREATE_NO_WINDOW 防控制台闪窗）。**开机自启动**：`app/autostart.py` HKCU Run（源码优先 pythonw），设置界面体验组 ToggleSwitch 即时生效。**聊天停止/重新生成**：发送键 busy 时变「停止」（`_abort_requested` → `_ai_thread` 下个 chunk 前跳出+close 生成器，已收部分入史、空则「（已停止）」）；「↻」弹尾部问答对重发（`send` 尾段抽 `_begin_reply` 复用，不重复计互动）；旧 setEnabled 契约退役（测试改文案断言）。验证：全量 **805**（+10）+ 实平台（发送↔停止/↻ 可用性/设置三键）+ PID 26404。坑位：**多步补丁脚本中途断言失败=整脚本不落盘，import 等前置替换会静默丢失**。详见 Obsidian `开发记录6-09-12 B组配套完善三项` |
