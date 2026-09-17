@@ -570,11 +570,12 @@ class HomeDecorationTests(unittest.TestCase):
         self.assertEqual(state["pet_coins"], 260)
         self.assertEqual(
             progression.set_home_decoration_position(state, "home_sofa", -80, 900),
-            {"x": 0, "y": 543},
+            # 2026-09-18 起 clamp 尺寸取定义目录（360×197）：768-197=571
+            {"x": 0, "y": 571},
         )
         self.assertEqual(
             progression.home_decoration_position(state, "home_sofa"),
-            {"x": 0, "y": 543},
+            {"x": 0, "y": 571},
         )
 
     def test_home_decoration_cannot_be_bought_twice_or_without_funds(self):

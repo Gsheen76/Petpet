@@ -724,7 +724,9 @@ class HomeSceneAssetTests(unittest.TestCase):
         )
         self.assertEqual(
             scene.move_furniture("home_sofa", QPoint(-60, 900)),
-            {"x": 0, "y": 543},
+            # 2026-09-18 起 clamp 尺寸取定义目录（360×197）：
+            # 768-197=571；旧值 543 来自停更的手抄表（225 高）。
+            {"x": 0, "y": 571},
         )
         save.assert_called_with(state)
 

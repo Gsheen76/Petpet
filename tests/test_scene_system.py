@@ -69,7 +69,8 @@ class HomeSceneGeometryTests(unittest.TestCase):
         position = scene_system.clamp_home_furniture_position(
             "home_sofa", -80, 900
         )
-        self.assertEqual(position, {"x": 0, "y": 543})
+        # 2026-09-18 起 clamp 尺寸取定义目录（sofa 360×197）：768-197=571
+        self.assertEqual(position, {"x": 0, "y": 571})
 
     def test_decoration_selection_bounds_and_handles_cover_transformed_item(self):
         bounds = scene_system.home_decoration_bounds(

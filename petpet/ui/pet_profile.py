@@ -1233,6 +1233,13 @@ class PetProfileWindow(QWidget):
                 self._idle_timer.timeout.connect(self._advance_idle_frame)
             self._idle_timer.start(round(1000 / IDLE_FPS))
         else:
+            # 无帧分支必须停掉并释放旧定时器（2026-09-18）：只置 None
+            # 会让旧 QTimer 继续跑，下次有帧时另起新定时器 → 动画 N
+            # 倍速、定时器随切换累积。
+            stale = getattr(self, "_idle_timer", None)
+            if stale is not None:
+                stale.stop()
+                stale.deleteLater()
             self._idle_timer = None
 
     def _advance_idle_frame(self):

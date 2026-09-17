@@ -21,15 +21,22 @@ HOME_DECORATION_ROTATION_MAX = 180.0
 HOME_DECORATION_HANDLE_SIZE = 14.0
 HOME_DECORATION_ROTATE_HANDLE_OFFSET = 32.0
 
-# Authored dimensions in world pixels.  Keep these in sync with the furniture
-# catalog used by progression once the shop is wired in.
-HOME_FURNITURE_SIZES = {
-    "home_rug": (440, 270),
-    "home_sofa": (360, 225),
-    "home_plant": (190, 340),
-    "home_wall_art": (220, 285),
-    "home_status_card": (420, 270),
-}
+
+def _furniture_size(decoration_id: str) -> tuple[int, int]:
+    """家具定义尺寸（单一事实源，2026-09-18）：从 progression 的
+    HOME_DECORATION_DEFINITIONS 取——手抄尺寸表曾停更 8 件新家具，
+    缺项回退 (0,0) 会把家具整体拖出全景。core 在模块加载期 import
+    本模块，这里函数内延迟导入破环。
+    """
+    from petpet.progression import core as _progression_core
+
+    definition = _progression_core.HOME_DECORATION_DEFINITIONS.get(
+        decoration_id
+    )
+    size = definition.get("size") if isinstance(definition, dict) else None
+    if size:
+        return int(size[0]), int(size[1])
+    return (0, 0)
 
 
 def _as_bool(value: Any, default: bool = False) -> bool:
@@ -228,7 +235,7 @@ HOME_FURNITURE_REGIONS = {
 def clamp_home_furniture_position(decoration_id: str, x: Any, y: Any) -> dict[str, int]:
     """Clamp a furniture top-left to its authored world region."""
 
-    width, height = HOME_FURNITURE_SIZES.get(decoration_id, (0, 0))
+    width, height = _furniture_size(decoration_id)
     max_x = max(0, HOME_WORLD_SIZE[0] - width)
     min_y = 0
     max_y = max(0, HOME_WORLD_SIZE[1] - height)

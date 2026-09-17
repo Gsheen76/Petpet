@@ -730,3 +730,48 @@ class RenameTargetsViewedPetTests(unittest.TestCase):
         window, pet = self._window()
         window._commit_name("午餐丸")
         pet.set_pet_name.assert_called_once_with("午餐丸")
+
+
+class IdleTimerLeakTests(unittest.TestCase):
+    """idle 无帧分支必须停掉旧定时器（2026-09-18）。
+
+    此前置 `_idle_timer=None` 不 stop：帧加载失败后切换会另起新
+    QTimer，旧定时器继续跑 → 动画 N 倍速、定时器累积。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        from PyQt5.QtWidgets import QApplication
+
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_no_frame_branch_stops_previous_timer(self):
+        from unittest.mock import Mock, patch
+
+        from PyQt5.QtCore import QTimer
+
+        from petpet.ui import pet_profile as module
+        from petpet.ui.pet_profile import PetProfileWindow
+
+        pet = SimpleNamespace(
+            state=_fresh_state(),
+            set_active_pet=Mock(return_value={"ok": True}),
+            set_pet_name=Mock(),
+            update=Mock(),
+            say=Mock(),
+            home_scene_window=None,
+            open_shop=Mock(),
+        )
+        window = PetProfileWindow(pet, save_state=Mock())
+        self.addCleanup(window.close)
+
+        timer = QTimer(window)
+        timer.start(50)
+        window._idle_timer = timer
+
+        with patch.object(module, "_load_idle_frames", return_value=[]):
+            window._start_idle_animation()
+
+        self.assertFalse(
+            timer.isActive(), "无帧分支必须 stop 旧 idle 定时器"
+        )

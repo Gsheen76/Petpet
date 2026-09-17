@@ -939,6 +939,10 @@ class PurchasePopup(QDialog):
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setModal(True)
         self.setFixedSize(360, 250)
+        # 双键确认弹窗（cancel_text 非空）的 Esc/点外=取消（2026-09-18）：
+        # 送礼等以 Accepted 判定执行，Esc 误确认会真实消耗道具；单键
+        # informational 弹窗维持 Esc/点外=确认（原行为，有测试钉住）。
+        self._cancelable = bool(cancel_text)
 
         sheet = QPixmap(_shop_asset("background.png"))
         rounded = QPixmap(self.size())
@@ -1011,7 +1015,10 @@ class PurchasePopup(QDialog):
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
-            self.accept()
+            if getattr(self, "_cancelable", False):
+                self.reject()
+            else:
+                self.accept()
             return
         super().keyPressEvent(event)
 
@@ -1019,7 +1026,10 @@ class PurchasePopup(QDialog):
         # Clicks landing on the translucent frame outside the rounded card
         # count as dismissing the dialog.
         if not self._card_path().contains(event.pos()):
-            self.accept()
+            if getattr(self, "_cancelable", False):
+                self.reject()
+            else:
+                self.accept()
             return
         super().mousePressEvent(event)
 
