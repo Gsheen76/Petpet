@@ -2322,8 +2322,18 @@ class PetWindow(QWidget):
                 - s["decay_mood"] * awake_decay_multiplier
                 * decay_rate_multiplier,
             )
+        # 自动入睡/唤醒状态机（2026-09-18 重新接线）：v1.5.0 拆包重构时
+        # 丢失了唯一的调用点——精力掉到阈值下不再走去睡觉、auto 睡眠
+        # 不再自动醒来；按旧版契约在结算衰减后驱动。on_decay 是定时器
+        # 槽，状态机异常必须兜底（PyQt5 槽内未捕获=静默杀进程）。
+        try:
+            auto_sleep_event = self._update_auto_sleep_state()
+        except Exception:
+            auto_sleep_event = None
         _dependency("save_state")(self.state)
         self.refresh_pose_from_state()
+        if auto_sleep_event in ("walking", "woke"):
+            return
         reminder = PetWindow.next_stat_reminder(self)
         if reminder is not None:
             _stat, line = reminder

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import os
+import shutil
 from copy import deepcopy
 from typing import Callable
 
@@ -10,6 +13,32 @@ STATE_SCHEMA_VERSION = 4
 DEFAULT_PET_ID = "lunch_meat"
 _FACADE_SNAPSHOT_KEY = "_active_pet_facade_snapshot"
 _DEFAULT_PET_NAME_KEY = "_default_pet_name"
+
+
+def write_json_atomic(path, data):
+    """原子写 JSON（2026-09-18）：temp+fsync+os.replace，写前把上一份
+    完整主档复制为 .bak。断电/崩溃/磁盘满不再留下半截主档，主档损坏
+    时可回退 .bak——此前 save_state 原地覆盖且异常静默，等价整档丢失。
+    """
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as stream:
+        json.dump(data, stream)
+        stream.flush()
+        os.fsync(stream.fileno())
+    if os.path.exists(path):
+        shutil.copy2(path, path + ".bak")
+    os.replace(tmp, path)
+
+
+def load_json_with_backup(path, default_factory):
+    """按 主档 → .bak → 默认值 的顺序读取 JSON。"""
+    for candidate in (path, path + ".bak"):
+        try:
+            with open(candidate, "r", encoding="utf-8") as stream:
+                return json.load(stream)
+        except Exception:
+            continue
+    return default_factory()
 
 PLAYER_FIELDS = (
     "born", "autostart", "tutorial_completed", "level", "xp",

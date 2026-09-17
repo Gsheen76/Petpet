@@ -1361,11 +1361,12 @@ class ChatWindow(QWidget):
         full = []
         err = None
         aborted = False
-        stream = ai.chat_stream(
-            user_text, mem=self.mem,
-            pet_name=self._pet_name(), image_attachment=image_attachment,
-            pet_id=self.pet_id)
+        stream = None
         try:
+            stream = ai.chat_stream(
+                user_text, mem=self.mem,
+                pet_name=self._pet_name(), image_attachment=image_attachment,
+                pet_id=self.pet_id)
             for kind, payload in stream:
                 if self._abort_requested:
                     aborted = True
@@ -1379,13 +1380,19 @@ class ChatWindow(QWidget):
                 elif kind == "error":
                     err = payload
                     break
+        except Exception:
+            # 流内任何异常（含 chat_stream 构建阶段，如历史条目缺键）
+            # 都必须以 error 信号收场——线程静默死亡会让 busy 永久卡
+            # 在「停止」，只能重启（2026-09-18 修复）。
+            err = "internal_error"
         finally:
-            close = getattr(stream, "close", None)
-            if callable(close):
-                try:
-                    close()
-                except Exception:
-                    pass
+            if stream is not None:
+                close = getattr(stream, "close", None)
+                if callable(close):
+                    try:
+                        close()
+                    except Exception:
+                        pass
         if aborted:
             # 已收到的部分即答案；一个字都没收到时如实标注已停止。
             self._bridge_provider().done.emit(

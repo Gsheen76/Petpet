@@ -13,7 +13,9 @@ Config: set env ZHIPU_API_KEY, or configure the API key and model in Petpet:
 """
 import os, json, re, time, urllib.request, urllib.error
 import hmac, hashlib, base64
+import random
 import shutil
+import threading
 import uuid
 import requests
 from petpet.app.paths import DATA_DIR, RESOURCE_DIR
@@ -703,7 +705,7 @@ def fallback_reply(user_text, err=None, pet_name=None):
     t = (user_text or "").lower()
     for key, replies in _FALLBACK.items():
         if key in t:
-            reply = random.choice(replies) if "random" in globals() else replies[0]
+            reply = random.choice(replies)
             return reply.replace("Sheen", pet_name)
     if err == "no_api_key":
         return f"{pet_name} 现在连不上聊天服务，设置好 API Key 就能聊天啦。"
@@ -745,10 +747,29 @@ def append_history(mem, role, content, image=None, pet_id="lunch_meat", *,
     # every 6 user turns, refresh user_profile in background
     user_turns = sum(1 for h in mem["history"] if h["role"] == "user")
     if role == "user" and user_turns % 6 == 0:
+        _dispatch_profile_refresh(selected)
+
+
+def _dispatch_profile_refresh(pet_id="lunch_meat"):
+    """把档案抽取挪出调用线程（2026-09-18）：append_history 由 GUI 槽
+    （on_done）同步调用，此处直接 urlopen(timeout=20) 曾把每条消息
+    冻结最长 20 秒，且历史饱和在 60 条后每轮必触发。后台线程重读
+    最新存档做读-改-写，避免拿旧 dict 覆盖 GUI 侧刚写入的新消息。
+    """
+    def _worker():
         try:
-            _refresh_user_profile(mem, pet_id=selected)
+            if get_chat_mode() != "personal":
+                return
+            mem = load_memory(pet_id)
+            _refresh_user_profile(mem, pet_id=pet_id)
         except Exception:
             pass
+
+    thread = threading.Thread(
+        target=_worker, daemon=True, name="petpet-profile-refresh"
+    )
+    thread.start()
+    return thread
 
 
 def _refresh_user_profile(mem, pet_id="lunch_meat", *, profile=None):

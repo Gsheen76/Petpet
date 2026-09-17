@@ -324,6 +324,13 @@ def ensure_profile_facts(mem: dict) -> dict:
     legacy = mem.get("user_profile")
     if isinstance(legacy, str) and legacy.strip():
         legacy_text = legacy.strip()
+        if facts and legacy_text == render_profile_facts(facts).strip():
+            # user_profile 在分栏化后由 _refresh_user_profile 写回为当前
+            # 分栏的渲染文本（供旧版本回退读取）——它恰等于分栏渲染结果
+            # 时是自同步串而非待迁移的旧摘要，再迁入「其他」会让档案随
+            # 每次加载自我污染（2026-09-18 修复）；真旧摘要照常迁移。
+            mem["profile_facts"] = facts
+            return mem
         existing_other = [
             fact for fact in (
                 _clean_fact(item) for item in facts.get("其他") or []

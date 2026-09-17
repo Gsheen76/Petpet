@@ -486,27 +486,27 @@ def xp_to_next(level):
 
 def load_state():
     try:
-        with open(SAVE_PATH, "r", encoding="utf-8") as f:
-            s = json.load(f)
-            state = {**DEFAULT_STATE, **s}
-            state["pet_name"] = ai.normalize_pet_name(
-                state.get("pet_name")
-            )
-            state["tutorial_completed"] = bool(
-                state.get("tutorial_completed", False)
-            )
-            if state.get("sleeping"):
-                if state.get("sleep_mode") not in ("manual", "auto"):
-                    # Sleeping saves from older versions are user-controlled.
-                    state["sleep_mode"] = "manual"
-            else:
-                state["sleep_mode"] = None
-            progression.ensure_progression(state)
-            return app_state.ensure_state_schema(
-                state,
-                ai.DEFAULT_PET_NAME,
-                ai.normalize_pet_name,
-            )
+        # 主档损坏时回退 .bak（2026-09-18 原子写盘配套）
+        s = app_state.load_json_with_backup(SAVE_PATH, dict)
+        state = {**DEFAULT_STATE, **s}
+        state["pet_name"] = ai.normalize_pet_name(
+            state.get("pet_name")
+        )
+        state["tutorial_completed"] = bool(
+            state.get("tutorial_completed", False)
+        )
+        if state.get("sleeping"):
+            if state.get("sleep_mode") not in ("manual", "auto"):
+                # Sleeping saves from older versions are user-controlled.
+                state["sleep_mode"] = "manual"
+        else:
+            state["sleep_mode"] = None
+        progression.ensure_progression(state)
+        return app_state.ensure_state_schema(
+            state,
+            ai.DEFAULT_PET_NAME,
+            ai.normalize_pet_name,
+        )
     except Exception:
         state = progression.ensure_progression(dict(DEFAULT_STATE))
         return app_state.ensure_state_schema(
@@ -518,14 +518,18 @@ def load_state():
 def save_state(s):
     try:
         app_state.prepare_state_for_save(s)
-        with open(SAVE_PATH, "w", encoding="utf-8") as f:
-            json.dump({
+        # 原子落盘（2026-09-18）：temp+fsync+replace，写前留 .bak；
+        # 此前原地覆盖 + 异常静默，断电/磁盘满等价整档清零。
+        app_state.write_json_atomic(
+            SAVE_PATH,
+            {
                 key: value for key, value in s.items()
                 if key not in {
                     "_active_pet_facade_snapshot",
                     "_default_pet_name",
                 }
-            }, f)
+            },
+        )
     except Exception:
         pass
 
