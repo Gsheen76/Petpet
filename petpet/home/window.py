@@ -1721,8 +1721,11 @@ class HomeSceneWindow(QWidget):
 
     # 遮挡滞回带（2026-09-14 闪烁修复）：翻转时键差中位仅 1.1px
     # （日志 1542 次实测），宠物在家具底线 ±几像素晃动即逐帧换层。
-    # 相对层确立后须越出 ±6px 才允许翻转；带内保持上一帧层级。
-    OCCLUSION_HYSTERESIS_PX = 6.0
+    # 2026-09-15 发布当晚日志复检：6px 带仍被尾部振幅击穿（toy_basket
+    # 同秒 −6.4→+10.5 往返、round_table 隔 1 秒 +8.1→−6.4），带宽按
+    # 实测振幅上调至 12px。相对层确立后须越出 ±12px 才允许翻转；
+    # 带内保持上一帧层级。
+    OCCLUSION_HYSTERESIS_PX = 12.0
 
     def _scene_render_entries(self):
         """Return normal scene entries in deterministic 2.5D paint order."""

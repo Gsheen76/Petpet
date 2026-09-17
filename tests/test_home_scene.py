@@ -2405,11 +2405,12 @@ class StatusCardOverlayAlignmentTests(unittest.TestCase):
 
 
 class OcclusionHysteresisTests(unittest.TestCase):
-    """遮挡滞回带（2026-09-14 闪烁修复）。
+    """遮挡滞回带（2026-09-14 闪烁修复，2026-09-17 带宽上调）。
 
     日志实锤：翻转时键差中位 1.1px——宠物在家具底线附近 ±几像素
-    晃动即来回换层（肉眼=闪烁）。契约：相对层确立后，|diff|<6px
-    内保持上一帧层级；越带才翻转。
+    晃动即来回换层（肉眼=闪烁）；6px 带又被 2026-09-15 发布当晚日志
+    的尾部振幅（至 ±10.5px）击穿，带宽按实测上调至 12px。契约：
+    相对层确立后，|diff|<12px 内保持上一帧层级；越带才翻转。
     """
 
     @classmethod
@@ -2454,8 +2455,8 @@ class OcclusionHysteresisTests(unittest.TestCase):
                 "带内必须保持上一帧层级",
 
             )
-            # 越带（diff=-10）：允许翻转成宠物在后
-            scene.home_pet.position = (400.0, 420.0)
+            # 越带（diff=-14）：允许翻转成宠物在后
+            scene.home_pet.position = (400.0, 416.0)
             order_flip = self._order(scene)
             self.assertLess(
                 order_flip.index("home_pet"),
@@ -2470,6 +2471,47 @@ class OcclusionHysteresisTests(unittest.TestCase):
                 order_hold2.index("home_pet"),
                 order_hold2.index("home_lamp"),
                 "带内回晃不得回跳",
+            )
+
+    def test_band_covers_observed_jitter_amplitude(self):
+        """2026-09-15 发布当晚日志（滞回 6px 生效后）仍有 1 秒内往返：
+
+        toy_basket 同秒 −6.4→+10.5、round_table 隔 1 秒 +8.1→−6.4——
+        边界晃动的尾部振幅超过 6px 带宽照样翻。契约：带宽必须盖住
+        实测振幅（≥10.5px），带内不得往返翻转。
+        """
+        scene = self._scene()
+        with patch.object(scene, "home_pet_visible", return_value=True):
+            # 远在前（diff=+30）确立「宠物在前」
+            scene.home_pet.position = (400.0, 460.0)
+            scene._scene_render_entries()
+
+            # 实测序列一：晃到 diff=-6.5（日志 −6.4）——不得翻回
+            scene.home_pet.position = (400.0, 423.5)
+            self.assertLess(
+                self._order(scene).index("home_lamp"),
+                self._order(scene).index("home_pet"),
+                "diff=-6.5 晃动不得翻转（实测振幅内）",
+            )
+            # 实测序列二：反向 diff=+10.5（日志 toy_basket）——仍在前
+            scene.home_pet.position = (400.0, 440.5)
+            self.assertLess(
+                self._order(scene).index("home_lamp"),
+                self._order(scene).index("home_pet"),
+            )
+            # 实测序列三：diff=-10.5（日志最大单腿 10.5 的对称侧）
+            scene.home_pet.position = (400.0, 419.5)
+            self.assertLess(
+                self._order(scene).index("home_lamp"),
+                self._order(scene).index("home_pet"),
+                "diff=-10.5 晃动不得翻转",
+            )
+            # 越新带（diff=-13）：正常翻转成宠物在后
+            scene.home_pet.position = (400.0, 417.0)
+            self.assertLess(
+                self._order(scene).index("home_pet"),
+                self._order(scene).index("home_lamp"),
+                "越带后应正常翻转",
             )
 
     def test_control_item_sorts_normally(self):
