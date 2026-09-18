@@ -57,3 +57,27 @@ class AnimationColorTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PlayAnimationScaleTests(unittest.TestCase):
+    """陪我出场 play 动画尺寸（2026-09-18 用户定稿：缩小）。
+
+    实测（真平台 grab）：scale 1.3 时 play 峰值主体 130×148px vs idle
+    最宽 88 / 恒高 143——宽度 +47% 即「太大」主因。交互动画惯例与
+    eat/pet/dig_reward 对齐取 1.0。
+    """
+
+    def test_lunch_meat_play_scale_matches_interaction_convention(self):
+        manifest_path = (
+            Path(__file__).resolve().parents[1]
+            / "assets" / "runtime" / "pets" / "lunch_meat"
+            / "desktop" / "animations" / "manifest.json"
+        )
+        with open(manifest_path, encoding="utf-8") as stream:
+            manifest = json.load(stream)
+
+        self.assertEqual(
+            manifest["play"].get("scale", 1.0),
+            1.0,
+            "陪我出场 play 动画 scale 应与交互动画惯例一致（1.0）",
+        )
