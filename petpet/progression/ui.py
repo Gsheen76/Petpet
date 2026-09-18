@@ -1644,7 +1644,9 @@ class AchievementsWindow(CozyProgressWindow):
         )
         claim_all = FeedbackButton(
             f"一键领取（{len(claimable)}）"
-            if claimable else "暂无待领取奖励"
+            # 空态文案（2026-09-18 用户定稿）：只显示「暂无」——
+            # 统计行已写「待领取 0 项」，长文案与之重复。
+            if claimable else "暂无"
         )
         claim_all.setObjectName("softButton")
         claim_all.setEnabled(bool(claimable))

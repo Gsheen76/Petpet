@@ -281,6 +281,28 @@ class ProgressionWindowUiTests(unittest.TestCase):
         self.assertIn("QLabel#effectCurrent", stylesheet)
         self.assertIn("QLabel#effectNext", stylesheet)
 
+    def test_claim_button_empty_state_text_is_brief(self):
+        """空态一键领取键文案（2026-09-18 用户定稿）：显示「暂无」。
+
+        旧文案「暂无待领取奖励」与旁边统计行「待领取 0 项」重复。
+        """
+        # 纯空档（夹具 level=3 会带出可领的升级成就，这里要零可领）
+        pet = SimpleNamespace(
+            state=progression.ensure_progression({}),
+            current_screen_rect=Mock(return_value=QRect(0, 0, 1200, 900)),
+            geometry=Mock(return_value=QRect(900, 600, 190, 220)),
+            interface_window_position=Mock(return_value=QPoint(700, 180)),
+            say=Mock(), update=Mock(), home_scene_window=None,
+        )
+        achievements = AchievementsWindow(pet, Mock())
+        self.windows = [achievements]
+
+        achievements.refresh()
+        soft = achievements.findChild(QPushButton, "softButton")
+        self.assertIsNotNone(soft)
+        self.assertFalse(soft.isEnabled())
+        self.assertEqual(soft.text(), "暂无")
+
     def test_achievement_header_does_not_stack_on_refresh(self):
         achievements = AchievementsWindow(self.pet, Mock())
         self.windows = [achievements]
