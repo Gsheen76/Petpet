@@ -232,3 +232,53 @@ class DarwinCollectionTests(unittest.TestCase):
             run.return_value.stdout = ""
             self.assertIsNone(game_guard._collect_darwin())
 
+
+
+class HiddenPetSilenceTests(unittest.TestCase):
+    """隐藏即静音（2026-09-19 用户反馈）：自动隐藏/手动隐藏期间
+    play_sound 不得出声——自治行为与自动睡醒的定时器在隐藏时照常
+    运行，汪声与动作音效曾穿出。"""
+
+    @classmethod
+    def setUpClass(cls):
+        from PyQt5.QtWidgets import QApplication
+
+        cls.app = QApplication.instance() or QApplication([])
+
+    def _window(self):
+        import copy
+        from unittest.mock import Mock
+
+        import pet
+
+        state = copy.deepcopy(pet.DEFAULT_STATE)
+        state.update({"tutorial_completed": True})
+        window = pet.PetWindow(state)
+        window.sounds = {"bark": Mock(), "pet": Mock(), "sleep": Mock()}
+        self.addCleanup(window.close)
+        return window
+
+    def test_auto_hidden_pet_stays_silent(self):
+        window = self._window()
+        window._game_auto_hidden = True
+
+        window.play_sound("bark")
+
+        window.sounds["bark"].play.assert_not_called()
+
+    def test_user_hidden_pet_stays_silent(self):
+        window = self._window()
+        window._user_hidden = True
+
+        window.play_sound("pet")
+
+        window.sounds["pet"].play.assert_not_called()
+
+    def test_visible_pet_still_plays(self):
+        window = self._window()
+        window._game_auto_hidden = False
+        window._user_hidden = False
+
+        window.play_sound("sleep")
+
+        window.sounds["sleep"].play.assert_called_once()

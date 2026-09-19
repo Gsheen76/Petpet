@@ -1715,6 +1715,12 @@ class PetWindow(QWidget):
     def play_sound(self, name):
         if not self.settings.get("sound_enabled", True):
             return
+        # 隐藏即静音（2026-09-19）：游戏自动隐藏/手动隐藏期间，自治
+        # 行为与自动睡醒的定时器仍在跑——声音不得穿出。
+        if self.__dict__.get("_game_auto_hidden", False) or self.__dict__.get(
+            "_user_hidden", False
+        ):
+            return
         se = self.sounds.get(name)
         if se is not None:
             se.stop()
