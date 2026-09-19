@@ -139,6 +139,9 @@ class HomeSceneWindow(QWidget):
         self._click_defer_timer.setSingleShot(True)
         self._click_defer_timer.timeout.connect(self._fire_deferred_click)
         self._window_drag_offset = None
+        # 用户拖窗偏移（2026-09-19）：全景重构把几何改成每 33ms 强制回
+        # 锚点，拖动失效；非装修态在锚点矩形上叠加持久偏移量。
+        self._window_offset = None
         self._last_pet_tick = time.monotonic()
         self._last_persisted_home_target = None
         self.setMouseTracking(True)
@@ -168,7 +171,10 @@ class HomeSceneWindow(QWidget):
     def _target_scene_geometry(self):
         if self.is_decorating():
             return decoration_scene_window_geometry(self._screen_rect())
-        return scene_window_geometry(self._screen_rect())
+        rect = scene_window_geometry(self._screen_rect())
+        if self._window_offset is not None:
+            rect.translate(self._window_offset)
+        return rect
 
     def _apply_scene_geometry(self):
         rect = self._target_scene_geometry()
@@ -2413,7 +2419,12 @@ class HomeSceneWindow(QWidget):
             self._hover_button = key
             self.update()
         if self._window_drag_offset is not None:
-            self.move(event.globalPos() - self._window_drag_offset)
+            desired = event.globalPos() - self._window_drag_offset
+            anchored = self._target_scene_geometry()
+            self._window_offset = QPoint(
+                desired.x() - anchored.x(), desired.y() - anchored.y(),
+            )
+            self.move(desired)
             return
         if self._editing_gesture is None:
             return
@@ -2427,6 +2438,7 @@ class HomeSceneWindow(QWidget):
 
     def mouseReleaseEvent(self, event):
         if self._window_drag_offset is not None:
+            # 松手只清按住锚点；用户偏移量保留（拖动位置持久）。
             self._window_drag_offset = None
             event.accept()
             return

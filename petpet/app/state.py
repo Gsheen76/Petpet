@@ -144,15 +144,20 @@ def default_pet_name(state: dict) -> str:
     return str(_pet_defaults(state).get("pet_name"))
 
 
-def pet_profile(state: dict, pet_id: str) -> dict:
-    """Return an independent normalized profile without changing the active pet."""
+def pet_profile(state: dict, pet_id: str, *, create: bool = True) -> dict:
+    """Return an independent normalized profile without changing the active pet.
+
+    create=False 用于查看未拥有宠物的只读路径（2026-09-19 防幽灵档）：
+    缺失的档案不会被注册进存档。
+    """
     if not isinstance(pet_id, str) or not pet_id:
         raise ValueError("pet_id must be a non-empty string")
     pets = _pets(state)
     profile = pets.get(pet_id)
     if not isinstance(profile, dict):
         profile = {}
-        pets[pet_id] = profile
+        if create:
+            pets[pet_id] = profile
     _complete_fields(profile, {}, PET_FIELDS, _pet_defaults(state))
     profile["pet_name"] = str(
         profile.get("pet_name") or _pet_defaults(state)["pet_name"]
@@ -199,6 +204,40 @@ def bind_active_pet(state: dict, pet_id: str) -> dict:
     if pet_id not in owned_pet_ids:
         owned_pet_ids.append(pet_id)
     return _project_active_pet(state)
+
+
+def sweep_ghost_pet_profiles(state: dict) -> None:
+    """清扫幽灵宠物档案（2026-09-19）：查看未拥有宠物的旧 bug 曾把纯
+    默认值档案写进存档，虚增「拥有宠物」数。只删「未拥有 + 非出勤 +
+    关键字段与默认值完全一致」的档案；带任何真实数据（好感/经验/
+    改名/陪伴时长）的一律保留。
+    """
+    pets = state.get("pets")
+    if not isinstance(pets, dict):
+        return
+    owned = set(
+        pet_id for pet_id in (state.get("owned_pet_ids") or [])
+        if isinstance(pet_id, str)
+    )
+    active_pet_id = state.get("active_pet_id")
+    if isinstance(active_pet_id, str):
+        owned.add(active_pet_id)
+    defaults = _pet_defaults(state)
+    pristine_keys = (
+        "pet_name", "affection_points", "affection_level",
+        "xp", "level", "active_seconds",
+    )
+    ghosts = [
+        pet_id for pet_id, profile in pets.items()
+        if isinstance(profile, dict)
+        and pet_id not in owned
+        and all(
+            profile.get(key) == defaults.get(key)
+            for key in pristine_keys
+        )
+    ]
+    for pet_id in ghosts:
+        del pets[pet_id]
 
 
 def ensure_state_schema(
@@ -260,6 +299,7 @@ def ensure_state_schema(
         if pet_id not in owned_pet_ids:
             owned_pet_ids.append(pet_id)
     state["owned_pet_ids"] = owned_pet_ids
+    sweep_ghost_pet_profiles(state)
 
     _project_active_pet(state)
     state["state_schema_version"] = STATE_SCHEMA_VERSION

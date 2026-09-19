@@ -268,6 +268,7 @@ def load_config():
 def save_config(config):
     """Persist local AI settings atomically so a crash cannot truncate them."""
     chat_config.save_config(CONFIG_PATH, config)
+    _invalidate_personal_setup_cache()
 
 
 def _aliyun_quota_today(now=None):
@@ -341,12 +342,36 @@ def set_api_key(api_key):
     save_config(config)
 
 
+_PERSONAL_SETUP_CACHE_TTL = 10.0
+_personal_setup_cache = {"at": 0.0, "value": True, "path": None}
+
+
 def needs_personal_setup_reminder():
-    """Show the one-time personal-chat hint until its editor is first opened."""
+    """Show the one-time personal-chat hint until its editor is first opened.
+
+    被 paintEvent 30fps 每帧调用（2026-09-19）：加 TTL 缓存（按
+    CONFIG_PATH 键控，测试换路径即失效），未配 Key 期间不再每帧读盘
+    解析 config.json；save_config/mark_personal_setup_seen 主动失效。
+    """
+    now = time.monotonic()
+    cache = _personal_setup_cache
+    if (
+        now - cache["at"] < _PERSONAL_SETUP_CACHE_TTL
+        and cache["path"] == CONFIG_PATH
+    ):
+        return cache["value"]
     config = load_config()
-    return not config.get("api_key") and not bool(
+    value = not config.get("api_key") and not bool(
         config.get("personal_setup_seen", False)
     )
+    cache["at"] = now
+    cache["value"] = value
+    cache["path"] = CONFIG_PATH
+    return value
+
+
+def _invalidate_personal_setup_cache():
+    _personal_setup_cache["at"] = 0.0
 
 
 def mark_personal_setup_seen():
@@ -354,6 +379,7 @@ def mark_personal_setup_seen():
     config = load_config()
     config["personal_setup_seen"] = True
     save_config(config)
+    _invalidate_personal_setup_cache()
 
 
 def has_default_chat_consent():

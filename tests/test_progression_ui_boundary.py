@@ -375,7 +375,8 @@ def test_home_page_has_decoration_category_chips(shop_window):
 
 
 def test_weekly_companionship_summary_from_records(shop_window):
-    """陪伴周报（2026-09-15 A4）：记录页顶部汇总一周关键数据。"""
+    """陪伴周报（2026-09-15 A4；2026-09-19 改真·周增量）：首次渲染
+    建立周锚点，终身累计不再冒充「本周」，只统计锚点后的增量。"""
     from petpet.progression.ui import weekly_companionship_summary
 
     records = {
@@ -383,12 +384,19 @@ def test_weekly_companionship_summary_from_records(shop_window):
         "feedings": 8, "play_sessions": 5, "gifts_given": 2,
         "active_seconds": 3600 * 25,
     }
+    weekly_companionship_summary(records)  # 建锚：终身数不算本周
+    records["chats_opened"] += 3
+    records["ai_replies"] += 7
+    records["pettings"] += 2
+    records["active_seconds"] += 3600 * 2
+
     lines = weekly_companionship_summary(records)
     joined = " ".join(lines)
-    assert "12" in joined and "聊天" in joined
-    assert "34" in joined
-    assert "21" in joined
-    assert "陪伴 25 小时" in joined
-    # 空记录也有温和文案
+
+    assert "聊天 3 次" in joined
+    assert "回了你 7 句" in joined
+    assert "互动 2 次" in joined
+    assert "陪伴 2 小时" in joined
+    # 本周无增量（或空记录）也有温和文案
     empty = weekly_companionship_summary({})
-    assert empty and "还没有" in " ".join(empty) or len(empty) >= 1
+    assert len(empty) >= 1

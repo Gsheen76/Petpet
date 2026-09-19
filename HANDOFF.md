@@ -1,6 +1,6 @@
 # Petpet 项目交接文档
 
-**版本**：**v1.7.4 已发布**（2026-09-18 09:25 本地，tag `a70e0db`，[GitHub Release](https://github.com/Gsheen76/Petpet/releases/tag/v1.7.4)）；发布后：陪我出场动画缩小、成就页空态领取键文案改「暂无」（未随版，见最近变更表末两行）
+**版本**：**v1.7.4 已发布**（2026-09-18 09:25 本地，tag `a70e0db`，[GitHub Release](https://github.com/Gsheen76/Petpet/releases/tag/v1.7.4)）；发布后：陪我出场动画缩小、成就页空态领取键文案改「暂无」、审计中危七项清偿（未随版，见最近变更表末三行）
 **日期**：2026-09-18
 **核心分支**：main（与远端一致；发布链 5acc9e6→657b393→62438ff→54da3ce→a70e0db）
 
@@ -55,6 +55,7 @@ D:\Agent_project\Petpet
 
 | 领域 | 内容 |
 |------|------|
+| **审计中危七项清偿**（2026-09-19，v1.7.4 后待发） | 全部中危遗留一次清偿（TDD 17 测，`tests/test_audit_tier3.py`）：⑥ 幽灵 profile 三重防护——snapshot 走 `pet_profile(create=False)`、`give_gift` owned 守卫（裸 state 门面按默认午餐肉回退）、`ensure_state_schema` 尾部清扫**纯默认值**幽灵档（改名/有好感保留）；④ setup 提醒 10s TTL 缓存（CONFIG_PATH 键控防测试互染，save_config 主动失效）；⑤ 拖拽钳位抽 `clamp_drag_position` 相对屏幕边界（修副屏左/上拖不进）；⑦ 小屋拖窗 `_window_offset` 持久偏移（修全景重构副作用；松手只清按住锚点）；⑩ 图片轮禁重生成（拒发占位文本、不弹历史防缩略图孤儿）；⑧ `_shared_pet_coins` **投影感知**（有 `_active_pet_facade_snapshot` 门面为真、裸结构 player 为真）；⑨ 陪伴周报 `weekly_record_deltas` ISO 周锚点真增量（首次渲染建锚，历史累计不再冒充本周）。旧测试规格更新×2（币值方向/周报语义）。**坑位：`str.replace` 修 Qt 回调先数同名行（__init__/mouseReleaseEvent 双中招）；裸 state 与投影态币值真源不同（快照键判据）；模块级 TTL 缓存跨测试互染（路径键控+显式清零）**。验证：全量 **901 passed**（+17）+ 真平台七不变量冒烟 + 重启 PID 16120（隐藏=用户正玩英雄联盟，自动隐藏定稿行为）。详见 Obsidian `开发记录6-09-19 审计中危七项清偿` |
 | **成就页空态领取键文案**（2026-09-18，v1.7.4 后待发） | 用户截图指示「截屏区域改成暂无」：空态一键领取键「暂无待领取奖励」→**「暂无」**（与统计行「待领取 0 项」重复且偏长）；有可领仍「一键领取（N）」，禁用逻辑不变。测试 `test_claim_button_empty_state_text_is_brief`（空档 softButton==暂无+禁用）。**坑位：成就窗测试夹具 level=3 自带可领升级成就——测空态必须纯 `ensure_progression({})` 自建 pet**。验证：TDD 红绿 + 全量 **884 passed**（+1）+ 真平台冒烟（windows 平台按钮渲染）+ 重启 PID 29840 可见。详见 Obsidian `开发记录6-09-18 成就页空态领取键文案改暂无` |
 | **陪我出场动画缩小**（2026-09-18，v1.7.4 后待发） | 用户：「缩小一下换成午餐肉陪我的出场动画，现在太大了」。实测（真平台逐帧 grab）：play 动画 manifest `scale: 1.3` 使峰值主体 130×148px vs idle 最宽 88/恒高 143——**宽向 +47% 是「太大」主因**（张开姿势×1.3 画布溢出绘制框 30%）。修：`lunch_meat/animations/manifest.json` play.scale **1.3→1.0**（与 eat/pet/dig_reward 交互动画惯例一致）；play 唯一生产触发点就是宠物面板「陪我」（ice_cream 无 play 条目不受影响）。测试 `PlayAnimationScaleTests` 钉死。坑位：`pet_asset_path` 是姿势路径解析器非通用资产路径工具，测 manifest 用测试文件相对根。验证：TDD 红绿 + 缩后实测峰值 100×116 + 全量 **883 passed**（+1）+ 重启 PID 11332 可见。详见 Obsidian `开发记录6-09-18 陪我出场动画缩小` |
 | **全应用审计六项修复**（2026-09-18，已随 v1.7.4 发布） | 三路并行审计代理扫全应用回收 20 项、逐项取证后修六项高危（TDD 六红六绿，`tests/test_app_audit_fixes.py`）：① **自动睡醒死接线**——`_update_auto_sleep_state` 自 v1.5.0 拆包丢失唯一调用点（旧版 d7d4ee2 在 on_decay/on_autonomy 两处调），低精力不睡、auto 睡不醒、参数调试器旋钮空转；`on_decay` 按旧契约接线+try/except 兜底（薄壳坑：`__new__` 读缺失属性 RuntimeError，getattr 接不住）。② **存档非原子写**——原地覆盖+异常吞掉=断电整档清零；`state.py` 新增 `write_json_atomic`（temp+fsync+replace+写前 .bak）/`load_json_with_backup`（主档→.bak→默认），`pet.py` 换用。③ **档案抽取阻塞 GUI**——`append_history`（GUI 槽）内联 `urlopen(timeout=20)`，历史饱和 60 条后每条消息必触发；新增 `_dispatch_profile_refresh` 守护线程，**重读最新存档做读-改-写**防旧 dict 覆盖。④ **档案自我污染**——渲染文本写回 `user_profile` 被迁移逻辑反复塞进「其他」；改为「恰等于 `render_profile_facts` 渲染结果才跳过」（真旧摘要照常迁移，钉住的不丢记忆规格保住）。⑤ **`_ai_thread` 异常静默死亡**——busy 永久卡「停止」；整体 try/except→error 信号。⑥ **fallback random 未导入**——恒第一条。验证：全量 **878 passed**（+10）+ 真平台（原子写三态/损坏回退/on_decay 接线/4ms 返回）+ 重启 PID 12372。**坑位：审计代理结论必须逐项取证（20 项中 5+ 误报/设计取舍）；测试守护线程 Event.wait 须在补丁作用域内；计数触发器测试先算术（6+1=7%6≠0）**。**审计遗留 14 项按严重度登记在 §9 待办区（同日 Tier2 已修其中中①②③，余 11 项）**。详见 Obsidian `开发记录\2026-09-18 全应用审计六项修复` |
@@ -243,13 +244,13 @@ assets/runtime/ui/gifts/          # 礼物图标（商店卡+面板背包共用�
    - ~~中①~~（已修 2026-09-18 Tier2：`_cancelable` 标志，双键弹窗 Esc/点外 reject，单键维持 accept）
    - ~~中②~~（已修 2026-09-18 Tier2：删手抄表，`_furniture_size()` 延迟导入定义目录破 core→geometry 环）
    - ~~中③~~（已修 2026-09-18 Tier2：无帧分支 stop+deleteLater 旧定时器）
-   - 中④：`pet_window.py:1600` paintEvent 每帧同步读盘解析 config.json（未配 key 期间 30fps×读盘）——缓存标志位
-   - 中⑤：`pet_window.py:1816` 拖拽钳位把虚拟桌面尺寸当绝对坐标——副屏在主屏左/上时小狗拖不进那块屏，应改用 `screen.left()/top()`
-   - 中⑥：查看未拥有宠物即经 `pet_profile()` 创建幽灵 profile 入档（`_select_pet_for_view` 无 owned 检查）+ `give_gift` 无 `pet_owned` 守卫
-   - 中⑦：小屋空白区拖窗被 33ms `_sync_scene→_apply_scene_geometry` 每帧弹回（`_window_drag_offset` 期间应跳过 re-apply）
-   - 中⑧：币值双写口径——`add_coins/purchase_upgrade/purchase_decoration` 只写门面、`_shared_pet_coins` 以 player 覆盖门面，存档捕获又反向；写盘失败后分叉（A2 原子写已大幅缩窗，但口径仍应统一）
-   - 中⑨：陪伴周报数据源是终身累计 records，文案却写"本周"——要么加周锚点快照、要么改文案
-   - 中⑩：`_regenerate` 处理图片轮——重发的是占位文本且缩略图成孤儿文件
+   - ~~中④~~（已修 2026-09-19：needs_personal_setup_reminder 10s TTL 缓存，CONFIG_PATH 键控 + save_config 主动失效）
+   - ~~中⑤~~（已修 2026-09-19：抽 `clamp_drag_position` 静态方法，边界相对 screen.left()/top()/right()/bottom()）
+   - ~~中⑥~~（已修 2026-09-19：snapshot 走 pet_profile(create=False)；give_gift owned 守卫；schema 尾部清扫纯默认幽灵档）
+   - ~~中⑦~~（已修 2026-09-19：非装修态几何叠加持久 `_window_offset`，拖动更新偏移、松手保留；装修全景不受影响）
+   - ~~中⑧~~（已修 2026-09-19：`_shared_pet_coins` 投影感知——有门面快照键门面为真、裸结构 player 为真）
+   - ~~中⑨~~（已修 2026-09-19：core.weekly_record_deltas ISO 周键惰性锚点，只计本周增量、跨周重置；首次渲染即建锚，历史累计不计入当周）
+   - ~~中⑩~~（已修 2026-09-19：尾部用户条目带 image 键即拒发并提示，历史不动；文字轮不变）
    - 低⑪：搜索框留关键词时新消息流式全量显示、完成后又被过滤消失（前后不一致）
    - 低⑫：`pet.py:1962` 每次单击新建 `QTimer(self.app)` 不销毁（慢性小泄漏）
    - 低⑬：aliyun-chat 无服务端限流（README 明示仅客户端计数，公网函数持 key 可被刷）

@@ -114,18 +114,26 @@ def test_old_outfit_and_home_discount_flags_are_ignored():
 
 
 def test_outfit_and_home_purchases_use_and_sync_shared_player_coins():
-    outfit_state = fresh_state(
-        pet_coins=0,
-        player={"pet_coins": 600},
-    )
+    # 币值口径（2026-09-19）：投影后的会话态里门面是活跃真相（加载
+    # 投影 player→门面、保存捕获门面→player）。player 滞后（捕获
+    # 间隙的挖宝所得）时，购买按门面余额进行、不得回滚滞后的 player。
+    from petpet.app import state as app_state
+
+    def projected_state(facade_coins):
+        state = fresh_state(
+            pet_coins=0,
+            player={"pet_coins": 0},
+        )
+        app_state.ensure_state_schema(state, "Sheen", str)
+        state["pet_coins"] = facade_coins  # 模拟捕获间隙的获得
+        return state
+
+    outfit_state = projected_state(600)
     assert progression.purchase_outfit(outfit_state, "dinosaur_suit")["ok"] is True
     assert outfit_state["player"]["pet_coins"] == 0
     assert outfit_state["pet_coins"] == 0
 
-    home_state = fresh_state(
-        pet_coins=0,
-        player={"pet_coins": 240},
-    )
+    home_state = projected_state(240)
     assert progression.purchase_home_decoration(home_state, "home_sofa")["ok"] is True
     assert home_state["player"]["pet_coins"] == 0
     assert home_state["pet_coins"] == 0

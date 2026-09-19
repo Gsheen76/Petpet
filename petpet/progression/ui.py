@@ -641,16 +641,17 @@ def _clear_layout(layout):
 
 
 def weekly_companionship_summary(records):
-    """陪伴周报文案（2026-09-15 A4）：记录页顶部的一行式汇总。
+    """陪伴周报文案（2026-09-15 A4；2026-09-19 改真·周增量）。
 
-    纯函数：从 records 计数生成 2-3 行中文摘要；数据为空时给
-    温和的引导文案。
+    记录页顶部的一行式汇总。records 是终身累计计数——本函数经
+    core.weekly_record_deltas 惰性维护周锚点快照（会写入
+    records["week_anchor"]），只统计本周增量；跨周自动重置。
+    本周无增量时给温和的引导文案。
     """
+    deltas = progression.weekly_record_deltas(records)
+
     def _count(key):
-        try:
-            return int((records or {}).get(key, 0) or 0)
-        except (TypeError, ValueError):
-            return 0
+        return int(deltas.get(key, 0) or 0)
 
     chats = _count("chats_opened")
     replies = _count("ai_replies")

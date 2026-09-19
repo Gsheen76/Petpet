@@ -158,7 +158,8 @@ def pet_profile_snapshot(state: dict, pet_id: str) -> dict:
     if pet_id == active_id:
         profile = state
     else:
-        profile = app_state.pet_profile(state, pet_id)
+        # create=False：查看未拥有宠物的只读路径，不注册档案（2026-09-19）
+        profile = app_state.pet_profile(state, pet_id, create=False)
     owned = (
         pet_id == active_id
         or pet_id in (state.get("owned_pet_ids") or ())

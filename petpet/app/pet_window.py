@@ -829,6 +829,24 @@ class PetWindow(QWidget):
         """Return the virtual bounding rect of all screens (multi-monitor)."""
         return QApplication.primaryScreen().virtualGeometry()
 
+    @staticmethod
+    def clamp_drag_position(pos, screen, pet_w, dog_h):
+        """把拖拽目标位置钳在边界矩形内（2026-09-19 修多显示器）。
+
+        旧实现把虚拟桌面原点当绝对 (0,0)（左界 -0.7w、右界 width-0.3w），
+        副屏位于主屏左/上方时小狗永远拖不进那块屏。改为相对
+        screen.left()/top()/right()/bottom()；最多探出任意外边 70%，
+        顶部预留 60px 气泡区、底部 40px。
+        """
+        left = screen.left() - int(pet_w * 0.7)
+        right = screen.right() + 1 - int(pet_w * 0.3)
+        top = screen.top() - int(dog_h * 0.7) + 60
+        bottom = screen.bottom() + 1 - int(dog_h * 0.3) - 40
+        return QPoint(
+            max(left, min(pos.x(), right)),
+            max(top, min(pos.y(), bottom)),
+        )
+
     def screen_at(self, pos):
         """Return the QScreen that contains pos, or the nearest one."""
         for scr in QApplication.screens():
@@ -1814,13 +1832,10 @@ class PetWindow(QWidget):
                 self.wake_from_shake()
             new_pos = e.globalPos() - self.drag_offset
             # clamp so the pet stays at least partially visible on screen
-            screen = self.screen_rect()
-            w, h = self.PET_W, self.DOG_H  # use dog drawing size for clamping
-            # allow at most 70% off-screen on any side, so a chunk always shows
-            # but account for the 60px bubble space at top of widget
-            new_x = max(-int(w*0.7), min(new_pos.x(), screen.width() - int(w*0.3)))
-            new_y = max(-int(h*0.7) + 60, min(new_pos.y(), screen.height() - int(h*0.3) - 40))
-            self.move(new_x, new_y)
+            new_pos = PetWindow.clamp_drag_position(
+                new_pos, self.screen_rect(), self.PET_W, self.DOG_H
+            )
+            self.move(new_pos.x(), new_pos.y())
             # store raw (unclamped) cursor velocity samples within last 1s,
             # so fling speed reflects hand motion even near screen edges
             self.drag_samples.append((e.globalPos(), now))

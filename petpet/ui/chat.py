@@ -1328,6 +1328,18 @@ class ChatWindow(QWidget):
         history = self.mem.get("history") or []
         if not history or history[-1].get("role") != "assistant":
             return
+        # 图片轮禁用重生成（2026-09-19）：历史只存缩略图与占位文本，
+        # 重发会把占位串当用户消息发给模型且原图丢失；条目弹出后
+        # 缩略图还成了孤儿文件。
+        last_user = next(
+            (entry for entry in reversed(history[:-1])
+             if entry.get("role") == "user"),
+            None,
+        )
+        if last_user is not None and last_user.get("image"):
+            self.chat_notice.setText("图片消息暂不支持重新生成。")
+            self.chat_notice.show()
+            return
         history.pop()
         if not history or history[-1].get("role") != "user":
             return

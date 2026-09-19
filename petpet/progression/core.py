@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import time
 import random
 
@@ -11,6 +12,7 @@ from petpet.home.geometry import (
     normalize_home_scene,
 )
 from petpet.app.pets import load_pet_registry as _load_pet_registry
+from petpet.app.state import DEFAULT_PET_ID, _FACADE_SNAPSHOT_KEY
 
 
 RECORD_DEFAULTS = {
@@ -501,11 +503,21 @@ def _safe_float(value, default, minimum, maximum):
 def _shared_pet_coins(state):
     player = state.get("player")
     if isinstance(player, dict):
-        player["pet_coins"] = _safe_int(
-            player.get("pet_coins", state.get("pet_coins", 0))
-        )
-        if "pet_coins" in state:
-            state["pet_coins"] = player["pet_coins"]
+        # 币值口径（2026-09-19）：schema 投影发生后的会话态里门面是
+        # 活跃真相（加载投影 player→门面、保存捕获门面→player）——
+        # player 滞后时按门面计，防捕获间隙的获得/消耗被回滚；未经
+        # 投影的裸结构（无门面快照键）里 player 才是唯一真实来源。
+        projected = _FACADE_SNAPSHOT_KEY in state
+        if projected:
+            value = _safe_int(
+                state.get("pet_coins", player.get("pet_coins", 0))
+            )
+        else:
+            value = _safe_int(
+                player.get("pet_coins", state.get("pet_coins", 0))
+            )
+        player["pet_coins"] = value
+        state["pet_coins"] = value
         return player
     state["pet_coins"] = _safe_int(state.get("pet_coins", 0))
     return state
@@ -1116,6 +1128,50 @@ def award_minigame_coins(
     }
 
 
+WEEKLY_SUMMARY_RECORD_KEYS = (
+    "chats_opened", "ai_replies", "pettings", "feedings",
+    "play_sessions", "gifts_given", "active_seconds",
+)
+
+
+def _week_key(now=None):
+    """ISO 周键（本地时区，周一为周首）。"""
+    moment = datetime.datetime.fromtimestamp(
+        time.time() if now is None else now
+    )
+    year, week, _day = moment.isocalendar()
+    return f"{year}-W{week:02d}"
+
+
+def weekly_record_deltas(records, now=None):
+    """陪伴周报的周锚点（2026-09-19）：records 是终身累计计数，文案却
+    写「本周」——本函数惰性维护周锚点快照（records["week_anchor"]），
+    返回本周增量 dict；跨周时锚点重置到当前值、增量从零重新计。
+    """
+    records = records if isinstance(records, dict) else {}
+    key = _week_key(now)
+    anchor = records.get("week_anchor")
+    snapshot = (
+        anchor.get("snapshot")
+        if isinstance(anchor, dict) and anchor.get("key") == key
+        else None
+    )
+    if not isinstance(snapshot, dict):
+        snapshot = {
+            record_key: _safe_int(records.get(record_key, 0))
+            for record_key in WEEKLY_SUMMARY_RECORD_KEYS
+        }
+        records["week_anchor"] = {"key": key, "snapshot": snapshot}
+    return {
+        record_key: max(
+            0,
+            _safe_int(records.get(record_key, 0))
+            - _safe_int(snapshot.get(record_key, 0)),
+        )
+        for record_key in WEEKLY_SUMMARY_RECORD_KEYS
+    }
+
+
 def dig_cooldown_remaining(state, now=None):
     """Seconds until another treasure can be discovered."""
     ensure_progression(state)
@@ -1508,8 +1564,20 @@ def give_gift(state, pet_id, gift_id):
             "message": "背包里还没有这件礼物，先去商店看看吧。",
         }
     target_pet_id = (
-        state.get("active_pet_id") if pet_id is None else pet_id
+        (state.get("active_pet_id") or DEFAULT_PET_ID)
+        if pet_id is None else pet_id
     )
+    # 所有权守卫（2026-09-19）：历史幽灵档会绕过下方 pets 缺档检查，
+    # 未拥有的宠物不能收礼。裸 state（无 active_pet_id）门面宠物按
+    # 默认午餐肉回退（既有坑位约定）。
+    active_pet_id = state.get("active_pet_id") or DEFAULT_PET_ID
+    if target_pet_id != active_pet_id and target_pet_id not in set(
+        _shared_owned_pet_ids(state)
+    ):
+        return {
+            "ok": False,
+            "message": "还没有这只宠物，先去商店带 TA 回家吧。",
+        }
     base_amount, amount, preferred = gift_affection_for(
         target_pet_id, gift_id,
     )
