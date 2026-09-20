@@ -1175,3 +1175,40 @@ class BonusBubbleKeepAliveTests(unittest.TestCase):
         gc.collect()
         self.assertNotIn(ref(), BonusBubble._keep_alive,
                          "close 后必须从保活表移除")
+
+
+class SpeechBubbleKeepAliveTests(unittest.TestCase):
+    """说话气泡保活（2026-09-20 闪退根因修复）。
+
+    与 BonusBubble 同族的无父顶层原生窗：say() 的「close 旧泡→建新泡」
+    曾让旧泡失去全部 Python 引用被 GC 连 C++ 一起回收，而在途窗口事件
+    仍会投递到它——qwindows.dll 读悬空 QString 即 Qt5Core 访问违例
+    （pythonw.exe.20876.dmp：AV 读 0xFFFFFFFFFFFFFFFF，调用链
+    QEventLoop→QGui 窗口事件→qwindows.dll）。
+    """
+
+    def test_speech_bubble_survives_gc_until_closed(self):
+        import gc
+        import weakref
+
+        import sip
+
+        app = QApplication.instance() or QApplication([])
+        from petpet.ui.desktop import SpeechBubble
+
+        pet = SimpleNamespace(x=lambda: 100, y=lambda: 100, PET_W=190, PET_H=220)
+        bubble = SpeechBubble(pet)
+        bubble.__dict__.pop("_self_guard", None)
+        ref = weakref.ref(bubble)
+        del bubble
+        gc.collect()
+        QApplication.processEvents()
+
+        self.assertIsNotNone(ref(), "无外部引用时气泡必须由类级注册表保活")
+        self.assertFalse(sip.isdeleted(ref()), "C++ 对象不得被 GC 回收")
+
+        ref().close()
+        QApplication.processEvents()
+        gc.collect()
+        self.assertNotIn(ref(), SpeechBubble._keep_alive,
+                         "close 后必须从保活表移除")

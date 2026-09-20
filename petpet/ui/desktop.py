@@ -1422,9 +1422,23 @@ def _esc(text):
 
 
 class SpeechBubble(QWidget):
-    """A complete, queued speech bubble that wraps long messages."""
+    """A complete, queued speech bubble that wraps long messages.
+
+    自持保活（2026-09-20 闪退根因修复）：本组件与 BonusBubble 同为
+    无父顶层原生窗——PetWindow.say() 的「close 旧泡→建新泡」会让旧泡
+    失去全部 Python 引用而被 GC 连 C++ 窗口当场回收，此刻在途的窗口
+    系统事件（曝光/几何）仍投递到它，qwindows.dll 读悬空 QString 即
+    Qt5Core 访问违例（pythonw.exe.20876.dmp 实证：AV 读
+    0xFFFFFFFFFFFFFFFF，链 QEventLoop→QGui 窗口事件→qwindows.dll）。
+    类级注册表保活到 closeEvent 真正发生，与 BonusBubble 2026-09-14
+    修复同款。
+    """
+
+    _keep_alive = set()
+
     def __init__(self, pet):
         super().__init__()
+        SpeechBubble._keep_alive.add(self)
         self.pet = pet
         self.text = ""
         self.setWindowFlags(
@@ -1439,6 +1453,16 @@ class SpeechBubble(QWidget):
         self._hide_timer = QTimer(self)
         self._hide_timer.setSingleShot(True)
         self._hide_timer.timeout.connect(self._show_next_or_hide)
+
+    def closeEvent(self, event):
+        # 先停掉隐藏定时器：close 后对象即将释放，在途的 timeout 事件
+        # 不得再指向它（BonusBubble 家族竞态的最后一道闸）。
+        try:
+            self._hide_timer.stop()
+        except RuntimeError:
+            pass
+        SpeechBubble._keep_alive.discard(self)
+        super().closeEvent(event)
 
     def show_text(self, text, ms):
         text = " ".join(str(text).replace("\r", "\n").splitlines()).strip()

@@ -1,6 +1,6 @@
 # Petpet 项目交接文档
 
-**版本**：**v1.7.4 已发布**（2026-09-18 09:25 本地，tag `a70e0db`，[GitHub Release](https://github.com/Gsheen76/Petpet/releases/tag/v1.7.4)）；发布后：陪我出场动画缩小、成就页空态领取键文案改「暂无」、审计中危七项清偿、隐藏即静音（未随版，见最近变更表末四行）
+**版本**：**v1.7.4 已发布**（2026-09-18 09:25 本地，tag `a70e0db`，[GitHub Release](https://github.com/Gsheen76/Petpet/releases/tag/v1.7.4)）；发布后：陪我出场动画缩小、成就页空态领取键文案改「暂无」、审计中危七项清偿、隐藏即静音、闪退修复（SpeechBubble 保活）（未随版，见最近变更表末五行）
 **日期**：2026-09-18
 **核心分支**：main（与远端一致；发布链 5acc9e6→657b393→62438ff→54da3ce→a70e0db）
 
@@ -55,6 +55,7 @@ D:\Agent_project\Petpet
 
 | 领域 | 内容 |
 |------|------|
+| **闪退取证与说话气泡保活**（2026-09-20，v1.7.4 后待发） | 用户 10:42 闪退（pythonw 20876）。**minidump 法证**（无 cdb，pip minidump + CONTEXT 裸读 + 栈扫描）：Qt5Core AV **读 0xFFFF...FFFF**，链 `QEventLoop→QGui 窗口事件→qwindows.dll→字符串扫描` = 「销毁 vs 事件」竞态；排查自动睡醒/多屏跨界/音效均排除（存档 awake 49.2、单屏 2560×1440、栈无 Multimedia）。根因：**SpeechBubble**（无父顶层原生窗，BonusBubble 孪生）在 `say()` 换泡时失去全部引用被 GC 连 C++ 当场回收。修：类级 `_keep_alive`（BonusBubble 2026-09-14 同款）+ closeEvent 先停 `_hide_timer`。测试 `SpeechBubbleKeepAliveTests`。验证：TDD 红绿 + 全量 **905 passed**（+1）+ 真平台 say 链无 AV + 重启 PID 33200。**坑位：faulthandler 日志跨次追加按行号分辨新旧；minidump 包 ExceptionCode 需 .value、ThreadContext 按 Rva 裸读；「无 parent+频繁创建销毁+原生窗」三特征组件都该保活**。详见 Obsidian `开发记录6-09-20 闪退取证与说话气泡保活修复` |
 | **隐藏即静音**（2026-09-19，v1.7.4 后待发） | 用户反馈：游戏自动隐藏期间宠物声音仍穿出。根因：`play_sound` 只查 `sound_enabled`，不看 `_game_auto_hidden`/`_user_hidden`——自治动作音效与**自动睡醒的汪声**由常驻定时器驱动、隐藏时照常触发（对照：`say()` 气泡本有 `interface_anchor_visible()` 门）。修：入口统一加隐藏门，覆盖全部 11 处调用点。测试 `HiddenPetSilenceTests` 三测（双隐藏态静音+可见护栏）。验证：TDD 红绿 + 全量 **904 passed**（+3）+ 真平台冒烟（隐藏不响/可见照响）+ 重启 PID 32764（用户游戏进行中，隐藏=预期态）。详见 Obsidian `开发记录6-09-19 隐藏即静音` |
 | **审计中危七项清偿**（2026-09-19，v1.7.4 后待发） | 全部中危遗留一次清偿（TDD 17 测，`tests/test_audit_tier3.py`）：⑥ 幽灵 profile 三重防护——snapshot 走 `pet_profile(create=False)`、`give_gift` owned 守卫（裸 state 门面按默认午餐肉回退）、`ensure_state_schema` 尾部清扫**纯默认值**幽灵档（改名/有好感保留）；④ setup 提醒 10s TTL 缓存（CONFIG_PATH 键控防测试互染，save_config 主动失效）；⑤ 拖拽钳位抽 `clamp_drag_position` 相对屏幕边界（修副屏左/上拖不进）；⑦ 小屋拖窗 `_window_offset` 持久偏移（修全景重构副作用；松手只清按住锚点）；⑩ 图片轮禁重生成（拒发占位文本、不弹历史防缩略图孤儿）；⑧ `_shared_pet_coins` **投影感知**（有 `_active_pet_facade_snapshot` 门面为真、裸结构 player 为真）；⑨ 陪伴周报 `weekly_record_deltas` ISO 周锚点真增量（首次渲染建锚，历史累计不再冒充本周）。旧测试规格更新×2（币值方向/周报语义）。**坑位：`str.replace` 修 Qt 回调先数同名行（__init__/mouseReleaseEvent 双中招）；裸 state 与投影态币值真源不同（快照键判据）；模块级 TTL 缓存跨测试互染（路径键控+显式清零）**。验证：全量 **901 passed**（+17）+ 真平台七不变量冒烟 + 重启 PID 16120（隐藏=用户正玩英雄联盟，自动隐藏定稿行为）。详见 Obsidian `开发记录6-09-19 审计中危七项清偿` |
 | **成就页空态领取键文案**（2026-09-18，v1.7.4 后待发） | 用户截图指示「截屏区域改成暂无」：空态一键领取键「暂无待领取奖励」→**「暂无」**（与统计行「待领取 0 项」重复且偏长）；有可领仍「一键领取（N）」，禁用逻辑不变。测试 `test_claim_button_empty_state_text_is_brief`（空档 softButton==暂无+禁用）。**坑位：成就窗测试夹具 level=3 自带可领升级成就——测空态必须纯 `ensure_progression({})` 自建 pet**。验证：TDD 红绿 + 全量 **884 passed**（+1）+ 真平台冒烟（windows 平台按钮渲染）+ 重启 PID 29840 可见。详见 Obsidian `开发记录6-09-18 成就页空态领取键文案改暂无` |
