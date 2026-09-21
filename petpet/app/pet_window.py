@@ -142,6 +142,14 @@ class PetWindow(QWidget):
         self.setAttribute(Qt.WA_ShowWithoutActivating, True)
         self.setMouseTracking(True)
 
+        # 屏幕热变更自愈（2026-09-21）：拔插显示器/改缩放后把宠物与
+        # 可见面板钳回有效屏，防止按旧屏幕模型落位的窗口被"截一半"。
+        app = QApplication.instance()
+        if app is not None:
+            app.screenAdded.connect(self._handle_screen_layout_change)
+            app.screenRemoved.connect(self._handle_screen_layout_change)
+            app.primaryScreenChanged.connect(self._handle_screen_layout_change)
+
         self._current_pet_id = pet_definition(
             self.state.get("active_pet_id", "lunch_meat")
         )["id"]
@@ -846,6 +854,66 @@ class PetWindow(QWidget):
             max(left, min(pos.x(), right)),
             max(top, min(pos.y(), bottom)),
         )
+
+    def _handle_screen_layout_change(self, *_args):
+        """屏幕布局热变更自愈（2026-09-21）：拔插显示器/改缩放后，把
+        宠物本体与所有可见顶层窗钳进最近有效屏。
+
+        只救「离桌面不远」的悬空窗（旧屏幕模型算出的坐标至多偏出一
+        两块屏）——_warm_up_interaction_surfaces 停靠在 (-10000,-10000)
+        的预热交互面绝不能被拽进可见屏。隐藏中的面板不走此路径——经
+        show_near_pet 打开时按当下屏幕重新落位；宠物本体即使隐藏也钳，
+        防拔屏后重现悬空。返回移动的窗口数（测试用）。
+        """
+        from petpet.ui.common import clamp_window_into_nearest_screen
+
+        screens = []
+        for screen in QApplication.screens():
+            try:
+                rect = screen.availableGeometry()
+            except RuntimeError:
+                continue
+            if not rect.isEmpty():
+                screens.append(rect)
+        if not screens:
+            return 0
+        desktop = screens[0]
+        for rect in screens[1:]:
+            desktop = desktop.united(rect)
+        rescue_zone = desktop.adjusted(-2000, -2000, 2000, 2000)
+        moved = 0
+
+        def _contains_any(rect):
+            return any(s.contains(rect) for s in screens)
+
+        def _rescuable(rect):
+            return rescue_zone.intersects(rect)
+
+        try:
+            pet_rect = self.geometry()
+        except RuntimeError:
+            pet_rect = None
+        if (
+            pet_rect is not None
+            and not _contains_any(pet_rect)
+            and _rescuable(pet_rect)
+        ):
+            if clamp_window_into_nearest_screen(self, screens):
+                moved += 1
+        for widget in QApplication.topLevelWidgets():
+            if widget is self:
+                continue
+            try:
+                if not widget.isVisible() or not widget.isWindow():
+                    continue
+                rect = widget.geometry()
+            except RuntimeError:
+                continue
+            if _contains_any(rect) or not _rescuable(rect):
+                continue
+            if clamp_window_into_nearest_screen(widget, screens):
+                moved += 1
+        return moved
 
     def screen_at(self, pos):
         """Return the QScreen that contains pos, or the nearest one."""

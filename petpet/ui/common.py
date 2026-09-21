@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QPoint
+from PyQt5.QtCore import QPoint, QRect
 from PyQt5.QtGui import QFont
 
 
@@ -91,3 +91,61 @@ def center_window_on_screen(
         max(screen.x(), min(x, screen.right() + 1 - width)),
         max(screen.y(), min(y, screen.bottom() + 1 - height)),
     ))
+
+
+def clamp_rect_into_screen(rect, screen_rect):
+    """把窗口矩形平移钳进目标屏（屏幕热变更自愈 2026-09-21）。
+
+    只平移不缩放：窗口任一边越出屏就贴回该边；窗口比屏大（如装修
+    全景 2138 宽遇上窄屏）时对齐屏左上角，不做压缩。
+    """
+    if rect.width() >= screen_rect.width():
+        x = screen_rect.x()
+    else:
+        x = max(
+            screen_rect.x(),
+            min(rect.x(), screen_rect.x() + screen_rect.width() - rect.width()),
+        )
+    if rect.height() >= screen_rect.height():
+        y = screen_rect.y()
+    else:
+        y = max(
+            screen_rect.y(),
+            min(rect.y(), screen_rect.y() + screen_rect.height() - rect.height()),
+        )
+    return QRect(x, y, rect.width(), rect.height())
+
+
+def _rect_overlap_area(a, b):
+    w = min(a.right(), b.right()) - max(a.x(), b.x()) + 1
+    h = min(a.bottom(), b.bottom()) - max(a.y(), b.y()) + 1
+    return max(0, w) * max(0, h)
+
+
+def pick_screen_rect_for(rect, screen_rects):
+    """返回与窗口矩形最相干的屏矩形：重叠面积最大者优先，全无重叠时
+    中心距最近者优先；空列表返回 None。"""
+    if not screen_rects:
+        return None
+    cx, cy = rect.x() + rect.width() / 2, rect.y() + rect.height() / 2
+
+    def score(screen):
+        scx = screen.x() + screen.width() / 2
+        scy = screen.y() + screen.height() / 2
+        distance = ((cx - scx) ** 2 + (cy - scy) ** 2) ** 0.5
+        return (_rect_overlap_area(rect, screen), -distance)
+
+    return max(screen_rects, key=score)
+
+
+def clamp_window_into_nearest_screen(window, screen_rects):
+    """把窗口钳进与其最相干的有效屏（2026-09-21）。返回是否移动。"""
+    target = pick_screen_rect_for(window.geometry(), screen_rects)
+    if target is None:
+        return False
+    rect = window.geometry()
+    new = clamp_rect_into_screen(rect, target)
+    if new.topLeft() != rect.topLeft():
+        window.move(new.topLeft())
+        return True
+    return False
