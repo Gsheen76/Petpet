@@ -34,7 +34,9 @@ from petpet.app.fonts import APP_FONT_FAMILY
 from petpet.app.paths import SHOP_UI_DIR
 from petpet.app.settings import DEFAULT_SETTINGS, save_settings
 from petpet.progression.ui import FeedbackButton
-from petpet.ui.common import independent_pixel_font
+from petpet.ui.common import (
+    center_window_on_screen, independent_pixel_font, pet_screen_rect,
+)
 from petpet.ui.controls import StepperControl, ThreeLevelSlider, ToggleSwitch
 
 # QSS 的 url() 只认正斜杠，走一个模块级常量避免两处各拼一遍。
@@ -209,13 +211,8 @@ class SettingsWindow(QWidget):
         painter.drawRoundedRect(outer, 22, 22)
 
     def show_near_pet(self):
-        """Show settings centered on the active pet's screen."""
-        screen = self.pet.interface_screen_rect()
-        window_size = self.size()
-        self.move(QPoint(
-            screen.x() + (screen.width() - window_size.width()) // 2,
-            screen.y() + (screen.height() - window_size.height()) // 2,
-        ))
+        """Show settings on the pet's screen, adapted to its size."""
+        center_window_on_screen(self, pet_screen_rect(self.pet))
         self.show()
         self.raise_()
         self.activateWindow()

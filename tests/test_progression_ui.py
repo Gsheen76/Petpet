@@ -5,7 +5,7 @@ from unittest.mock import Mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt5.QtCore import QEvent, QPoint, QRect, Qt
+from PyQt5.QtCore import QEvent, QPoint, QRect, QSize, Qt
 from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import QApplication, QFrame, QGridLayout, QLabel, QPushButton
 
@@ -76,10 +76,11 @@ class ProgressionWindowUiTests(unittest.TestCase):
         records.show_near_pet()
 
         # 多屏定稿（2026-09-20）：面板在宠物所在屏（夹具的
-        # current_screen_rect 0,0,1200,900）居中，不再固定主屏。
+        # current_screen_rect 0,0,1200,900）几何居中（QRect.center()
+        # 的宽-1 约定与几何中心差 1px，以几何公式为准）。
         screen = self.pet.current_screen_rect()
-        expected_x = screen.center().x() - records.width() // 2
-        expected_y = screen.center().y() - records.height() // 2
+        expected_x = screen.x() + (screen.width() - records.width()) // 2
+        expected_y = screen.y() + (screen.height() - records.height()) // 2
         self.assertEqual(records.pos().x(), expected_x)
         self.assertEqual(records.pos().y(), expected_y)
         self.pet.interface_window_position.assert_not_called()
@@ -417,3 +418,61 @@ class DualScreenPanelPlacementTests(unittest.TestCase):
 
         self.assertGreaterEqual(shop.x(), 2560)
         self.assertLess(shop.x(), 5120)
+
+
+class AdaptivePanelPlacementTests(unittest.TestCase):
+    """面板自适应任意屏幕（2026-09-20 定稿）：面板必须完整落在宠物
+    所在屏内——小屏（1366×768 副屏）自动收缩、负原点屏（左/上副屏）
+    落位正确、大屏不误收缩。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def _pet(self, rect):
+        return SimpleNamespace(
+            state=progression.ensure_progression({}),
+            current_screen_rect=Mock(return_value=rect),
+            geometry=Mock(return_value=QRect(rect.center(), QSize(190, 220))),
+            interface_window_position=Mock(return_value=QPoint(700, 180)),
+            say=Mock(),
+            update=Mock(),
+            home_scene_window=None,
+        )
+
+    def test_panel_shrinks_and_stays_inside_small_screen(self):
+        records = RecordsWindow(self._pet(QRect(0, 0, 1366, 768)), Mock())
+        self.windows = [records]
+        # 模拟「大主屏上构造」（offscreen 主屏偏小会把构造尺寸先缩掉，
+        # 显式恢复偏好尺寸才能测到 show 期自适应）
+        records.setFixedSize(850, 960)
+
+        records.show_near_pet()
+
+        self.assertLessEqual(records.height(), 768 - 60,
+                             "小屏上面板高度必须收缩进屏内")
+        self.assertGreaterEqual(records.y(), 0)
+        self.assertLessEqual(records.y() + records.height(), 768)
+
+    def test_panel_opens_inside_left_monitor_with_negative_origin(self):
+        records = RecordsWindow(self._pet(QRect(-1920, 0, 1920, 1080)), Mock())
+        self.windows = [records]
+
+        records.show_near_pet()
+
+        self.assertGreaterEqual(records.x(), -1920)
+        self.assertLessEqual(records.x() + records.width(), 0)
+
+    def test_large_screen_keeps_preferred_size(self):
+        pet = self._pet(QRect(2560, 6, 2560, 1440))
+        records = RecordsWindow(pet, Mock())
+        self.windows = [records]
+        size_before = (records.width(), records.height())
+
+        records.show_near_pet()
+
+        self.assertEqual(
+            (records.width(), records.height()), size_before,
+            "大屏不得误收缩",
+        )
+        self.assertGreaterEqual(records.x(), 2560)
