@@ -199,6 +199,48 @@ class ScreenLayoutSelfHealTests(unittest.TestCase):
         self.assertEqual(moved, 0)
         self.assertEqual(QRect(parked.geometry()).topLeft(), before.topLeft())
 
+    def test_signal_wiring_clamps_stray_via_real_emit(self):
+        # 钉住 __init__ 的三处 connect：删掉接线本测必红。
+        # 用 disconnect 探针（成功断开=连过）而非手动 emit——offscreen
+        # 平台 emit primaryScreenChanged 会 C 级硬死整个 pytest 进程。
+        window = self._window()
+        handler = window._handle_screen_layout_change
+        for signal in (
+            self.app.screenAdded,
+            self.app.screenRemoved,
+            self.app.primaryScreenChanged,
+        ):
+            try:
+                signal.disconnect(handler)
+            except TypeError:
+                self.fail("screen change signal not wired in PetWindow.__init__")
+            finally:
+                signal.connect(handler)
+
+    def test_prewarming_marker_skips_even_inside_rescue_zone(self):
+        # 极端多左屏布局（桌面左缘 -6000，救援区左缘 -8000）下停靠面
+        # 会落进救援区——_prewarming 标记属性必须兜住（code-review 修正）
+        window = self._window()
+        parked = QWidget()
+        self.addCleanup(parked.close)
+        parked._prewarming = True
+        parked.move(-8000, 0)  # 与救援区真正重叠（x 轴考到，y=0 排除侥幸）
+        parked.resize(496, 333)
+        parked.show()
+        before = QRect(parked.geometry())
+
+        self._patch_screens(
+            [_FakeScreen(QRect(-6000, 0, 2560, 1380))],
+            [parked],
+        )
+        try:
+            moved = window._handle_screen_layout_change()
+        finally:
+            self._restore_screens()
+
+        self.assertEqual(moved, 0)
+        self.assertEqual(QRect(parked.geometry()).topLeft(), before.topLeft())
+
     def test_hidden_pet_itself_still_clamped(self):
         # 宠物隐藏期间拔屏，恢复屏幕后本体也要钳回（隐藏状态下无可见窗口）
         window = self._window()

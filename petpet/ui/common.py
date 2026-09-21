@@ -140,10 +140,10 @@ def pick_screen_rect_for(rect, screen_rects):
 
 def clamp_window_into_nearest_screen(window, screen_rects):
     """把窗口钳进与其最相干的有效屏（2026-09-21）。返回是否移动。"""
-    target = pick_screen_rect_for(window.geometry(), screen_rects)
+    rect = window.geometry()
+    target = pick_screen_rect_for(rect, screen_rects)
     if target is None:
         return False
-    rect = window.geometry()
     new = clamp_rect_into_screen(rect, target)
     if new.topLeft() != rect.topLeft():
         window.move(new.topLeft())

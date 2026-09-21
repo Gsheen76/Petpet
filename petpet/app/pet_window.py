@@ -17,7 +17,7 @@ from petpet.progression import core as progression
 from petpet.app.paths import OUTFITS_DIR, SOUNDS_DIR
 from petpet.app.pets import pet_asset_path, pet_definition
 from petpet.app.settings import load_settings
-from petpet.ui.common import pixel_font
+from petpet.ui.common import clamp_window_into_nearest_screen, pixel_font
 from PyQt5.QtCore import (
     QByteArray,
     QPoint,
@@ -861,12 +861,11 @@ class PetWindow(QWidget):
 
         只救「离桌面不远」的悬空窗（旧屏幕模型算出的坐标至多偏出一
         两块屏）——_warm_up_interaction_surfaces 停靠在 (-10000,-10000)
-        的预热交互面绝不能被拽进可见屏。隐藏中的面板不走此路径——经
-        show_near_pet 打开时按当下屏幕重新落位；宠物本体即使隐藏也钳，
+        的预热交互面绝不能被拽进可见屏（救援半径 + _prewarming 标记
+        双保险）。隐藏中的面板不走此路径——经 show_near_pet 打开时按
+        当下屏幕重新落位；宠物本体即使隐藏也钳，
         防拔屏后重现悬空。返回移动的窗口数（测试用）。
         """
-        from petpet.ui.common import clamp_window_into_nearest_screen
-
         screens = []
         for screen in QApplication.screens():
             try:
@@ -905,6 +904,10 @@ class PetWindow(QWidget):
                 continue
             try:
                 if not widget.isVisible() or not widget.isWindow():
+                    continue
+                if getattr(widget, "_prewarming", False):
+                    # 预热停靠面标记兜底：极端多左屏布局下救援半径
+                    # 覆盖到停靠坐标时也不拽（code-review 修正 2026-09-22）
                     continue
                 rect = widget.geometry()
             except RuntimeError:
@@ -2343,6 +2346,7 @@ class PetWindow(QWidget):
             menu._prewarming = True
             menu.move(-10000, -10000)
             if menu.stat_bubble is not None:
+                menu.stat_bubble._prewarming = True
                 menu.stat_bubble.move(-10000, -10000)
                 menu.stat_bubble.show()
             menu.show()
