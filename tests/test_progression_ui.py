@@ -75,7 +75,9 @@ class ProgressionWindowUiTests(unittest.TestCase):
 
         records.show_near_pet()
 
-        screen = QApplication.primaryScreen().availableGeometry()
+        # 多屏定稿（2026-09-20）：面板在宠物所在屏（夹具的
+        # current_screen_rect 0,0,1200,900）居中，不再固定主屏。
+        screen = self.pet.current_screen_rect()
         expected_x = screen.center().x() - records.width() // 2
         expected_y = screen.center().y() - records.height() // 2
         self.assertEqual(records.pos().x(), expected_x)
@@ -369,3 +371,49 @@ class ProgressionWindowUiTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DualScreenPanelPlacementTests(unittest.TestCase):
+    """多屏面板落位（2026-09-20 定稿）：面板必须在**宠物所在屏**居中，
+    不再永远弹主屏——双屏用户在右屏逗狗时，商店/记录开到左屏很割裂。
+    聊天窗与设置页已是正确范式（interface_screen_rect）。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def _pet_on_right_screen(self):
+        return SimpleNamespace(
+            state=progression.ensure_progression({}),
+            current_screen_rect=Mock(
+                return_value=QRect(2560, 6, 2560, 1440)
+            ),
+            geometry=Mock(return_value=QRect(900, 600, 190, 220)),
+            interface_window_position=Mock(return_value=QPoint(700, 180)),
+            say=Mock(),
+            update=Mock(),
+            home_scene_window=None,
+        )
+
+    def test_records_panel_opens_on_pets_screen(self):
+        pet = self._pet_on_right_screen()
+        records = RecordsWindow(pet, Mock())
+        self.windows = [records]
+
+        records.show_near_pet()
+
+        x = records.x()
+        self.assertGreaterEqual(
+            x, 2560, "面板左缘应落在右屏（宠物所在屏）内"
+        )
+        self.assertLess(x, 5120)
+
+    def test_shop_panel_opens_on_pets_screen(self):
+        pet = self._pet_on_right_screen()
+        shop = ShopWindow(pet, Mock())
+        self.windows = [shop]
+
+        shop.show_near_pet()
+
+        self.assertGreaterEqual(shop.x(), 2560)
+        self.assertLess(shop.x(), 5120)

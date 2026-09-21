@@ -25,6 +25,7 @@ from petpet.app.fonts import APP_FONT_FAMILY
 from petpet.app.paths import GIFTS_UI_DIR
 from petpet.app import pets as pet_registry
 from petpet.app import state as app_state
+from petpet.ui.common import pet_screen_rect
 from petpet.chat import api as ai
 from petpet.progression import core as progression
 from petpet.progression.ui import FeedbackButton, PurchasePopup
@@ -1881,9 +1882,9 @@ class PetProfileWindow(QWidget):
         self.refresh()
 
     def show_near_pet(self):
-        """面板在屏幕居中打开（与商店/成就/记录面板一致）。"""
+        """面板在宠物所在屏居中打开（多屏定稿 2026-09-20，与聊天/设置一致）。"""
         self.refresh()
-        screen = QApplication.primaryScreen().availableGeometry()
+        screen = pet_screen_rect(self.pet)
         self.move(
             screen.center().x() - self.width() // 2,
             screen.center().y() - self.height() // 2,

@@ -45,3 +45,25 @@ def independent_pixel_font(
     font.setPixelSize(independent_font_px(size))
     font.setWeight(weight)
     return font
+
+
+def pet_screen_rect(pet):
+    """宠物当前所在屏的矩形（多屏定稿 2026-09-20）。
+
+    面板打开位置跟随宠物所在屏：优先 interface_screen_rect（含界面
+    锚点逻辑，聊天窗/设置页同款），退 current_screen_rect（测试夹具
+    常用），再退主屏可用区。返回 QRect。
+    """
+    from PyQt5.QtCore import QRect
+    from PyQt5.QtWidgets import QApplication
+
+    for name in ("interface_screen_rect", "current_screen_rect"):
+        getter = getattr(pet, name, None)
+        if callable(getter):
+            try:
+                rect = getter()
+            except RuntimeError:
+                rect = None
+            if isinstance(rect, QRect) and not rect.isEmpty():
+                return rect
+    return QApplication.primaryScreen().availableGeometry()

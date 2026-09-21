@@ -36,6 +36,7 @@ from PyQt5.QtWidgets import (
 )
 
 from petpet.progression import core as progression
+from petpet.ui.common import pet_screen_rect as _pet_screen_rect
 from petpet.ui import decorations as decoration_renderer
 from petpet.app.paths import (
     DECORATIONS_DIR,
@@ -1275,9 +1276,10 @@ class CozyProgressWindow(QWidget):
 
     def show_near_pet(self):
         self.refresh()
-        # Panel pages open centred on the screen and always start from the
-        # top of their content — no remembered drag position or scroll.
-        screen = QApplication.primaryScreen().availableGeometry()
+        # Panel pages open centred on the pet's screen (dual-screen rule,
+        # 2026-09-20) and always start from the top of their content — no
+        # remembered drag position or scroll.
+        screen = _pet_screen_rect(self.pet)
         self.move(
             screen.center().x() - self.width() // 2,
             screen.center().y() - self.height() // 2,
