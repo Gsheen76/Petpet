@@ -16,14 +16,15 @@ from scipy import ndimage
 
 GRID_SIZE = 4
 ALPHA_THRESHOLD = 32
-# Match the idle animation's measured saturation/brightness so the held
-# silhouette reads as the same dog. (Measured: idle sat .644 val .784
-# vs raw grab sat .529 val .899.)
-SATURATION_GAIN = 1.153
-BRIGHTNESS_GAIN = 0.862
-# This sheet runs ~1.3 degrees yellow of the idle hue; trimming green
-# pulls the orange back toward the idle red-orange.
-GREEN_GAIN = 0.96
+# 2026-09-22: color-calibration defaults retired to 1.0 (no correction).
+# Two user verdicts (dinosaur drag 2026-08-31, original-skin drag
+# 2026-09-22) chose the sheet's own colors over calibrated matches; the
+# original-skin frames had to be matrix-inverted back to source colors
+# (tools/restore_lunch_meat_drag_colors.py). Calibration stays opt-in
+# via --sat/--val/--green.
+SATURATION_GAIN = 1.0
+BRIGHTNESS_GAIN = 1.0
+GREEN_GAIN = 1.0
 
 
 def _dog_region(frame: Image.Image) -> numpy.ndarray:
