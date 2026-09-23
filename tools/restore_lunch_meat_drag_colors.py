@@ -15,8 +15,8 @@ Forward chain applied to the source sheet (git archaeology):
                           NOT 1/0.92 as the commit message implied)
 
 Run:  python tools/restore_lunch_meat_drag_colors.py   (in-place, git is
-the backup). Idempotent: running it twice applies the inverse twice and
-WILL overshoot -- do not re-run after committing.
+the backup). NOT idempotent: running it twice applies the inverse twice
+and WILL overshoot -- do not re-run after committing.
 """
 
 from __future__ import annotations
