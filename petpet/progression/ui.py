@@ -1306,41 +1306,39 @@ class CozyProgressWindow(KeepAliveTopLevelWindow):
         raise NotImplementedError
 
 
-class RecordsWindow(CozyProgressWindow):
+class DailyWindow(CozyProgressWindow):
+    """「每日」独立窗（2026-09-25 用户定稿：签到/日历/今日任务完全独立，
+    不再寄居记录窗页签）。排版：签到横幅卡 → 日历卡 → 今日任务卡。"""
+
     def __init__(self, pet, save_callback):
         self.save_callback = save_callback
-        self.record_pet_id = None
-        # 页签（2026-09-24 反馈轮）：记录 / 签到任务 两个页面
-        self.record_page = "records"
         today = datetime.date.today()
         self._cal_year, self._cal_month = today.year, today.month
         super().__init__(
             pet,
-            "温馨记录",
-            "每一次摸摸、饭饭和陪伴，都被认真记在这里。",
-            (850, 960),
+            "每日",
+            "签到、日历和今日任务，每天来看我一眼。",
+            (700, 800),
             shop_theme=True,
             title_image=False,
         )
 
-    @staticmethod
-    def _data_card(title, value, note=""):
-        card = QFrame()
-        card.setObjectName("dataCard")
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(17, 13, 17, 13)
-        layout.setSpacing(4)
-        title_label = QLabel(title)
-        title_label.setObjectName("cardTitle")
-        value_label = QLabel(str(value))
-        value_label.setObjectName("cardValue")
-        layout.addWidget(title_label)
-        layout.addWidget(value_label)
-        if note:
-            note_label = QLabel(note)
-            note_label.setObjectName("muted")
-            layout.addWidget(note_label)
-        return card
+    def refresh(self):
+        progression.ensure_progression(self.pet.state)
+        self._refresh_coin_label()
+        self.status_label.clear()
+        _clear_layout(self.content_layout)
+        state = self.pet.state
+        progression.ensure_check_in(state)
+        self.content_layout.addWidget(self._build_check_in_card())
+        self.content_layout.addWidget(self._build_check_in_calendar())
+        progression.ensure_daily_quests(state)
+        self.content_layout.addWidget(self._build_daily_quest_card())
+        self.content_layout.addStretch(1)
+
+    def show_near_pet(self):
+        self.refresh()
+        super().show_near_pet()
 
     def show_near_pet(self):
         # 有可领（签到/任务/全勤）时直接落到签到任务页（反馈轮定稿）；
@@ -1567,6 +1565,43 @@ class RecordsWindow(CozyProgressWindow):
             self.save_callback(self.pet.state)
         self.refresh()
 
+class RecordsWindow(CozyProgressWindow):
+    def __init__(self, pet, save_callback):
+        self.save_callback = save_callback
+        self.record_pet_id = None
+        super().__init__(
+            pet,
+            "温馨记录",
+            "每一次摸摸、饭饭和陪伴，都被认真记在这里。",
+            (850, 960),
+            shop_theme=True,
+            title_image=False,
+        )
+
+    @staticmethod
+    def _data_card(title, value, note=""):
+        card = QFrame()
+        card.setObjectName("dataCard")
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(17, 13, 17, 13)
+        layout.setSpacing(4)
+        title_label = QLabel(title)
+        title_label.setObjectName("cardTitle")
+        value_label = QLabel(str(value))
+        value_label.setObjectName("cardValue")
+        layout.addWidget(title_label)
+        layout.addWidget(value_label)
+        if note:
+            note_label = QLabel(note)
+            note_label.setObjectName("muted")
+            layout.addWidget(note_label)
+        return card
+
+    def show_near_pet(self):
+        # 复用窗口防旧内容（2026-09-24 起）：每次打开按当前状态重建
+        self.refresh()
+        super().show_near_pet()
+
     def refresh(self):
         progression.ensure_progression(self.pet.state)
         self._refresh_coin_label()
@@ -1601,17 +1636,6 @@ class RecordsWindow(CozyProgressWindow):
             }
             pet_name = ""
             affection_level = state.get("affection_level", 1)
-
-        self._add_page_header(self._build_page_tab_bar())
-        if self.record_page == "daily":
-            # 签到任务页（2026-09-24 反馈轮）：签到卡 + 日历 + 今日任务
-            progression.ensure_check_in(state)
-            progression.ensure_daily_quests(state)
-            self.content_layout.addWidget(self._build_check_in_card())
-            self.content_layout.addWidget(self._build_check_in_calendar())
-            self.content_layout.addWidget(self._build_daily_quest_card())
-            self.content_layout.addStretch(1)
-            return
 
         if pets:
             self._add_page_header(self._build_pet_switch_bar(pets))

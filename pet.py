@@ -104,7 +104,7 @@ from petpet.ui import desktop as desktop_ui
 import progression
 import decoration_renderer
 import minigames
-from progression_ui import AchievementsWindow, RecordsWindow, ShopWindow
+from progression_ui import AchievementsWindow, DailyWindow, RecordsWindow, ShopWindow
 from minigames import MiniGameHubWindow
 from home_scene import HomeSceneWindow
 from petpet.ui.pet_profile import (

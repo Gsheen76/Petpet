@@ -536,7 +536,7 @@ class BubbleMenu(KeepAliveTopLevelWindow):
         ("🏠", "小屋", "home", "#cf9770"),
         ("🛍", "商店", "shop", "#e0a85f"),
         ("🤝", "互动", "interaction", "#72bf9b"),
-        ("📅", "签到", "daily_rewards", "#e8b06e"),
+        ("📅", "每日", "daily_rewards", "#e8b06e"),
         ("⋯", "更多", "more", "#e7ae64"),
     ]
     INTERACTION_ACTIONS = [
@@ -567,9 +567,9 @@ class BubbleMenu(KeepAliveTopLevelWindow):
             or (action == "chat" and needs_personal_setup)
             or action in zero_actions
             or (action == "interaction" and bool(zero_actions))
-            # 签到/每日任务可领：主菜单「签到」专属键 + 「更多」入口 +
-            # 次级「记录」键亮红点（2026-09-24 签到独立成键）
-            or (action in ("daily_rewards", "more", "records") and daily_ready)
+            # 每日可领：主菜单「每日」专属键 + 「更多」入口亮红点
+            # （2026-09-25 每日独立成窗，记录键不再提示）
+            or (action in ("daily_rewards", "more") and daily_ready)
         )
 
     def __init__(self, pet, page="primary", show_window=True):
@@ -727,17 +727,21 @@ class BubbleMenu(KeepAliveTopLevelWindow):
                 by + (button_h - bh) / 2,
                 bw, bh,
             )
-            self._bubble_rects.append((i, rect, action, color, emoji))
+            # 命中区=固定整格（2026-09-25 用户反馈：悬浮触发区应是整个
+            # 框起的格子而非图标区；缩放只作用于视觉，不改变触发范围，
+            # 各键手感一致）
+            self._bubble_rects.append(
+                (i, QRectF(bx, by, button_w, button_h), action, color, emoji)
+            )
 
             # 图标即按键（2026-09-09 用户定稿）：去掉糖果底板与常驻文字，
             # 悬浮时放大 + 珊瑚描边高亮 + 底部名称胶囊；按住缩小压暗。
             # 高亮框用未缩放基准几何（2026-09-09 精调）：主菜单行宽=画布
             # 620，放大矩形（×1.07）会越出首尾按键外侧被裁。
             if hovered:
-                # inset 3：描边外半宽 1.1 后仍离画布缘 ~2px，首尾按键不贴边。
-                # 2026-09-24 用户定稿：常态保持素颜（无描边无底框），
-                # 仅悬浮时出高亮。
-                halo = QRectF(bx + 3, by + 2, button_w - 6, button_h - 24)
+                # 2026-09-25 用户定稿：高亮框铺满整个按键格（含名称胶囊
+                # 区）——所见高亮区 == 悬浮触发区，各键手感一致。
+                halo = QRectF(bx + 2, by + 2, button_w - 4, button_h - 6)
                 p.setBrush(QColor(242, 143, 118, 34))
                 p.setPen(QPen(QColor("#f28f76"), 2.2))
                 p.drawRoundedRect(halo, 18, 18)
@@ -875,7 +879,7 @@ class BubbleMenu(KeepAliveTopLevelWindow):
         elif action == "pet_profile":
             pet.open_pet_profile()
         elif action == "daily_rewards":
-            pet.open_records(force_daily=True)
+            pet.open_daily_window()
         elif action == "records":
             pet.open_records()
         elif action == "achievements":

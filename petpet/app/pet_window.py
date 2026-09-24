@@ -58,6 +58,16 @@ def _dependency(name):
     return _dependency_resolver(name)
 
 
+
+
+def progression_daily_ready(state):
+    """红点/日志共用的可领判定（局部导入防 import 环）。"""
+    try:
+        from petpet.progression import daily as _daily
+        return bool(_daily.daily_rewards_claimable(state))
+    except Exception:
+        return False
+
 class PetWindow(QWidget):
     # Runtime frames are displayed at roughly half this size on desktop.
     # Keeping a 2x-ish buffer preserves crispness while bounding Qt memory.
@@ -235,6 +245,7 @@ class PetWindow(QWidget):
         self.chat_win = None  # lazy-created on first chat
         self.settings_win = None  # lazy-created on first settings open
         self.records_win = None
+        self.daily_win = None
         self.achievements_win = None
         self.shop_win = None
         self.profile_win = None
@@ -3094,24 +3105,27 @@ class PetWindow(QWidget):
                 pass
         return "desktop"
 
-    def open_records(self, force_daily=False):
-        """Open the lifetime companion record panel.
-
-        force_daily=True 直达「签到任务」页（2026-09-24 主菜单签到键）。
-        """
+    def open_records(self):
+        """Open the lifetime companion record panel."""
         if self.records_win is None:
             self.records_win = _dependency("RecordsWindow")(self, _dependency("save_state"))
-        if force_daily:
-            try:
-                self.records_win.record_page = "daily"
-            except Exception:
-                pass
         try:
             from petpet.app.diagnostics import log_event
-            log_event("records_open", force_daily=bool(force_daily))
+            log_event("records_open")
         except Exception:
             pass
         self.records_win.show_near_pet()
+
+    def open_daily_window(self):
+        """打开「每日」独立窗（2026-09-25：签到/日历/任务完全独立成窗）。"""
+        if self.daily_win is None:
+            self.daily_win = _dependency("DailyWindow")(self, _dependency("save_state"))
+        try:
+            from petpet.app.diagnostics import log_event
+            log_event("daily_open", claimable=progression_daily_ready(self.state))
+        except Exception:
+            pass
+        self.daily_win.show_near_pet()
 
     def open_pet_profile(self):
         """Open the per-pet profile panel (art, name, affection, outfits)."""
