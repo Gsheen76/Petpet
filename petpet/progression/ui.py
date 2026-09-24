@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import calendar as _calendar
 import datetime
 
 import os
@@ -1377,7 +1378,7 @@ class RecordsWindow(CozyProgressWindow):
             layout.addWidget(button)
         dot = QLabel()
         dot.setFixedSize(12, 12)
-        dot.setStyleSheet("background:#e0533d;border-radius:6px;")
+        dot.setStyleSheet("background:#ee5e62;border-radius:6px;")  # 与气泡菜单红点同色
         try:
             dot.setVisible(progression.daily_rewards_claimable(self.pet.state))
         except Exception:
@@ -1388,8 +1389,6 @@ class RecordsWindow(CozyProgressWindow):
 
     def _build_check_in_calendar(self):
         """签到日历（2026-09-24 反馈轮）：月历网格直观显示签到记录。"""
-        import calendar as _calendar
-
         state = self.pet.state
         year, month = self._cal_year, self._cal_month
         card = QFrame()
@@ -1454,14 +1453,12 @@ class RecordsWindow(CozyProgressWindow):
         return card
 
     def _shift_calendar_month(self, delta):
-        import calendar as _calendar
-
         year = self._cal_year + (self._cal_month - 1 + delta) // 12
         month = (self._cal_month - 1 + delta) % 12 + 1
         today = datetime.date.today()
         if (year, month) > (today.year, today.month):
             return  # 不许翻到未来
-        earliest = today.year * 12 + today.month - 13  # 最多回看 12 个月
+        earliest = today.year * 12 + today.month - 12  # 最多回看 12 个月
         if year * 12 + month < earliest:
             return
         self._cal_year, self._cal_month = year, month
