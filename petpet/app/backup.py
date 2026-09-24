@@ -127,31 +127,43 @@ def restore_backup_zip(zip_path: str, data_dir: str | None = None) -> list[str]:
                 with bundle.open(name) as src, open(staged_path, "wb") as dst:
                     dst.write(src.read())
                 staged.append((name, staged_path))
-        # 换入阶段：先存回滚副本，再逐文件原子替换
-        touched = []
-        for name, staged_path in staged:
-            target = os.path.abspath(os.path.join(root, name))
-            if os.path.dirname(target) != root_abs:
-                raise ValueError(f"异常路径条目：{name}")
-            if os.path.exists(target):
-                prev = os.path.join(rollback, name)
-                shutil.copyfile(target, prev)
-            touched.append((name, target))
-            tmp_target = target + ".petpet_restore.tmp"
-            shutil.copyfile(staged_path, tmp_target)
-            os.replace(tmp_target, target)
+        # 换入阶段：先存回滚副本，再逐文件原子替换；还原前不存在的
+        # 文件记入 created_new，回滚时删除（不留新增残留）
+        created_new = []
+        tmp_current = None
+        try:
+            for name, staged_path in staged:
+                target = os.path.abspath(os.path.join(root, name))
+                if os.path.dirname(target) != root_abs:
+                    raise ValueError(f"异常路径条目：{name}")
+                if os.path.exists(target):
+                    prev = os.path.join(rollback, name)
+                    shutil.copyfile(target, prev)
+                else:
+                    created_new.append(target)
+                tmp_target = target + ".petpet_restore.tmp"
+                tmp_current = tmp_target
+                shutil.copyfile(staged_path, tmp_target)
+                os.replace(tmp_target, target)
+                tmp_current = None
+        except BaseException:
+            if tmp_current is not None:
+                try: os.unlink(tmp_current)
+                except OSError: pass
+            for target in created_new:
+                try: os.unlink(target)
+                except OSError: pass
+            if rollback is not None:
+                for name in os.listdir(rollback):
+                    try:
+                        os.replace(
+                            os.path.join(rollback, name),
+                            os.path.abspath(os.path.join(root, name)),
+                        )
+                    except OSError:
+                        pass  # 回滚尽力而为；调用方仍有事前安全快照兜底
+            raise
         return names
-    except BaseException:
-        if rollback is not None:
-            for name in os.listdir(rollback):
-                try:
-                    os.replace(
-                        os.path.join(rollback, name),
-                        os.path.abspath(os.path.join(root, name)),
-                    )
-                except OSError:
-                    pass  # 回滚尽力而为；调用方仍有事前安全快照兜底
-        raise
     finally:
         for folder in (staging, rollback):
             if folder and os.path.isdir(folder):
