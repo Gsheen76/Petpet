@@ -1078,14 +1078,17 @@ DAILY_QUEST_COUNT = 3
 DAILY_QUEST_BONUS = 30
 
 
-def _daily_quest_date(now=None):
+def _stamp_datetime(now=None):
+    """now 三态归一化（datetime/浮点纪元/None→当下）。"""
     if isinstance(now, datetime.datetime):
-        stamp = now
-    elif isinstance(now, (int, float)):
-        stamp = datetime.datetime.fromtimestamp(now)
-    else:
-        stamp = datetime.datetime.now()
-    return stamp.strftime("%Y-%m-%d")
+        return now
+    if isinstance(now, (int, float)):
+        return datetime.datetime.fromtimestamp(now)
+    return datetime.datetime.now()
+
+
+def _daily_quest_date(now=None):
+    return _stamp_datetime(now).strftime("%Y-%m-%d")
 
 
 def ensure_daily_quests(state, now=None):
@@ -1174,7 +1177,7 @@ def claim_daily_bonus(state, now=None):
 CHECK_IN_REWARD_CYCLE = (10, 15, 20, 25, 30, 40, 60)
 
 
-def ensure_check_in(state, now=None):
+def ensure_check_in(state):
     """补齐签到块；已有合法块原样保留。"""
     ensure_progression(state)
     block = state.get("check_in")
@@ -1188,24 +1191,16 @@ def ensure_check_in(state, now=None):
 
 
 def _check_in_today(now):
-    stamp = now if isinstance(now, datetime.datetime) else (
-        datetime.datetime.fromtimestamp(now)
-        if isinstance(now, (int, float)) else datetime.datetime.now()
-    )
-    return stamp.strftime("%Y-%m-%d")
+    return _stamp_datetime(now).strftime("%Y-%m-%d")
 
 
 def _check_in_yesterday(now):
-    stamp = now if isinstance(now, datetime.datetime) else (
-        datetime.datetime.fromtimestamp(now)
-        if isinstance(now, (int, float)) else datetime.datetime.now()
-    )
-    return (stamp - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+    return (_stamp_datetime(now) - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
 
 
 def check_in_status(state, now=None):
     """返回 {available, streak, today_reward}（available=今天还没签）。"""
-    ensure_check_in(state, now=now)
+    ensure_check_in(state)
     block = state["check_in"]
     today = _check_in_today(now)
     available = block["last_date"] != today
@@ -1220,7 +1215,7 @@ def check_in_status(state, now=None):
 
 def do_check_in(state, now=None):
     """签一次到：昨天签过则连续 +1，否则重置为 1；重复签到返回 0。"""
-    ensure_check_in(state, now=now)
+    ensure_check_in(state)
     block = state["check_in"]
     today = _check_in_today(now)
     if block["last_date"] == today:

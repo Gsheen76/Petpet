@@ -79,7 +79,7 @@ class CheckInCoreTests(unittest.TestCase):
 
     def test_status_reports_availability_and_streak(self):
         state = fresh_state()
-        ensure_check_in(state, now=datetime(2026, 9, 24, 9, 0, 0))
+        ensure_check_in(state)
         status = check_in_status(state, now=datetime(2026, 9, 24, 12, 0, 0))
         self.assertTrue(status["available"])
         self.assertEqual(status["streak"], 0)
@@ -94,9 +94,18 @@ class CheckInCoreTests(unittest.TestCase):
         ensure_check_in(state)
         self.assertEqual(state["check_in"], {"last_date": None, "streak": 0})
         state["check_in"] = {"last_date": "2026-09-24", "streak": 3}
-        ensure_check_in(state, now=datetime(2026, 9, 24, 10, 0, 0))
+        ensure_check_in(state)
         self.assertEqual(state["check_in"]["streak"], 3)  # 已有合法块不动
 
 
 if __name__ == "__main__":
     unittest.main()
+
+class CheckInRobustnessTests(unittest.TestCase):
+    def test_float_epoch_and_corrupt_block(self):
+        state = fresh_state()
+        state["check_in"] = {"streak": "corrupt"}
+        day = datetime(2026, 9, 24, 9, 0, 0)
+        self.assertEqual(do_check_in(state, now=day.timestamp()),
+                         CHECK_IN_REWARD_CYCLE[0])  # 浮点纪元 + 坏块自愈
+        self.assertEqual(state["check_in"]["streak"], 1)
