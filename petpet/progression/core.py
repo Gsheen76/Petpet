@@ -1169,6 +1169,74 @@ def claim_daily_bonus(state, now=None):
     return DAILY_QUEST_BONUS
 
 
+# 每日签到（2026-09-24 用户点名）：连续签到 + 7 天阶梯奖励循环，
+# 第 7 天 60 币大奖后回到第 1 天（streak 不封顶，奖励按 (streak-1)%7 取）。
+CHECK_IN_REWARD_CYCLE = (10, 15, 20, 25, 30, 40, 60)
+
+
+def ensure_check_in(state, now=None):
+    """补齐签到块；已有合法块原样保留。"""
+    ensure_progression(state)
+    block = state.get("check_in")
+    if (
+        isinstance(block, dict)
+        and isinstance(block.get("streak"), int)
+        and (block.get("last_date") is None or isinstance(block.get("last_date"), str))
+    ):
+        return
+    state["check_in"] = {"last_date": None, "streak": 0}
+
+
+def _check_in_today(now):
+    stamp = now if isinstance(now, datetime.datetime) else (
+        datetime.datetime.fromtimestamp(now)
+        if isinstance(now, (int, float)) else datetime.datetime.now()
+    )
+    return stamp.strftime("%Y-%m-%d")
+
+
+def _check_in_yesterday(now):
+    stamp = now if isinstance(now, datetime.datetime) else (
+        datetime.datetime.fromtimestamp(now)
+        if isinstance(now, (int, float)) else datetime.datetime.now()
+    )
+    return (stamp - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+
+
+def check_in_status(state, now=None):
+    """返回 {available, streak, today_reward}（available=今天还没签）。"""
+    ensure_check_in(state, now=now)
+    block = state["check_in"]
+    today = _check_in_today(now)
+    available = block["last_date"] != today
+    streak = int(block.get("streak", 0))
+    next_streak = streak + 1 if available else streak
+    reward = (
+        CHECK_IN_REWARD_CYCLE[(next_streak - 1) % len(CHECK_IN_REWARD_CYCLE)]
+        if next_streak >= 1 else 0
+    )
+    return {"available": available, "streak": streak, "today_reward": reward}
+
+
+def do_check_in(state, now=None):
+    """签一次到：昨天签过则连续 +1，否则重置为 1；重复签到返回 0。"""
+    ensure_check_in(state, now=now)
+    block = state["check_in"]
+    today = _check_in_today(now)
+    if block["last_date"] == today:
+        return 0
+    streak = int(block.get("streak", 0))
+    if block["last_date"] == _check_in_yesterday(now) and streak >= 1:
+        streak += 1
+    else:
+        streak = 1
+    reward = CHECK_IN_REWARD_CYCLE[(streak - 1) % len(CHECK_IN_REWARD_CYCLE)]
+    add_coins(state, reward)
+    block["last_date"] = today
+    block["streak"] = streak
+    return reward
+
+
 def record_action(state, action, amount=1, now=None):
     """Record an interaction and grant its matching affection."""
     ensure_progression(state)

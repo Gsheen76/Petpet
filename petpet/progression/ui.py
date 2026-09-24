@@ -1334,6 +1334,44 @@ class RecordsWindow(CozyProgressWindow):
             layout.addWidget(note_label)
         return card
 
+    def _build_check_in_card(self):
+        """签到卡：连续天数 + 今日奖励领取键。"""
+        status = progression.check_in_status(self.pet.state)
+        card = QFrame()
+        card.setObjectName("weeklySummary")
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(14, 10, 14, 10)
+        layout.setSpacing(4)
+        title = QLabel("每日签到")
+        title.setStyleSheet(
+            "color:#c96f52;font-size:17px;font-weight:800;"
+        )
+        layout.addWidget(title)
+        row = QHBoxLayout()
+        streak = int(status["streak"])
+        note = f"已连续签到 {streak} 天" if streak else "今天也要来看我呀"
+        label = QLabel(note)
+        label.setStyleSheet(
+            "color:#7b564a;font-size:16px;font-weight:600;"
+        )
+        row.addWidget(label, 1)
+        button = FeedbackButton()
+        if status["available"]:
+            button.setText(f"签到 +{status['today_reward']}")
+            button.clicked.connect(lambda: self._do_check_in())
+        else:
+            button.setText("已签到")
+            button.setEnabled(False)
+        row.addWidget(button)
+        layout.addLayout(row)
+        return card
+
+    def _do_check_in(self):
+        granted = progression.do_check_in(self.pet.state)
+        if granted:
+            self.save_callback(self.pet.state)
+        self.refresh()
+
     def _build_daily_quest_card(self):
         """今日任务卡：任务行（进度 + 领取键）+ 全勤奖励键。"""
         state = self.pet.state
@@ -1447,6 +1485,12 @@ class RecordsWindow(CozyProgressWindow):
             )
             weekly_layout.addWidget(label)
         self.content_layout.addWidget(weekly)
+
+        # 每日签到（2026-09-24）：连续签到 + 7 天阶梯奖励，置于任务卡上方
+        # （总计页专属）
+        if self.record_pet_id is None:
+            progression.ensure_check_in(state)
+            self.content_layout.addWidget(self._build_check_in_card())
 
         # 每日任务（2026-09-23 创新甲）：三条日常 + 全勤奖励，跨日重置；
         # 进度由 record_action 单漏斗自动累积（总计页专属）
