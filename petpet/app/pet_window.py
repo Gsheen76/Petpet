@@ -2540,6 +2540,11 @@ class PetWindow(QWidget):
             else candidates[0]
         )
         # bonus_text not pre-computed; computed from actual deltas on click
+        # 保活修复配套（2026-09-24）：先关旧泡再建新——否则旧泡滞留保活
+        # 表且 40ms 脉冲定时器常转（每次心情事件漏一只）
+        _close_old = getattr(self, "_close_interactive_bubble", None)
+        if callable(_close_old):
+            _close_old()
         self._interactive_bubble = _dependency("InteractiveBubble")(self, label, action, color, "")
         self._last_interactive_t = time.time()
         # also show a tiny speech line to draw attention
@@ -2547,6 +2552,17 @@ class PetWindow(QWidget):
             self.say("肚子咕咕叫啦，主人看看我～", 2500)
         elif action == "play":
             self.say("心情有点低落，陪我玩一会儿嘛～", 2500)
+
+    def _close_interactive_bubble(self):
+        """关掉当前互动气泡（停定时器+出保活表）；已亡则清引用。"""
+        old = self._interactive_bubble
+        if old is None:
+            return
+        try:
+            old.close()
+        except RuntimeError:
+            pass
+        self._interactive_bubble = None
 
     def _show_pending_dig_bubble(self):
         if int(self.state.get("pending_dig_reward", 0)) <= 0:
@@ -2566,6 +2582,9 @@ class PetWindow(QWidget):
                     return False
             except RuntimeError:
                 self._interactive_bubble = None
+        _close_old = getattr(self, "_close_interactive_bubble", None)
+        if callable(_close_old):
+            _close_old()
         self._interactive_bubble = _dependency("InteractiveBubble")(
             self, "发现宝藏", "dig_reward", "#e3ac36", ""
         )
