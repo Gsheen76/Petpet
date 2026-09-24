@@ -154,12 +154,18 @@ class CheckInFeedbackRoundTests(unittest.TestCase):
         self.assertTrue(daily_rewards_claimable(
             state, now=datetime(2026, 9, 24, 11, 0, 0)))  # 任务可领
         from petpet.progression.core import claim_daily_quest, claim_daily_bonus
+        # 显式 now 贯穿判定与领取：跨午夜跑测试时真实「今天」已翻日，
+        # 无 now 的调用会按新日期判块过期——签到可领误真、任务根本
+        # 领不上（2026-09-25 凌晨踩中）
+        day_noon = datetime(2026, 9, 24, 12, 0, 0)
         for i in range(3):
             state["daily_quests"]["quests"][i]["progress"] =                 state["daily_quests"]["quests"][i]["target"]
-            claim_daily_quest(state, i)
-        self.assertTrue(daily_rewards_claimable(state))  # 全勤可领
-        claim_daily_bonus(state)
-        self.assertFalse(daily_rewards_claimable(state))
+            claim_daily_quest(state, i, now=day_noon)
+        self.assertTrue(daily_rewards_claimable(
+            state, now=day_noon))  # 全勤可领
+        claim_daily_bonus(state, now=day_noon)
+        self.assertFalse(daily_rewards_claimable(
+            state, now=datetime(2026, 9, 24, 12, 0, 0)))
 
     def test_ensure_backfills_history_from_legacy_last_date(self):
         from petpet.progression.core import ensure_check_in, signed_dates_for_month

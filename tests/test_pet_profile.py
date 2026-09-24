@@ -578,7 +578,8 @@ class BubbleMenuEntryTests(unittest.TestCase):
         actions = [entry[2] for entry in BubbleMenu.PRIMARY_ACTIONS]
         self.assertIn("pet_profile", actions)
         self.assertLess(actions.index("pet_profile"), 3)
-        self.assertEqual(BubbleMenu.PAGE_COLUMNS["primary"], 6)
+        # 2026-09-24 主菜单加第 7 键「签到」
+        self.assertEqual(BubbleMenu.PAGE_COLUMNS["primary"], 7)
 
     def test_dispatch_opens_pet_profile(self):
         import pet

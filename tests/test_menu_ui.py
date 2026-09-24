@@ -62,7 +62,7 @@ class MenuUiTests(unittest.TestCase):
             [action for _, _, action, _ in pet.BubbleMenu.PRIMARY_ACTIONS],
             [
                 "chat", "pet_profile", "home",
-                "shop", "interaction", "more",
+                "shop", "interaction", "daily_rewards", "more",
             ],
         )
         self.assertEqual(
@@ -1332,6 +1332,8 @@ class DailyRewardAttentionTests(unittest.TestCase):
         )
         self.assertTrue(pet.BubbleMenu.action_needs_attention(
             "records", **kwargs_true))
+        self.assertTrue(pet.BubbleMenu.action_needs_attention(
+            "daily_rewards", **kwargs_true))
         self.assertTrue(pet.BubbleMenu.action_needs_attention(
             "more", **kwargs_true))
         self.assertFalse(pet.BubbleMenu.action_needs_attention(

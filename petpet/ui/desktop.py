@@ -536,6 +536,7 @@ class BubbleMenu(KeepAliveTopLevelWindow):
         ("🏠", "小屋", "home", "#cf9770"),
         ("🛍", "商店", "shop", "#e0a85f"),
         ("🤝", "互动", "interaction", "#72bf9b"),
+        ("📅", "签到", "daily_rewards", "#e8b06e"),
         ("⋯", "更多", "more", "#e7ae64"),
     ]
     INTERACTION_ACTIONS = [
@@ -554,7 +555,7 @@ class BubbleMenu(KeepAliveTopLevelWindow):
         ("↩", "返回", "back", "#79bd9a"),
         ("✕", "退出", "quit", "#df8f91"),
     ]
-    PAGE_COLUMNS = {"primary": 6, "interaction": 4, "more": 5}
+    PAGE_COLUMNS = {"primary": 7, "interaction": 4, "more": 5}
 
     @staticmethod
     def action_needs_attention(action, *, has_claimable,
@@ -566,8 +567,9 @@ class BubbleMenu(KeepAliveTopLevelWindow):
             or (action == "chat" and needs_personal_setup)
             or action in zero_actions
             or (action == "interaction" and bool(zero_actions))
-            # 签到/每日任务可领：主菜单「更多」入口 + 次级「记录」键亮红点
-            or (action in ("more", "records") and daily_ready)
+            # 签到/每日任务可领：主菜单「签到」专属键 + 「更多」入口 +
+            # 次级「记录」键亮红点（2026-09-24 签到独立成键）
+            or (action in ("daily_rewards", "more", "records") and daily_ready)
         )
 
     def __init__(self, pet, page="primary", show_window=True):
@@ -669,15 +671,16 @@ class BubbleMenu(KeepAliveTopLevelWindow):
         p.setRenderHint(QPainter.Antialiasing)
         self._bubble_rects = []
         n = len(self.actions)
-        # 主菜单（2026-09-09 用户定稿）：行宽 6×96+5×8.8=620 与上方
-        # 资料卡（620）精确对齐；其余页沿用 102/10。
+        columns = self.PAGE_COLUMNS[self.page]
+        # 主菜单：行宽与上方资料卡（620）精确对齐——2026-09-24 加第 7
+        # 键「签到」后按列数均分（7×81.03+6×8.8=620）；其余页沿用 102/10。
         if self.page == "primary":
-            button_w, gap = 96, 8.8
+            gap = 8.8
+            button_w = (self.W - (columns - 1) * gap) / columns
         else:
             button_w, gap = 102, 10
         # 图标即按键（2026-09-09）：图标 52/58px + 悬浮名称胶囊 22px。
         button_h = 92
-        columns = self.PAGE_COLUMNS[self.page]
         rows = int(math.ceil(n / columns))
         total_w = columns * button_w + (columns - 1) * gap
         total_h = rows * button_h + (rows - 1) * gap
@@ -730,19 +733,14 @@ class BubbleMenu(KeepAliveTopLevelWindow):
             # 悬浮时放大 + 珊瑚描边高亮 + 底部名称胶囊；按住缩小压暗。
             # 高亮框用未缩放基准几何（2026-09-09 精调）：主菜单行宽=画布
             # 620，放大矩形（×1.07）会越出首尾按键外侧被裁。
-            # 常态可交互边界（2026-09-24 用户反馈）：图标即按键没有边框
-            # 时不知道实际可点范围——常态画淡描边+浅奶洗标出键区，
-            # 悬浮仍走原高亮（更强的珊瑚描边+放大）。
-            bounds = QRectF(bx + 3, by + 2, button_w - 6, button_h - 24)
             if hovered:
                 # inset 3：描边外半宽 1.1 后仍离画布缘 ~2px，首尾按键不贴边。
+                # 2026-09-24 用户定稿：常态保持素颜（无描边无底框），
+                # 仅悬浮时出高亮。
+                halo = QRectF(bx + 3, by + 2, button_w - 6, button_h - 24)
                 p.setBrush(QColor(242, 143, 118, 34))
                 p.setPen(QPen(QColor("#f28f76"), 2.2))
-                p.drawRoundedRect(bounds, 18, 18)
-            else:
-                p.setBrush(QColor(255, 246, 232, 60))
-                p.setPen(QPen(QColor(242, 195, 168, 110), 1.4))
-                p.drawRoundedRect(bounds, 18, 18)
+                p.drawRoundedRect(halo, 18, 18)
 
             icon_px = 58 if hovered else 52
             # 缩放结果按 (action, px) 缓存（2026-09-12 悬浮卡顿优化）：
@@ -869,6 +867,8 @@ class BubbleMenu(KeepAliveTopLevelWindow):
             pet.open_settings()
         elif action == "pet_profile":
             pet.open_pet_profile()
+        elif action == "daily_rewards":
+            pet.open_records(force_daily=True)
         elif action == "records":
             pet.open_records()
         elif action == "achievements":

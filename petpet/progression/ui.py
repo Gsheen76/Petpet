@@ -1343,12 +1343,15 @@ class RecordsWindow(CozyProgressWindow):
         return card
 
     def show_near_pet(self):
-        # 有可领（签到/任务/全勤）时直接落到签到任务页（反馈轮定稿）
+        # 有可领（签到/任务/全勤）时直接落到签到任务页（反馈轮定稿）；
+        # 页签可能已切换——每次打开都按当前页重建内容，防复用窗口显
+        # 旧页（2026-09-24 签到独立成键后必经路径）
         try:
             if progression.daily_rewards_claimable(self.pet.state):
                 self.record_page = "daily"
         except Exception:
             pass
+        self.refresh()
         super().show_near_pet()
 
     def _set_record_page(self, page):

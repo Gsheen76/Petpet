@@ -3094,10 +3094,18 @@ class PetWindow(QWidget):
                 pass
         return "desktop"
 
-    def open_records(self):
-        """Open the lifetime companion record panel."""
+    def open_records(self, force_daily=False):
+        """Open the lifetime companion record panel.
+
+        force_daily=True 直达「签到任务」页（2026-09-24 主菜单签到键）。
+        """
         if self.records_win is None:
             self.records_win = _dependency("RecordsWindow")(self, _dependency("save_state"))
+        if force_daily:
+            try:
+                self.records_win.record_page = "daily"
+            except Exception:
+                pass
         self.records_win.show_near_pet()
 
     def open_pet_profile(self):
