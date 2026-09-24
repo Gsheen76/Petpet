@@ -116,9 +116,19 @@ def pet_interface_bonus_origin(pet, y_offset=-10):
 
 
 class StatBubble(QWidget):
-    """A warm, readable growth card shown above the right-click actions."""
+    """A warm, readable growth card shown above the right-click actions.
+
+    自持保活（2026-09-24）：无父顶层原生窗 + WA_DeleteOnClose + 500ms
+    刷新定时器，菜单 _close 先关资料卡再弃菜单引用——保活到 closeEvent
+    真正发生，关闭时先停定时器（家族第 4 例，同 Bonus/Speech/
+    Interactive 模式）。
+    """
+
+    _keep_alive = set()
+
     def __init__(self, pet, show_window=True):
         super().__init__()
+        StatBubble._keep_alive.add(self)
         self.pet = pet
         self.setWindowFlags(
             Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint |
@@ -135,6 +145,14 @@ class StatBubble(QWidget):
         if show_window:
             self.show()
             self.raise_()
+
+    def closeEvent(self, event):
+        try:
+            self._timer.stop()
+        except RuntimeError:
+            pass
+        StatBubble._keep_alive.discard(self)
+        super().closeEvent(event)
 
     def _tick(self):
         self.update()
@@ -506,6 +524,15 @@ class StatBubble(QWidget):
 
 
 class BubbleMenu(QWidget):
+    """Radial/bubble action menu.
+
+    自持保活（2026-09-24）：构造不传 parent 即无父顶层原生窗，
+    _close 尾部 ``pet._bubble_menu = None`` 后无任何引用——GC 连 C++
+    一起回收而在途窗口事件仍投递（家族第 5 例，同款保活模式）。
+    """
+
+    _keep_alive = set()
+
     """Soft candy-style action buttons with a warm growth card."""
     PRIMARY_ACTIONS = [
         ("💬", "聊天", "chat", "#ef8fa2"),
@@ -549,6 +576,7 @@ class BubbleMenu(QWidget):
 
     def __init__(self, pet, page="primary", show_window=True):
         super().__init__()
+        BubbleMenu._keep_alive.add(self)
         self.pet = pet
         self.page = page if page in self.PAGE_COLUMNS else "primary"
         action_sets = {
@@ -857,6 +885,16 @@ class BubbleMenu(QWidget):
             return
         self._close()
 
+    def closeEvent(self, event):
+        # 先停动画定时器：close 后对象即将释放，在途 timeout 不得再指
+        # 向它（家族竞态的最后一道闸）。
+        try:
+            self._anim.stop()
+        except (AttributeError, RuntimeError):
+            pass
+        BubbleMenu._keep_alive.discard(self)
+        super().closeEvent(event)
+
     def _close(self):
         if self._closing:
             return
@@ -1035,9 +1073,22 @@ class BonusBubble(QWidget):
 class InteractiveBubble(QWidget):
     """A clickable bubble floating above the pet, e.g. '🦴 喂我'.
     Refined style: soft shadow, gradient, pulse animation, oval shape.
-    Clicking triggers the associated action and shows a BonusBubble."""
+    Clicking triggers the associated action and shows a BonusBubble.
+
+    自持保活（2026-09-24 22:27 闪退根因修复）：家族第三成员（Bonus
+    2026-09-14、Speech 2026-09-20 已修）。本组件无父、40ms 脉冲定时器
+    常驻、触发/隐藏路径「pet._interactive_bubble=None→close()」即弃
+    全部引用且 WA_DeleteOnClose——C++ 窗口当场销毁而在途窗口事件
+    （曝光/几何/anim timeout）仍投递到它（pythonw.exe.49612.dmp：GUI
+    线程 AV 读 0xFFFF...FFFF，与 09-20 签名一致）。类级注册表保活到
+    closeEvent 真正发生，关闭时先停脉冲定时器再移除。
+    """
+
+    _keep_alive = set()
+
     def __init__(self, pet, label, action_name, color, bonus_text):
         super().__init__()
+        InteractiveBubble._keep_alive.add(self)
         self.pet = pet
         self.action_name = action_name
         self.bonus_text = bonus_text
@@ -1066,6 +1117,16 @@ class InteractiveBubble(QWidget):
         self._anim.start(40)
         self._place_above_pet()
         self.show()
+
+    def closeEvent(self, event):
+        # 先停脉冲定时器：close 后对象即将释放，在途 timeout 不得再指
+        # 向它（家族竞态的最后一道闸）。
+        try:
+            self._anim.stop()
+        except RuntimeError:
+            pass
+        InteractiveBubble._keep_alive.discard(self)
+        super().closeEvent(event)
 
     def _tick(self):
         self._pulse += 0.08

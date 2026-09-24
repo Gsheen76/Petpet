@@ -1214,6 +1214,112 @@ class SpeechBubbleKeepAliveTests(unittest.TestCase):
                          "close 后必须从保活表移除")
 
 
+class StatBubbleKeepAliveTests(unittest.TestCase):
+    """资料卡气泡保活（2026-09-24 同族第三案连带清偿）。"""
+
+    def _host(self):
+        return SimpleNamespace(
+            state=progression.ensure_progression({}),
+            interface_anchor_rect=lambda: QRect(900, 700, 190, 220),
+            interface_screen_rect=lambda: QRect(0, 0, 1920, 1080),
+        )
+
+    def test_stat_bubble_survives_gc_until_closed(self):
+        import gc
+        import weakref
+
+        import sip
+
+        app = QApplication.instance() or QApplication([])
+        from petpet.ui.desktop import StatBubble
+
+        bubble = StatBubble(self._host(), show_window=False)
+        ref = weakref.ref(bubble)
+        del bubble
+        gc.collect()
+        QApplication.processEvents()
+        self.assertIsNotNone(ref())
+        self.assertFalse(sip.isdeleted(ref()))
+        ref().close()
+        QApplication.processEvents()
+        gc.collect()
+        self.assertNotIn(ref(), StatBubble._keep_alive)
+
+
+class BubbleMenuKeepAliveTests(unittest.TestCase):
+    """气泡菜单本体保活（2026-09-24）：close 后 pet._bubble_menu 置 None
+    即弃全部引用，菜单 C++ 被 GC 当场回收而在途事件仍在投递。"""
+
+    def _host(self):
+        return SimpleNamespace(
+            state=progression.ensure_progression({}),
+            pet_name="烟花",
+            interface_anchor_rect=lambda: QRect(900, 700, 190, 220),
+            interface_screen_rect=lambda: QRect(0, 0, 1920, 1080),
+            set_pet_name=Mock(),
+        )
+
+    def test_menu_survives_gc_until_closed(self):
+        import gc
+        import weakref
+
+        import sip
+
+        app = QApplication.instance() or QApplication([])
+        menu = pet.BubbleMenu(self._host(), show_window=False)
+        ref = weakref.ref(menu)
+        menu.pet._bubble_menu = None  # 模拟 _close 尾部的弃引用
+        del menu
+        gc.collect()
+        QApplication.processEvents()
+        self.assertIsNotNone(ref(), "无外部引用时菜单必须由类级注册表保活")
+        self.assertFalse(sip.isdeleted(ref()))
+        ref()._close()
+        QApplication.processEvents()
+        gc.collect()
+        self.assertNotIn(ref(), pet.BubbleMenu._keep_alive)
+
+
+class InteractiveBubbleKeepAliveTests(unittest.TestCase):
+    """互动气泡保活（2026-09-24 22:27 闪退根因修复）。
+
+    家族第三成员（Speech/Bonus 已修）：无父顶层原生窗 + 40ms 脉冲定时
+    器 + 触发/隐藏路径「置 None→close()」即弃引用且 WA_DeleteOnClose
+    ——pythonw.exe.49612.dmp（22:27，同晚 21:45 再发）签名与 09-20 完
+    全一致：GUI 线程窗口系统事件投递到已释放接收者，AV 读
+    0xFFFFFFFFFFFFFFFF。
+    """
+
+    def test_interactive_bubble_survives_gc_until_closed(self):
+        import gc
+        import weakref
+
+        import sip
+
+        app = QApplication.instance() or QApplication([])
+        from petpet.ui.desktop import InteractiveBubble
+
+        pet = SimpleNamespace(
+            state={}, x=lambda: 100, y=lambda: 100, PET_W=190, PET_H=220,
+            interface_anchor_rect=lambda: QRect(100, 100, 190, 220),
+            interface_screen_rect=lambda: QRect(0, 0, 1920, 1080),
+        )
+        bubble = InteractiveBubble(pet, "🦴 喂我", "feed", "#ff8c42", "")
+        ref = weakref.ref(bubble)
+        del bubble
+        gc.collect()
+        QApplication.processEvents()
+
+        self.assertIsNotNone(ref(), "无外部引用时气泡必须由类级注册表保活")
+        self.assertFalse(sip.isdeleted(ref()), "C++ 对象不得被 GC 回收")
+
+        ref().close()
+        QApplication.processEvents()
+        gc.collect()
+        self.assertNotIn(ref(), InteractiveBubble._keep_alive,
+                         "close 后必须从保活表移除")
+
+
 class DailyRewardAttentionTests(unittest.TestCase):
     """签到/任务可领红点（2026-09-24 反馈轮）：更多入口 + 记录键。"""
 
