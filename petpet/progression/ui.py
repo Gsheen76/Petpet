@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import datetime
+
 import os
 import time
 import copy
@@ -1306,6 +1308,10 @@ class RecordsWindow(CozyProgressWindow):
     def __init__(self, pet, save_callback):
         self.save_callback = save_callback
         self.record_pet_id = None
+        # 页签（2026-09-24 反馈轮）：记录 / 签到任务 两个页面
+        self.record_page = "records"
+        today = datetime.date.today()
+        self._cal_year, self._cal_month = today.year, today.month
         super().__init__(
             pet,
             "温馨记录",
@@ -1333,6 +1339,133 @@ class RecordsWindow(CozyProgressWindow):
             note_label.setObjectName("muted")
             layout.addWidget(note_label)
         return card
+
+    def show_near_pet(self):
+        # 有可领（签到/任务/全勤）时直接落到签到任务页（反馈轮定稿）
+        try:
+            if progression.daily_rewards_claimable(self.pet.state):
+                self.record_page = "daily"
+        except Exception:
+            pass
+        super().show_near_pet()
+
+    def _set_record_page(self, page):
+        if page == self.record_page:
+            return
+        self.record_page = page
+        self.scroll.verticalScrollBar().setValue(0)
+        self.refresh()
+
+    def _build_page_tab_bar(self):
+        """页签条：温馨记录 | 签到任务（可领时红点）。"""
+        bar = QFrame()
+        bar.setObjectName("petTabBar")
+        bar.setFixedHeight(58)
+        layout = QHBoxLayout(bar)
+        layout.setContentsMargins(6, 6, 6, 6)
+        layout.setSpacing(4)
+        for key, label in (("records", "温馨记录"), ("daily", "签到任务")):
+            button = FeedbackButton(label)
+            button.setObjectName("petTabButton")
+            button.setCheckable(True)
+            button.setChecked(self.record_page == key)
+            button.setCursor(Qt.PointingHandCursor)
+            button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            button.clicked.connect(
+                lambda _checked=False, selected=key: self._set_record_page(selected)
+            )
+            layout.addWidget(button)
+        dot = QLabel()
+        dot.setFixedSize(12, 12)
+        dot.setStyleSheet("background:#e0533d;border-radius:6px;")
+        try:
+            dot.setVisible(progression.daily_rewards_claimable(self.pet.state))
+        except Exception:
+            dot.setVisible(False)
+        layout.addWidget(dot, 0, Qt.AlignTop | Qt.AlignLeft)
+        layout.addStretch(1)
+        return bar
+
+    def _build_check_in_calendar(self):
+        """签到日历（2026-09-24 反馈轮）：月历网格直观显示签到记录。"""
+        import calendar as _calendar
+
+        state = self.pet.state
+        year, month = self._cal_year, self._cal_month
+        card = QFrame()
+        card.setObjectName("weeklySummary")
+        outer = QVBoxLayout(card)
+        outer.setContentsMargins(14, 10, 14, 10)
+        outer.setSpacing(6)
+
+        header = QHBoxLayout()
+        prev = FeedbackButton("‹")
+        prev.setFixedSize(34, 30)
+        prev.clicked.connect(lambda: self._shift_calendar_month(-1))
+        nxt = FeedbackButton("›")
+        nxt.setFixedSize(34, 30)
+        nxt.clicked.connect(lambda: self._shift_calendar_month(1))
+        title = QLabel(f"{year} 年 {month} 月")
+        title.setAlignment(Qt.AlignCenter)
+        title.setStyleSheet(
+            "color:#c96f52;font-size:17px;font-weight:800;"
+        )
+        header.addWidget(prev)
+        header.addWidget(title, 1)
+        header.addWidget(nxt)
+        outer.addLayout(header)
+
+        signed = progression.signed_dates_for_month(state, year, month)
+        today = datetime.date.today()
+        days_in_month = _calendar.monthrange(year, month)[1]
+        first_weekday = (_calendar.monthrange(year, month)[0] + 1) % 7  # 周日为首
+        grid = QGridLayout()
+        grid.setSpacing(3)
+        for column, name in enumerate("日一二三四五六"):
+            head = QLabel(name)
+            head.setAlignment(Qt.AlignCenter)
+            head.setFixedHeight(20)
+            head.setStyleSheet("color:#a58b7c;font-size:13px;font-weight:700;")
+            grid.addWidget(head, 0, column)
+        for day in range(1, days_in_month + 1):
+            slot = first_weekday + day - 1
+            row, column = slot // 7 + 1, slot % 7
+            cell = QLabel(str(day))
+            cell.setAlignment(Qt.AlignCenter)
+            cell.setFixedSize(38, 32)
+            is_today = (year, month, day) == (today.year, today.month, today.day)
+            is_future = (year, month, day) > (today.year, today.month, today.day)
+            if day in signed:
+                cell.setStyleSheet(
+                    "background:#f28f76;color:#ffffff;border-radius:16px;"
+                    "font-size:15px;font-weight:800;"
+                )
+            elif is_today:
+                cell.setStyleSheet(
+                    "color:#e0533d;border:2px solid #f28f76;border-radius:16px;"
+                    "font-size:15px;font-weight:800;"
+                )
+            elif is_future:
+                cell.setStyleSheet("color:#c9b8ac;font-size:14px;")
+            else:
+                cell.setStyleSheet("color:#7b564a;font-size:14px;")
+            grid.addWidget(cell, row, column)
+        outer.addLayout(grid)
+        return card
+
+    def _shift_calendar_month(self, delta):
+        import calendar as _calendar
+
+        year = self._cal_year + (self._cal_month - 1 + delta) // 12
+        month = (self._cal_month - 1 + delta) % 12 + 1
+        today = datetime.date.today()
+        if (year, month) > (today.year, today.month):
+            return  # 不许翻到未来
+        earliest = today.year * 12 + today.month - 13  # 最多回看 12 个月
+        if year * 12 + month < earliest:
+            return
+        self._cal_year, self._cal_month = year, month
+        self.refresh()
 
     def _build_check_in_card(self):
         """签到卡：连续天数 + 今日奖励领取键。"""
@@ -1468,6 +1601,17 @@ class RecordsWindow(CozyProgressWindow):
             pet_name = ""
             affection_level = state.get("affection_level", 1)
 
+        self._add_page_header(self._build_page_tab_bar())
+        if self.record_page == "daily":
+            # 签到任务页（2026-09-24 反馈轮）：签到卡 + 日历 + 今日任务
+            progression.ensure_check_in(state)
+            progression.ensure_daily_quests(state)
+            self.content_layout.addWidget(self._build_check_in_card())
+            self.content_layout.addWidget(self._build_check_in_calendar())
+            self.content_layout.addWidget(self._build_daily_quest_card())
+            self.content_layout.addStretch(1)
+            return
+
         if pets:
             self._add_page_header(self._build_pet_switch_bar(pets))
 
@@ -1485,18 +1629,6 @@ class RecordsWindow(CozyProgressWindow):
             )
             weekly_layout.addWidget(label)
         self.content_layout.addWidget(weekly)
-
-        # 每日签到（2026-09-24）：连续签到 + 7 天阶梯奖励，置于任务卡上方
-        # （总计页专属）
-        if self.record_pet_id is None:
-            progression.ensure_check_in(state)
-            self.content_layout.addWidget(self._build_check_in_card())
-
-        # 每日任务（2026-09-23 创新甲）：三条日常 + 全勤奖励，跨日重置；
-        # 进度由 record_action 单漏斗自动累积（总计页专属）
-        if self.record_pet_id is None:
-            progression.ensure_daily_quests(state)
-            self.content_layout.addWidget(self._build_daily_quest_card())
 
         if self.record_pet_id is not None:
             # Pet tabs only show what belongs to this pet; shared panels

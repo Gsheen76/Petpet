@@ -535,13 +535,16 @@ class BubbleMenu(QWidget):
 
     @staticmethod
     def action_needs_attention(action, *, has_claimable,
-                               needs_personal_setup, zero_actions=()):
+                               needs_personal_setup, zero_actions=(),
+                               daily_ready=False):
         zero_actions = set(zero_actions)
         return (
             (action in ("more", "achievements") and has_claimable)
             or (action == "chat" and needs_personal_setup)
             or action in zero_actions
             or (action == "interaction" and bool(zero_actions))
+            # 签到/每日任务可领：主菜单「更多」入口 + 次级「记录」键亮红点
+            or (action in ("more", "records") and daily_ready)
         )
 
     def __init__(self, pet, page="primary", show_window=True):
@@ -676,8 +679,12 @@ class BubbleMenu(QWidget):
                     }[action]
                     for action in zero_record_actions
                 },
+                # 第四元素（2026-09-24 反馈轮）：签到/任务/全勤任一可领
+                _dependency("progression").daily_rewards_claimable(
+                    self.pet.state),
             )
-        has_claimable, needs_api_key, zero_actions = self._attention_flags
+        has_claimable, needs_api_key, zero_actions, daily_ready = (
+            self._attention_flags)
         for i, (emoji, label, action, color) in enumerate(self.actions):
             row = i // columns
             column = i % columns
@@ -754,7 +761,8 @@ class BubbleMenu(QWidget):
                     action,
                     has_claimable=has_claimable,
                     needs_personal_setup=needs_api_key,
-                    zero_actions=zero_actions):
+                    zero_actions=zero_actions,
+                    daily_ready=daily_ready):
                 dot_center = QPointF(rect.right() - 10, rect.top() + 10)
                 p.setBrush(QColor(255, 255, 255))
                 p.setPen(Qt.NoPen)

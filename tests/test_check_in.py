@@ -92,7 +92,7 @@ class CheckInCoreTests(unittest.TestCase):
     def test_ensure_creates_block_and_tolerates_legacy_state(self):
         state = fresh_state()
         ensure_check_in(state)
-        self.assertEqual(state["check_in"], {"last_date": None, "streak": 0})
+        self.assertEqual(state["check_in"], {"last_date": None, "streak": 0, "history": []})
         state["check_in"] = {"last_date": "2026-09-24", "streak": 3}
         ensure_check_in(state)
         self.assertEqual(state["check_in"]["streak"], 3)  # 已有合法块不动
@@ -109,3 +109,62 @@ class CheckInRobustnessTests(unittest.TestCase):
         self.assertEqual(do_check_in(state, now=day.timestamp()),
                          CHECK_IN_REWARD_CYCLE[0])  # 浮点纪元 + 坏块自愈
         self.assertEqual(state["check_in"]["streak"], 1)
+
+class CheckInFeedbackRoundTests(unittest.TestCase):
+    """2026-09-24 反馈轮：奖励上调 + history 历史 + 月历查询 + 可领红点判定。"""
+
+    def test_reward_cycle_bumped(self):
+        self.assertEqual(CHECK_IN_REWARD_CYCLE, (15, 20, 25, 30, 40, 50, 80))
+
+    def test_check_in_appends_history_dedup_and_trim(self):
+        from petpet.progression.core import ensure_check_in
+        state = fresh_state()
+        day = datetime(2026, 9, 20, 9, 0, 0)
+        for i in range(3):
+            do_check_in(state, now=day + timedelta(days=i))
+        do_check_in(state, now=day + timedelta(days=2, hours=8))  # 同日补签
+        self.assertEqual(
+            state["check_in"]["history"],
+            ["2026-09-20", "2026-09-21", "2026-09-22"],
+        )
+        for i in range(500):
+            do_check_in(state, now=day + timedelta(days=3 + i))
+        self.assertLessEqual(len(state["check_in"]["history"]), 400)
+
+    def test_signed_dates_for_month(self):
+        from petpet.progression.core import signed_dates_for_month
+        state = fresh_state()
+        day = datetime(2026, 8, 30, 9, 0, 0)
+        for i in range(3):
+            do_check_in(state, now=day + timedelta(days=i))
+        self.assertEqual(signed_dates_for_month(state, 2026, 8), {30, 31})
+        self.assertEqual(signed_dates_for_month(state, 2026, 9), {1})
+
+    def test_daily_rewards_claimable_matrix(self):
+        from petpet.progression.core import daily_rewards_claimable
+        state = fresh_state()
+        self.assertTrue(daily_rewards_claimable(state))  # 没签到 → 可签
+        do_check_in(state, now=datetime(2026, 9, 24, 9, 0, 0))
+        from petpet.progression.core import ensure_daily_quests
+        ensure_daily_quests(state, now=datetime(2026, 9, 24, 10, 0, 0))
+        self.assertFalse(daily_rewards_claimable(
+            state, now=datetime(2026, 9, 24, 11, 0, 0)))  # 无可领
+        quest = state["daily_quests"]["quests"][0]
+        quest["progress"] = quest["target"]
+        self.assertTrue(daily_rewards_claimable(
+            state, now=datetime(2026, 9, 24, 11, 0, 0)))  # 任务可领
+        from petpet.progression.core import claim_daily_quest, claim_daily_bonus
+        for i in range(3):
+            state["daily_quests"]["quests"][i]["progress"] =                 state["daily_quests"]["quests"][i]["target"]
+            claim_daily_quest(state, i)
+        self.assertTrue(daily_rewards_claimable(state))  # 全勤可领
+        claim_daily_bonus(state)
+        self.assertFalse(daily_rewards_claimable(state))
+
+    def test_ensure_backfills_history_from_legacy_last_date(self):
+        from petpet.progression.core import ensure_check_in, signed_dates_for_month
+        state = fresh_state()
+        state["check_in"] = {"last_date": "2026-09-24", "streak": 2}
+        ensure_check_in(state)
+        self.assertEqual(state["check_in"]["history"], ["2026-09-24"])
+        self.assertIn(24, signed_dates_for_month(state, 2026, 9))

@@ -1212,3 +1212,25 @@ class SpeechBubbleKeepAliveTests(unittest.TestCase):
         gc.collect()
         self.assertNotIn(ref(), SpeechBubble._keep_alive,
                          "close 后必须从保活表移除")
+
+
+class DailyRewardAttentionTests(unittest.TestCase):
+    """签到/任务可领红点（2026-09-24 反馈轮）：更多入口 + 记录键。"""
+
+    def test_daily_ready_dots_more_and_records_only(self):
+        import pet
+
+        kwargs_true = dict(
+            has_claimable=False, needs_personal_setup=False,
+            zero_actions=(), daily_ready=True,
+        )
+        self.assertTrue(pet.BubbleMenu.action_needs_attention(
+            "records", **kwargs_true))
+        self.assertTrue(pet.BubbleMenu.action_needs_attention(
+            "more", **kwargs_true))
+        self.assertFalse(pet.BubbleMenu.action_needs_attention(
+            "chat", **kwargs_true))
+        self.assertFalse(pet.BubbleMenu.action_needs_attention(
+            "records", has_claimable=False, needs_personal_setup=False,
+            zero_actions=(), daily_ready=False,
+        ))

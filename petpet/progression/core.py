@@ -1174,20 +1174,24 @@ def claim_daily_bonus(state, now=None):
 
 # 每日签到（2026-09-24 用户点名）：连续签到 + 7 天阶梯奖励循环，
 # 第 7 天 60 币大奖后回到第 1 天（streak 不封顶，奖励按 (streak-1)%7 取）。
-CHECK_IN_REWARD_CYCLE = (10, 15, 20, 25, 30, 40, 60)
+CHECK_IN_REWARD_CYCLE = (15, 20, 25, 30, 40, 50, 80)  # 2026-09-24 反馈轮整体上调
+CHECK_IN_HISTORY_CAP = 400
 
 
 def ensure_check_in(state):
-    """补齐签到块；已有合法块原样保留。"""
+    """补齐签到块；streak 合法则保留并补 history（约 13 个月容量）。"""
     ensure_progression(state)
     block = state.get("check_in")
-    if (
-        isinstance(block, dict)
-        and isinstance(block.get("streak"), int)
-        and (block.get("last_date") is None or isinstance(block.get("last_date"), str))
-    ):
-        return
-    state["check_in"] = {"last_date": None, "streak": 0}
+    if not isinstance(block, dict) or not isinstance(block.get("streak"), int):
+        block = {"last_date": None, "streak": 0}
+    if not isinstance(block.get("history"), list):
+        block["history"] = []
+    # 迁移（2026-09-24 反馈轮）：旧代码只存 last_date——最后签到日回填
+    # 进 history，否则升级当天日历上不显示已签的今天
+    last = block.get("last_date")
+    if isinstance(last, str) and last not in block["history"]:
+        block["history"].append(last)
+    state["check_in"] = block
 
 
 def _check_in_today(now):
@@ -1229,7 +1233,47 @@ def do_check_in(state, now=None):
     add_coins(state, reward)
     block["last_date"] = today
     block["streak"] = streak
+    history = block.setdefault("history", [])
+    if today not in history:
+        history.append(today)
+    if len(history) > CHECK_IN_HISTORY_CAP:
+        del history[:-CHECK_IN_HISTORY_CAP]
     return reward
+
+
+def signed_dates_for_month(state, year, month):
+    """返回某月已签到的日集合（日历显示用）。"""
+    ensure_check_in(state)
+    prefix = f"{int(year):04d}-{int(month):02d}-"
+    days = set()
+    for entry in state["check_in"].get("history", []):
+        if isinstance(entry, str) and entry.startswith(prefix):
+            try:
+                days.add(int(entry[-2:]))
+            except ValueError:
+                continue
+    return days
+
+
+def daily_rewards_claimable(state, now=None):
+    """红点判定：签到可签 / 任务完成可领 / 全勤可领，任一为真。"""
+    if check_in_status(state, now=now)["available"]:
+        return True
+    block = state.get("daily_quests")
+    if not isinstance(block, dict) or block.get("date") != _daily_quest_date(now):
+        return False
+    quests = block.get("quests", [])
+    if any(
+        not q.get("claimed")
+        and int(q.get("progress", 0)) >= int(q.get("target", 1))
+        for q in quests
+    ):
+        return True
+    return (
+        bool(quests)
+        and not block.get("bonus_claimed")
+        and all(q.get("claimed") for q in quests)
+    )
 
 
 def record_action(state, action, amount=1, now=None):
