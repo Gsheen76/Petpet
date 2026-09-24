@@ -1067,6 +1067,108 @@ def pet_record_action(state, action, amount=1):
         mirror[action] += _safe_int(amount)
 
 
+DAILY_QUEST_POOL = (
+    ("pettings", "摸摸它 5 次", 5, 20),
+    ("feedings", "喂它吃 1 顿饭", 1, 20),
+    ("play_sessions", "陪它玩 1 次", 1, 20),
+    ("ai_replies", "和它聊 3 句天", 3, 20),
+    ("gifts_given", "送它 1 份礼物", 1, 20),
+)
+DAILY_QUEST_COUNT = 3
+DAILY_QUEST_BONUS = 30
+
+
+def _daily_quest_date(now=None):
+    if isinstance(now, datetime.datetime):
+        stamp = now
+    elif isinstance(now, (int, float)):
+        stamp = datetime.datetime.fromtimestamp(now)
+    else:
+        stamp = datetime.datetime.now()
+    return stamp.strftime("%Y-%m-%d")
+
+
+def ensure_daily_quests(state, now=None):
+    """惰性生成/跨日重置当日任务（2026-09-23 创新甲）。
+
+    按日期种子确定性抽 3 条（同日全员同题，免存 rng 状态）；同日
+    重复调用为无操作，进度与领取状态原样保留。
+    """
+    ensure_progression(state)
+    today = _daily_quest_date(now)
+    block = state.get("daily_quests")
+    if (
+        isinstance(block, dict)
+        and block.get("date") == today
+        and isinstance(block.get("quests"), list)
+        and len(block["quests"]) == DAILY_QUEST_COUNT
+    ):
+        return
+    chosen = random.Random(f"petpet-daily-{today}").sample(
+        list(DAILY_QUEST_POOL), DAILY_QUEST_COUNT
+    )
+    state["daily_quests"] = {
+        "date": today,
+        "quests": [
+            {
+                "key": key,
+                "label": label,
+                "target": target,
+                "reward": reward,
+                "progress": 0,
+                "claimed": False,
+            }
+            for key, label, target, reward in chosen
+        ],
+        "bonus_claimed": False,
+    }
+
+
+def daily_quest_hook(state, action, amount=1, now=None):
+    """record_action 单漏斗的当日任务进度推进（缺块/过期不推进）。"""
+    block = state.get("daily_quests")
+    if not isinstance(block, dict) or block.get("date") != _daily_quest_date(now):
+        return
+    for quest in block.get("quests", []):
+        if quest.get("key") == action and not quest.get("claimed"):
+            quest["progress"] = min(
+                int(quest.get("progress", 0)) + int(amount),
+                int(quest.get("target", 1)),
+            )
+
+
+def claim_daily_quest(state, index, now=None):
+    """领取一条完成的任务奖励，返回到账币数（不可领返回 0）。"""
+    block = state.get("daily_quests")
+    if not isinstance(block, dict) or block.get("date") != _daily_quest_date(now):
+        return 0
+    quests = block.get("quests", [])
+    if not isinstance(index, int) or not 0 <= index < len(quests):
+        return 0
+    quest = quests[index]
+    if quest.get("claimed") or int(quest.get("progress", 0)) < int(quest.get("target", 1)):
+        return 0
+    reward = int(quest.get("reward", 0))
+    add_coins(state, reward)
+    quest["claimed"] = True
+    return reward
+
+
+def claim_daily_bonus(state, now=None):
+    """三条全部领毕后的一次性全勤奖励。"""
+    block = state.get("daily_quests")
+    if not isinstance(block, dict) or block.get("date") != _daily_quest_date(now):
+        return 0
+    quests = block.get("quests", [])
+    if not quests or block.get("bonus_claimed"):
+        return 0
+    if not all(quest.get("claimed") for quest in quests):
+        return 0
+    add_coins(state, DAILY_QUEST_BONUS)
+    block["bonus_claimed"] = True
+    return DAILY_QUEST_BONUS
+
+
 def record_action(state, action, amount=1, now=None):
     """Record an interaction and grant its matching affection."""
     ensure_progression(state)
@@ -1074,6 +1176,7 @@ def record_action(state, action, amount=1, now=None):
     if amount <= 0 or action not in state["records"]:
         return add_affection(state, 0)
     state["records"][action] += amount
+    daily_quest_hook(state, action, amount, now)
     if action in {
         "pettings", "feedings", "play_sessions", "sleep_sessions"
     }:

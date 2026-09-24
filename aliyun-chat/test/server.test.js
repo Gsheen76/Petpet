@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { handleRequest } from "../src/server.js";
+import { handleRequest, _resetRateLimiter } from "../src/server.js";
 
 const INSTALL_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const REQUEST_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
@@ -152,4 +152,56 @@ test("reports only the missing GLM key", async () => {
     event: "configuration_missing",
     missing: ["ZHIPU_API_KEY"],
   }]);
+});
+
+
+test("rate limits per install id beyond the window cap", async () => {
+  _resetRateLimiter();
+  const env = { ...environment(), RATE_LIMIT_MAX: "3" };
+  const fetchImpl = async () => new Response("data: {}" + String.fromCharCode(10, 10), {
+    status: 200, headers: { "content-type": "text/event-stream" },
+  });
+  let last = 200;
+  for (let i = 0; i < 4; i += 1) {
+    const response = await handleRequest(request({
+      request_id: `cccccccc-cccc-4ccc-8ccc-${String(i).padStart(12, "0")}`,
+    }), { env, fetchImpl });
+    last = response.status;
+  }
+  assert.equal(last, 429);
+  const limited = await handleRequest(request({
+    request_id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+  }), { env, fetchImpl });
+  assert.equal(limited.status, 429);
+  assert.equal((await limited.json()).error, "rate_limited");
+});
+
+test("rate limits per source ip across install ids", async () => {
+  _resetRateLimiter();
+  const env = { ...environment(), RATE_LIMIT_MAX_PER_IP: "2", RATE_LIMIT_MAX: "50" };
+  const fetchImpl = async () => new Response("data: {}" + String.fromCharCode(10, 10), {
+    status: 200, headers: { "content-type": "text/event-stream" },
+  });
+  const statuses = [];
+  for (let i = 0; i < 3; i += 1) {
+    const response = await handleRequest(request({
+      install_id: `eeeeeeee-eeee-4eee-8eee-${String(i).padStart(12, "0")}`,
+      request_id: `ffffffff-ffff-4fff-8fff-${String(i).padStart(12, "0")}`,
+    }), { env, fetchImpl, sourceIp: "9.9.9.9" });
+    statuses.push(response.status);
+  }
+  assert.deepEqual(statuses, [200, 200, 429]);
+});
+
+test("rejected requests do not consume rate budget", async () => {
+  _resetRateLimiter();
+  const env = { ...environment(), RATE_LIMIT_MAX: "2" };
+  const fetchImpl = async () => new Response("data: {}" + String.fromCharCode(10, 10), {
+    status: 200, headers: { "content-type": "text/event-stream" },
+  });
+  assert.equal((await handleRequest(request({ install_id: "bad" }), { env, fetchImpl })).status, 400);
+  const first = await handleRequest(request(), { env, fetchImpl });
+  const second = await handleRequest(request(), { env, fetchImpl });
+  assert.equal(first.status, 200);
+  assert.equal(second.status, 200);
 });

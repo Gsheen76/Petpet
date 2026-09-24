@@ -1767,7 +1767,11 @@ class TrayApp:
         self._press_t = 0
         self._press_button = None
         self._last_left_click_t = 0
-        self._pending_single_click = None
+        # 低⑫（2026-09-23）：单发单击去抖定时器只建一次复用——
+        # 原实现每次单击 new QTimer(self.app)，旧对象父挂 app 永不回收
+        self._pending_single_click = QTimer(self.app)
+        self._pending_single_click.setSingleShot(True)
+        self._pending_single_click.timeout.connect(self._do_single_click)
         self.pet.mousePressEvent_orig = self.pet.mousePressEvent
         self.pet.mouseReleaseEvent_orig = self.pet.mouseReleaseEvent
         self.pet.mousePressEvent = self._wrap_press
@@ -1955,17 +1959,12 @@ class TrayApp:
                 now = time.time()
                 if now - self._last_left_click_t < 0.35:
                     # double click: cancel pending single click, open the home scene
-                    if self._pending_single_click is not None:
-                        self._pending_single_click.stop()
-                        self._pending_single_click = None
+                    self._pending_single_click.stop()
                     self._last_left_click_t = 0
                     self.pet.open_home_scene()
                 else:
                     # first click: schedule single-click action after delay
                     self._last_left_click_t = now
-                    self._pending_single_click = QTimer(self.app)
-                    self._pending_single_click.setSingleShot(True)
-                    self._pending_single_click.timeout.connect(self._do_single_click)
                     self._pending_single_click.start(320)
             self._press_button = None
             self._press_pos = None
@@ -1975,7 +1974,7 @@ class TrayApp:
         self.pet.mouseReleaseEvent_orig(e)
 
     def _do_single_click(self):
-        self._pending_single_click = None
+        # singleShot 触发后自动停；定时器常驻复用（勿置 None）
         if not self.pet.state.get("sleeping"):
             self.pet.pet_click()
 

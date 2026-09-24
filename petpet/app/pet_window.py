@@ -2379,6 +2379,33 @@ class PetWindow(QWidget):
         except RuntimeError:
             return _dependency("BubbleMenu")(self, page=page)
 
+    DREAM_LINES = (
+        "（梦里有一大盘香喷喷的饭…）",
+        "（梦到在软软的毯子上打滚…）",
+        "（梦里追着一只蝴蝶跑…）",
+        "（哼哼…梦里也有人摸摸头…）",
+        "（梦到主人回家开门的声音…）",
+    )
+
+    def _maybe_dream(self):
+        """睡眠期偶发梦境气泡（2026-09-23 创新乙）：纯氛围彩蛋。
+
+        每 tick 约 2% 概率，同一条梦话至少间隔 40 个 tick（约 2 分钟
+        醒着节拍），say() 自带可见性门，隐藏/游戏期间不冒泡。
+        """
+        try:
+            now = time.monotonic()
+            last = getattr(self, "_last_dream_at", 0.0)
+            if now - last < 120:
+                return
+            if random.random() < 0.02:
+                self._last_dream_at = now
+                self.say(random.choice(self.DREAM_LINES))
+        except RuntimeError:
+            # 测试壳（__new__ 未走 __init__）上属性访问抛 RuntimeError；
+            # 梦境是氛围彩蛋，任何失败都不得拖垮 decay 主链
+            return
+
     def on_decay(self):
         s = self.settings
         effects = progression.upgrade_effects(self.state)
@@ -2396,6 +2423,10 @@ class PetWindow(QWidget):
                     0,
                     self.state["hunger"] - effects["sleep_hunger_cost"],
                 )
+            try:
+                self._maybe_dream()
+            except (AttributeError, RuntimeError):
+                pass  # 测试壳可能无此方法；氛围彩蛋不拖垮 decay
         else:
             self.state["hunger"] = max(
                 0,

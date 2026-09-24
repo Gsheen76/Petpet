@@ -10,6 +10,8 @@ from __future__ import annotations
 import glob
 import os
 import time
+import shutil
+import tempfile
 import zipfile
 
 from petpet.app.paths import DATA_DIR
@@ -103,15 +105,54 @@ def restore_backup_zip(zip_path: str, data_dir: str | None = None) -> list[str]:
 
     仅接受备份模式内的文件名（防伪造包写入任意路径）；调用方应先
     做一次安全快照（backup_now）再调用。
+
+    原子化（2026-09-23 低⑭）：先整体解包进 staging 临时目录，再逐
+    文件「写临时+os.replace」替换；替换阶段任何失败按回滚副本恢复
+    全部已动文件——中途失败不再留下新旧混合态。
     """
     root = data_dir or DATA_DIR
     names = inspect_backup_zip(zip_path)
     root_abs = os.path.abspath(root)
-    with zipfile.ZipFile(zip_path) as bundle:
-        for name in names:
+    staging = None
+    rollback = None
+    try:
+        staging = tempfile.mkdtemp(prefix="petpet_restore_stage_")
+        rollback = tempfile.mkdtemp(prefix="petpet_restore_prev_")
+        staged = []
+        with zipfile.ZipFile(zip_path) as bundle:
+            for name in names:
+                staged_path = os.path.abspath(os.path.join(staging, name))
+                if os.path.dirname(staged_path) != os.path.abspath(staging):
+                    raise ValueError(f"异常路径条目：{name}")
+                with bundle.open(name) as src, open(staged_path, "wb") as dst:
+                    dst.write(src.read())
+                staged.append((name, staged_path))
+        # 换入阶段：先存回滚副本，再逐文件原子替换
+        touched = []
+        for name, staged_path in staged:
             target = os.path.abspath(os.path.join(root, name))
             if os.path.dirname(target) != root_abs:
                 raise ValueError(f"异常路径条目：{name}")
-            with bundle.open(name) as src, open(target, "wb") as dst:
-                dst.write(src.read())
-    return names
+            if os.path.exists(target):
+                prev = os.path.join(rollback, name)
+                shutil.copyfile(target, prev)
+            touched.append((name, target))
+            tmp_target = target + ".petpet_restore.tmp"
+            shutil.copyfile(staged_path, tmp_target)
+            os.replace(tmp_target, target)
+        return names
+    except BaseException:
+        if rollback is not None:
+            for name in os.listdir(rollback):
+                try:
+                    os.replace(
+                        os.path.join(rollback, name),
+                        os.path.abspath(os.path.join(root, name)),
+                    )
+                except OSError:
+                    pass  # 回滚尽力而为；调用方仍有事前安全快照兜底
+        raise
+    finally:
+        for folder in (staging, rollback):
+            if folder and os.path.isdir(folder):
+                shutil.rmtree(folder, ignore_errors=True)

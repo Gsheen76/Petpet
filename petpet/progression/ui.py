@@ -1334,6 +1334,67 @@ class RecordsWindow(CozyProgressWindow):
             layout.addWidget(note_label)
         return card
 
+    def _build_daily_quest_card(self):
+        """今日任务卡：任务行（进度 + 领取键）+ 全勤奖励键。"""
+        state = self.pet.state
+        block = state["daily_quests"]
+        card = QFrame()
+        card.setObjectName("weeklySummary")
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(14, 10, 14, 10)
+        layout.setSpacing(4)
+        title = QLabel("今日任务")
+        title.setStyleSheet(
+            "color:#c96f52;font-size:17px;font-weight:800;"
+        )
+        layout.addWidget(title)
+        for index, quest in enumerate(block["quests"]):
+            row = QHBoxLayout()
+            label = QLabel(
+                f"{quest['label']}　{quest['progress']}/{quest['target']}"
+            )
+            label.setStyleSheet(
+                "color:#7b564a;font-size:16px;font-weight:600;"
+            )
+            row.addWidget(label, 1)
+            button = FeedbackButton()
+            if quest["claimed"]:
+                button.setText("已领取")
+                button.setEnabled(False)
+            elif int(quest["progress"]) >= int(quest["target"]):
+                button.setText(f"领取 +{quest['reward']}")
+                button.clicked.connect(
+                    lambda _checked=False, i=index: self._claim_daily_quest(i)
+                )
+            else:
+                button.setText("进行中")
+                button.setEnabled(False)
+            row.addWidget(button)
+            layout.addLayout(row)
+        if (
+            not block.get("bonus_claimed")
+            and block["quests"]
+            and all(q["claimed"] for q in block["quests"])
+        ):
+            bonus = FeedbackButton(
+                f"全部完成！领取 +{progression.DAILY_QUEST_BONUS}"
+            )
+            bonus.clicked.connect(lambda: self._claim_daily_bonus())
+            layout.addWidget(bonus)
+        return card
+
+    def _claim_daily_quest(self, index):
+        granted = progression.claim_daily_quest(self.pet.state, index)
+        if granted:
+            self.save_callback(self.pet.state)
+        self.refresh()
+
+    def _claim_daily_bonus(self):
+        granted = progression.claim_daily_bonus(self.pet.state)
+        if granted:
+            self.save_callback(self.pet.state)
+        self.refresh()
+
     def refresh(self):
         progression.ensure_progression(self.pet.state)
         self._refresh_coin_label()
@@ -1386,6 +1447,12 @@ class RecordsWindow(CozyProgressWindow):
             )
             weekly_layout.addWidget(label)
         self.content_layout.addWidget(weekly)
+
+        # 每日任务（2026-09-23 创新甲）：三条日常 + 全勤奖励，跨日重置；
+        # 进度由 record_action 单漏斗自动累积（总计页专属）
+        if self.record_pet_id is None:
+            progression.ensure_daily_quests(state)
+            self.content_layout.addWidget(self._build_daily_quest_card())
 
         if self.record_pet_id is not None:
             # Pet tabs only show what belongs to this pet; shared panels

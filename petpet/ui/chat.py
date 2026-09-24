@@ -1351,6 +1351,10 @@ class ChatWindow(QWidget):
 
     def _begin_reply(self, text, attachment, display_text):
         self.chat_notice.hide()
+        # 低⑪（2026-09-23）：发送即退出搜索过滤——否则流式期间新问答
+        # 绕过过滤器直显、完成后又被过滤消失，前后不一致
+        if self.search_input.text().strip():
+            self.search_input.clear()  # textChanged → 自动全量刷新
         self._pending_user = display_text
         self._streaming = ""
         self._abort_requested = False

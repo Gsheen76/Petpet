@@ -8,6 +8,32 @@ const MAX_BODY_BYTES = 32768;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DEFAULT_ZHIPU_ENDPOINT = "https://open.bigmodel.cn/api/paas/v4/chat/completions";
 
+// 服务端限流（2026-09-23 低⑬）：每装机 ID + 每来源 IP 双滑窗。实例内
+// Map 计数（函数计算多实例时各自独立限流，仍显著抬升刷量成本）。
+const rateBuckets = new Map();
+
+export function _resetRateLimiter() {
+  rateBuckets.clear();
+}
+
+function overLimit(key, max, windowMs) {
+  const now = Date.now();
+  const recent = (rateBuckets.get(key) || []).filter((t) => now - t < windowMs);
+  if (recent.length >= max) {
+    rateBuckets.set(key, recent);
+    return true;
+  }
+  recent.push(now);
+  rateBuckets.set(key, recent);
+  if (rateBuckets.size > 10_000) {
+    for (const key of rateBuckets.keys()) {
+      if (rateBuckets.size <= 5_000) break;
+      rateBuckets.delete(key);
+    }
+  }
+  return false;
+}
+
 function error(code, status) {
   return Response.json({ error: code }, { status });
 }
@@ -43,6 +69,13 @@ export async function handleRequest(request, {
   if (!UUID.test(body?.request_id || "") || !UUID.test(body?.install_id || "")
     || !validMessages(body?.messages)) {
     return error("invalid_default_chat_request", 400);
+  }
+  const rateMaxPerIp = Number(env.RATE_LIMIT_MAX_PER_IP || 120);
+  const rateMaxPerInstall = Number(env.RATE_LIMIT_MAX || 20);
+  const rateWindowMs = Number(env.RATE_LIMIT_WINDOW_MS || 60_000);
+  if (overLimit(`ip:${sourceIp}`, rateMaxPerIp, rateWindowMs)
+    || overLimit(`id:${body.install_id}`, rateMaxPerInstall, rateWindowMs)) {
+    return error("rate_limited", 429);
   }
   if (!env.ZHIPU_API_KEY) {
     log({
