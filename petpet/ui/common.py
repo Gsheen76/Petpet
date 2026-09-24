@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QPoint, QRect
+from PyQt5.QtCore import QPoint, QRect, Qt
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import QWidget
 
@@ -184,3 +184,30 @@ class KeepAliveTopLevelWindow(QWidget):
     def closeEvent(self, event):
         type(self)._keep_alive.discard(self)
         super().closeEvent(event)
+
+
+_ADOPTED_WINDOWS = set()
+
+
+def adopt_window(widget, delete_on_close=True):
+    """把任意原生窗（QMenu 等非自研类）纳入保活（家族扩展 2026-09-25）。
+
+    自研窗口走 KeepAliveTopLevelWindow 基类；QMenu 这类不能换基族的，
+    用本函数收养：强引用保活到 C++ 销毁（destroyed 信号出表，
+    WA_DeleteOnClose 让关闭即销毁、表自清）。右键菜单每开新建再弃引
+    用的无父 QMenu 是闪退家族第 6 例（00:54 案，与 22:27 同模块同
+    偏移）。
+    """
+    if not isinstance(widget, QWidget):
+        return
+    _ADOPTED_WINDOWS.add(widget)
+    try:
+        widget.setAttribute(Qt.WA_DeleteOnClose, bool(delete_on_close))
+    except Exception:
+        pass
+    try:
+        widget.destroyed.connect(
+            lambda *_, w=widget: _ADOPTED_WINDOWS.discard(w)
+        )
+    except Exception:
+        pass

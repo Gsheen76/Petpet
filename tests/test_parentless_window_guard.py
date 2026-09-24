@@ -84,3 +84,28 @@ class ParentlessWindowGuardTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class QMenuAdoptionGuardTests(unittest.TestCase):
+    """裸 QMenu 守卫（2026-09-25 家族第 6 例后）：无父 QMenu 必须收养
+    （adopt_window）或持父/持久引用——否则关闭即弃引用重现闪退族。"""
+
+    def test_bare_qmenu_is_adopted_parented_or_persistent(self):
+        offenders = []
+        files = [REPO / "pet.py"] + sorted((REPO / "petpet").rglob("*.py"))
+        for path in files:
+            if path.name == "common.py":
+                continue
+            lines = path.read_text(encoding="utf-8").splitlines()
+            for index, line in enumerate(lines):
+                if "QMenu(" not in line:
+                    continue
+                if "parent" in line:
+                    continue  # 带父
+                if "=" in line and "self." in line.split("=")[0]:
+                    continue  # 持久引用（self.menu 等复用）
+                window = chr(10).join(lines[index:index + 8])
+                if "adopt_window" in window:
+                    continue
+                offenders.append(f"{path.name}:{index + 1}")
+        self.assertEqual(offenders, [], "未收养的裸 QMenu：" + ", ".join(offenders))

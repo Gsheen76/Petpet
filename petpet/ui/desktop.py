@@ -798,6 +798,13 @@ class BubbleMenu(KeepAliveTopLevelWindow):
                 p.setBrush(QColor("#ee5e62"))
                 p.drawEllipse(dot_center, 5.5, 5.5)
 
+    def leaveEvent(self, e):
+        # 2026-09-25 用户反馈：鼠标移出菜单后悬浮高亮残留在最后键上
+        # ——离开即清 hover 并重绘
+        self._hover = -1
+        self.update()
+        super().leaveEvent(e)
+
     def mouseMoveEvent(self, e):
         pos = e.pos()
         new_hover = -1
@@ -896,10 +903,28 @@ class BubbleMenu(KeepAliveTopLevelWindow):
             pass
         super().closeEvent(event)  # 基类出保活表
 
+    def showEvent(self, event):
+        # 诊断埋点（2026-09-25）：菜单几何留痕——若再现 125% 屏 0.8 倍
+        # 钳制（496/620），diag.log 直接给出页宽高与坐标证据
+        try:
+            from petpet.app.diagnostics import log_event
+            log_event(
+                "menu_open", page=self.page,
+                w=self.width(), h=self.height(), x=self.x(), y=self.y(),
+            )
+        except Exception:
+            pass
+        super().showEvent(event)
+
     def _close(self):
         if self._closing:
             return
         self._closing = True
+        try:
+            from petpet.app.diagnostics import log_event
+            log_event("menu_close", page=self.page)
+        except Exception:
+            pass
         if self._app is not None:
             try:
                 self._app.applicationStateChanged.disconnect(

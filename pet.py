@@ -2136,6 +2136,11 @@ class TrayApp:
     def _fresh_menu(self):
         """Build a fresh standalone menu for right-click on pet."""
         m = QMenu()
+        # 保活收养（2026-09-25 闪退家族第 6 例）：无父 QMenu 每次右键
+        # 新建、exec_ 返回后即弃引用——GC 连 C++ 一起销毁而在途关闭
+        # 事件仍投递（00:54 案与 22:27 同模块同偏移）
+        from petpet.ui.common import adopt_window
+        adopt_window(m)
         m.setStyleSheet(WARM_MENU_STYLE)
         self._populate_menu(m, include_status=True)
         return m
@@ -2244,6 +2249,11 @@ class TrayApp:
             self.state["y"] = self.pet.y()
         save_state(self.state)
         self.tray.hide()
+        try:
+            from petpet.app.diagnostics import log_event
+            log_event("app_quit")
+        except Exception:
+            pass
         instance_server = getattr(self, "_instance_server", None)
         if instance_server is not None:
             instance_server.close()
@@ -2257,6 +2267,14 @@ def main():
     configure_display_scaling()
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
+    # 后台诊断（2026-09-25）：槽/paint 内未捕获异常改为记录+继续运行，
+    # 关键动作留痕 diag.log——不再依赖事后 minidump 猜谜
+    try:
+        from petpet.app.diagnostics import install_excepthooks, log_event
+        install_excepthooks()
+        log_event("app_start", pid=os.getpid(), version=VERSION)
+    except Exception:
+        pass
     try:
         from petpet.app.fonts import apply_app_font
         apply_app_font(app)

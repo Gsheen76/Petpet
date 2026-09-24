@@ -3106,6 +3106,11 @@ class PetWindow(QWidget):
                 self.records_win.record_page = "daily"
             except Exception:
                 pass
+        try:
+            from petpet.app.diagnostics import log_event
+            log_event("records_open", force_daily=bool(force_daily))
+        except Exception:
+            pass
         self.records_win.show_near_pet()
 
     def open_pet_profile(self):
