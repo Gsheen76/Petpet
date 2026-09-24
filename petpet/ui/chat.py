@@ -43,6 +43,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+from petpet.ui.common import KeepAliveTopLevelWindow
 from petpet.ui.common import independent_font_px, independent_pixel_font
 
 # 大头照裁剪框缓存（按源图尺寸；2026-09-10 聊天头像大头照轮）。
@@ -107,7 +108,7 @@ def _assistant_head_rect(image):
     return rect
 
 
-class ChatWindow(QWidget):
+class ChatWindow(KeepAliveTopLevelWindow):
     """A small chat panel that floats beside the pet.
     Sheen replies stream in token-by-token via the bridge."""
     def __init__(self, pet_window, pet_id="lunch_meat", *, memory_profile=None,

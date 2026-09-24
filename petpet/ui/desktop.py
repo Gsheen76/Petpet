@@ -19,7 +19,7 @@ from PyQt5.QtGui import (
 )
 from PyQt5.QtWidgets import QApplication, QWidget
 
-from petpet.ui.common import pixel_font
+from petpet.ui.common import KeepAliveTopLevelWindow, pixel_font
 
 # 气泡按键贴图（2026-09-09 素材轮）：按 action 名加载，缺失回退 emoji。
 _BUBBLE_ICON_CACHE = {}
@@ -115,7 +115,7 @@ def pet_interface_bonus_origin(pet, y_offset=-10):
     return anchor.center().x(), anchor.top() + int(y_offset)
 
 
-class StatBubble(QWidget):
+class StatBubble(KeepAliveTopLevelWindow):
     """A warm, readable growth card shown above the right-click actions.
 
     自持保活（2026-09-24）：无父顶层原生窗 + WA_DeleteOnClose + 500ms
@@ -124,11 +124,9 @@ class StatBubble(QWidget):
     Interactive 模式）。
     """
 
-    _keep_alive = set()
 
     def __init__(self, pet, show_window=True):
         super().__init__()
-        StatBubble._keep_alive.add(self)
         self.pet = pet
         self.setWindowFlags(
             Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint |
@@ -151,8 +149,7 @@ class StatBubble(QWidget):
             self._timer.stop()
         except RuntimeError:
             pass
-        StatBubble._keep_alive.discard(self)
-        super().closeEvent(event)
+        super().closeEvent(event)  # 基类出保活表
 
     def _tick(self):
         self.update()
@@ -523,7 +520,7 @@ class StatBubble(QWidget):
             p.drawText(mood_rect, Qt.AlignCenter | Qt.TextSingleLine, mood_text)
 
 
-class BubbleMenu(QWidget):
+class BubbleMenu(KeepAliveTopLevelWindow):
     """Radial/bubble action menu.
 
     自持保活（2026-09-24）：构造不传 parent 即无父顶层原生窗，
@@ -531,7 +528,6 @@ class BubbleMenu(QWidget):
     一起回收而在途窗口事件仍投递（家族第 5 例，同款保活模式）。
     """
 
-    _keep_alive = set()
 
     """Soft candy-style action buttons with a warm growth card."""
     PRIMARY_ACTIONS = [
@@ -576,7 +572,6 @@ class BubbleMenu(QWidget):
 
     def __init__(self, pet, page="primary", show_window=True):
         super().__init__()
-        BubbleMenu._keep_alive.add(self)
         self.pet = pet
         self.page = page if page in self.PAGE_COLUMNS else "primary"
         action_sets = {
@@ -735,12 +730,19 @@ class BubbleMenu(QWidget):
             # 悬浮时放大 + 珊瑚描边高亮 + 底部名称胶囊；按住缩小压暗。
             # 高亮框用未缩放基准几何（2026-09-09 精调）：主菜单行宽=画布
             # 620，放大矩形（×1.07）会越出首尾按键外侧被裁。
+            # 常态可交互边界（2026-09-24 用户反馈）：图标即按键没有边框
+            # 时不知道实际可点范围——常态画淡描边+浅奶洗标出键区，
+            # 悬浮仍走原高亮（更强的珊瑚描边+放大）。
+            bounds = QRectF(bx + 3, by + 2, button_w - 6, button_h - 24)
             if hovered:
                 # inset 3：描边外半宽 1.1 后仍离画布缘 ~2px，首尾按键不贴边。
-                halo = QRectF(bx + 3, by + 2, button_w - 6, button_h - 24)
                 p.setBrush(QColor(242, 143, 118, 34))
                 p.setPen(QPen(QColor("#f28f76"), 2.2))
-                p.drawRoundedRect(halo, 18, 18)
+                p.drawRoundedRect(bounds, 18, 18)
+            else:
+                p.setBrush(QColor(255, 246, 232, 60))
+                p.setPen(QPen(QColor(242, 195, 168, 110), 1.4))
+                p.drawRoundedRect(bounds, 18, 18)
 
             icon_px = 58 if hovered else 52
             # 缩放结果按 (action, px) 缓存（2026-09-12 悬浮卡顿优化）：
@@ -892,8 +894,7 @@ class BubbleMenu(QWidget):
             self._anim.stop()
         except (AttributeError, RuntimeError):
             pass
-        BubbleMenu._keep_alive.discard(self)
-        super().closeEvent(event)
+        super().closeEvent(event)  # 基类出保活表
 
     def _close(self):
         if self._closing:
@@ -986,7 +987,7 @@ class BubbleMenu(QWidget):
             self._close()
 
 
-class BonusBubble(QWidget):
+class BonusBubble(KeepAliveTopLevelWindow):
     """A floating '+25 饱腹' style bubble that drifts up and fades out.
     Shown after the user interacts with the pet via an InteractiveBubble.
 
@@ -997,7 +998,6 @@ class BonusBubble(QWidget):
     保活到 closeEvent 真正发生，关闭时移除。
     """
 
-    _keep_alive = set()
 
     def __init__(self, text, x, y, color="#ff8c42"):
         super().__init__()
@@ -1020,12 +1020,7 @@ class BonusBubble(QWidget):
         self._t = QTimer(self)
         self._t.timeout.connect(self._tick)
         self._t.start(33)
-        BonusBubble._keep_alive.add(self)
         self.show()
-
-    def closeEvent(self, event):
-        BonusBubble._keep_alive.discard(self)
-        super().closeEvent(event)
 
     def _tick(self):
         self.life += 1
@@ -1070,7 +1065,7 @@ class BonusBubble(QWidget):
         p.drawText(r, Qt.AlignCenter, self.text)
 
 
-class InteractiveBubble(QWidget):
+class InteractiveBubble(KeepAliveTopLevelWindow):
     """A clickable bubble floating above the pet, e.g. '🦴 喂我'.
     Refined style: soft shadow, gradient, pulse animation, oval shape.
     Clicking triggers the associated action and shows a BonusBubble.
@@ -1084,11 +1079,9 @@ class InteractiveBubble(QWidget):
     closeEvent 真正发生，关闭时先停脉冲定时器再移除。
     """
 
-    _keep_alive = set()
 
     def __init__(self, pet, label, action_name, color, bonus_text):
         super().__init__()
-        InteractiveBubble._keep_alive.add(self)
         self.pet = pet
         self.action_name = action_name
         self.bonus_text = bonus_text
@@ -1125,8 +1118,7 @@ class InteractiveBubble(QWidget):
             self._anim.stop()
         except RuntimeError:
             pass
-        InteractiveBubble._keep_alive.discard(self)
-        super().closeEvent(event)
+        super().closeEvent(event)  # 基类出保活表
 
     def _tick(self):
         self._pulse += 0.08
@@ -1490,7 +1482,7 @@ def _esc(text):
                 .replace(">","&gt;").replace("\n","<br>"))
 
 
-class SpeechBubble(QWidget):
+class SpeechBubble(KeepAliveTopLevelWindow):
     """A complete, queued speech bubble that wraps long messages.
 
     自持保活（2026-09-20 闪退根因修复）：本组件与 BonusBubble 同为
@@ -1503,11 +1495,9 @@ class SpeechBubble(QWidget):
     修复同款。
     """
 
-    _keep_alive = set()
 
     def __init__(self, pet):
         super().__init__()
-        SpeechBubble._keep_alive.add(self)
         self.pet = pet
         self.text = ""
         self.setWindowFlags(
@@ -1525,13 +1515,12 @@ class SpeechBubble(QWidget):
 
     def closeEvent(self, event):
         # 先停掉隐藏定时器：close 后对象即将释放，在途的 timeout 事件
-        # 不得再指向它（BonusBubble 家族竞态的最后一道闸）。
+        # 不得再指向它（家族竞态的最后一道闸）。
         try:
             self._hide_timer.stop()
         except RuntimeError:
             pass
-        SpeechBubble._keep_alive.discard(self)
-        super().closeEvent(event)
+        super().closeEvent(event)  # 基类出保活表
 
     def show_text(self, text, ms):
         text = " ".join(str(text).replace("\r", "\n").splitlines()).strip()

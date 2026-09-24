@@ -25,6 +25,7 @@ from petpet.app.fonts import APP_FONT_FAMILY
 from petpet.app.paths import GIFTS_UI_DIR
 from petpet.app import pets as pet_registry
 from petpet.app import state as app_state
+from petpet.ui.common import KeepAliveTopLevelWindow
 from petpet.ui.common import (
     center_window_on_screen,
     pet_screen_rect,
@@ -824,7 +825,7 @@ class _ArtButton(QWidget):
         self.update()
 
 
-class PetProfileWindow(QWidget):
+class PetProfileWindow(KeepAliveTopLevelWindow):
     """宠物详情面板：background 圆角画布上的宠物内容区。
 
     所有按键加入时必须带悬停与点击反馈（AGENTS.md UI 约定）。

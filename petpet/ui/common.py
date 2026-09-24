@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from PyQt5.QtCore import QPoint, QRect
 from PyQt5.QtGui import QFont
+from PyQt5.QtWidgets import QWidget
 
 
 FIXED_FONT_SCALE = 2.0
@@ -149,3 +150,37 @@ def clamp_window_into_nearest_screen(window, screen_rects):
         window.move(new.topLeft())
         return True
     return False
+
+
+class KeepAliveTopLevelWindow(QWidget):
+    """无父顶层原生窗保活基类（2026-09-24 崩溃家族根治）。
+
+    病理：无父 QWidget 一旦失去全部 Python 引用（换泡/关菜单即弃），
+    GC 会连 C++ 窗口一起同步销毁，而在途的窗口系统事件（曝光/几何）
+    与动画定时器 timeout 仍会投递到它——Qt5Core AV 读
+    0xFFFFFFFFFFFFFFFF（pythonw.exe 20876/49612.dmp 实证，
+    2026-09-13 起四案：Bonus/Speech/Interactive/Stat/BubbleMenu）。
+
+    结构化保证：__init_subclass__ 给每个子类自动建独立注册表，
+    构造即入表、closeEvent 出表——C++ 销毁只走 Qt 自己的关闭/删除
+    路径，GC 永远碰不到活窗口。**本基类刻意不停定时器**：长生命
+    周期面板（关后复用）的实例定时器不能被误杀；短命浮窗在各自
+    closeEvent 里先停自身定时器再 super() 出表。
+
+    规矩（tests/test_parentless_window_guard.py 强制）：petpet 里任何
+    设 Qt.Tool 标志的顶层 QWidget 子类必须继承本类，零豁免。
+    """
+
+    _keep_alive = set()
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        cls._keep_alive = set()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        type(self)._keep_alive.add(self)
+
+    def closeEvent(self, event):
+        type(self)._keep_alive.discard(self)
+        super().closeEvent(event)

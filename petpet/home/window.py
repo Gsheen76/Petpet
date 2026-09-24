@@ -18,6 +18,7 @@ from PyQt5.QtGui import (
     QPen,
     QPixmap,
 )
+from petpet.ui.common import KeepAliveTopLevelWindow
 from PyQt5.QtWidgets import QWidget
 
 from petpet.progression import core as progression
@@ -49,7 +50,7 @@ from petpet.home.rendering import *  # noqa: F401,F403
 
 
 
-class HomeSceneWindow(QWidget):
+class HomeSceneWindow(KeepAliveTopLevelWindow):
     """Fixed home board rendered behind the independent PetWindow."""
 
     # 胶囊按键两段式按压反馈：前段缩小+变暗，后段回弹原大小+悬浮高亮；

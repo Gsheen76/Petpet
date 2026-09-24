@@ -34,6 +34,7 @@ from petpet.app.fonts import APP_FONT_FAMILY
 from petpet.app.paths import SHOP_UI_DIR
 from petpet.app.settings import DEFAULT_SETTINGS, save_settings
 from petpet.progression.ui import FeedbackButton
+from petpet.ui.common import KeepAliveTopLevelWindow
 from petpet.ui.common import (
     center_window_on_screen, independent_pixel_font, pet_screen_rect,
 )
@@ -111,7 +112,7 @@ PERSONALITY_PRESETS = (
     },
 )
 
-class SettingsWindow(QWidget):
+class SettingsWindow(KeepAliveTopLevelWindow):
     """Tunable settings panel — chat window size, decay rates, chatter frequency, etc."""
     CHANGED = pyqtSignal()
     PREFERRED_WIDTH = 850

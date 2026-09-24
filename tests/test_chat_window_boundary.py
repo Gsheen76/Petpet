@@ -32,7 +32,12 @@ class ChatWindowBoundaryTests(unittest.TestCase):
 
         self.assertTrue(issubclass(pet.ChatWindow, PackageChatWindow))
         self.assertIsNot(pet.ChatWindow, PackageChatWindow)
-        self.assertEqual(set(pet.ChatWindow.__dict__) - {"__module__", "__doc__"}, {"__init__"})
+        # _keep_alive：KeepAliveTopLevelWindow.__init_subclass__ 自动生成的
+        # 类级保活注册表（2026-09-24），非 facade 自有逻辑
+        self.assertEqual(
+            set(pet.ChatWindow.__dict__) - {"__module__", "__doc__"},
+            {"__init__", "_keep_alive"},
+        )
 
 
 if __name__ == "__main__":

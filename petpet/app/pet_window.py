@@ -2344,18 +2344,24 @@ class PetWindow(QWidget):
                 self, page=page, show_window=False
             )
             menu._prewarming = True
-            menu.move(-10000, -10000)
+            # 2026-09-24：预热不再 show 停靠 -10000——125% 缩放屏上，
+            # 常驻显示的停靠窗首次移入会被 WM 按 100/125 钳到 517/620
+            # （用户报「首次右键气泡加载不完全」，setGeometry 警告实
+            # 证且事后重申无效）。grab() 同样强制完整 paintEvent（图
+            # 标/字体/布局预热价值保留），窗口保持未显示——首开直接
+            # 在目标屏按目标几何创建，无 DPI 迁移。
+            _grab = getattr(menu, "grab", None)
+            if callable(_grab):
+                _grab()
+            else:
+                menu.repaint()  # 测试壳可能没有 grab
             if menu.stat_bubble is not None:
                 menu.stat_bubble._prewarming = True
-                menu.stat_bubble.move(-10000, -10000)
-                menu.stat_bubble.show()
-            menu.show()
-            menu.repaint()
-            if menu.stat_bubble is not None:
-                menu.stat_bubble.repaint()
-            menu._anim.stop()
-            if menu.stat_bubble is not None:
+                _grab = getattr(menu.stat_bubble, "grab", None)
+                if callable(_grab):
+                    _grab()
                 menu.stat_bubble._timer.stop()
+            menu._anim.stop()
             self._prewarmed_bubble_menus[page] = menu
 
     def _create_bubble_menu(self, page="primary"):
@@ -2375,6 +2381,26 @@ class PetWindow(QWidget):
             menu.show()
             menu.raise_()
             menu.activateWindow()
+
+            def _reassert_prewarmed_geometry(menu=menu):
+                # 预热窗首开 DPI 迁移钳制修复（2026-09-24）：125% 缩放屏
+                # 上，-10000 停靠的预热窗首次移入会被 WM 按 100/125 压到
+                # 517/620（用户报「首次右键气泡加载不完全」）——下一个
+                # 事件循环重申既定尺寸并复位。
+                try:
+                    if menu.width() != menu.W or menu.height() != menu.H:
+                        menu.setFixedSize(menu.W, menu.H)
+                        menu._place()
+                        sb = menu.stat_bubble
+                        if sb is not None and (
+                            sb.width() != 620 or sb.height() != 416
+                        ):
+                            sb.setFixedSize(620, 416)
+                            sb._place()
+                except RuntimeError:
+                    pass
+
+            QTimer.singleShot(0, _reassert_prewarmed_geometry)
             return menu
         except RuntimeError:
             return _dependency("BubbleMenu")(self, page=page)

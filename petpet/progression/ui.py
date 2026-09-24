@@ -39,6 +39,7 @@ from PyQt5.QtWidgets import (
 )
 
 from petpet.progression import core as progression
+from petpet.ui.common import KeepAliveTopLevelWindow
 from petpet.ui.common import (
     center_window_on_screen as _center_window_on_screen,
     pet_screen_rect as _pet_screen_rect,
@@ -1103,7 +1104,7 @@ class PriceTagLabel(QLabel):
         painter.end()
 
 
-class CozyProgressWindow(QWidget):
+class CozyProgressWindow(KeepAliveTopLevelWindow):
     """Shared frameless shell with warm styling and draggable title bar."""
 
     def __init__(

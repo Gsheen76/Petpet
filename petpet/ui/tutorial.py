@@ -14,6 +14,7 @@ from PyQt5.QtWidgets import (
 
 from petpet.progression.ui import FeedbackButton
 from petpet.chat import api as ai
+from petpet.ui.common import KeepAliveTopLevelWindow
 from petpet.ui.common import independent_pixel_font
 
 TUTORIAL_PAGES = (
@@ -55,7 +56,7 @@ TUTORIAL_PAGES = (
 )
 
 
-class TutorialWindow(QWidget):
+class TutorialWindow(KeepAliveTopLevelWindow):
     """Warm first-run guide whose final step names the pet."""
 
     PAGES = TUTORIAL_PAGES
