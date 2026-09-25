@@ -227,3 +227,12 @@ def daily_rewards_claimable(state, now=None):
         and not block.get("bonus_claimed")
         and all(q.get("claimed") for q in quests)
     )
+
+
+def ms_until_next_midnight(now=None):
+    """距下一个本地零点的毫秒数（零点自动刷新定时用；下限 1s 防抖）。"""
+    stamp = _stamp_datetime(now)
+    nxt = (stamp + datetime.timedelta(days=1)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    return max(1000, int((nxt - stamp).total_seconds() * 1000))

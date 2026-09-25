@@ -160,6 +160,11 @@ class PetWindow(QWidget):
             app.screenRemoved.connect(self._handle_screen_layout_change)
             app.primaryScreenChanged.connect(self._handle_screen_layout_change)
 
+        # 零点自动刷新（2026-09-25 用户定稿）：任务/签到块到点即重置，
+        # 不再依赖「打开每日窗才刷新」（此前零点后开门前的互动不计
+        # 入新一天进度）
+        self._schedule_midnight_rollover()
+
         self._current_pet_id = pet_definition(
             self.state.get("active_pet_id", "lunch_meat")
         )["id"]
@@ -865,6 +870,56 @@ class PetWindow(QWidget):
             max(left, min(pos.x(), right)),
             max(top, min(pos.y(), bottom)),
         )
+
+    def _schedule_midnight_rollover(self):
+        from petpet.progression.daily import ms_until_next_midnight
+
+        QTimer.singleShot(ms_until_next_midnight(), self._midnight_rollover)
+
+    def _rollover_save(self, state):
+        try:
+            _dependency("save_state")(state)
+        except Exception:
+            pass
+
+    def _midnight_rollover(self):
+        """零点自动刷新：重置任务/签到块 + 失效红点缓存 + 刷新开着的
+        每日窗 + 重排下一个零点（全程防炸，刷新失败不得影响主程序）。"""
+        try:
+            from petpet.app.diagnostics import log_event
+            log_event("midnight_rollover")
+        except Exception:
+            pass
+        try:
+            from petpet.progression import daily as _daily
+            _daily.ensure_daily_quests(self.state)
+            _daily.ensure_check_in(self.state)
+        except Exception:
+            pass
+        try:
+            self._rollover_save(self.state)
+        except Exception:
+            pass
+        menus = [getattr(self, "_bubble_menu", None)]
+        menus.extend(
+            getattr(self, "_prewarmed_bubble_menus", {}).values()
+        )
+        for menu in menus:
+            if menu is None:
+                continue
+            try:
+                menu._attention_flags = None
+                menu.update()
+            except (AttributeError, RuntimeError, TypeError):
+                pass
+        daily_win = getattr(self, "daily_win", None)
+        if daily_win is not None:
+            try:
+                if daily_win.isVisible():
+                    daily_win.refresh()
+            except (AttributeError, RuntimeError):
+                pass
+        self._schedule_midnight_rollover()
 
     def _handle_screen_layout_change(self, *_args):
         """屏幕布局热变更自愈（2026-09-21）：拔插显示器/改缩放后，把

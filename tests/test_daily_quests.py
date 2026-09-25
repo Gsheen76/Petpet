@@ -103,3 +103,74 @@ class DailyQuestCoreTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MidnightRolloverTests(unittest.TestCase):
+    """零点自动刷新（2026-09-25 用户定稿）：到点立即重置任务/签到块。
+
+    红点缓存（菜单 _attention_flags）同步失效、开着的每日窗重建、
+    重排下一个零点——不再依赖「打开窗口才刷新」。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        from PyQt5.QtWidgets import QApplication
+
+        cls.app = QApplication.instance() or QApplication([])
+
+    def _window(self):
+        import copy
+
+        import pet
+
+        state = copy.deepcopy(pet.DEFAULT_STATE)
+        state.update({"x": 100, "y": 100, "tutorial_completed": True})
+        window = pet.PetWindow(state)
+        self.addCleanup(window.close)
+        return window
+
+    def test_ms_until_next_midnight(self):
+        from petpet.progression.daily import ms_until_next_midnight
+
+        almost = ms_until_next_midnight(datetime(2026, 9, 25, 23, 59, 0))
+        self.assertTrue(59_000 <= almost <= 60_500, almost)
+        fresh = ms_until_next_midnight(datetime(2026, 9, 25, 0, 0, 5))
+        self.assertTrue(24 * 3600_000 - 10_000 <= fresh <= 24 * 3600_000, fresh)
+
+    def test_rollover_resets_blocks_flags_and_reschedules(self):
+        from types import SimpleNamespace
+
+        window = self._window()
+        yesterday = datetime.now() - timedelta(days=1)
+        window.state["daily_quests"] = {
+            "date": yesterday.strftime("%Y-%m-%d"),
+            "quests": [],
+            "bonus_claimed": True,
+        }
+        window.state["check_in"] = {
+            "last_date": yesterday.strftime("%Y-%m-%d"),
+            "streak": 3,
+            "history": [yesterday.strftime("%Y-%m-%d")],
+        }
+        menu = SimpleNamespace(
+            _attention_flags=object(),
+            update=lambda: None,
+        )
+        window._prewarmed_bubble_menus = {"primary": menu}
+        scheduled = []
+        window._schedule_midnight_rollover = lambda: scheduled.append(1)
+        saved = []
+        window._rollover_save = lambda s: saved.append(1)
+
+        window._midnight_rollover()
+
+        today = datetime.now().strftime("%Y-%m-%d")
+        self.assertEqual(window.state["daily_quests"]["date"], today)
+        self.assertFalse(window.state["daily_quests"]["bonus_claimed"])
+        self.assertEqual(window.state["check_in"]["last_date"],
+                         yesterday.strftime("%Y-%m-%d"))  # 昨天签过不自动补签
+        from petpet.progression.daily import check_in_status
+        self.assertTrue(check_in_status(window.state)["available"])
+        self.assertIsNone(menu._attention_flags)
+        self.assertEqual(scheduled, [1])
+        self.assertEqual(saved, [1])
