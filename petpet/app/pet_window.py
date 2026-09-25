@@ -164,8 +164,6 @@ class PetWindow(QWidget):
         # 不再依赖「打开每日窗才刷新」（此前零点后开门前的互动不计
         # 入新一天进度）
         self._schedule_midnight_rollover()
-        # 任务完成报信去重表（(日期, 任务键)）
-        self._quest_notified = set()
 
         self._current_pet_id = pet_definition(
             self.state.get("active_pet_id", "lunch_meat")
@@ -875,8 +873,9 @@ class PetWindow(QWidget):
 
     def _notify_daily_ready(self):
         """任务完成即时报信（2026-09-25 果汁感）：decay tick 里扫当日
-        任务块，新完成的任务说一次「去领奖励」（每条任务只报一次；
-        say 自带隐藏门，游戏/隐藏期间不扰）。"""
+        任务块，新完成的任务说一次「去领奖励」（notified 标记随
+        任务块持久化，重启不重播；say 自带隐藏门，游戏/隐藏期间不
+        扰）。"""
         try:
             from petpet.progression import daily as _daily
             _daily.ensure_daily_quests(self.state)
@@ -884,21 +883,23 @@ class PetWindow(QWidget):
             today = _daily._daily_quest_date()
             if block.get("date") != today:
                 return
-            self._quest_notified = {
-                key for key in self._quest_notified if key[0] == today
-            }
             for quest in block.get("quests", []):
-                key = (today, quest.get("key"))
-                if quest.get("claimed") or key in self._quest_notified:
+                # notified 标记持久化在任务块里（审查修正：进程内 set
+                # 重启/备份还原后会重播）；块随日期重置自然清零
+                if quest.get("claimed") or quest.get("notified"):
                     continue
                 if int(quest.get("progress", 0)) >= int(quest.get("target", 1)):
-                    self._quest_notified.add(key)
+                    quest["notified"] = True
                     self.say(
                         f"今天的「{quest.get('label', '任务')}」完成啦，"
                         "记得去领奖励～"
                     )
         except Exception:
-            pass
+            try:
+                from petpet.app.diagnostics import log_event
+                log_event("quest_notify_error")
+            except Exception:
+                pass
 
     def _schedule_midnight_rollover(self):
         from petpet.progression.daily import ms_until_next_midnight
@@ -2553,10 +2554,6 @@ class PetWindow(QWidget):
                 self._maybe_dream()
             except (AttributeError, RuntimeError):
                 pass  # 测试壳可能无此方法；氛围彩蛋不拖垮 decay
-            try:
-                self._notify_daily_ready()
-            except (AttributeError, RuntimeError):
-                pass  # 测试壳兼容；报信不拖垮 decay
         else:
             self.state["hunger"] = max(
                 0,
@@ -2584,6 +2581,12 @@ class PetWindow(QWidget):
             auto_sleep_event = self._update_auto_sleep_state()
         except Exception:
             auto_sleep_event = None
+        # 任务完成报信（2026-09-25 果汁感；审查修正：醒睡都要扫——
+        # 原先误挂睡眠分支，醒着互动永不报信）
+        try:
+            self._notify_daily_ready()
+        except (AttributeError, RuntimeError):
+            pass  # 测试壳兼容；报信不拖垮 decay
         _dependency("save_state")(self.state)
         self.refresh_pose_from_state()
         if auto_sleep_event in ("walking", "woke"):

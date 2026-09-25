@@ -209,6 +209,7 @@ class RewardJuiceTests(unittest.TestCase):
 
         self.assertEqual(len(said), 1)
         self.assertIn(quest["label"], said[0])
+        self.assertTrue(quest["notified"])  # 持久化标记（重启不重播）
         quest["claimed"] = True
         window._notify_daily_ready()
         self.assertEqual(len(said), 1)
