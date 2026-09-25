@@ -871,6 +871,33 @@ class PetWindow(QWidget):
             max(top, min(pos.y(), bottom)),
         )
 
+    PET_SKITS = (
+        ("happy", "嘿嘿，今天也是元气满满的一天！"),
+        ("play", "看我！我会翻跟头哦——好啦其实是转个圈～"),
+        ("eat", "呜……好像闻到了什么好吃的味道……"),
+        ("dig_reward", "我挖到了一个小秘密：其实我很喜欢你！"),
+    )
+
+    def _maybe_skit(self):
+        """小剧场彩蛋（2026-09-25 续新轮）：久置闲时随机表演一段。
+
+        每 tick 约 0.6%、冷却 20 分钟、仅醒着且可见（say 自带隐藏
+        门）；动画名全部是既有交互动画，零新素材。
+        """
+        try:
+            now = time.monotonic()
+            if now - getattr(self, "_last_skit_at", 0.0) < 1200:
+                return
+            if self.state.get("sleeping"):
+                return
+            if random.random() < 0.006:
+                self._last_skit_at = now
+                anim, line = random.choice(self.PET_SKITS)
+                self.trigger_animation(anim)
+                self.say(line, 2600)
+        except (AttributeError, RuntimeError):
+            pass  # 测试壳兼容；彩蛋不拖垮主链
+
     def _notify_daily_ready(self):
         """任务完成即时报信（2026-09-25 果汁感）：decay tick 里扫当日
         任务块，新完成的任务说一次「去领奖励」（notified 标记随
@@ -2587,6 +2614,10 @@ class PetWindow(QWidget):
             self._notify_daily_ready()
         except (AttributeError, RuntimeError):
             pass  # 测试壳兼容；报信不拖垮 decay
+        try:
+            self._maybe_skit()
+        except (AttributeError, RuntimeError):
+            pass  # 彩蛋不拖垮 decay
         _dependency("save_state")(self.state)
         self.refresh_pose_from_state()
         if auto_sleep_event in ("walking", "woke"):

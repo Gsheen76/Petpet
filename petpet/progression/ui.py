@@ -1556,6 +1556,18 @@ class DailyWindow(CozyProgressWindow):
                 button.setEnabled(False)
             row.addWidget(button)
             layout.addLayout(row)
+        ready_count = sum(
+            1
+            for q in block["quests"]
+            if not q["claimed"]
+            and int(q["progress"]) >= int(q["target"])
+        )
+        if ready_count >= 2:  # 只有一条时单独的领取键已足够
+            claim_all = FeedbackButton(f"一键领取全部（{ready_count}）")
+            claim_all.clicked.connect(
+                lambda: self._claim_all_ready()
+            )
+            layout.addWidget(claim_all)
         if (
             not block.get("bonus_claimed")
             and block["quests"]
@@ -1567,6 +1579,26 @@ class DailyWindow(CozyProgressWindow):
             bonus.clicked.connect(lambda: self._claim_daily_bonus())
             layout.addWidget(bonus)
         return card
+
+    def _claim_all_ready(self, now=None):
+        """一键领取（2026-09-25 续新轮）：领全部完成任务+全勤，聚合反应。"""
+        granted_total = 0
+        quests = (self.pet.state.get("daily_quests") or {}).get("quests", [])
+        for index, quest in enumerate(quests):
+            if quest.get("claimed"):
+                continue
+            if int(quest.get("progress", 0)) >= int(quest.get("target", 1)):
+                granted_total += progression.claim_daily_quest(
+                    self.pet.state, index, now=now
+                )
+        granted_total += progression.claim_daily_bonus(
+            self.pet.state, now=now
+        )
+        if granted_total:
+            self.save_callback(self.pet.state)
+            self._pet_react(f"一口气领了 +{granted_total} 宠物币，赚翻啦！")
+        self.refresh()
+        return granted_total
 
     def _claim_daily_quest(self, index, now=None):
         granted = progression.claim_daily_quest(self.pet.state, index, now=now)

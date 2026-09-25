@@ -7,11 +7,13 @@ record_action，任务进度自动累积，无需各调用点改造。
 import copy
 import sys
 import unittest
+import unittest.mock
 from datetime import datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import petpet.app.pet_window as pet_window_mod
 from petpet.progression import core as progression
 from petpet.progression.core import (
     DAILY_QUEST_BONUS,
@@ -257,3 +259,105 @@ class RewardJuiceTests(unittest.TestCase):
 
         self.assertEqual(len(lines), 1)
         self.assertIn(str(quest["reward"]), lines[0])
+
+
+class ClaimAllReadyTests(unittest.TestCase):
+    """一键领取（2026-09-25 续新轮）：可领任务≥1 时聚合领全部+全勤。"""
+
+    @classmethod
+    def setUpClass(cls):
+        from PyQt5.QtWidgets import QApplication
+
+        cls.app = QApplication.instance() or QApplication([])
+
+    def _shell(self, state):
+        from types import SimpleNamespace
+
+        from petpet.progression.ui import DailyWindow
+
+        dw = DailyWindow.__new__(DailyWindow)
+        dw.pet = SimpleNamespace(state=state)
+        dw.save_callback = lambda s: None
+        dw.refresh = lambda: None
+        lines = []
+        dw._pet_react = lambda text: lines.append(text)
+        return dw, lines
+
+    def test_claim_all_collects_completed_and_bonus(self):
+        day = datetime(2026, 9, 25, 12, 0, 0)
+        state = fresh_state()
+        ensure_daily_quests(state, now=day)
+        rewards = []
+        for quest in state["daily_quests"]["quests"]:
+            quest["progress"] = quest["target"]
+            rewards.append(quest["reward"])
+        dw, lines = self._shell(state)
+
+        granted = dw._claim_all_ready(now=day)
+
+        self.assertEqual(granted, sum(rewards) + DAILY_QUEST_BONUS)  # 3 任务 + 全勤
+        self.assertTrue(all(q["claimed"] for q in state["daily_quests"]["quests"]))
+        self.assertTrue(state["daily_quests"]["bonus_claimed"])
+        self.assertEqual(len(lines), 1, lines)  # 聚合一次反应
+        self.assertIn(str(granted), lines[0])
+
+    def test_claim_all_nothing_ready_returns_zero(self):
+        day = datetime(2026, 9, 25, 12, 0, 0)
+        state = fresh_state()
+        ensure_daily_quests(state, now=day)
+        dw, lines = self._shell(state)
+        self.assertEqual(dw._claim_all_ready(now=day), 0)
+        self.assertEqual(lines, [])
+
+
+class PetSkitTests(unittest.TestCase):
+    """小剧场彩蛋（2026-09-25 续新轮）：久置闲时随机表演。"""
+
+    @classmethod
+    def setUpClass(cls):
+        from PyQt5.QtWidgets import QApplication
+
+        cls.app = QApplication.instance() or QApplication([])
+
+    def _window(self):
+        import copy
+
+        import pet
+
+        state = copy.deepcopy(pet.DEFAULT_STATE)
+        state.update({"x": 100, "y": 100, "tutorial_completed": True})
+        window = pet.PetWindow(state)
+        self.addCleanup(window.close)
+        return window
+
+    def test_skit_fires_once_per_cooldown(self):
+        import random as _random
+
+        window = self._window()
+        window.state["sleeping"] = False
+        window._last_skit_at = 0.0  # 冷却早已过
+        said = []
+        window.say = lambda t, ms=2200: said.append(t)
+        window.trigger_animation = lambda name: said.append(f"[{name}]")
+
+        with unittest.mock.patch.object(
+            pet_window_mod.random, "random", lambda: 0.0
+        ):
+            window._maybe_skit()
+            window._maybe_skit()  # 冷却内不得再演
+
+        self.assertEqual(len(said), 2)  # 一个动画标记 + 一句台词
+        self.assertTrue(said[0].startswith("["))
+        self.assertNotEqual(window._last_skit_at, 0.0)
+
+    def test_skit_sleeping_skipped(self):
+        window = self._window()
+        window.state["sleeping"] = True
+        window._last_skit_at = 0.0
+        said = []
+        window.say = lambda t, ms=2200: said.append(t)
+        with unittest.mock.patch.object(
+            pet_window_mod.random, "random", lambda: 0.0
+        ):
+            window._maybe_skit()
+        self.assertEqual(said, [])

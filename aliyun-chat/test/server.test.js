@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { beforeEach, test } from "node:test";
 
 import { handleRequest, _resetRateLimiter } from "../src/server.js";
+
+// 全局限流器隔离（2026-09-25 债清偿）：此前只有新测试 reset，旧测试
+// 靠 20/分余量裸奔——套件增长会互相污染。
+beforeEach(() => _resetRateLimiter());
 
 const INSTALL_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const REQUEST_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";

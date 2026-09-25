@@ -24,11 +24,14 @@ function overLimit(key, max, windowMs) {
     return true;
   }
   recent.push(now);
+  // LRU 触活（2026-09-25 债清偿）：Map 按插入序逐出，set 到已存在键
+  // 不换位——活跃键会被误逐。delete+set 把刚用的挪到最新端。
+  rateBuckets.delete(key);
   rateBuckets.set(key, recent);
   if (rateBuckets.size > 10_000) {
-    for (const key of rateBuckets.keys()) {
+    for (const oldest of rateBuckets.keys()) {
       if (rateBuckets.size <= 5_000) break;
-      rateBuckets.delete(key);
+      rateBuckets.delete(oldest);
     }
   }
   return false;
