@@ -33,7 +33,8 @@ def _clean_fact(value: object) -> str | None:
     return text
 
 
-def nudge_lines(facts, pet_name, idle_seconds, hour, month=None, day=None):
+def nudge_lines(facts, pet_name, idle_seconds, hour, month=None, day=None,
+                mood=None):
     """档案感知的主动搭话候选台词（2026-09-11）。
 
     纯模板、确定性：称呼栏优先取代「主人」；喜欢/作息/重要的事
@@ -45,6 +46,14 @@ def nudge_lines(facts, pet_name, idle_seconds, hour, month=None, day=None):
     alias = first_fact(facts, "称呼")
     who = alias or "主人"
     lines = []
+    # 心情语气（2026-09-25 c 线收尾）：低心情混入求陪伴候选、高心情
+    # 混入元气候选——进同一池按时间轮选，自然加权不刷屏
+    if isinstance(mood, (int, float)):
+        if mood < 40:
+            lines.insert(0, f"{who}，我有点闷闷的…能陪我说说话吗？")
+            lines.insert(0, "趴在这里好久了，想有人摸摸我…")
+        elif mood >= 75:
+            lines.insert(0, "今天的我元气满满，要不要一起玩呀？")
 
     likes = _clean_bucket(facts, "喜欢")
     routine = _clean_bucket(facts, "作息")

@@ -187,3 +187,29 @@ class BuddyAiMemoryCompatibilityTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NudgeMoodFlavorTests(unittest.TestCase):
+    """搭话心情语气（2026-09-25 c 线收尾）：低心情混入求陪伴、高心情混入元气。"""
+
+    def test_low_mood_mixes_companion_lines(self):
+        from petpet.chat.memory import nudge_lines
+
+        base = nudge_lines({}, "午餐肉", 3600, 14)
+        low = nudge_lines({}, "午餐肉", 3600, 14, mood=25)
+        self.assertGreater(len(low), len(base))
+        self.assertTrue(any("陪" in line for line in low))
+
+    def test_high_mood_mixes_energy_lines(self):
+        from petpet.chat.memory import nudge_lines
+
+        high = nudge_lines({}, "午餐肉", 3600, 14, mood=90)
+        self.assertTrue(any("元气" in line or "开心" in line for line in high))
+
+    def test_no_mood_unchanged(self):
+        from petpet.chat.memory import nudge_lines
+
+        self.assertEqual(
+            len(nudge_lines({}, "午餐肉", 3600, 14, mood=None)),
+            len(nudge_lines({}, "午餐肉", 3600, 14)),
+        )

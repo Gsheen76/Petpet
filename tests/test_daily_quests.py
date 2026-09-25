@@ -506,3 +506,33 @@ class HeatmapAndWeeklyCopyTests(unittest.TestCase):
         self.assertIn("本周互动 18 次", joined)
         self.assertIn("最活跃 周六", joined)
         self.assertIn("连续活跃 2 天", joined)
+
+
+class DreamMoodPoolTests(unittest.TestCase):
+    """梦境心情分池（2026-09-25 c 线收尾）。"""
+
+    @classmethod
+    def setUpClass(cls):
+        from PyQt5.QtWidgets import QApplication
+
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_low_mood_dream_from_low_pool(self):
+        import copy
+
+        import pet
+
+        state = copy.deepcopy(pet.DEFAULT_STATE)
+        state.update({"x": 100, "y": 100, "tutorial_completed": True,
+                      "sleeping": True, "mood": 20})
+        window = pet.PetWindow(state)
+        self.addCleanup(window.close)
+        said = []
+        window.say = lambda t, ms=2200: said.append(t)
+        with unittest.mock.patch.object(
+            pet_window_mod.random, "random", lambda: 0.0
+        ):
+            window._maybe_dream()
+        self.assertEqual(len(said), 1)
+        low_pool = set(pet.PetWindow.LOW_MOOD_DREAM_LINES)
+        self.assertIn(said[0], low_pool)

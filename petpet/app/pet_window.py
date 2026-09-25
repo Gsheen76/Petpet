@@ -2548,6 +2548,12 @@ class PetWindow(QWidget):
         "（哼哼…梦里也有人摸摸头…）",
         "（梦到主人回家开门的声音…）",
     )
+    # 心情分池（2026-09-25 c 线收尾）：低心情梦「求陪伴」的梦
+    LOW_MOOD_DREAM_LINES = (
+        "（梦里也在等主人回来…）",
+        "（梦到了一起玩的下午…要是不醒就好了…）",
+        "（呜…梦里也没有人摸摸头…）",
+    )
 
     def _maybe_dream(self):
         """睡眠期偶发梦境气泡（2026-09-23 创新乙）：纯氛围彩蛋。
@@ -2562,7 +2568,13 @@ class PetWindow(QWidget):
                 return
             if random.random() < 0.02:
                 self._last_dream_at = now
-                self.say(random.choice(self.DREAM_LINES))
+                pool = self.DREAM_LINES
+                try:
+                    if float(self.state.get("mood", 100) or 0) < 40:
+                        pool = self.LOW_MOOD_DREAM_LINES
+                except (TypeError, ValueError):
+                    pass
+                self.say(random.choice(pool))
         except RuntimeError:
             # 测试壳（__new__ 未走 __init__）上属性访问抛 RuntimeError；
             # 梦境是氛围彩蛋，任何失败都不得拖垮 decay 主链

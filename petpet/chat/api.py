@@ -902,6 +902,7 @@ def maybe_nudge(mem, idle_seconds, pet_state=None, idle_min=1800,
     opts = chat_memory.nudge_lines(
         mem.get("profile_facts") or {}, pet_name, idle_seconds, h,
         month=now.tm_mon, day=now.tm_mday,
+        mood=(pet_state or {}).get("mood") if isinstance(pet_state, dict) else None,
     )
     msg = opts[int(time.time()) % len(opts)]
     mem["last_nudge_t"] = time.time()
