@@ -14,6 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import petpet.app.pet_window as pet_window_mod
+import petpet.progression.ui as progression_ui_mod
 from petpet.progression import core as progression
 from petpet.progression.core import (
     DAILY_QUEST_BONUS,
@@ -397,10 +398,10 @@ class ActivityLogTests(unittest.TestCase):
         from petpet.progression.daily import note_daily_activity
 
         state = fresh_state()
-        for offset in range(35):
+        for offset in range(50):
             day = datetime(2026, 9, 25, 10, 0, 0) - timedelta(days=offset)
             note_daily_activity(state, 1, now=day)
-        self.assertLessEqual(len(state["activity_log"]), 28)
+        self.assertLessEqual(len(state["activity_log"]), 42)  # 2026-09-25 扩容
 
 
 class MoodWeightedSkitTests(unittest.TestCase):
@@ -439,3 +440,69 @@ class MoodWeightedSkitTests(unittest.TestCase):
 
         self.assertEqual(len(picked), 1)
         self.assertIn(picked[0], ("play", "eat"))
+
+
+class HeatmapAndWeeklyCopyTests(unittest.TestCase):
+    """c 线二轮：日历热力着色 + 周报活动文案 + 容量扩到 42 天。"""
+
+    @classmethod
+    def setUpClass(cls):
+        from PyQt5.QtWidgets import QApplication
+
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_activity_log_capacity_42(self):
+        from petpet.progression.daily import note_daily_activity
+
+        state = fresh_state()
+        for offset in range(50):
+            day = datetime(2026, 9, 25, 10, 0, 0) - timedelta(days=offset)
+            note_daily_activity(state, 1, now=day)
+        self.assertLessEqual(len(state["activity_log"]), 42)
+
+    def test_calendar_heat_styles_by_activity(self):
+        from types import SimpleNamespace
+
+        from petpet.progression.ui import DailyWindow
+
+        state = fresh_state()
+        today = datetime.now()
+        log = state.setdefault("activity_log", {})
+        log[(today - timedelta(days=1)).strftime("%Y-%m-%d")] = 12  # 高热
+        dw = DailyWindow.__new__(DailyWindow)
+        dw.pet = SimpleNamespace(state=state)
+        dw._cal_year, dw._cal_month = today.year, today.month
+        card = DailyWindow._build_check_in_calendar(dw)
+        yesterday = today - timedelta(days=1)
+        cells = {}
+        for label in card.findChildren(type(card).__mro__[0].__bases__[0].__bases__[0]):  # noqa
+            pass
+        from PyQt5.QtWidgets import QLabel
+        for label in card.findChildren(QLabel):
+            if label.text() == str(yesterday.day):
+                cells["hot"] = label.styleSheet()
+            if label.text() == str(today.day):
+                cells["today"] = label.styleSheet()
+        self.assertIn("#e8a87c", cells["hot"], cells["hot"])  # 高热洗色
+        self.assertIn("#f28f76", cells["today"], cells["today"])  # 今日描边
+
+    def test_weekly_summary_activity_lines(self):
+        from petpet.progression.ui import weekly_companionship_summary
+
+        records = progression.ensure_progression({})
+        series = [
+            ("一", 3), ("二", 0), ("三", 5), ("四", 0),
+            ("五", 0), ("六", 8), ("日", 2),
+        ]
+        with unittest.mock.patch.object(
+            progression_ui_mod.progression,
+            "weekly_record_deltas",
+            lambda rec: {"pettings": 5, "active_seconds": 7200},
+        ):
+            lines = weekly_companionship_summary(
+                records, activity_series=series,
+            )
+        joined = " ".join(lines)
+        self.assertIn("本周互动 18 次", joined)
+        self.assertIn("最活跃 周六", joined)
+        self.assertIn("连续活跃 2 天", joined)

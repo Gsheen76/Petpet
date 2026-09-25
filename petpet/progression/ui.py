@@ -649,7 +649,7 @@ def _clear_layout(layout):
             widget.deleteLater()
 
 
-def weekly_companionship_summary(records):
+def weekly_companionship_summary(records, activity_series=None):
     """陪伴周报文案（2026-09-15 A4；2026-09-19 改真·周增量）。
 
     记录页顶部的一行式汇总。records 是终身累计计数——本函数经
@@ -677,6 +677,20 @@ def weekly_companionship_summary(records):
         return ["这周还没开始记录，去摸摸 TA 吧～"]
     lines = [f"本周：陪伴 {hours} 小时 · 互动 {interactions} 次"
              + (f" · 送出礼物 {gifts} 份" if gifts else "")]
+    if activity_series:
+        counts = [int(c) for _, c in activity_series]
+        total = sum(counts)
+        if total > 0:
+            peak_label, peak = max(activity_series, key=lambda p: p[1])
+            lines.append(f"本周互动 {total} 次 · 最活跃 周{peak_label}")
+            streak = 0
+            for count in reversed(counts):
+                if count > 0:
+                    streak += 1
+                else:
+                    break
+            if streak >= 2:
+                lines.append(f"已连续活跃 {streak} 天，TA 都记着呢")
     detail = " · ".join(
         f"{label} {value}"
         for label, value in (
@@ -1474,6 +1488,14 @@ class DailyWindow(CozyProgressWindow):
         today = datetime.date.today()
         days_in_month = _calendar.monthrange(year, month)[1]
         first_weekday = (_calendar.monthrange(year, month)[0] + 1) % 7  # 周日为首
+        # 陪伴热力（2026-09-25 c 线二轮）：未签到日按当日互动量四档
+        # 看色（贡献图式）；已签到日保持珊瑚胶囊不被热力盖住
+        activity = state.get("activity_log") or {}
+        month_counts = [
+            activity.get(f"{year:04d}-{month:02d}-{day:02d}", 0)
+            for day in range(1, days_in_month + 1)
+        ]
+        heat_peak = max(month_counts) or 1
         grid = QGridLayout()
         grid.setSpacing(3)
         for column, name in enumerate("日一二三四五六"):
@@ -1503,9 +1525,27 @@ class DailyWindow(CozyProgressWindow):
             elif is_future:
                 cell.setStyleSheet("color:#c9b8ac;font-size:14px;")
             else:
-                cell.setStyleSheet("color:#7b564a;font-size:14px;")
+                heat = month_counts[day - 1]
+                wash = ""
+                if heat > 0:
+                    ratio = heat / heat_peak
+                    if ratio > 0.75:
+                        wash = "background:#e8a87c;"
+                    elif ratio > 0.5:
+                        wash = "background:#f0c4a4;"
+                    elif ratio > 0.25:
+                        wash = "background:#f7ddc9;"
+                    else:
+                        wash = "background:#fdf1e4;"
+                cell.setStyleSheet(
+                    f"{wash}color:#7b564a;border-radius:16px;font-size:14px;"
+                )
             grid.addWidget(cell, row, column)
         outer.addLayout(grid)
+        legend = QLabel("底色越暖 = 那天陪 TA 越多")
+        legend.setStyleSheet("color:#a58b7c;font-size:12px;")
+        legend.setAlignment(Qt.AlignRight)
+        outer.addWidget(legend)
         return card
 
     def _shift_calendar_month(self, delta):
@@ -1749,7 +1789,12 @@ class RecordsWindow(CozyProgressWindow):
         weekly_layout = QVBoxLayout(weekly)
         weekly_layout.setContentsMargins(14, 10, 14, 10)
         weekly_layout.setSpacing(2)
-        for line in weekly_companionship_summary(records):
+        for line in weekly_companionship_summary(
+            records,
+            activity_series=progression.daily_activity_series(
+                state, days=7
+            ),
+        ):
             label = QLabel(line)
             label.setWordWrap(True)
             label.setStyleSheet(

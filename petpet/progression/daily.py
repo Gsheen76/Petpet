@@ -238,7 +238,7 @@ def ms_until_next_midnight(now=None):
     return max(1000, int((nxt - stamp).total_seconds() * 1000))
 
 
-ACTIVITY_LOG_DAYS = 28
+ACTIVITY_LOG_DAYS = 42  # 2026-09-25 c线二轮：够画整月热力日历
 _WEEKDAY_LABELS = ("一", "二", "三", "四", "五", "六", "日")
 
 
