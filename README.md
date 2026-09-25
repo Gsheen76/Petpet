@@ -6,7 +6,16 @@
   <img src="assets/runtime/pets/lunch_meat/desktop/poses/idle.png" width="280" alt="Pet陪它桌面小狗">
 </p>
 
-当前版本：`v1.7.4`
+当前版本：`v1.7.5`
+
+## v1.7.5 更新亮点
+
+- **每日玩法上线**：每天三条日常任务（做互动自动累计，20 币/条 + 30 全勤，一键领取）+ 连续签到 7 天阶梯奖励（15~80 币循环，断签重来）——右键菜单新增「📅 每日」专属键直达，可领时亮红点，零点自动刷新。
+- **陪伴热力日历**：每日窗的月历按当天互动量深浅着色（贡献图式），「哪天陪得多」一眼回望；记录页新增七日互动柱状图，周报会告诉你最活跃是周几、连续活跃了几天。
+- **宠物更「活」了**：心情贯穿四层表现（低落时只演求陪伴的戏、做想念的梦、搭话变黏人）；久置时随机小剧场彩蛋；领奖时当场庆祝。
+- **闪退家族根治**：一系列「关面板/换气泡偶发闪退」的根因全量清偿，并以静态扫描测试强制未来所有浮窗继承保活基类，杜绝复发；高缩放屏首次右键菜单显示不全根治；后台诊断日志上线——程序异常从无声消失变为记录并继续运行。
+- **多屏自适应**：面板全屏自适应（小屏收缩/负原点屏），拔插显示器/改缩放后窗口自动回到有效屏。
+- 全量 986 项自动化测试，GitHub Actions 每次 push 自动回归。
 
 ## v1.7.4 更新亮点
 
@@ -132,9 +141,9 @@
 | 平台 | 文件 |
 | --- | --- |
 | Windows 直接运行 | `Petpet.exe` |
-| Windows 便携包 | `Petpet-v1.7.4-windows.zip` |
-| macOS Apple 芯片 | `Petpet-v1.7.4-macOS-arm64.zip` |
-| 校验和 | `Petpet-v1.7.4-SHA256SUMS.txt` |
+| Windows 便携包 | `Petpet-v1.7.5-windows.zip` |
+| macOS Apple 芯片 | `Petpet-v1.7.5-macOS-arm64.zip` |
+| 校验和 | `Petpet-v1.7.5-SHA256SUMS.txt` |
 
 Windows 下载 ZIP 后解压并运行 `Petpet.exe`。直接下载的 `Petpet.exe` 也可以独立运行，程序不会弹出命令行窗口。
 
@@ -374,8 +383,8 @@ dist/Petpet.app
 公开 Release 必须包含以下三项非空正式资产；校验和文件也会一并上传：
 
 - `Petpet.exe`
-- `Petpet-v1.7.4-windows.zip`
-- `Petpet-v1.7.4-macOS-arm64.zip`
+- `Petpet-v1.7.5-windows.zip`
+- `Petpet-v1.7.5-macOS-arm64.zip`
 
 中途失败时 Release 会保持草稿。修复问题后可以重复运行同一版本命令；脚本不会强推、覆盖已存在的标签或删除 worktree。已公开且完整的 Release 会先验证远端资产，避免重复修改。
 
