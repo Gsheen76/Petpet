@@ -2005,6 +2005,8 @@ class TrayApp:
         m.addSeparator()
 
         # ---- 管理 ----
+        a_daily = QAction("📅 每日", m); a_daily.triggered.connect(self.pet.open_daily_window); m.addAction(a_daily)
+        a_records = QAction("📒 温馨记录", m); a_records.triggered.connect(self.pet.open_records); m.addAction(a_records)
         a_recall = QAction("🎯 回到屏幕中央", m); a_recall.triggered.connect(self.pet.recall); m.addAction(a_recall)
         a_hide = QAction("👁 显示/隐藏", m); a_hide.triggered.connect(self.toggle_visible); m.addAction(a_hide)
         a_settings = QAction("⚙️ 设置", m); a_settings.triggered.connect(self.pet.open_settings); m.addAction(a_settings)

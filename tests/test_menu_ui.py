@@ -35,6 +35,12 @@ class FakePet:
     def open_settings(self):
         pass
 
+    def open_daily_window(self):
+        pass
+
+    def open_records(self):
+        pass
+
 
 class MenuUiTests(unittest.TestCase):
     @classmethod

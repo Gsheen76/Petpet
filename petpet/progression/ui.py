@@ -2141,6 +2141,10 @@ class AchievementsWindow(CozyProgressWindow):
             self.pet.say(
                 f"成就奖励领到啦！Pet币 +{result['reward']} ✨", 2200
             )
+            try:
+                self.pet.trigger_animation("happy")
+            except Exception:
+                pass
         else:
             self.status_label.setText(result.get("message", "暂时不能领取"))
         self.refresh()
@@ -2153,6 +2157,10 @@ class AchievementsWindow(CozyProgressWindow):
                 f"一口气领了 {result['count']} 个成就，"
                 f"Pet币 +{result['reward']}！", 2600
             )
+            try:
+                self.pet.trigger_animation("happy")
+            except Exception:
+                pass
             message = (
                 f"✓ 已领取 {result['count']} 项，Pet币 +{result['reward']}"
             )

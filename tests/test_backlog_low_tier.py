@@ -16,6 +16,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from PyQt5.QtCore import QEvent, QPointF, Qt, QTimer
 from PyQt5.QtWidgets import QApplication, QLineEdit
 
+import pet
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
@@ -198,3 +200,22 @@ class BackupRestoreAtomicTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TrayMenuDailyRecordsEntriesTests(unittest.TestCase):
+    """托盘/右键菜单补「每日/温馨记录」入口（2026-09-25 续新轮）。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_menu_contains_daily_and_records_actions(self):
+        from PyQt5.QtWidgets import QMenu
+
+        tray = pet.TrayApp(self.app)
+        self.addCleanup(tray.pet.close)
+        menu = QMenu()
+        tray._populate_menu(menu, include_status=True)
+        texts = [a.text() for a in menu.actions()]
+        self.assertIn("📅 每日", texts)
+        self.assertIn("📒 温馨记录", texts)
