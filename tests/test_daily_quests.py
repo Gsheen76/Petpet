@@ -361,3 +361,81 @@ class PetSkitTests(unittest.TestCase):
         ):
             window._maybe_skit()
         self.assertEqual(said, [])
+
+
+class ActivityLogTests(unittest.TestCase):
+    """每日活动流水（2026-09-25 c 线）：按天记互动量，喂周报图表。"""
+
+    def test_note_and_series(self):
+        from petpet.progression.daily import (
+            daily_activity_series,
+            note_daily_activity,
+        )
+
+        state = fresh_state()
+        note_daily_activity(state, 2, now=datetime(2026, 9, 24, 10, 0, 0))
+        note_daily_activity(state, 3, now=datetime(2026, 9, 25, 11, 0, 0))
+        note_daily_activity(state, 1, now=datetime(2026, 9, 25, 12, 0, 0))
+
+        series = daily_activity_series(
+            state, days=3, now=datetime(2026, 9, 25, 13, 0, 0)
+        )
+        self.assertEqual(len(series), 3)
+        self.assertEqual(series[-1][1], 4)  # 今天累计
+        self.assertEqual(series[-2][1], 2)  # 昨天
+        self.assertEqual(series[-3][1], 0)  # 前天（无记录为 0）
+
+    def test_record_action_feeds_activity(self):
+        state = fresh_state()
+        progression.record_action(
+            state, "pettings", now=datetime(2026, 9, 25, 14, 0, 0).timestamp()
+        )
+        log = state.get("activity_log")
+        self.assertEqual(log, {datetime.now().strftime("%Y-%m-%d"): 1})
+
+    def test_trim_old_days(self):
+        from petpet.progression.daily import note_daily_activity
+
+        state = fresh_state()
+        for offset in range(35):
+            day = datetime(2026, 9, 25, 10, 0, 0) - timedelta(days=offset)
+            note_daily_activity(state, 1, now=day)
+        self.assertLessEqual(len(state["activity_log"]), 28)
+
+
+class MoodWeightedSkitTests(unittest.TestCase):
+    """小剧场心情加权：低心情偏求陪伴（play/eat），高心情偏 happy。"""
+
+    @classmethod
+    def setUpClass(cls):
+        from PyQt5.QtWidgets import QApplication
+
+        cls.app = QApplication.instance() or QApplication([])
+
+    def _window(self):
+        import copy
+
+        import pet
+
+        state = copy.deepcopy(pet.DEFAULT_STATE)
+        state.update({"x": 100, "y": 100, "tutorial_completed": True})
+        window = pet.PetWindow(state)
+        self.addCleanup(window.close)
+        return window
+
+    def test_low_mood_picks_companion_skit(self):
+        window = self._window()
+        window.state["sleeping"] = False
+        window.state["mood"] = 25
+        window._last_skit_at = 0.0
+        picked = []
+        window.trigger_animation = lambda name: picked.append(name)
+        window.say = lambda t, ms=2200: None
+
+        with unittest.mock.patch.object(
+            pet_window_mod.random, "random", lambda: 0.0
+        ):
+            window._maybe_skit()
+
+        self.assertEqual(len(picked), 1)
+        self.assertIn(picked[0], ("play", "eat"))

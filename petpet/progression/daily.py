@@ -236,3 +236,35 @@ def ms_until_next_midnight(now=None):
         hour=0, minute=0, second=0, microsecond=0
     )
     return max(1000, int((nxt - stamp).total_seconds() * 1000))
+
+
+ACTIVITY_LOG_DAYS = 28
+_WEEKDAY_LABELS = ("一", "二", "三", "四", "五", "六", "日")
+
+
+def note_daily_activity(state, amount=1, now=None):
+    """按天累计互动量（2026-09-25 c 线）：喂周报图表/后续热力图。"""
+    if int(amount) <= 0:
+        return
+    log = state.setdefault("activity_log", {})
+    if not isinstance(log, dict):
+        log = {}
+        state["activity_log"] = log
+    key = _stamp_datetime(now).strftime("%Y-%m-%d")
+    log[key] = int(log.get(key, 0)) + int(amount)
+    if len(log) > ACTIVITY_LOG_DAYS:
+        for old in sorted(log)[:-ACTIVITY_LOG_DAYS]:
+            del log[old]
+
+
+def daily_activity_series(state, days=7, now=None):
+    """最近 N 天 (星期标签, 互动量) 列表，旧→新；无记录为 0。"""
+    log = state.get("activity_log") or {}
+    stamp = _stamp_datetime(now)
+    series = []
+    for offset in range(days - 1, -1, -1):
+        day = stamp - datetime.timedelta(days=offset)
+        key = day.strftime("%Y-%m-%d")
+        label = _WEEKDAY_LABELS[day.weekday()]
+        series.append((label, int(log.get(key, 0))))
+    return series

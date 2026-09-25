@@ -53,6 +53,7 @@ from petpet.app.paths import (
     SHOP_UI_DIR,
 )
 from petpet.app.fonts import APP_FONT_FAMILY
+from petpet.ui.common import independent_pixel_font
 from petpet.app.pets import (
     load_pet_registry,
     pet_asset_path,
@@ -1306,6 +1307,59 @@ class CozyProgressWindow(KeepAliveTopLevelWindow):
         raise NotImplementedError
 
 
+class _WeekBarChart(QWidget):
+    """七日互动柱状图（2026-09-25 c 线）：纯 QPainter，奶油底珊瑚柱，
+    今日高亮，柱顶标数。数据来自 activity_log（新数据当天起积累）。"""
+
+    def __init__(self, series, parent=None):
+        super().__init__(parent)
+        self.series = list(series)
+        self.setFixedHeight(190)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(255, 246, 232, 200))
+        painter.drawRoundedRect(QRectF(self.rect()), 16, 16)
+
+        counts = [count for _, count in self.series]
+        peak = max(counts) or 1
+        left, right = 26, self.width() - 26
+        top, bottom = 30, self.height() - 30
+        slot = (right - left) / max(1, len(self.series))
+        bar_w = min(46.0, slot * 0.56)
+        for index, (label, count) in enumerate(self.series):
+            cx = left + slot * (index + 0.5)
+            bar_h = max(6.0, (bottom - top) * (count / peak))
+            rect = QRectF(cx - bar_w / 2, bottom - bar_h, bar_w, bar_h)
+            is_today = index == len(self.series) - 1
+            if count == 0:
+                painter.setBrush(QColor(232, 218, 202, 160))
+                painter.drawRoundedRect(
+                    QRectF(cx - bar_w / 2, bottom - 6, bar_w, 6), 3, 3
+                )
+            else:
+                painter.setBrush(
+                    QColor("#f28f76") if is_today else QColor("#f2c3a8")
+                )
+                painter.drawRoundedRect(rect, 7, 7)
+            painter.setPen(QColor("#a58b7c"))
+            painter.setFont(independent_pixel_font(12))
+            painter.drawText(
+                QRectF(cx - slot / 2, bottom + 6, slot, 16),
+                Qt.AlignCenter, label,
+            )
+            if count > 0:
+                painter.setPen(QColor("#c96f52"))
+                painter.setFont(independent_pixel_font(11, QFont.Bold))
+                painter.drawText(
+                    QRectF(cx - slot / 2, rect.top() - 18, slot, 16),
+                    Qt.AlignCenter, str(count),
+                )
+            painter.setPen(Qt.NoPen)
+
+
 class DailyWindow(CozyProgressWindow):
     """「每日」独立窗（2026-09-25 用户定稿：签到/日历/今日任务完全独立，
     不再寄居记录窗页签）。排版：签到横幅卡 → 日历卡 → 今日任务卡。"""
@@ -1703,6 +1757,13 @@ class RecordsWindow(CozyProgressWindow):
             )
             weekly_layout.addWidget(label)
         self.content_layout.addWidget(weekly)
+
+        # 七日互动柱状图（2026-09-25 c 线）：activity_log 按天累计，
+        # 新数据当天起积累（历史无逐日数据，空白天画平条）
+        if self.record_pet_id is None:
+            self.content_layout.addWidget(
+                _WeekBarChart(progression.daily_activity_series(self.pet.state))
+            )
 
         if self.record_pet_id is not None:
             # Pet tabs only show what belongs to this pet; shared panels

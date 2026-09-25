@@ -1075,6 +1075,7 @@ def record_action(state, action, amount=1, now=None):
         return add_affection(state, 0)
     state["records"][action] += amount
     daily_quest_hook(state, action, amount, now)
+    note_daily_activity(state, amount, now)
     if action in {
         "pettings", "feedings", "play_sessions", "sleep_sessions"
     }:
@@ -2115,6 +2116,8 @@ from petpet.progression.daily import (  # noqa: E402,F401
     check_in_status,
     claim_daily_bonus,
     claim_daily_quest,
+    daily_activity_series,
+    note_daily_activity,
     daily_quest_hook,
     daily_rewards_claimable,
     do_check_in,

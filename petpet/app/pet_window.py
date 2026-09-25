@@ -892,7 +892,15 @@ class PetWindow(QWidget):
                 return
             if random.random() < 0.006:
                 self._last_skit_at = now
-                anim, line = random.choice(self.PET_SKITS)
+                mood = float(self.state.get("mood", 100) or 0)
+                pool = self.PET_SKITS
+                if mood < 40:
+                    # 心情加权（2026-09-25 c 线）：低心情偏「求陪伴」戏码
+                    pool = tuple(
+                        skit for skit in self.PET_SKITS
+                        if skit[0] in ("play", "eat")
+                    ) or self.PET_SKITS
+                anim, line = random.choice(pool)
                 self.trigger_animation(anim)
                 self.say(line, 2600)
         except (AttributeError, RuntimeError):
