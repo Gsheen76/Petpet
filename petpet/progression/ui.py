@@ -1498,10 +1498,25 @@ class DailyWindow(CozyProgressWindow):
         layout.addLayout(row)
         return card
 
-    def _do_check_in(self):
-        granted = progression.do_check_in(self.pet.state)
+    def _pet_react(self, text):
+        """奖励到账的宠物反应（2026-09-25 果汁感）：说话 + 开心动画。"""
+        try:
+            self.pet.say(text)
+        except Exception:
+            pass
+        try:
+            self.pet.trigger_animation("happy")
+        except Exception:
+            pass
+
+    def _do_check_in(self, now=None):
+        granted = progression.do_check_in(self.pet.state, now=now)
         if granted:
             self.save_callback(self.pet.state)
+            self._pet_react(f"签到成功，+{granted} 宠物币！")
+            streak = int(self.pet.state["check_in"].get("streak", 0))
+            if streak >= 7 and streak % 7 == 0:
+                self._pet_react(f"连续签到 {streak} 天啦，你是最棒的！")
         self.refresh()
 
     def _build_daily_quest_card(self):
@@ -1553,16 +1568,18 @@ class DailyWindow(CozyProgressWindow):
             layout.addWidget(bonus)
         return card
 
-    def _claim_daily_quest(self, index):
-        granted = progression.claim_daily_quest(self.pet.state, index)
+    def _claim_daily_quest(self, index, now=None):
+        granted = progression.claim_daily_quest(self.pet.state, index, now=now)
         if granted:
             self.save_callback(self.pet.state)
+            self._pet_react(f"任务奖励 +{granted} 到账啦！")
         self.refresh()
 
-    def _claim_daily_bonus(self):
-        granted = progression.claim_daily_bonus(self.pet.state)
+    def _claim_daily_bonus(self, now=None):
+        granted = progression.claim_daily_bonus(self.pet.state, now=now)
         if granted:
             self.save_callback(self.pet.state)
+            self._pet_react(f"全勤奖励 +{granted}！每天都有你真好～")
         self.refresh()
 
 class RecordsWindow(CozyProgressWindow):

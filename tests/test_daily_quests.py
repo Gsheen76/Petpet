@@ -174,3 +174,85 @@ class MidnightRolloverTests(unittest.TestCase):
         self.assertIsNone(menu._attention_flags)
         self.assertEqual(scheduled, [1])
         self.assertEqual(saved, [1])
+
+
+class RewardJuiceTests(unittest.TestCase):
+    """奖励回路果汁感（2026-09-25 创新轮）：领取有反应、任务完成即报信。"""
+
+    @classmethod
+    def setUpClass(cls):
+        from PyQt5.QtWidgets import QApplication
+
+        cls.app = QApplication.instance() or QApplication([])
+
+    def _window(self):
+        import copy
+
+        import pet
+
+        state = copy.deepcopy(pet.DEFAULT_STATE)
+        state.update({"x": 100, "y": 100, "tutorial_completed": True})
+        window = pet.PetWindow(state)
+        self.addCleanup(window.close)
+        return window
+
+    def test_quest_completion_notifies_once(self):
+        window = self._window()
+        ensure_daily_quests(window.state)
+        quest = window.state["daily_quests"]["quests"][0]
+        quest["progress"] = quest["target"]
+        said = []
+        window.say = lambda text, ms=2200: said.append(text)
+
+        window._notify_daily_ready()
+        window._notify_daily_ready()  # 第二个 tick 不得重播
+
+        self.assertEqual(len(said), 1)
+        self.assertIn(quest["label"], said[0])
+        quest["claimed"] = True
+        window._notify_daily_ready()
+        self.assertEqual(len(said), 1)
+
+    def test_check_in_claim_reacts_with_milestone(self):
+        from types import SimpleNamespace
+
+        from petpet.progression.ui import DailyWindow
+
+        state = fresh_state()
+        # 预置 6 天连续 → 今天签完 streak=7（周里程碑）
+        state["check_in"] = {
+            "last_date": "2026-09-24", "streak": 6,
+            "history": ["2026-09-24"],
+        }
+        dw = DailyWindow.__new__(DailyWindow)
+        dw.pet = SimpleNamespace(state=state)
+        dw.save_callback = lambda s: None
+        dw.refresh = lambda: None
+        lines = []
+        dw._pet_react = lambda text: lines.append(text)
+
+        dw._do_check_in(now=datetime(2026, 9, 25, 10, 0, 0))
+
+        self.assertTrue(any("签到" in x and "80" in x for x in lines), lines)  # Day7 大奖 80
+        self.assertTrue(any("连续签到 7 天" in x for x in lines), lines)
+
+    def test_quest_claim_reacts(self):
+        from types import SimpleNamespace
+
+        from petpet.progression.ui import DailyWindow
+
+        state = fresh_state()
+        ensure_daily_quests(state, now=datetime(2026, 9, 25, 9, 0, 0))
+        quest = state["daily_quests"]["quests"][0]
+        quest["progress"] = quest["target"]
+        dw = DailyWindow.__new__(DailyWindow)
+        dw.pet = SimpleNamespace(state=state)
+        dw.save_callback = lambda s: None
+        dw.refresh = lambda: None
+        lines = []
+        dw._pet_react = lambda text: lines.append(text)
+
+        dw._claim_daily_quest(0, now=datetime(2026, 9, 25, 10, 0, 0))
+
+        self.assertEqual(len(lines), 1)
+        self.assertIn(str(quest["reward"]), lines[0])
