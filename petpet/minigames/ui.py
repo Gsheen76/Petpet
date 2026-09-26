@@ -1048,6 +1048,13 @@ class MemoryMatchGameWindow(CozyProgressWindow):
         self.content_layout.addWidget(self.replay_button)
         self.status_label.setText("点两张一样的卡片配对吧！")
 
+    def refresh(self):
+        """CozyProgressWindow.show_near_pet 每开必调（2026-09-26 玩不了
+        修复：漏 override 基类 abstract，hub 打开即 NotImplementedError，
+        excepthook 拦下后表现为点了没反应）。"""
+        self._refresh_info()
+        self.grid.update()
+
     def _on_card(self, index):
         event = self.board.flip(index)
         kind = event[0]

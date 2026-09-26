@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """记忆翻牌小游戏（2026-09-26 创新轮）：纯逻辑 + 奖励公式 TDD。"""
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -69,3 +70,46 @@ class MemoryBoardTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MemoryWindowOpenPathTests(unittest.TestCase):
+    """真实打开路径（2026-09-26 玩不了回归钉）：hub 走 show_near_pet，
+    其内部必调 refresh——未 override 基类 abstract 的窗口当场抛
+    NotImplementedError（曾以 excepthook 日志定案）。"""
+
+    @classmethod
+    def setUpClass(cls):
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        from PyQt5.QtWidgets import QApplication
+
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_every_game_window_overrides_refresh(self):
+        from petpet.minigames.ui import (
+            CoinCatchGameWindow,
+            LuckyPawsGameWindow,
+            MemoryMatchGameWindow,
+        )
+        from petpet.progression.ui import CozyProgressWindow
+
+        for cls in (CoinCatchGameWindow, LuckyPawsGameWindow,
+                    MemoryMatchGameWindow):
+            self.assertIsNot(
+                cls.refresh, CozyProgressWindow.refresh, cls.__name__
+            )
+
+    def test_memory_window_show_near_pet_does_not_raise(self):
+        from types import SimpleNamespace
+
+        from petpet.minigames.ui import MemoryMatchGameWindow
+
+        pet = SimpleNamespace(
+            state={"pets": {}},
+            interface_screen_rect=lambda: __import__("PyQt5.QtCore", fromlist=["QRect"]).QRect(0, 0, 1920, 1080),
+        )
+        window = MemoryMatchGameWindow(pet, lambda s: None)
+        self.addCleanup(window.close)
+        window.show_near_pet()  # 修复前此处 NotImplementedError
+
+        import sys as _sys
+        _sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
