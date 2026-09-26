@@ -1134,7 +1134,10 @@ class BubbleMenuPaintPerfTests(unittest.TestCase):
                 (0, QRectF(0, 0, 96, 92), "chat", "#fff", "💬"),
             ]
             menu.mouseMoveEvent(
-                SimpleNamespace(pos=lambda: QPoint(48, 46))
+                SimpleNamespace(
+                    pos=lambda: QPoint(48, 46),
+                    globalPos=lambda: menu.mapToGlobal(QPoint(48, 46)),
+                )
             )
         upd.assert_called_once()
 
@@ -1347,3 +1350,46 @@ class DailyRewardAttentionTests(unittest.TestCase):
             "records", has_claimable=False, needs_personal_setup=False,
             zero_actions=(), daily_ready=False,
         ))
+
+
+class FullCellHoverFallbackTests(unittest.TestCase):
+    """全域悬浮兜底（2026-09-26 手感修复）：不依赖窗口自身 mouseMove
+    ——app 级过滤/几何直算也应命中整格（含图标外区域）。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def _menu(self):
+        host = SimpleNamespace(
+            state=progression.ensure_progression({}),
+            pet_name="烟花",
+            interface_anchor_rect=lambda: QRect(900, 700, 190, 220),
+            interface_screen_rect=lambda: QRect(0, 0, 1920, 1080),
+            set_pet_name=Mock(),
+        )
+        return pet.BubbleMenu(host, show_window=False)
+
+    def test_update_hover_at_covers_full_cell(self):
+        menu = self._menu()
+        self.addCleanup(menu._close)
+        menu.move(100, 100)
+        # 第 7 键（更多）格子左上角（图标外区域）经全局坐标命中
+        columns = 7
+        gap = 8.8
+        button_w = (menu.W - (columns - 1) * gap) / columns
+        corner_global = QPoint(
+            int(100 + (columns - 1) * (button_w + gap) + 2),
+            int(100 + 19 + 2),
+        )
+        menu._update_hover_at(corner_global)
+        self.assertEqual(menu._hover, 6)
+
+    def test_outside_clears_hover(self):
+        menu = self._menu()
+        self.addCleanup(menu._close)
+        menu.move(100, 100)
+        menu._update_hover_at(QPoint(100 + 30, 100 + 60))
+        self.assertNotEqual(menu._hover, -1)
+        menu._update_hover_at(QPoint(900, 900))
+        self.assertEqual(menu._hover, -1)

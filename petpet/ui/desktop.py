@@ -809,17 +809,46 @@ class BubbleMenu(KeepAliveTopLevelWindow):
         self.update()
         super().leaveEvent(e)
 
-    def mouseMoveEvent(self, e):
-        pos = e.pos()
+    def _update_hover_at(self, global_pos):
+        """按全局光标即时计算悬浮格（2026-09-26 手感修复）。
+
+        不依赖 paint 期 _bubble_rects——按当前几何重算格子，任何
+        「进窗首帧 mouseMove 未投递」的路由怪癖都能被 app 级兜底喂到；
+        格子全域（含图标外框区）命中，与命中区=固定整格定稿一致。
+        """
+        try:
+            local = self.mapFromGlobal(global_pos)
+        except RuntimeError:
+            return
+        n = len(self.actions)
+        columns = self.PAGE_COLUMNS[self.page]
+        if self.page == "primary":
+            gap = 8.8
+            button_w = (self.W - (columns - 1) * gap) / columns
+        else:
+            button_w, gap = 102, 10
+        button_h = 92
+        rows = max(1, int(math.ceil(n / columns)))
+        total_w = columns * button_w + (columns - 1) * gap
+        total_h = rows * button_h + (rows - 1) * gap
+        start_x = (self.W - total_w) / 2
+        start_y = (self.H - total_h) / 2
+        pos = QPointF(local)
         new_hover = -1
-        for i, rect, _, _, _ in self._bubble_rects:
-            if rect.contains(QPointF(pos)):
-                new_hover = i; break
+        for i in range(n):
+            row, column = i // columns, i % columns
+            bx = start_x + column * (button_w + gap)
+            by = start_y + row * (button_h + gap)
+            if QRectF(bx, by, button_w, button_h).contains(pos):
+                new_hover = i
+                break
         if new_hover != self._hover:
             self._hover = new_hover
-            # 立即重绘（2026-09-12 悬浮跟手）：不等 16ms 缓动 tick，
-            # 高亮框/名称胶囊要当帧跟上鼠标。
+            # 立即重绘（2026-09-12 悬浮跟手）：不等 16ms 缓动 tick
             self.update()
+
+    def mouseMoveEvent(self, e):
+        self._update_hover_at(e.globalPos())
 
     def mousePressEvent(self, e):
         if e.button() != Qt.LeftButton:
@@ -962,6 +991,25 @@ class BubbleMenu(KeepAliveTopLevelWindow):
             self._close()
 
     def eventFilter(self, watched, event):
+        # 悬浮兜底（2026-09-26 手感修复）：NoActivate/Tool 窗在部分
+        # Windows 路径下首帧 mouseMove 不投递给本窗——任何 app 级
+        # MouseMove 到达时光标在本窗内就驱动悬浮（格子全域命中），
+        # 移出窗则清高亮
+        if (
+            event.type() == QEvent.MouseMove
+            and not self._closing
+            and not getattr(self, "_prewarming", False)
+            and self.isVisible()
+        ):
+            try:
+                gp = event.globalPos()
+                if self.frameGeometry().contains(gp):
+                    self._update_hover_at(gp)
+                elif self._hover != -1:
+                    self._hover = -1
+                    self.update()
+            except RuntimeError:
+                pass
         if (
             event.type() == QEvent.MouseButtonPress
             and watched is self.pet
