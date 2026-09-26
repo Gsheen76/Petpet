@@ -1051,7 +1051,10 @@ class MemoryMatchGameWindow(CozyProgressWindow):
     def refresh(self):
         """CozyProgressWindow.show_near_pet 每开必调（2026-09-26 玩不了
         修复：漏 override 基类 abstract，hub 打开即 NotImplementedError，
-        excepthook 拦下后表现为点了没反应）。"""
+        excepthook 拦下后表现为点了没反应）。币标签也要在此刷新——
+        构造期 CoinPillLabel 默认 0，不刷就「点进去 Pet币变 0」（同日
+        用户报，另两个游戏的 refresh 都先刷币）。"""
+        self._refresh_coin_label()
         self._refresh_info()
         self.grid.update()
 

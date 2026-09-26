@@ -113,3 +113,28 @@ class MemoryWindowOpenPathTests(unittest.TestCase):
 
         import sys as _sys
         _sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+
+class CoinLabelOnEntryTests(unittest.TestCase):
+    """入场币值显示（2026-09-26 用户报：点进去 Pet币变 0，玩一局才好）。"""
+
+    @classmethod
+    def setUpClass(cls):
+        from PyQt5.QtWidgets import QApplication
+
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_refresh_shows_real_balance_on_open(self):
+        from types import SimpleNamespace
+
+        from petpet.minigames.ui import MemoryMatchGameWindow
+        from petpet.progression import core as progression
+
+        state = {"pets": {}}
+        progression.ensure_progression(state)
+        progression.add_coins(state, 123)
+        pet = SimpleNamespace(state=state)
+        window = MemoryMatchGameWindow(pet, lambda s: None)
+        self.addCleanup(window.close)
+        window.refresh()
+        self.assertEqual(window.coin_label._balance, 123)
