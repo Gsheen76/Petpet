@@ -957,7 +957,7 @@ class _MemoryCardGrid(QWidget):
         for index, key in enumerate(self.board.deck):
             name = MEMORY_CARD_ICONS[int(key.split("_")[-1])]
             self.icons[index] = name
-        self.setMinimumSize(460, 460)
+        self.setMinimumSize(680, 560)  # 与金币雨同窗幅（2026-09-26 用户定稿）
 
     def _icon_pixmap(self, name, px):
         path = os.path.join(BUBBLE_MENU_DIR, f"{name}.png")
@@ -1031,7 +1031,7 @@ class MemoryMatchGameWindow(CozyProgressWindow):
             pet,
             "记忆翻牌",
             "翻开卡片找出 8 对图案，步数越少奖励越高。",
-            (560, 640),
+            (850, 960),
             shop_theme=True,
             title_image=False,
         )
