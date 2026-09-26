@@ -61,7 +61,7 @@ DIG_REWARD_TIERS = (
     (0.01, 120, 200, "大宝藏"),
 )
 
-MINIGAME_IDS = ("coin_catch", "lucky_paws")
+MINIGAME_IDS = ("coin_catch", "lucky_paws", "memory_match")
 
 AFFECTION_ACTION_GAINS = {
     "pettings": 1,

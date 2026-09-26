@@ -80,7 +80,8 @@ class MiniGameUiTests(unittest.TestCase):
         self.assertIn("金币雨", labels)
         self.assertIn("幸运爪爪", labels)
         self.assertIn("没有每日上限", labels)
-        self.assertEqual(buttons.count("开始"), 2)
+        # 2026-09-26 新增第三个小游戏「记忆翻牌」
+        self.assertEqual(buttons.count("开始"), 3)
 
     def test_coin_game_settles_score_and_updates_best(self):
         save = Mock()

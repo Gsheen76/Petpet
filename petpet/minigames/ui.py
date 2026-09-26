@@ -9,7 +9,7 @@ import time
 
 from PyQt5.QtCore import QPointF, QRectF, Qt, QTimer, pyqtSignal
 from PyQt5.QtGui import (
-    QColor, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap
+    QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap
 )
 from PyQt5.QtWidgets import (
     QFrame,
@@ -21,11 +21,19 @@ from PyQt5.QtWidgets import (
 )
 
 from petpet.progression import core as progression
-from petpet.app.paths import POSES_DIR
+from petpet.app.fonts import APP_FONT_FAMILY
+from petpet.app.paths import BUBBLE_MENU_DIR, POSES_DIR
+from petpet.minigames.memory import MemoryBoard, memory_reward
 from petpet.progression.ui import CozyProgressWindow, FeedbackButton
 
 
 GAME_DEFINITIONS = {
+    "memory_match": {
+        "icon": "🃏",
+        "name": "记忆翻牌",
+        "description": "翻开卡片找出 8 对图案，步数越少奖励越高（完美 40 币）。",
+        "accent": "#8fb7de",
+    },
     "coin_catch": {
         "icon": "🪙",
         "name": "金币雨",
@@ -910,6 +918,7 @@ class MiniGameHubWindow(CozyProgressWindow):
         window_type = {
             "coin_catch": CoinCatchGameWindow,
             "lucky_paws": LuckyPawsGameWindow,
+            "memory_match": MemoryMatchGameWindow,
         }.get(game_id)
         if window_type is None:
             return
@@ -928,3 +937,173 @@ class MiniGameHubWindow(CozyProgressWindow):
                 pass
             self.game_window = None
         super().closeEvent(event)
+
+
+MEMORY_CARD_ICONS = (
+    "chat", "feed", "play", "sleep", "home", "shop", "pet", "records",
+)
+
+
+class _MemoryCardGrid(QWidget):
+    """4×4 翻牌卡面（2026-09-26）：手绘卡背 + 气泡菜单图标做卡面，
+    与金币雨画布同属游戏自绘点击面（按键规范豁免同源）。"""
+
+    card_clicked = pyqtSignal(int)
+
+    def __init__(self, board, parent=None):
+        super().__init__(parent)
+        self.board = board
+        self.icons = {}
+        for index, key in enumerate(self.board.deck):
+            name = MEMORY_CARD_ICONS[int(key.split("_")[-1])]
+            self.icons[index] = name
+        self.setMinimumSize(460, 460)
+
+    def _icon_pixmap(self, name, px):
+        path = os.path.join(BUBBLE_MENU_DIR, f"{name}.png")
+        pix = QPixmap(path)
+        if pix.isNull():
+            return QPixmap()
+        return pix.scaled(px, px, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+
+    def cell_rect(self, index):
+        col, row = index % 4, index // 4
+        cw = self.width() / 4.0
+        ch = self.height() / 4.0
+        return QRectF(col * cw + 7, row * ch + 7, cw - 14, ch - 14)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setPen(Qt.NoPen)
+        for index in range(len(self.board.deck)):
+            rect = self.cell_rect(index)
+            if self.board.is_matched(index):
+                painter.setBrush(QColor("#f2c3a8"))
+                painter.setPen(QPen(QColor("#f28f76"), 2.0))
+                painter.drawRoundedRect(rect, 16, 16)
+                painter.setPen(Qt.NoPen)
+                self._draw_icon(painter, index, int(rect.width() * 0.62))
+            elif self.board.is_open(index):
+                painter.setBrush(QColor("#fff6e8"))
+                painter.setPen(QPen(QColor("#f2c3a8"), 2.0))
+                painter.drawRoundedRect(rect, 16, 16)
+                painter.setPen(Qt.NoPen)
+                self._draw_icon(painter, index, int(rect.width() * 0.7))
+            else:
+                painter.setBrush(QColor("#f7ddc9"))
+                painter.setPen(QPen(QColor("#e8cbb2"), 1.6))
+                painter.drawRoundedRect(rect, 16, 16)
+                painter.setPen(QColor("#c99a6e"))
+                font = QFont(APP_FONT_FAMILY)
+                font.setPixelSize(20)
+                font.setBold(True)
+                painter.setFont(font)
+                painter.drawText(rect, Qt.AlignCenter, "?")
+                painter.setPen(Qt.NoPen)
+
+    def _draw_icon(self, painter, index, px):
+        pix = self._icon_pixmap(self.icons[index], px)
+        if pix.isNull():
+            return
+        rect = self.cell_rect(index)
+        painter.drawPixmap(
+            QPointF(rect.center().x() - pix.width() / 2,
+                    rect.center().y() - pix.height() / 2), pix,
+        )
+
+    def mousePressEvent(self, event):
+        pos = QPointF(event.pos())
+        for index in range(len(self.board.deck)):
+            if self.cell_rect(index).contains(pos):
+                self.card_clicked.emit(index)
+                return
+        super().mousePressEvent(event)
+
+
+class MemoryMatchGameWindow(CozyProgressWindow):
+    """记忆翻牌（2026-09-26）：8 对图标，步数效率计币。"""
+
+    def __init__(self, pet, save_callback, finished_callback=None):
+        self.save_callback = save_callback
+        self.finished_callback = finished_callback
+        super().__init__(
+            pet,
+            "记忆翻牌",
+            "翻开卡片找出 8 对图案，步数越少奖励越高。",
+            (560, 640),
+            shop_theme=True,
+            title_image=False,
+        )
+        self.board = MemoryBoard(pairs=8)
+        self.grid = _MemoryCardGrid(self.board)
+        self.grid.card_clicked.connect(self._on_card)
+        self.content_layout.addWidget(self.grid)
+        self.info_label = QLabel("已配对 0 / 8 · 步数 0")
+        self.info_label.setAlignment(Qt.AlignCenter)
+        self.info_label.setObjectName("muted")
+        self.content_layout.addWidget(self.info_label)
+        self.replay_button = FeedbackButton("再玩一局")
+        self.replay_button.clicked.connect(self._restart)
+        self.content_layout.addWidget(self.replay_button)
+        self.status_label.setText("点两张一样的卡片配对吧！")
+
+    def _on_card(self, index):
+        event = self.board.flip(index)
+        kind = event[0]
+        if kind == "match":
+            self._flash()
+            if self.board.done:
+                self._finish()
+        elif kind == "miss":
+            self._flash()
+        self._refresh_info()
+        self.grid.update()
+
+    def _flash(self):
+        """miss/match 后 600ms 合上未配对牌并重绘。"""
+        QTimer.singleShot(600, self._close_pending)
+
+    def _close_pending(self):
+        try:
+            if len(self.board.opened) == 2:
+                i, j = self.board.opened
+                if self.board.deck[i] != self.board.deck[j]:
+                    self.board.opened = []
+                    self.grid.update()
+        except RuntimeError:
+            pass
+
+    def _refresh_info(self):
+        matched = len(self.board.matched) // 2
+        self.info_label.setText(
+            f"已配对 {matched} / {self.board.pairs} · 步数 {self.board.moves}"
+        )
+
+    def _finish(self):
+        reward = memory_reward(self.board)
+        result = progression.award_minigame_coins(
+            self.pet.state, "memory_match", reward,
+            score=self.board.pairs * 2 - self.board.moves,
+        )
+        self.save_callback(self.pet.state)
+        self._refresh_coin_label()
+        self.status_label.setText(
+            f"全部配对完成！{self.board.moves} 步，获得 {result['reward']} Pet币 ✨"
+        )
+        try:
+            if self.finished_callback:
+                self.finished_callback()
+        except Exception:
+            pass
+
+    def _restart(self):
+        self.board = MemoryBoard(pairs=8)
+        self.grid.board = self.board
+        self.grid.icons = {
+            index: MEMORY_CARD_ICONS[int(key.split("_")[-1])]
+            for index, key in enumerate(self.board.deck)
+        }
+        self._refresh_info()
+        self.status_label.setText("点两张一样的卡片配对吧！")
+        self.grid.update()
