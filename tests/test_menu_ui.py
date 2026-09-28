@@ -577,6 +577,9 @@ class MenuUiTests(unittest.TestCase):
         fake_menu = SimpleNamespace(
             isVisible=Mock(return_value=True),
             _close=Mock(),
+            # 光标守卫（2026-09-28 菜单消失修复）：失活时光标在菜单
+            # 外才自动关——本测试语义即"点到别处失去焦点"。
+            _cursor_inside=lambda: False,
         )
 
         pet.BubbleMenu._on_application_state_changed(
@@ -1391,6 +1394,37 @@ class DailyRewardAttentionTests(unittest.TestCase):
 
 
 
+class BubbleMenuShowGraceTests(unittest.TestCase):
+    """刚显示宽限（2026-09-28 菜单消失修复）：页面切换 factory 的
+    show+activateWindow 引发应用状态翻转，Inactive 事件打到刚 born
+    的新菜单上曾当场自杀（用户点「互动/更多」菜单消失）。显示后
+    0.5s 内失活不得关菜单。"""
+
+    def test_inactive_within_grace_does_not_close(self):
+        import time as _time
+
+        app = QApplication.instance() or QApplication([])
+        from petpet.ui.desktop import BubbleMenu
+
+        menu = BubbleMenu.__new__(BubbleMenu)  # 不跑完整构造
+        menu._closing = False
+        menu._prewarming = False
+        menu._suppress_state_close_until = _time.monotonic() + 0.5
+        closed = []
+        menu._close = lambda: closed.append(1)
+        menu.isVisible = lambda: True
+        from PyQt5.QtCore import QPoint
+        menu.rect = lambda: QRect(0, 0, 620, 130)
+        menu.mapFromGlobal = lambda *_: QPoint(99999, 99999)  # 光标在外
+        menu._on_application_state_changed(Qt.ApplicationInactive)
+        self.assertEqual(
+            closed, [], "宽限期内失活不得自杀（菜单消失修复）")
+        # 宽限过期后恢复自动关闭语义
+        menu._suppress_state_close_until = _time.monotonic() - 0.1
+        menu._on_application_state_changed(Qt.ApplicationInactive)
+        self.assertEqual(len(closed), 1, "宽限期外失活应自动关")
+
+
 def _drain_close_grace(window_cls, timeout_ms=400):
     """等待延迟出表落地（2026-09-28 缓冲出表改版：close 后
     CLOSE_GRACE_MS 内仍在表，期满才 discard）。"""
@@ -1400,7 +1434,7 @@ def _drain_close_grace(window_cls, timeout_ms=400):
     t = QTimer()
     t.setSingleShot(True)
     t.timeout.connect(lambda: fired.append(1))
-    t.start(int(window_cls.CLOSE_GRACE_MS) + 30)
+    t.start(int(window_cls.CLOSE_GRACE_MS) + 150)  # 余量：+30 曾与排空窗竞态闪失败
     while not fired and t.isActive():
         QApplication.processEvents()
 

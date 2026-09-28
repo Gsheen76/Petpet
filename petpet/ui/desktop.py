@@ -8,6 +8,7 @@ from petpet.chat import api as ai
 from PyQt5.QtCore import QEvent, QPoint, QPointF, QRect, QRectF, Qt, QTimer
 from PyQt5.QtGui import (
     QColor,
+    QCursor,
     QFont,
     QFontMetrics,
     QLinearGradient,
@@ -649,6 +650,8 @@ class BubbleMenu(KeepAliveTopLevelWindow):
 
         self._place()
         if show_window:
+            # 刚显示宽限：见 _on_application_state_changed 注释
+            self._suppress_state_close_until = time.monotonic() + 1.5
             self.show()
             self.raise_()
             self.activateWindow()
@@ -762,9 +765,15 @@ class BubbleMenu(KeepAliveTopLevelWindow):
             )
 
             # 图标即按键（2026-09-09 用户定稿）：去掉糖果底板与常驻文字，
-            # 悬浮时放大 + 底部名称胶囊；按住缩小压暗。
-            # 高亮框已撤（2026-09-28 纯缩放反馈统一：全应用按键只做
-            # 悬浮放大/按压缩小，不再画描边/白洗光环）。
+            # 悬浮时放大 + 光环高亮 + 底部名称胶囊；按住缩小压暗。
+            # 光环恢复（2026-09-28 晚用户定稿：气泡菜单保留旧交互，
+            # 「我喜欢之前那样的交互方式」——光环画在整格内，无越界
+            # 裁角问题；面板/家园等其余按键仍走纯缩放）。
+            if hovered:
+                halo = QRectF(bx + 2, by + 2, button_w - 4, button_h - 6)
+                p.setBrush(QColor(242, 143, 118, 34))
+                p.setPen(QPen(QColor("#f28f76"), 2.2))
+                p.drawRoundedRect(halo, 18, 18)
             icon_px = 58 if hovered else 52
             # 缩放结果按 (action, px) 缓存（2026-09-12 悬浮卡顿优化）：
             # 每帧对 240² 源图做 SmoothTransformation 是跟手卡顿主因之一。
@@ -1017,8 +1026,27 @@ class BubbleMenu(KeepAliveTopLevelWindow):
 
     def _on_application_state_changed(self, state):
         if (state == Qt.ApplicationInactive and self.isVisible()
-                and not getattr(self, "_prewarming", False)):
+                and not getattr(self, "_prewarming", False)
+                # 刚显示宽限（2026-09-28 菜单消失修复）：页面切换
+                # factory 的 show+activateWindow 会引发应用状态翻转
+                # （Inactive 事件打到刚 born 的新菜单上，焦点仲裁慢时
+                # >0.5s 才送达）——旧代码当场自杀并清空 pet._bubble_menu，
+                # 用户点「互动/更多/返回」菜单就消失。
+                and time.monotonic() > getattr(
+                    self, "_suppress_state_close_until", 0.0)
+                # 光标在菜单内永不自杀（本质修）：用户正点着菜单键时
+                # 光标本就在菜单里，此时到达的失活必是 activateWindow
+                # 翻转，不是"点到菜单外"。取不到光标信息（未初始化
+                # 壳/收尾）按"在内"处理——守卫宁可漏关不可误杀。
+                and not self._cursor_inside()):
             self._close()
+
+    def _cursor_inside(self):
+        try:
+            return self.rect().contains(
+                self.mapFromGlobal(QCursor.pos()))
+        except Exception:
+            return True
 
     def eventFilter(self, watched, event):
         # 悬浮兜底（2026-09-26 手感修复）：NoActivate/Tool 窗在部分

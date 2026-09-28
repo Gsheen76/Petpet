@@ -2519,6 +2519,11 @@ class PetWindow(QWidget):
         try:
             menu._prewarming = False
             menu._closing = False
+            # 刚显示宽限（2026-09-28 菜单消失修复）：预热菜单构造时
+            # 未 show、没设宽限标志——这里 show+activateWindow 前补上，
+            # 否则状态翻转的 Inactive 事件会让新页面当场自杀（用户点
+            # 「互动/更多」菜单消失）。
+            menu._suppress_state_close_until = time.monotonic() + 1.5
             menu._anim.start(16)
             if menu.stat_bubble is not None:
                 menu.stat_bubble._timer.start(500)

@@ -86,8 +86,8 @@ class ClickSoundFilterTests(unittest.TestCase):
                 self.plays += 1
 
         fake = _Fake()
-        old_effect, old_ts = sounds._EFFECT, sounds._LAST_PLAY_TS
-        sounds._EFFECT = fake
+        old_effects, old_ts = sounds._EFFECTS, sounds._LAST_PLAY_TS
+        sounds._EFFECTS = [fake]  # 3 实例轮换——测试里放 1 个假件即可
         sounds._LAST_PLAY_TS = 0.0
         try:
             sounds.play_click()
@@ -96,7 +96,7 @@ class ClickSoundFilterTests(unittest.TestCase):
                 fake.plays, 1, "25ms 节流内只允许播一次（防双响）"
             )
         finally:
-            sounds._EFFECT = old_effect
+            sounds._EFFECTS = old_effects
             sounds._LAST_PLAY_TS = old_ts
 
 

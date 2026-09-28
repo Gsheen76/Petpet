@@ -22,14 +22,18 @@
 import os
 import time
 
-_EFFECT = None  # None=未加载 | QSoundEffect | False=加载失败
+_EFFECTS = None  # None=未加载 | list[QSoundEffect] | False=加载失败
+_EFFECT_SLOT = 0  # 轮换索引：4 实例轮播——25ms 节流下同实例间隔
+#                 # ≥100ms > 85ms 音长，数学上永不撞「播放中
+#                 # restart」的 ~300ms 同步段（评审轮：3 实例时
+#                 # 75ms<85ms 仍有理论边缘，2026-09-28 晚实测收敛）
 _LAST_PLAY_TS = 0.0
 _PLAY_THROTTLE_S = 0.025
 
 
 def play_click():
     """播一次统一点击音（25ms 节流；设置关/加载失败时静默）。"""
-    global _EFFECT, _LAST_PLAY_TS
+    global _EFFECTS, _EFFECT_SLOT, _LAST_PLAY_TS
     now = time.monotonic()
     if now - _LAST_PLAY_TS < _PLAY_THROTTLE_S:
         return  # 同一次点击的多层命中只响一次
@@ -40,30 +44,37 @@ def play_click():
             return
     except Exception:
         pass  # 设置读不了也照播——宁可响，不可哑
-    if _EFFECT is None:
+    if _EFFECTS is None:
         try:
             from PyQt5.QtCore import QUrl
             from PyQt5.QtMultimedia import QSoundEffect
 
             from petpet.app.paths import SOUNDS_DIR
 
-            effect = QSoundEffect()
-            effect.setSource(QUrl.fromLocalFile(
-                os.path.join(SOUNDS_DIR, "click.wav")))
-            effect.setVolume(0.35)
-            effect.setMuted(True)  # 预热（首次播放 600ms 卡顿坑）
-            effect.play()
-            effect.setMuted(False)
-            _EFFECT = effect
+            effects = []
+            for _ in range(4):
+                effect = QSoundEffect()
+                effect.setSource(QUrl.fromLocalFile(
+                    os.path.join(SOUNDS_DIR, "click.wav")))
+                effect.setVolume(0.30)  # 柔和音效轮降一点
+                effect.setMuted(True)  # 预热设备接入（启动期调用）
+                effect.play()
+                effect.setMuted(False)
+                effects.append(effect)
+            _EFFECTS = effects
         except Exception:
-            _EFFECT = False
+            _EFFECTS = False
             return
-    if _EFFECT is False:
+    if _EFFECTS is False:
         return
     _LAST_PLAY_TS = now
     try:
-        _EFFECT.stop()
-        _EFFECT.play()
+        # 不 stop()：播放已自然结束的实例 play() 走冷路径（实测
+        # 0.01ms）；快速连点由 3 实例轮换保证同实例不撞「播放中
+        # restart」的 ~300ms 同步段——「点完卡一下」的元凶（用户
+        # 反馈音效卡顿三轮均命中：预热冻结/stop 段/restart 段）。
+        _EFFECT_SLOT = (_EFFECT_SLOT + 1) % len(_EFFECTS)
+        _EFFECTS[_EFFECT_SLOT].play()
     except RuntimeError:
         pass  # 音频后端已关（进程收尾等）
 

@@ -226,14 +226,17 @@ class PureScaleStaticGuards(unittest.TestCase):
 
     ROOT = Path(__file__).resolve().parents[1]
 
-    def test_bubble_menu_hover_halo_removed(self):
+    def test_bubble_menu_hover_halo_present(self):
+        """气泡菜单 hover 光环（2026-09-28 晚用户定稿恢复：「我喜欢
+        之前那样的交互方式」）——光环画在整格内，无越界裁角问题；
+        纯缩放规范不适用于气泡菜单，防再被统一轮误删。"""
         src = (self.ROOT / "petpet" / "ui" / "desktop.py").read_text(
             encoding="utf-8")
-        self.assertNotIn(
-            "242, 143, 118, 34", src, "气泡菜单悬浮白洗光环不得回库")
-        self.assertNotIn(
+        self.assertIn(
+            "242, 143, 118, 34", src, "气泡菜单悬浮白洗光环是用户定稿")
+        self.assertIn(
             'QPen(QColor("#f28f76"), 2.2)', src,
-            "气泡菜单悬浮珊瑚描边不得回库")
+            "气泡菜单悬浮珊瑚描边是用户定稿")
 
     def test_recover_state_never_enlarges(self):
         """recover（回弹）相位=原大小，不得与 hover 同享放大几何。"""
