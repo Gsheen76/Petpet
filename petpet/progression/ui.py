@@ -799,7 +799,7 @@ class PreservedTextLabel(QLabel):
 class FeedbackButton(QPushButton):
     """Push button with the app-standard hover/press feedback.
 
-    悬浮 = 素材放大 2px；按住 = 内缩 4px + 压暗（持续整个按住期间）；
+    悬浮 = 素材放大 2px；点击/按住 = 还原原大小（按压内缩与压暗已按用户 2026-09-28 终版定稿删除）；
     松开在键内 = 点击音即刻响、回弹原大小 8ms 后才触发 clicked
     （宠物面板/家园同款；2026-09-28 三轮手感链：按压 3→5→4px、
     回弹 40→15→8ms、压暗 70→45、音效提前到松开瞬间）。checkable
@@ -940,20 +940,12 @@ class FeedbackButton(QPushButton):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.SmoothPixmapTransform)
         painter.setRenderHint(QPainter.Antialiasing)
-        # 纯缩放反馈（2026-09-28 用户定稿）：hover=素材放大 2px、
-        # recover=回原大小、pressed=内缩 4px+压暗（三轮：3→5→4px
-        # 折中回摆，压暗 70→45 减淡）——不再画任何描边/白洗
-        # （描边曾因画在 rect±2 被裁成四角取景框角标）。
-        if phase == "pressed":
-            target = self.rect().adjusted(4, 4, -4, -4)
-        else:
-            d = 2 if phase == "hover" else 0
-            target = self.rect().adjusted(-d, -d, d, d)
+        # 最简反馈（2026-09-28 用户终版定稿）：**悬浮=放大 2px，
+        # 点击/按住=还原原大小**——按压内缩与压暗全部删除，无任何
+        # 叠加层（描边/白洗历史上曾致四角取景框角标，禁用）。
+        d = 2 if phase == "hover" else 0
+        target = self.rect().adjusted(-d, -d, d, d)
         painter.drawPixmap(target, skin)
-        if phase == "pressed":
-            path = QPainterPath()
-            path.addRoundedRect(QRectF(target), 16, 16)
-            painter.fillPath(path, QColor(150, 60, 40, 45))
         painter.end()
 
 
@@ -2762,6 +2754,9 @@ class ShopWindow(CozyProgressWindow):
         self.page = page
         self.status_label.clear()
         self.scroll.verticalScrollBar().setValue(0)
+        # 选中态统一在此同步（缓存挂回/首建两路径都走到——
+        # 首建分支曾漏调，旧分栏 checked 残留，用户截图实证）。
+        self._sync_tab_bar()
         cached = self._page_cache.get(page)
         if cached:
             # 挂回缓存页（布局级开销，重访瞬时）

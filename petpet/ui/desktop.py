@@ -747,9 +747,8 @@ class BubbleMenu(KeepAliveTopLevelWindow):
             bx = start_x + column * (button_w + gap)
             by = start_y + row * (button_h + gap)
             hovered = self._hover == i
+            # 最简反馈（2026-09-28 终版）：只悬浮放大——按住缩小删除。
             scale = 1.0 + self._hover_scales[i] * 0.07
-            if self._press == i:
-                scale *= 0.96
             bw = button_w * scale
             bh = button_h * scale
             rect = QRectF(
@@ -789,15 +788,7 @@ class BubbleMenu(KeepAliveTopLevelWindow):
                             icon_band.center().y() - scaled.height() / 2),
                     scaled,
                 )
-                if self._press == i:
-                    p.setBrush(QColor(70, 42, 28, 60))
-                    p.setPen(Qt.NoPen)
-                    p.drawRoundedRect(
-                        QRectF(icon_band.center().x() - scaled.width() / 2,
-                               icon_band.center().y() - scaled.height() / 2,
-                               scaled.width(), scaled.height()),
-                        12, 12,
-                    )
+
             else:
                 p.setPen(QColor("#8a5a3c"))
                 p.setFont(pixel_font(24 if hovered else 22, QFont.Bold))

@@ -828,16 +828,10 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
         painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
         # 纯缩放反馈（2026-09-28 用户定稿统一）：hover=放大 3px、
         # pressed=内缩 3px+压暗；不再画描边/白洗叠层。
-        draw_rect = rect
-        if state == "hover":
-            draw_rect = rect.adjusted(-3, -3, 3, 3)
-        elif state == "pressed":
-            draw_rect = rect.adjusted(4, 4, -4, -4)
+        # 最简反馈（2026-09-28 终版）：悬浮放大 3px、点击/按住还原
+        # 原大小——按压内缩与压暗删除。
+        draw_rect = rect.adjusted(-3, -3, 3, 3) if state == "hover" else rect
         painter.drawPixmap(draw_rect, pixmap)
-        if state == "pressed":
-            painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor(70, 42, 28, 95))
-            painter.drawRoundedRect(draw_rect, 14, 14)
         if label:
             painter.setFont(self._cute_button_font())
             painter.setPen(QColor("#9A5B3F"))
@@ -851,10 +845,9 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
                            state=None):
         # 纯缩放反馈（2026-09-28 用户定稿统一）：hover=整键放大 3px、
         # pressed=整键内缩 3px+压暗；描边/白洗叠层撤除。
+        # 最简反馈（2026-09-28 终版）：悬浮放大、点击/按住还原原大小。
         if state == "hover":
             rect = rect.adjusted(-3, -3, 3, 3)
-        elif state == "pressed":
-            rect = rect.adjusted(4, 4, -4, -4)
         painter.save()
         painter.setPen(Qt.NoPen)
         painter.setBrush(QColor(78, 47, 36, 76))
@@ -879,13 +872,6 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
         font.setBold(variant == "menu_toggle")
         painter.setFont(font)
         painter.setPen(text)
-        if state == "pressed":
-            painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor(70, 42, 28, 95))
-            painter.drawRoundedRect(rect, 14, 14)
-            # 压暗盖后补回文字色——NoPen 下 drawText 不绘制（评审轮抓出
-            # 的按压文字消失回归）。
-            painter.setPen(text)
         painter.drawText(rect, Qt.AlignCenter, label)
         painter.restore()
 
@@ -2003,12 +1989,8 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
             # 分类签同按键规范（悬浮放大，按住内缩+压暗；recover 回原大小）。
             if state == "hover":
                 rect = rect.adjusted(-2, -2, 2, 2)
-            elif state == "pressed":
-                rect = rect.adjusted(2, 2, -2, -2)
             selected = category == self._decoration_category
             fill = "#cf846a" if selected else "#f9e7ce"
-            if state == "pressed":
-                fill = "#b06a4f" if selected else "#ecd0b2"
             painter.setBrush(QColor(fill))
             painter.setPen(Qt.NoPen)
             painter.drawRoundedRect(rect, 7, 7)
@@ -2067,9 +2049,7 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
             # 放置/收纳键同按键规范（recover 回原大小）。
             if state == "hover":
                 action_rect = action_rect.adjusted(-2, -2, 2, 2)
-            elif state == "pressed":
-                action_rect = action_rect.adjusted(2, 2, -2, -2)
-            painter.setBrush(QColor("#e8b98c" if state == "pressed" else "#f5d6b3"))
+            painter.setBrush(QColor("#f5d6b3"))
             painter.setPen(Qt.NoPen)
             painter.drawRoundedRect(action_rect, 7, 7)
             # 悬浮纯放大（2026-09-28 用户定稿统一）：描边撤除。

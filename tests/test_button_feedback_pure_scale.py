@@ -178,10 +178,10 @@ class AvatarButtonPureScaleTests(unittest.TestCase):
         pressed = _opaque_bbox(self._grab(btn))
         btn._pressed = False
         self.assertIsNotNone(normal)
-        # 常态内缩 2px、悬浮回全幅、按压内缩 5px（含压暗盖）。
+        # 常态内缩 2px、悬浮回全幅、按压还原常态（终版：按压效果删除）。
         self.assertEqual(normal[0], 2, "常态头像应四周留 2px 余量")
         self.assertEqual(hovered[0], 0, "悬浮应放大到全幅（无余量）")
-        self.assertEqual(pressed[0], 5, "按压应内缩 5px（2026-09-28 三轮：4→6→5px）")
+        self.assertEqual(pressed[0], 2, "按压应还原常态（2026-09-28 终版：按压效果删除）")
         # 悬浮帧不得引入白色洗盖（顶部不得出现近白不透明像素）。
         btn._hovered = True
         arr = _array(self._grab(btn))
@@ -226,8 +226,8 @@ class HomeSceneButtonPureScaleTests(unittest.TestCase):
             "悬浮整键应外扩 3px/边",
         )
         self.assertEqual(
-            (pressed[2] - pressed[0]) - (normal[2] - normal[0]), -8,
-            "按压整键应内缩 4px/边（2026-09-28 三轮：3→5→4px 折中）",
+            (pressed[2] - pressed[0]) - (normal[2] - normal[0]), 0,
+            "按压应还原原大小（2026-09-28 终版：按压效果全部删除）",
         )
 
     def test_pressed_keeps_label_visible(self):
