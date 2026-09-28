@@ -337,7 +337,7 @@ class ChatWindow(KeepAliveTopLevelWindow):
         self.title.mouseReleaseEvent = lambda e: setattr(self, "_drag_off", None)
 
         # 标题行按键（2026-09-11 A1）：接全应用按键反馈规范
-        # （悬浮放大+白洗、按住内缩压暗、键内回弹 40ms 后触发）。
+        # （悬浮放大、按住内缩压暗、键内回弹 40ms 后触发——纯缩放反馈）。
         self.close_btn = FeedbackButton("×")
         self.close_btn.setFixedSize(28, 28)
         self.close_btn.setCursor(Qt.PointingHandCursor)

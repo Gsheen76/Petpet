@@ -826,6 +826,8 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
             return
         painter.save()
         painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
+        # 纯缩放反馈（2026-09-28 用户定稿统一）：hover=放大 3px、
+        # pressed=内缩 3px+压暗；不再画描边/白洗叠层。
         draw_rect = rect
         if state == "hover":
             draw_rect = rect.adjusted(-3, -3, 3, 3)
@@ -836,11 +838,6 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
             painter.setPen(Qt.NoPen)
             painter.setBrush(QColor(70, 42, 28, 150))
             painter.drawRoundedRect(draw_rect, 14, 14)
-        elif state in ("hover", "recover"):
-            # recover：回弹到原大小，只借用悬浮的描边+白洗高亮。
-            painter.setPen(QPen(QColor("#d9976b"), 3))
-            painter.setBrush(QColor(255, 252, 246, 90))
-            painter.drawRoundedRect(draw_rect.adjusted(1, 1, -1, -1), 14, 14)
         if label:
             painter.setFont(self._cute_button_font())
             painter.setPen(QColor("#9A5B3F"))
@@ -852,6 +849,12 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
 
     def _draw_scene_button(self, painter, rect, label, variant="primary",
                            state=None):
+        # 纯缩放反馈（2026-09-28 用户定稿统一）：hover=整键放大 3px、
+        # pressed=整键内缩 3px+压暗；描边/白洗叠层撤除。
+        if state == "hover":
+            rect = rect.adjusted(-3, -3, 3, 3)
+        elif state == "pressed":
+            rect = rect.adjusted(3, 3, -3, -3)
         painter.save()
         painter.setPen(Qt.NoPen)
         painter.setBrush(QColor(78, 47, 36, 76))
@@ -877,11 +880,8 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
         painter.setFont(font)
         painter.setPen(text)
         if state == "pressed":
+            painter.setPen(Qt.NoPen)
             painter.setBrush(QColor(70, 42, 28, 150))
-            painter.drawRoundedRect(rect.adjusted(3, 3, -3, -3), 14, 14)
-        elif state in ("hover", "recover"):
-            painter.setPen(QPen(QColor("#d9976b"), 3))
-            painter.setBrush(QColor(255, 252, 246, 110))
             painter.drawRoundedRect(rect, 14, 14)
         painter.drawText(rect, Qt.AlignCenter, label)
         painter.restore()
@@ -1997,7 +1997,7 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
         for category, label in HOME_DECORATION_CATEGORIES:
             rect = self._category_rects()[category]
             state = self._button_state(f"deco:cat:{category}")
-            # 第六十八轮：分类签同按键规范（悬浮放大+描边，按住内缩+压暗）。
+            # 分类签同按键规范（悬浮放大，按住内缩+压暗）。
             if state == "hover" or state == "recover":
                 rect = rect.adjusted(-2, -2, 2, 2)
             elif state == "pressed":
@@ -2009,10 +2009,7 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
             painter.setBrush(QColor(fill))
             painter.setPen(Qt.NoPen)
             painter.drawRoundedRect(rect, 7, 7)
-            if state in ("hover", "recover"):
-                painter.setPen(QPen(QColor("#f28f76"), 2))
-                painter.setBrush(Qt.NoBrush)
-                painter.drawRoundedRect(rect, 7, 7)
+            # 悬浮纯放大（2026-09-28 用户定稿统一）：描边撤除。
             painter.setPen(QColor("#65483b"))
             painter.drawText(rect, Qt.AlignCenter, label)
         # 滚动指示条（2026-09-13 修复轮）：内容超出可视区时右缘细条
@@ -2072,10 +2069,7 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
             painter.setBrush(QColor("#e8b98c" if state == "pressed" else "#f5d6b3"))
             painter.setPen(Qt.NoPen)
             painter.drawRoundedRect(action_rect, 7, 7)
-            if state in ("hover", "recover"):
-                painter.setPen(QPen(QColor("#f28f76"), 2))
-                painter.setBrush(Qt.NoBrush)
-                painter.drawRoundedRect(action_rect, 7, 7)
+            # 悬浮纯放大（2026-09-28 用户定稿统一）：描边撤除。
             painter.setPen(QColor("#65483b"))
             painter.drawText(action_rect, Qt.AlignCenter, action)
 

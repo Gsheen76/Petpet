@@ -486,7 +486,8 @@ class _RoundedBgLabel(QWidget):
 
 class _TabButton(QWidget):
     """素材分栏按钮（第三十七轮）：参考图裁切的「简介/套装」牌。
-    悬停=放大+白洗；按住=缩小+压暗（alpha 60），松开在内才切换。"""
+    悬停=放大；按住=缩小+压暗（alpha 60），松开在内才切换。
+    悬浮白洗已撤（2026-09-28 用户定稿：全应用纯缩放反馈）。"""
 
     clicked = pyqtSignal(str)
 
@@ -584,9 +585,7 @@ class _TabButton(QWidget):
         if self._pressed:
             painter.setBrush(QColor(70, 42, 28, 60))
             painter.drawRoundedRect(art_pos, 12, 12)
-        elif self._hovered:
-            painter.setBrush(QColor(255, 252, 246, 80))
-            painter.drawRoundedRect(art_pos, 12, 12)
+        # 悬浮纯放大（2026-09-28 用户定稿统一）：白洗撤除。
 
 
 class _OutfitIdleLabel(QLabel):
@@ -620,8 +619,9 @@ class _OutfitIdleLabel(QLabel):
 
 
 class _AvatarButton(QWidget):
-    """宠物头像按钮：整幅绘制不裁切；悬停=圆角正方形珊瑚描边+白洗，
-    按压=暗洗+描边（贴合素材的绝对圆角方形，不受 QSS padding 影响）。"""
+    """宠物头像按钮：整幅绘制不裁切；悬停=头像放大到全幅，按压=内缩+
+    压暗（纯缩放反馈，2026-09-28 用户定稿统一）。选中（当前宠物）的
+    淡琥珀虚线常驻描边是语义状态，保留。"""
 
     clicked = pyqtSignal()
 
@@ -665,57 +665,54 @@ class _AvatarButton(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         w, h = self.width(), self.height()
+        # 纯缩放反馈：常态头像四周留 2px 余量，悬浮放大到全幅、
+        # 按压内缩 4px——绘制永远在 widget 边界内，不裁角。
+        if self._pressed:
+            box = QRect(4, 4, w - 8, h - 8)
+        elif self._hovered:
+            box = QRect(0, 0, w, h)
+        else:
+            box = QRect(2, 2, w - 4, h - 4)
         # 头像整幅等比居中（不裁切）。
         if not self._pixmap.isNull():
             scaled = self._pixmap.scaled(
-                w, h, Qt.KeepAspectRatio, Qt.SmoothTransformation,
+                box.width(), box.height(),
+                Qt.KeepAspectRatio, Qt.SmoothTransformation,
             )
             painter.drawPixmap(
-                (w - scaled.width()) // 2, (h - scaled.height()) // 2, scaled,
+                box.x() + (box.width() - scaled.width()) // 2,
+                box.y() + (box.height() - scaled.height()) // 2, scaled,
             )
-        # 反馈：圆角正方形描边（边长 = 按钮方形），悬停/按压变色。
         radius = max(6, round(16 * _FIT))
         pen_w = max(3, round(4 * _FIT))
         if self._pressed:
-            painter.setPen(QPen(QColor("#e8714f"), pen_w))
+            painter.setPen(Qt.NoPen)
             painter.setBrush(QColor(70, 42, 28, 60))
-            painter.drawRoundedRect(
-                pen_w // 2, pen_w // 2, w - pen_w, h - pen_w, radius, radius,
+            painter.drawRoundedRect(box, radius, radius)
+        elif self.selected:
+            # 选中（当前宠物）：淡琥珀虚线常驻描边（语义状态）。
+            painter.setPen(
+                QPen(QColor(230, 183, 110, 200), pen_w, Qt.DotLine)
             )
-        else:
-            if self._hovered:
-                painter.setBrush(QColor(255, 252, 246, 90))
-                painter.drawRoundedRect(0, 0, w, h, radius, radius)
-            # 选中（当前宠物）：淡琥珀虚线常驻描边；未选中悬停用珊瑚实线。
-            if self.selected:
-                pen = QPen(QColor(230, 183, 110, 200), pen_w, Qt.DotLine)
-                painter.setPen(pen)
-                painter.setBrush(Qt.NoBrush)
-                painter.drawRoundedRect(
-                    pen_w // 2, pen_w // 2, w - pen_w, h - pen_w,
-                    radius, radius,
-                )
-            if self._hovered:
-                painter.setPen(QPen(QColor("#f28f76"), pen_w))
-                painter.setBrush(Qt.NoBrush)
-                painter.drawRoundedRect(
-                    pen_w // 2, pen_w // 2, w - pen_w, h - pen_w,
-                    radius, radius,
-                )
+            painter.setBrush(Qt.NoBrush)
+            painter.drawRoundedRect(
+                pen_w // 2, pen_w // 2, w - pen_w, h - pen_w,
+                radius, radius,
+            )
 
 
 class _ArtButton(QWidget):
-    """素材图标按钮（第十九/二十一轮泛化）：悬浮放大+白洗，点击缩小→
-    还原后触发回调（两段式，节奏 CLOSE_*_MS）。用于关闭/改名等贴图键。"""
+    """素材图标按钮（第十九/二十一轮泛化）：悬浮放大，点击缩小→
+    还原后触发回调（两段式，节奏 CLOSE_*_MS；纯缩放反馈，2026-09-28
+    用户定稿统一——白洗已撤）。用于关闭/改名等贴图键。"""
 
     def __init__(self, parent, art, on_activate, margin=0,
-                 hover_wash=True, hover_grow=3):
+                 hover_grow=3):
         super().__init__(parent)
         self._art = art if not art.isNull() else QPixmap()
         self._on_activate = on_activate
-        # 悬浮白洗开关（2026-09-15 用户取消本页白闪）：False 时
-        # 只保留放大/内缩反馈；hover_grow 控制悬浮放大像素。
-        self._hover_wash = bool(hover_wash)
+        # 纯缩放反馈（2026-09-28 用户定稿统一）：白洗机制整体撤除，
+        # 只保留悬浮放大/按压内缩；hover_grow 控制悬浮放大像素。
         self._hover_grow = max(0, int(hover_grow))
         # 画布余量（2026-09-15 陪我键轮）：休息态贴图内缩 margin，
         # 悬浮/按压的缩放永远画在 widget 内——悬浮涨幅裁切治本
@@ -774,9 +771,7 @@ class _ArtButton(QWidget):
             # 黑闪盖素材实际范围（第三十四轮：alpha 80→60 略减）。
             painter.setBrush(QColor(70, 42, 28, 60))
             painter.drawRoundedRect(art_pos, 10, 10)
-        elif self.hovered and self._hover_wash:
-            painter.setBrush(QColor(255, 252, 246, 80))
-            painter.drawRoundedRect(art_pos, 10, 10)
+        # 悬浮纯放大（2026-09-28 用户定稿统一）：白洗撤除。
 
     def enterEvent(self, event):
         self.hovered = True
@@ -866,7 +861,6 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
         # 素材逐个接入（base_UI 已于第六轮撤下）。
         self._close_button = _ArtButton(
             self, _pp_pixmap("close_button.png"), self.close,
-            hover_wash=False,
         )
         self._close_button.set_art_rect(CLOSE_BUTTON_AT)
         # 套装装备按钮素材映射（绿=恐龙、橘=草莓），测试与刷新共用。
@@ -968,13 +962,13 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
 
         # 陪伴按钮（2026-09-15 查看/陪伴分离；同日晚用户素材定稿）：
         # 查看非出勤宠物时出现——点击让 TA 出勤陪你。用户提供的贴图
-        # 走 _ArtButton（悬浮放大+白洗 / 按住内缩压暗 / 键内回弹触发，
-        # 与面板其他贴图键同款反馈）。位置：待机动画图右侧垂直居中。
+        # 走 _ArtButton（悬浮放大 / 按住内缩压暗 / 键内回弹触发，纯缩放
+        # 反馈 2026-09-28 统一）。位置：待机动画图右侧垂直居中。
         self._companion_button = _ArtButton(
             self,
             _pp_pixmap("companion_button.png"),
             self._accompany_viewed_pet,
-            margin=6, hover_wash=False, hover_grow=1,
+            margin=6, hover_grow=1,
         )
         self._companion_button.setObjectName("companionButton")
         # 2026-09-15 十二调：中心轴对齐基础上再下移 4；
@@ -1002,7 +996,7 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
         self._name_label.setGeometry(_R(*NAME_ART_AT))
         self._rename_button = _ArtButton(
             self, _pp_pixmap("rename_icon.png"), self._open_name_dialog,
-            margin=3, hover_wash=False,
+            margin=3,
         )
         self._rename_button.set_art_rect(RENAME_BUTTON_AT)
 

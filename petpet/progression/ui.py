@@ -54,7 +54,7 @@ from petpet.app.paths import (
 )
 from petpet.app.fonts import APP_FONT_FAMILY
 from petpet.ui.common import independent_pixel_font
-from petpet.app.paths import RESOURCE_DIR
+from petpet.app.paths import RESOURCE_DIR, SOUNDS_DIR
 from petpet.app.pets import (
     load_pet_registry,
     pet_asset_path,
@@ -799,11 +799,16 @@ class PreservedTextLabel(QLabel):
 class FeedbackButton(QPushButton):
     """Push button with the app-standard hover/press feedback.
 
-    悬浮 = 素材放大 2px + 白洗 + 珊瑚描边；按住 = 内缩 3px + 压暗
-    （持续整个按住期间）；松开在键内 = 回弹高亮 40ms 后才触发
-    clicked（宠物面板/家园同款）。checkable 键（页签/筛选）保留
-    原生释放时序，仅视觉反馈相同。QSS 皮肤全铺满 widget、几何余量
-    为零，无法直接放大矩形——用 render 抓素颜帧后整体缩放绘制。
+    悬浮 = 素材放大 2px；按住 = 内缩 3px + 压暗（持续整个按住期间）；
+    松开在键内 = 回弹原大小 40ms 后才触发 clicked（宠物面板/家园同款）。
+    checkable 键（页签/筛选）保留原生释放时序。QSS 皮肤全铺满
+    widget、几何余量为零，无法直接放大矩形——用 render 抓素颜帧后
+    整体缩放绘制。
+
+    纯缩放反馈（2026-09-28 用户定稿，全应用统一）：悬浮/回弹不再加
+    白洗与珊瑚描边。描边曾画在 rect±2 的圆角矩形上，被控件边界裁掉
+    直线段、只剩四角的弧段——正是用户拍到的「四角锁定特效」，此类
+    叠层禁止复活。
 
     统一点击音（2026-09-28 用户定稿）：回弹触发瞬间播 click.wav
     （跟随 sound_enabled 全局开关；checkable/禁用键不响）。
@@ -885,7 +890,10 @@ class FeedbackButton(QPushButton):
                 effect = QSoundEffect()
                 effect.setSource(
                     QUrl.fromLocalFile(
-                        str(RESOURCE_DIR / "sounds" / "click.wav")
+                        # SOUNDS_DIR 与宠物音效同一目录
+                        # （RESOURCE_DIR 是 str 不能用 / 拼——曾 TypeError
+                        # 被吞、点击音全灭，2026-09-28 修）。
+                        os.path.join(SOUNDS_DIR, "click.wav")
                     )
                 )
                 effect.setVolume(0.35)
@@ -927,26 +935,19 @@ class FeedbackButton(QPushButton):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.SmoothPixmapTransform)
         painter.setRenderHint(QPainter.Antialiasing)
+        # 纯缩放反馈（2026-09-28 用户定稿）：hover=素材放大 2px、
+        # recover=回原大小、pressed=内缩 3px+压暗——不再画任何
+        # 描边/白洗（描边曾因画在 rect±2 被裁成四角取景框角标）。
         if phase == "pressed":
             target = self.rect().adjusted(3, 3, -3, -3)
-            tint = QColor(150, 60, 40, 70)
-            outline = None
         else:
-            d = 0 if phase == "recover" else 2
+            d = 2 if phase == "hover" else 0
             target = self.rect().adjusted(-d, -d, d, d)
-            if phase == "recover":
-                tint = QColor(255, 252, 246, 90)
-            else:
-                tint = QColor(255, 255, 255, 55)
-            outline = QColor("#f28f76")
         painter.drawPixmap(target, skin)
-        path = QPainterPath()
-        path.addRoundedRect(QRectF(target), 16, 16)
-        painter.fillPath(path, tint)
-        if outline is not None:
-            painter.setPen(QPen(outline, 2))
-            painter.setBrush(Qt.NoBrush)
-            painter.drawPath(path)
+        if phase == "pressed":
+            path = QPainterPath()
+            path.addRoundedRect(QRectF(target), 16, 16)
+            painter.fillPath(path, QColor(150, 60, 40, 70))
         painter.end()
 
 
