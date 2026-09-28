@@ -73,12 +73,12 @@ def _shop_asset(name):
 
 
 def _shop_pixmap(name, height):
-    pixmap = QPixmap(_shop_asset(name))
-    if pixmap.isNull():
-        return pixmap
-    return pixmap.scaledToHeight(
-        height, Qt.SmoothTransformation
-    )
+    # 图片缓存（2026-09-28 商店加载轮）：原实现每次页面重建都磁盘
+    # 加载+平滑缩放（无缓存）——各页首建 0.3-2.6s 的大头。走
+    # imgcache（QPixmap 双键缓存 + 后台 QImage 预解码热备）。
+    from petpet.app.imgcache import pixmap as cached_pixmap
+
+    return cached_pixmap(_shop_asset(name), height)
 
 
 _CROPPED_PIXMAP_CACHE = {}
@@ -112,7 +112,9 @@ def _shop_pixmap_cropped(name, height):
     cached = _CROPPED_PIXMAP_CACHE.get(key)
     if cached is not None:
         return cached
-    pixmap = QPixmap(_shop_asset(name))
+    from petpet.app.imgcache import pixmap as cached_pixmap
+
+    pixmap = cached_pixmap(_shop_asset(name))
     if pixmap.isNull():
         _CROPPED_PIXMAP_CACHE[key] = pixmap
         return pixmap
@@ -2340,7 +2342,9 @@ class DecorationPreview(QWidget):
         self.on_drag_finished = on_drag_finished
         self.preview_state = preview_state
         self.allow_drag = bool(allow_drag)
-        self.base_pixmap = QPixmap(os.path.join(POSES_DIR, "idle.png"))
+        from petpet.app.imgcache import pixmap as _cpixmap
+
+        self.base_pixmap = _cpixmap(os.path.join(POSES_DIR, "idle.png"))
         self.decoration_pixmaps = (
             decoration_renderer.load_decoration_pixmaps()
         )
@@ -2701,7 +2705,21 @@ class ShopWindow(CozyProgressWindow):
             button.setVisible(page != "pets" or has_pets)
             button.setChecked(self.page == page)
 
+    _predecode_started = False
+
     def refresh(self):
+        # 首次进店触发后台素材预解码（2026-09-28 加载轮）：磁盘 IO+
+        # 解码离开 UI 线程，后续各页首建从 QImage 热备轻转换（商店
+        # 全部相关素材仅 ~8.6MB，一次全热）。
+        if not ShopWindow._predecode_started:
+            ShopWindow._predecode_started = True
+            try:
+                from petpet.app.imgcache import (
+                    predecode_async, shop_asset_paths,
+                )
+                predecode_async(shop_asset_paths())
+            except Exception:
+                pass
         # 数据变化入口（购买/装备/重开窗口）：整页缓存失效重建。
         self._invalidate_page_cache()
         progression.ensure_progression(self.pet.state)
@@ -2803,7 +2821,8 @@ class ShopWindow(CozyProgressWindow):
         preview.setFixedSize(135, 135)
         preview.setAlignment(Qt.AlignCenter)
         preview_path = pet_avatar_path(pet_id)
-        pixmap = QPixmap(preview_path) if preview_path else QPixmap()
+        from petpet.app.imgcache import pixmap as _cpixmap
+        pixmap = _cpixmap(preview_path) if preview_path else QPixmap()
         if pixmap.isNull():
             preview.setStyleSheet("background: #f4d6b5; border-radius: 8px;")
         else:
@@ -3107,7 +3126,9 @@ class ShopWindow(CozyProgressWindow):
         preview.setFixedSize(210, 150)
         preview.setAlignment(Qt.AlignCenter)
         asset_folder = definition.get("asset_folder", outfit_id)
-        pixmap = QPixmap(os.path.join(
+        from petpet.app.imgcache import pixmap as _cpixmap
+
+        pixmap = _cpixmap(os.path.join(
             OUTFITS_DIR, asset_folder, definition["preview_asset"]
         ))
         if not pixmap.isNull():
@@ -3204,7 +3225,9 @@ class ShopWindow(CozyProgressWindow):
         preview = QLabel()
         preview.setFixedSize(210, 112)
         preview.setAlignment(Qt.AlignCenter)
-        pixmap = QPixmap(os.path.join(
+        from petpet.app.imgcache import pixmap as _cpixmap
+
+        pixmap = _cpixmap(os.path.join(
             DECORATIONS_DIR, definition["asset"]
         ))
         if not pixmap.isNull():
@@ -3465,7 +3488,8 @@ class ShopWindow(CozyProgressWindow):
         if decoration_id == "home_status_card":
             pixmap = render_home_status_card(state)
         else:
-            pixmap = QPixmap(HOME_FURNITURE_PATHS[decoration_id])
+            from petpet.app.imgcache import pixmap as _cpixmap
+            pixmap = _cpixmap(HOME_FURNITURE_PATHS[decoration_id])
         if not pixmap.isNull():
             preview.setPixmap(pixmap.scaled(
                 preview.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation
@@ -3735,7 +3759,8 @@ class ShopWindow(CozyProgressWindow):
         preview.setFixedSize(92, 92)
         preview.setAlignment(Qt.AlignCenter)
         icon_path = os.path.join(GIFTS_UI_DIR, definition.get("icon", ""))
-        pixmap = QPixmap(icon_path) if os.path.exists(icon_path) else QPixmap()
+        from petpet.app.imgcache import pixmap as _cpixmap
+        pixmap = _cpixmap(icon_path) if os.path.exists(icon_path) else QPixmap()
         if pixmap.isNull():
             preview.setStyleSheet("background: #f4d6b5; border-radius: 8px;")
         else:
