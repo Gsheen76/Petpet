@@ -900,6 +900,16 @@ class FeedbackButton(QPushButton):
         except RuntimeError:
             pass  # 窗口已销毁的延迟触发
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        # 皮肤帧预抓（2026-09-28 手感延迟轮）：皮肤缓存原是懒抓——
+        # 首次悬浮/按下某个键的那一帧 skin is None，画的是素颜（无
+        # 放大/内缩反馈），下一拍抓完才有反馈——每个键的"第一次"
+        # 都迟一拍（用户手感明显延迟的根因）。显示时即预抓，首次
+        # 悬浮/按压当帧就有完整反馈。singleShot(0) 避开 paint 期
+        # render 抓空帧的坑。
+        QTimer.singleShot(0, self._capture_skin)
+
     def paintEvent(self, event):
         phase = self._phase()
         skin = self._skin_cache

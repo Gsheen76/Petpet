@@ -91,6 +91,35 @@ class FeedbackButtonPureScaleTests(unittest.TestCase):
             f"悬浮帧不得含放大素材以外的叠层（描边/白洗回归？坏点 {bad}/{total}）",
         )
 
+    def test_skin_precaptured_on_show(self):
+        """显示即预抓皮肤帧（2026-09-28 手感延迟轮）：懒抓曾让每个键
+        首次悬浮/按压的第一帧画素颜（无放大/内缩反馈）——迟一拍。
+        """
+        from petpet.progression.ui import FeedbackButton
+
+        btn = FeedbackButton("购买")
+        btn.resize(110, 48)
+        btn.show()
+        QApplication.processEvents()  # showEvent 的 singleShot(0) 落地
+        self.assertIsNotNone(
+            btn._skin_cache, "显示后皮肤帧应已预抓（首次反馈当帧生效）"
+        )
+        self.assertFalse(btn._skin_cache.isNull())
+        # 首次（无任何悬停历史）hover 即完整放大帧
+        btn.underMouse = lambda: True
+        hover = btn.grab().toImage().convertToFormat(QImage.Format_ARGB32)
+        expected = QPixmap(btn.size())
+        expected.fill(Qt.transparent)
+        p = QPainter(expected)
+        p.setRenderHint(QPainter.SmoothPixmapTransform)
+        p.drawPixmap(QRect(-2, -2, btn.width() + 4, btn.height() + 4),
+                     btn._skin_cache)
+        p.end()
+        exp = expected.toImage().convertToFormat(QImage.Format_ARGB32)
+        ok, bad, total = _images_close(hover, exp)
+        self.assertTrue(ok, f"首次悬浮应为完整放大帧（坏点 {bad}/{total}）")
+        self.addCleanup(btn.close)
+
     def test_recover_frame_equals_plain_skin(self):
         """回弹相位于原大小直绘素颜帧（无叠层）。"""
         from petpet.progression.ui import FeedbackButton
