@@ -201,6 +201,48 @@ class HomeSceneButtonPureScaleTests(unittest.TestCase):
             "按压整键应内缩 3px/边",
         )
 
+    def test_pressed_keeps_label_visible(self):
+        """按压压暗盖后必须复回文字色 pen——NoPen 下 drawText 不绘制
+        （五轮评审抓出的按住文字消失回归）。offscreen 无字体库，文字
+        渲染 0 像素，像素对照测不出——改钉源码时序。"""
+        import re
+
+        src = (Path(__file__).resolve().parents[1]
+               / "petpet" / "home" / "window.py").read_text(encoding="utf-8")
+        block = re.search(
+            r"def _draw_scene_button\(.*?(?=\n    def )", src, re.S
+        )
+        self.assertIsNotNone(block, "找不到 _draw_scene_button")
+        text = block.group(0)
+        self.assertIn(
+            "painter.setPen(text)\n        painter.drawText",
+            text,
+            "按压压暗盖（NoPen）后必须复回文字色再 drawText",
+        )
+
+
+class PureScaleStaticGuards(unittest.TestCase):
+    """静态守卫：叠层撤除断言（halo 色号/recover 放大模式禁止回库）。"""
+
+    ROOT = Path(__file__).resolve().parents[1]
+
+    def test_bubble_menu_hover_halo_removed(self):
+        src = (self.ROOT / "petpet" / "ui" / "desktop.py").read_text(
+            encoding="utf-8")
+        self.assertNotIn(
+            "242, 143, 118, 34", src, "气泡菜单悬浮白洗光环不得回库")
+        self.assertNotIn(
+            'QPen(QColor("#f28f76"), 2.2)', src,
+            "气泡菜单悬浮珊瑚描边不得回库")
+
+    def test_recover_state_never_enlarges(self):
+        """recover（回弹）相位=原大小，不得与 hover 同享放大几何。"""
+        src = (self.ROOT / "petpet" / "home" / "window.py").read_text(
+            encoding="utf-8")
+        self.assertNotIn(
+            '== "hover" or state == "recover"', src,
+            "recover 相位不得沿用悬浮放大（点击缩小再还原）")
+
 
 if __name__ == "__main__":
     unittest.main()

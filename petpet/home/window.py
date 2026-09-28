@@ -883,6 +883,9 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
             painter.setPen(Qt.NoPen)
             painter.setBrush(QColor(70, 42, 28, 150))
             painter.drawRoundedRect(rect, 14, 14)
+            # 压暗盖后补回文字色——NoPen 下 drawText 不绘制（评审轮抓出
+            # 的按压文字消失回归）。
+            painter.setPen(text)
         painter.drawText(rect, Qt.AlignCenter, label)
         painter.restore()
 
@@ -1997,8 +2000,8 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
         for category, label in HOME_DECORATION_CATEGORIES:
             rect = self._category_rects()[category]
             state = self._button_state(f"deco:cat:{category}")
-            # 分类签同按键规范（悬浮放大，按住内缩+压暗）。
-            if state == "hover" or state == "recover":
+            # 分类签同按键规范（悬浮放大，按住内缩+压暗；recover 回原大小）。
+            if state == "hover":
                 rect = rect.adjusted(-2, -2, 2, 2)
             elif state == "pressed":
                 rect = rect.adjusted(2, 2, -2, -2)
@@ -2061,8 +2064,8 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
             action = "放置" if stored else "收纳"
             action_rect = self._item_action_rect(card)
             state = self._button_state(f"deco:act:{item_id}")
-            # 第六十八轮：放置/收纳键同按键规范。
-            if state == "hover" or state == "recover":
+            # 放置/收纳键同按键规范（recover 回原大小）。
+            if state == "hover":
                 action_rect = action_rect.adjusted(-2, -2, 2, 2)
             elif state == "pressed":
                 action_rect = action_rect.adjusted(2, 2, -2, -2)
@@ -2346,6 +2349,9 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
         self._button_recover_until = 0.0
         if point is None:
             return
+        from petpet.app.sounds import play_click
+
+        play_click()  # 统一点击音（2026-09-28 五轮：家园键接入共享曲）
         self.handle_scene_click(point)
 
     def _button_state(self, name):

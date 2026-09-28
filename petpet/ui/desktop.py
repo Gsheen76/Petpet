@@ -760,17 +760,9 @@ class BubbleMenu(KeepAliveTopLevelWindow):
             )
 
             # 图标即按键（2026-09-09 用户定稿）：去掉糖果底板与常驻文字，
-            # 悬浮时放大 + 珊瑚描边高亮 + 底部名称胶囊；按住缩小压暗。
-            # 高亮框用未缩放基准几何（2026-09-09 精调）：主菜单行宽=画布
-            # 620，放大矩形（×1.07）会越出首尾按键外侧被裁。
-            if hovered:
-                # 2026-09-25 用户定稿：高亮框铺满整个按键格（含名称胶囊
-                # 区）——所见高亮区 == 悬浮触发区，各键手感一致。
-                halo = QRectF(bx + 2, by + 2, button_w - 4, button_h - 6)
-                p.setBrush(QColor(242, 143, 118, 34))
-                p.setPen(QPen(QColor("#f28f76"), 2.2))
-                p.drawRoundedRect(halo, 18, 18)
-
+            # 悬浮时放大 + 底部名称胶囊；按住缩小压暗。
+            # 高亮框已撤（2026-09-28 纯缩放反馈统一：全应用按键只做
+            # 悬浮放大/按压缩小，不再画描边/白洗光环）。
             icon_px = 58 if hovered else 52
             # 缩放结果按 (action, px) 缓存（2026-09-12 悬浮卡顿优化）：
             # 每帧对 240² 源图做 SmoothTransformation 是跟手卡顿主因之一。
@@ -908,6 +900,9 @@ class BubbleMenu(KeepAliveTopLevelWindow):
                 self._close()
 
     def _run_action(self, action):
+        from petpet.app.sounds import play_click
+
+        play_click()  # 统一点击音（2026-09-28 五轮：气泡菜单接入共享曲）
         pet = self.pet
         if action in ("more", "interaction", "back"):
             # Switching pages always replaces the complete current canvas.

@@ -9,7 +9,7 @@ import os
 import time
 import copy
 
-from PyQt5.QtCore import Qt, QUrl, QPoint, QRect, QRectF, QSize, QTimer
+from PyQt5.QtCore import Qt, QPoint, QRect, QRectF, QSize, QTimer
 from PyQt5.QtGui import (
     QColor,
     QFont,
@@ -54,7 +54,6 @@ from petpet.app.paths import (
 )
 from petpet.app.fonts import APP_FONT_FAMILY
 from petpet.ui.common import independent_pixel_font
-from petpet.app.paths import RESOURCE_DIR, SOUNDS_DIR
 from petpet.app.pets import (
     load_pet_registry,
     pet_asset_path,
@@ -815,7 +814,6 @@ class FeedbackButton(QPushButton):
     """
 
     RECOVER_MS = 40
-    _CLICK_SOUND = None  # 类级共享 SoundEffect（全按钮一个实例）
 
     def __init__(self, text="", parent=None):
         super().__init__(text, parent)
@@ -882,35 +880,11 @@ class FeedbackButton(QPushButton):
 
     @classmethod
     def _play_click(cls):
-        """统一点击音（懒加载类级共享实例；失败静默）。"""
-        if cls._CLICK_SOUND is None:
-            try:
-                from PyQt5.QtMultimedia import QSoundEffect
+        """统一点击音（共享单例，2026-09-28 五轮抽到 petpet.app.sounds
+        ——家园/贴图键/气泡菜单同曲；失败静默）。"""
+        from petpet.app.sounds import play_click
 
-                effect = QSoundEffect()
-                effect.setSource(
-                    QUrl.fromLocalFile(
-                        # SOUNDS_DIR 与宠物音效同一目录
-                        # （RESOURCE_DIR 是 str 不能用 / 拼——曾 TypeError
-                        # 被吞、点击音全灭，2026-09-28 修）。
-                        os.path.join(SOUNDS_DIR, "click.wav")
-                    )
-                )
-                effect.setVolume(0.35)
-                effect.setMuted(True)  # 预热（首次播放 600ms 卡顿坑）
-                effect.play()
-                effect.setMuted(False)
-                cls._CLICK_SOUND = effect
-            except Exception:
-                cls._CLICK_SOUND = False  # 失败不再尝试
-            return
-        if cls._CLICK_SOUND is False:
-            return
-        try:
-            cls._CLICK_SOUND.stop()
-            cls._CLICK_SOUND.play()
-        except RuntimeError:
-            pass
+        play_click()
 
     def _fire_deferred(self):
         if not self._pending_fire:

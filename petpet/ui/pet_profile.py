@@ -621,7 +621,7 @@ class _OutfitIdleLabel(QLabel):
 class _AvatarButton(QWidget):
     """宠物头像按钮：整幅绘制不裁切；悬停=头像放大到全幅，按压=内缩+
     压暗（纯缩放反馈，2026-09-28 用户定稿统一）。选中（当前宠物）的
-    淡琥珀虚线常驻描边是语义状态，保留。"""
+    淡琥珀虚线描边是语义状态、非按压时常驻。"""
 
     clicked = pyqtSignal()
 
@@ -658,6 +658,9 @@ class _AvatarButton(QWidget):
             self.update()
             inside = self.rect().contains(event.pos())
             if inside:
+                from petpet.app.sounds import play_click
+
+                play_click()  # 统一点击音（头像=查看动作，非 checkable）
                 self.clicked.emit()
             event.accept()
 
@@ -810,6 +813,9 @@ class _ArtButton(QWidget):
         self._fire()
 
     def _fire(self):
+        from petpet.app.sounds import play_click
+
+        play_click()  # 统一点击音（2026-09-28 五轮：贴图键接入共享曲）
         activate = self._on_activate
         if callable(activate):
             activate()
