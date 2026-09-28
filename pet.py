@@ -2293,6 +2293,15 @@ def main():
     instance_server = SingleInstanceServer()
     if not instance_server.start():
         return 0
+    # 点击音启动期预热（2026-09-28 卡顿轮）：QSoundEffect 首次 play
+    # 是 ~1s 的同步音频后端初始化——放这里（托盘未现、锁已拿）一次
+    # 付清，用户第一次点按键不再冻 1s；顺带把进程音频后端 init 掉，
+    # PetWindow 的音效预热只剩每实例 ~200ms。
+    try:
+        from petpet.app.sounds import play_click
+        play_click()
+    except Exception:
+        pass
     if IS_WINDOWS and IS_FROZEN:
         repair_result = repair_legacy_windows_install(sys.executable)
         if repair_result.get("action") == "restart":

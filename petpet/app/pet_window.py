@@ -209,11 +209,15 @@ class PetWindow(QWidget):
                     self.sounds[name] = se
 
         # The first QSoundEffect play initializes the audio backend and can
-        # block for hundreds of milliseconds; pre-warm it muted in the
-        # background so the user's first interaction never hitches. The
-        # offscreen test platform has no audio backend and must not try.
+        # block for hundreds of milliseconds (measured 2026-09-28: ~1s for
+        # the process's first play + ~200ms per effect instance — the cost
+        # is device attach, NOT decode). Pay it all HERE, at the tail of
+        # construction: tray/pet are not visible yet, so no interaction can
+        # land inside the freeze. The old "singleShot(2000) + sync loop"
+        # landed the whole ~5s block right on the user's first clicks.
+        # The offscreen test platform has no audio backend and must not try.
         if self.sounds and not _dependency("IS_OFFSCREEN_PLATFORM")():
-            _dependency("QTimer").singleShot(2000, self._prewarm_sounds)
+            self._prewarm_sounds()
 
         # physics
         self.vx = 0.0
@@ -1910,12 +1914,18 @@ class PetWindow(QWidget):
 
     # ---------- say ----------
     def _prewarm_sounds(self):
+        # 启动期同步预热（2026-09-28 卡顿轮根治）：QSoundEffect 在本机
+        # 的 play() 有同步设备接入段（进程首个 ~1s + 每实例 ~200ms，
+        # 与解码无关——setSource 后台加载到 Ready 本身免费）。原
+        # 「启动后 2s singleShot + 同步 for」会把 ~5s 冻结压在用户首次
+        # 操作窗口上（真机：套装分栏切换 5.8s 里 5.06s 是它）。改为
+        # PetWindow 构造尾部（托盘/宠物尚未出现、用户必无交互）一次
+        # 付清：muted play 各一次；音量恢复挪到 play_sound 播放时设
+        # （stop 每次同步 ~240ms，不再调用）。
         for effect in self.sounds.values():
             try:
                 effect.setVolume(0.0)
                 effect.play()
-                effect.stop()
-                effect.setVolume(0.5)
             except RuntimeError:
                 pass
 
@@ -1930,7 +1940,9 @@ class PetWindow(QWidget):
             return
         se = self.sounds.get(name)
         if se is not None:
-            se.stop()
+            # 音量恢复挪到播放时（预热改为 muted play 不再 stop，
+            # 2026-09-28 卡顿轮——stop 每次同步 ~240ms）。
+            se.setVolume(0.5)
             se.play()
 
 
