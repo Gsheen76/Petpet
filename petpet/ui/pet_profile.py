@@ -687,8 +687,12 @@ class _AvatarButton(QWidget):
                 QPen(QColor(230, 183, 110, 200), pen_w, Qt.DotLine)
             )
             painter.setBrush(Qt.NoBrush)
+            # 选中框整体缩 10%（2026-09-29 用户定稿：每边内缩 5%，
+            # 框更贴合头像不显空）。
+            inset = round(min(w, h) * 0.05)
             painter.drawRoundedRect(
-                pen_w // 2, pen_w // 2, w - pen_w, h - pen_w,
+                inset + pen_w // 2, inset + pen_w // 2,
+                w - 2 * inset - pen_w, h - 2 * inset - pen_w,
                 radius, radius,
             )
 
