@@ -63,6 +63,13 @@ class ClickSoundFilterTests(unittest.TestCase):
             # 键外松开（拖出取消）不响
             _release(btn, 500, 500)
             self.assertEqual(len(hits), 3, "键外松开不得响")
+            # 游戏画布豁免（评审轮：金币雨/猜猜看整幅手势光标曾误响）
+            canvas = QWidget()
+            canvas.setCursor(Qt.PointingHandCursor)
+            canvas.setProperty("petpetNoClickSound", True)
+            canvas.resize(300, 300)
+            _release(canvas, 150, 150)
+            self.assertEqual(len(hits), 3, "豁免画布不得响")
         self.assertFalse(filt is None)
 
     def test_play_click_throttles_duplicate_hits(self):

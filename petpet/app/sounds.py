@@ -90,6 +90,10 @@ class ClickSoundFilter:
                     if (event.type() == QEvent.MouseButtonRelease
                             and event.button() == Qt.LeftButton
                             and isinstance(obj, QWidget)):
+                        # 游戏画布等整幅手势光标区显式豁免
+                        # （评审轮：金币雨/猜猜看连点画布曾被误响）。
+                        if obj.property("petpetNoClickSound"):
+                            return False
                         if (isinstance(obj, (QAbstractButton, QTabBar))
                                 or obj.cursor().shape()
                                 == Qt.PointingHandCursor):

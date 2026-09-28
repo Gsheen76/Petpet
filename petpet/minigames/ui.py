@@ -73,6 +73,8 @@ class CoinCatchCanvas(QWidget):
         super().__init__(parent)
         self.setMinimumHeight(390)
         self.setCursor(Qt.PointingHandCursor)
+        # 画布非按键：豁免应用级点击音（连点玩法全程点音曾误响）
+        self.setProperty("petpetNoClickSound", True)
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
         self._dog = QPixmap(os.path.join(POSES_DIR, "idle.png"))
@@ -352,6 +354,8 @@ class ShellShuffleCanvas(QWidget):
         self.rng = rng or random
         self.setMinimumHeight(335)
         self.setCursor(Qt.ArrowCursor)
+        # 画布非按键：guess 阶段整幅切手势光标，须豁免点击音
+        self.setProperty("petpetNoClickSound", True)
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
         self._token = 0
