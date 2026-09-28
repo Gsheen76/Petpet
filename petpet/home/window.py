@@ -55,7 +55,7 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
 
     # 胶囊按键两段式按压反馈：前段缩小+变暗，后段回弹原大小+悬浮高亮；
     # 总时长（含延迟触发动作）须保持短于旧版单段 100ms。
-    BUTTON_PRESS_FLASH_MS = 8  # 2026-09-28 三轮：40→15→8ms（回弹再加快）
+    BUTTON_PRESS_FLASH_MS = 0  # 2026-09-28 四轮：40→15→8→0ms（几乎瞬时）
 
     def __init__(self, pet, save_state):
         super().__init__()
@@ -2349,9 +2349,7 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
         self._button_recover_until = 0.0
         if point is None:
             return
-        from petpet.app.sounds import play_click
-
-        play_click()  # 统一点击音（2026-09-28 五轮：家园键接入共享曲）
+        # 点击音已在 mouseReleaseEvent 松开瞬间播（2026-09-28 四轮）
         self.handle_scene_click(point)
 
     def _button_state(self, name):
@@ -2452,6 +2450,10 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
                 event.pos()
             )
             if hit == key:
+                from petpet.app.sounds import play_click
+
+                play_click()  # 松开瞬间即响（2026-09-28 四轮用户定稿：
+                #  音效不得等回弹/触发——release 处直接播）
                 now = time.monotonic()
                 self._button_recover_until = (
                     now + self.BUTTON_PRESS_FLASH_MS / 1000.0

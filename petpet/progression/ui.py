@@ -816,7 +816,7 @@ class FeedbackButton(QPushButton):
     层 25ms 节流去重；跟随 sound_enabled 全局开关）。
     """
 
-    RECOVER_MS = 8  # 2026-09-28 三轮：40→15→8ms（回弹再加快）（低于感知阈）
+    RECOVER_MS = 0  # 2026-09-28 四轮：40→15→8→0ms（用户要几乎瞬时）（低于感知阈）
 
     def __init__(self, text="", parent=None):
         super().__init__(text, parent)

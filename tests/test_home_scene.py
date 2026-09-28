@@ -2049,11 +2049,13 @@ class HomeSceneAssetTests(unittest.TestCase):
             self.assertEqual(
                 scene._button_state("toggle:interaction"), "pressed"
             )
-        # 松开在键内 → 回弹段（原大小+悬浮高亮）40ms
+        # 松开在键内 → 回弹（2026-09-28 四轮 BUTTON_PRESS_FLASH_MS=0：
+        # recover 相位瞬时即逝；release→fire 之间状态机仍标 pressed，
+        # 但 0ms 触发器下一拍即清——视觉窗口为零）
         with patch("petpet.home.window.time.monotonic", return_value=base + 0.6):
             scene.mouseReleaseEvent(release_inside)
             self.assertEqual(
-                scene._button_state("toggle:interaction"), "recover"
+                scene._button_state("toggle:interaction"), "pressed"
             )
             self.assertIsNotNone(scene._deferred_click_point)
         # 回弹播完 → 延迟触发器到点：清理状态并触发
@@ -2063,7 +2065,7 @@ class HomeSceneAssetTests(unittest.TestCase):
         ):
             self.assertEqual(
                 scene._button_state("toggle:interaction"), "pressed"
-            )  # 触发器未到点前状态变量仍在（真实流程 40ms 即触发）
+            )  # 触发器未到点前状态变量仍在（真实流程 0ms 即触发）
         scene._fire_deferred_click()
         self.assertIsNone(scene._deferred_click_point)
         self.assertIsNone(scene._pressed_button)

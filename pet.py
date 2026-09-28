@@ -2298,8 +2298,8 @@ def main():
     # 付清，用户第一次点按键不再冻 1s；顺带把进程音频后端 init 掉，
     # PetWindow 的音效预热只剩每实例 ~200ms。
     try:
-        from petpet.app.sounds import play_click
-        play_click()
+        from petpet.app.sounds import prewarm
+        prewarm()
     except Exception:
         pass
     if IS_WINDOWS and IS_FROZEN:

@@ -73,30 +73,32 @@ class ClickSoundFilterTests(unittest.TestCase):
         self.assertFalse(filt is None)
 
     def test_play_click_throttles_duplicate_hits(self):
+        """40ms 节流：同一毫秒双层命中只播一次（>音效时长=永不
+        restart 的结构性保证，见 sounds.py docstring）。"""
         import petpet.app.sounds as sounds
 
         class _Fake:
             def __init__(self):
                 self.plays = 0
 
-            def stop(self):
+            def setVolume(self, *_):
                 pass
 
             def play(self):
                 self.plays += 1
 
         fake = _Fake()
-        old_effects, old_ts = sounds._EFFECTS, sounds._LAST_PLAY_TS
-        sounds._EFFECTS = [fake]  # 3 实例轮换——测试里放 1 个假件即可
+        old_effect, old_ts = sounds._EFFECT, sounds._LAST_PLAY_TS
+        sounds._EFFECT = fake
         sounds._LAST_PLAY_TS = 0.0
         try:
             sounds.play_click()
             sounds.play_click()  # 同一毫秒级的第二层命中——节流掉
             self.assertEqual(
-                fake.plays, 1, "25ms 节流内只允许播一次（防双响）"
+                fake.plays, 1, "40ms 节流内只允许播一次（防双响）"
             )
         finally:
-            sounds._EFFECTS = old_effects
+            sounds._EFFECT = old_effect
             sounds._LAST_PLAY_TS = old_ts
 
 

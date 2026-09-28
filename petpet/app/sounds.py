@@ -3,40 +3,70 @@
 ``click.wav``——含分栏/页签等 checkable 键（同日三轮用户明确：
 「包括分栏的按键」）。
 
-覆盖结构（三层，25ms 节流去重防双响）：
+**播放通道（2026-09-28 晚终版）**：QSoundEffect **单实例**——
+出声延迟最低（WASAPI 直通）。三个历史坑位的结构性规避：
+- 「播放中再 play()=restart」有 ~300ms 同步段 → **节流 40ms >
+  音效时长 35ms**：轮到下次播放时上一次必然已自然结束，数学上
+  永不进 restart 路径（人手最快连点 ~60-80ms 间隔，40ms 节流
+  不吞正常点击）；
+- 多实例在本机 WASAPI 每次 play ~500ms（实测灾难）→ 单实例；
+- 静音预热不得在播放中解除（漏声）→ 预热 volume=0 播放、
+  **音量只在真实播放前设**（winsound 因无此能力且 waveOut 有
+  系统出声缓冲延迟（用户耳朵吃亏）已弃用）。
+
+覆盖结构（40ms 节流去重防双响）：
 - 各触发点显式调用（FeedbackButton 松开/家园键/贴图键/头像/
   气泡菜单）；
 - ``install_click_sound_filter(app)``：**应用级事件过滤器**兜住
-  其余一切按键——QAbstractButton（QPushButton/QCheckBox/…含
-  checkable 页签）、QTabBar、以及设了 PointingHandCursor 的
-  自绘按键 widget，左键在键内松开即响（拖出键外不响）；
-- 节流：同一次点击最多响一次（不同层同时命中/事件与显式调用
-  同毫秒到达时只播首个）。
+  其余一切按键——QAbstractButton（含 checkable 页签）、QTabBar、
+  以及设了 PointingHandCursor 的自绘按键 widget，左键在键内
+  松开即响（拖出键外不响）；
+- 跟随设置项 ``sound_enabled``（读盘取值即时生效）。
 
-单例 QSoundEffect 懒加载（音量 0.35、静音预热防首次 ~600ms
-卡顿）；跟随设置项 ``sound_enabled``（读盘取值即时生效）。
-坑位存档：``app.paths`` 的 RESOURCE_DIR/SOURCE_DIR 是 **str**——
-路径只能 ``os.path.join``；曾用 ``/`` 拼接抛 TypeError 被
-``except Exception`` 吞成失败标记，点击音整轮静默失效。
+坑位存档：
+- ``app.paths`` 的 RESOURCE_DIR/SOURCE_DIR 是 **str**——路径只能
+  ``os.path.join``；曾用 ``/`` 拼接抛 TypeError 被 except 吞掉、
+  点击音整轮静默失效。
+- 音效时长改动时必须同步评估节流值：**节流 > 音效时长**是单
+  实例不撞 restart 的结构性保证。
 """
 import os
 import time
 
-_EFFECTS = None  # None=未加载 | list[QSoundEffect] | False=加载失败
-_EFFECT_SLOT = 0  # 轮换索引：4 实例轮播——25ms 节流下同实例间隔
-#                 # ≥100ms > 85ms 音长，数学上永不撞「播放中
-#                 # restart」的 ~300ms 同步段（评审轮：3 实例时
-#                 # 75ms<85ms 仍有理论边缘，2026-09-28 晚实测收敛）
+from petpet.app.paths import SOUNDS_DIR
+
+CLICK_PATH = os.path.join(SOUNDS_DIR, "click.wav")
+VOLUME = 0.30
+
+_EFFECT = None  # None=未加载 | QSoundEffect | False=加载失败
 _LAST_PLAY_TS = 0.0
-_PLAY_THROTTLE_S = 0.025
+_PLAY_THROTTLE_S = 0.040  # > 音效时长 35ms——见模块 docstring
+
+
+def prewarm():
+    """启动期预热（pet.py main 调用）：单实例 volume=0 播一次
+    （设备接入完成，全程零出声），**不真实播放**。"""
+    global _EFFECT
+    if _EFFECT is None:
+        try:
+            from PyQt5.QtCore import QUrl
+            from PyQt5.QtMultimedia import QSoundEffect
+
+            effect = QSoundEffect()
+            effect.setSource(QUrl.fromLocalFile(CLICK_PATH))
+            effect.setVolume(0.0)
+            effect.play()
+            _EFFECT = effect
+        except Exception:
+            _EFFECT = False
 
 
 def play_click():
-    """播一次统一点击音（25ms 节流；设置关/加载失败时静默）。"""
-    global _EFFECTS, _EFFECT_SLOT, _LAST_PLAY_TS
+    """播一次统一点击音（40ms 节流；设置关/通道失败时静默）。"""
+    global _LAST_PLAY_TS
     now = time.monotonic()
     if now - _LAST_PLAY_TS < _PLAY_THROTTLE_S:
-        return  # 同一次点击的多层命中只响一次
+        return  # 同一次点击的多层命中只响一次（且上一次必然播完）
     try:
         from petpet.app.settings import load_settings
 
@@ -44,68 +74,18 @@ def play_click():
             return
     except Exception:
         pass  # 设置读不了也照播——宁可响，不可哑
-    if _EFFECTS is None:
-        try:
-            from PyQt5.QtCore import QUrl
-            from PyQt5.QtMultimedia import QSoundEffect
-
-            from petpet.app.paths import SOUNDS_DIR
-
-            effects = []
-            for _ in range(4):
-                effect = QSoundEffect()
-                effect.setSource(QUrl.fromLocalFile(
-                    os.path.join(SOUNDS_DIR, "click.wav")))
-                effect.setVolume(0.30)  # 柔和音效轮降一点
-                effect.setMuted(True)  # 预热设备接入（启动期调用）
-                effect.play()
-                effect.setMuted(False)
-                effects.append(effect)
-            _EFFECTS = effects
-            _install_device_keepalive()
-        except Exception:
-            _EFFECTS = False
-            return
-    if _EFFECTS is False:
+    if _EFFECT is None:
+        prewarm()
+    if _EFFECT is False or _EFFECT is None:
         return
     _LAST_PLAY_TS = now
     try:
-        # 不 stop()：播放已自然结束的实例 play() 走冷路径（实测
-        # 0.01ms）；快速连点由 3 实例轮换保证同实例不撞「播放中
-        # restart」的 ~300ms 同步段——「点完卡一下」的元凶（用户
-        # 反馈音效卡顿三轮均命中：预热冻结/stop 段/restart 段）。
-        _EFFECT_SLOT = (_EFFECT_SLOT + 1) % len(_EFFECTS)
-        _EFFECTS[_EFFECT_SLOT].play()
+        # 预热后的实例音量为 0——真实播放前恢复（不在播放中解除
+        # 静音，防漏声）；单实例+40ms 节流>音长=永不进 restart 段。
+        _EFFECT.setVolume(VOLUME)
+        _EFFECT.play()
     except RuntimeError:
         pass  # 音频后端已关（进程收尾等）
-
-
-def _install_device_keepalive():
-    """音频设备保活心跳（2026-09-28 流畅轮）：蓝牙/USB 音频设备省电
-    休眠后，下一次真实播放要付 ~200-800ms 的同步唤醒段（用户「点击
-    偶尔卡一下」的环境性元凶——本日音效直觉第三次命中）。每 30s 用
-    轮换实例静音播一次，让设备/会话保持活跃。启动期预热后由本模块
-    自行安装；失败静默。"""
-    try:
-        from PyQt5.QtCore import QTimer
-
-        def _beat():
-            if isinstance(_EFFECTS, list) and _EFFECTS:
-                try:
-                    eff = _EFFECTS[0]
-                    eff.setMuted(True)
-                    eff.play()
-                    eff.setMuted(False)
-                except RuntimeError:
-                    pass
-
-        timer = QTimer()
-        timer.setInterval(30000)
-        timer.timeout.connect(_beat)
-        timer.start()
-        globals()["_KEEPALIVE_TIMER"] = timer  # 持引用防 GC
-    except Exception:
-        pass
 
 
 class ClickSoundFilter:
@@ -152,4 +132,3 @@ class ClickSoundFilter:
 def install_click_sound_filter(app):
     """应用级点击音过滤器（pet.py main 里安装一次）。"""
     return ClickSoundFilter(app)
-
