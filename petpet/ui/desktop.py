@@ -662,7 +662,7 @@ class BubbleMenu(KeepAliveTopLevelWindow):
             diff = target[i] - self._hover_scales[i]
             if abs(diff) > 0.01:
                 # 2026-09-28 用户反馈悬浮略有延迟：0.25→0.4/帧
-                # （~6 帧≈100ms 到位，原 ~10 帧≈160ms）。
+                # （0.01 截止下 ~9 帧≈144ms 到位，原 ~16 帧≈260ms）。
                 self._hover_scales[i] += diff * 0.4
                 changed = True
         if changed:

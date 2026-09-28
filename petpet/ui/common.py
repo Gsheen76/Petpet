@@ -191,6 +191,15 @@ class KeepAliveTopLevelWindow(QWidget):
 
     def closeEvent(self, event):
         def _drop(widget=self, registry=type(self)._keep_alive):
+            # 复用面板在缓冲期内重新 show 的话继续保活（评审轮补：
+            # 未来若出现「仅靠本表保活+关后重开」的窗口，不能在可见
+            # 期间失守）；C++ 已被 WA_DeleteOnClose 销毁的僵尸包装
+            # isVisible 会抛 RuntimeError——按不可见处理照常出表。
+            try:
+                if widget.isVisible():
+                    return
+            except RuntimeError:
+                pass
             registry.discard(widget)
 
         QTimer.singleShot(self.CLOSE_GRACE_MS, _drop)
