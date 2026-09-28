@@ -568,9 +568,9 @@ class BubbleMenu(KeepAliveTopLevelWindow):
             or action in zero_actions
             or (action == "interaction" and bool(zero_actions))
             # 每日双态点（2026-09-26 用户定稿）：红=可领（优先）、
-            # 蓝=今日任务没做完——主菜单「每日」专属键 + 「更多」入口
-            or (action in ("daily_rewards", "more")
-                and daily_state is not None)
+            # 蓝=今日任务没做完——只挂「每日」专属键（同日用户定稿：
+            # 更多键不挂每日点，避免蓝点出现在更多上的困惑）
+            or (action == "daily_rewards" and daily_state is not None)
         )
 
     @staticmethod
@@ -582,7 +582,7 @@ class BubbleMenu(KeepAliveTopLevelWindow):
         每日键/更多键在 daily_state 下取红或蓝（红优先已在状态函数
         内裁决）；其余既有红点条件一律红。
         """
-        if (action in ("daily_rewards", "more")
+        if (action == "daily_rewards"
                 and daily_state is not None
                 and not has_claimable):
             return "#ee5e62" if daily_state == "red" else "#4a90d9"

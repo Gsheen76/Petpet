@@ -1342,7 +1342,8 @@ class DailyRewardAttentionTests(unittest.TestCase):
         self.assertFalse(pet.BubbleMenu.action_needs_attention(
             "records", **kwargs_true),
             "2026-09-25 每日独立成窗：记录键不再提示")
-        self.assertTrue(pet.BubbleMenu.action_needs_attention(
+        # 2026-09-28 用户定稿：更多键不挂每日点（专属每日键就够了）
+        self.assertFalse(pet.BubbleMenu.action_needs_attention(
             "more", **kwargs_true))
         self.assertFalse(pet.BubbleMenu.action_needs_attention(
             "chat", **kwargs_true))
