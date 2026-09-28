@@ -128,7 +128,6 @@ class TutorialWindow(KeepAliveTopLevelWindow):
                 font-weight:800;
             }
             QPushButton:hover { background:#f5a08a; }
-            QPushButton:pressed { background:#df7d67; }
             QPushButton#secondary {
                 background:#f1dfd2;
                 color:#7e5b4c;

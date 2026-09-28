@@ -295,7 +295,6 @@ class SettingsWindow(KeepAliveTopLevelWindow):
                 font-weight:700;
             }}
             QPushButton:hover {{ background:#f5a08a; }}
-            QPushButton:pressed {{ background:#df7d67; }}
             QPushButton#stepButton {{
                 background:#fff0e6;
                 color:#b36650;
@@ -308,7 +307,6 @@ class SettingsWindow(KeepAliveTopLevelWindow):
                 background:#ffe1d3;
                 border-color:#e8a88b;
             }}
-            QPushButton#stepButton:pressed {{ background:#ffd1bf; }}
             QPushButton#closeButton {{
                 background:transparent;
                 color:transparent;
@@ -320,7 +318,6 @@ class SettingsWindow(KeepAliveTopLevelWindow):
             }}
             QPushButton#reset {{ background:#d7b9a6; color:#6d5145; }}
             QPushButton#reset:hover {{ background:#e2c8b8; }}
-            QPushButton#reset:pressed {{ background:#c9a892; }}
             QWidget#threeLevelTrack {{
                 background:#fff8ec;
                 border:1px solid #eed3ba;
@@ -334,9 +331,6 @@ class SettingsWindow(KeepAliveTopLevelWindow):
             }}
             QPushButton#threeLevelOption:hover {{
                 color:#70483c; background:#ffece1;
-            }}
-            QPushButton#threeLevelOption:pressed {{
-                color:#5f3d33; background:#f8dcd7;
             }}
             QPushButton#threeLevelOption:checked {{
                 color:#ffffff; background:#f28f76;

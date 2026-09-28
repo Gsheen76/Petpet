@@ -446,7 +446,6 @@ PANEL_STYLE = """
         font-weight: 800;
     }
     QPushButton:hover { background: #f5a08a; }
-    QPushButton:pressed { background: #de7a64; }
     QPushButton:disabled {
         background: #ead8ca;
         color: #a98b7b;

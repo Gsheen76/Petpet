@@ -683,16 +683,25 @@ class _AvatarButton(QWidget):
         pen_w = max(3, round(4 * _FIT))
         if self.selected:
             # 选中（当前宠物）：淡琥珀虚线常驻描边（语义状态）。
+            # 框贴头像实际素材矩形+2px（2026-09-29 用户两轮定稿：
+            # 「框太大、与分栏素材重合、留空不合理」——按钮矩形远
+            # 大于头像素材时按按钮画框会空一圈，改按 KeepAspectRatio
+            # 居中后的素材实际框）。
             painter.setPen(
                 QPen(QColor(230, 183, 110, 200), pen_w, Qt.DotLine)
             )
             painter.setBrush(Qt.NoBrush)
-            # 选中框整体缩 10%（2026-09-29 用户定稿：每边内缩 5%，
-            # 框更贴合头像不显空）。
-            inset = round(min(w, h) * 0.05)
+            if not self._pixmap.isNull():
+                art_w = scaled.width()
+                art_h = scaled.height()
+            else:
+                art_w, art_h = w - 4, h - 4
+            pad = 2
+            fx = (w - art_w) // 2 - pad
+            fy = (h - art_h) // 2 - pad
             painter.drawRoundedRect(
-                inset + pen_w // 2, inset + pen_w // 2,
-                w - 2 * inset - pen_w, h - 2 * inset - pen_w,
+                fx + pen_w // 2, fy + pen_w // 2,
+                art_w + 2 * pad - pen_w, art_h + 2 * pad - pen_w,
                 radius, radius,
             )
 
@@ -1070,7 +1079,6 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
             f"font-weight:600;color:#6b5646;background:transparent;"
             f"border:none;border-radius:{radius}px;padding:0 14px;}}"
             "QPushButton:hover{background:rgba(255,252,246,150);}"
-            "QPushButton:pressed{background:rgba(70,42,28,70);}"
             "QPushButton:checked{background:#f5a48f;color:#ffffff;}"
             "QPushButton:checked:hover{background:#f28f76;}"
         )
@@ -1540,7 +1548,9 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
             col.addWidget(empty)
             # 直达商店礼物页（2026-09-10 用户指示）：胶囊键，悬浮提亮、
             # 按住压暗（面板 QSS 胶囊同款反馈）。
-            go_shop = QPushButton("去商店挑选")
+            from petpet.progression.ui import FeedbackButton
+
+            go_shop = FeedbackButton("去商店挑选")
             go_shop.setObjectName("giftGoShopButton")
             go_shop.setCursor(Qt.PointingHandCursor)
             go_shop.setFixedSize(
@@ -1551,8 +1561,7 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
                 "color:#ffffff;background:#f28f76;border:0;"
                 f"border-radius:{round(27 * _SY * _FIT)}px;}}"
                 "QPushButton:hover{background:#f5a48f;}"
-                "QPushButton:pressed{background:#dd7a5f;}"
-            )
+                            )
             go_shop.clicked.connect(lambda: self._open_shop("gifts"))
             col.addWidget(go_shop, 0, Qt.AlignHCenter)
             self._gift_layout.insertWidget(0, host)

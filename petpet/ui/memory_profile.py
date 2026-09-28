@@ -83,21 +83,17 @@ QPushButton#saveProfile {{ background:#f28f76; color:#ffffff;
     border:0; border-radius:20px; padding:11px 44px; font-size:20px;
     font-weight:700; font-family:'{APP_FONT_FAMILY}'; }}
 QPushButton#saveProfile:hover {{ background:#e19179; }}
-QPushButton#saveProfile:pressed {{ background:#c66e5b; }}
 QPushButton#cancelProfile {{ background:#fffaf6; color:#8c6252;
     border:1px solid #e6cfc2; border-radius:18px; padding:9px 30px;
     font-size:20px; font-weight:700; font-family:'{APP_FONT_FAMILY}'; }}
 QPushButton#cancelProfile:hover {{ background:#ffe8dc;
     border-color:#dda993; }}
-QPushButton#cancelProfile:pressed {{ background:#ffdcd0; }}
 QPushButton#profileExport, QPushButton#profileImport {{
     background:#fffaf6; color:#8c6252;
     border:1px solid #e6cfc2; border-radius:18px; padding:9px 26px;
     font-size:20px; font-weight:700; font-family:'{APP_FONT_FAMILY}'; }}
 QPushButton#profileExport:hover, QPushButton#profileImport:hover {{
     background:#ffe8dc; border-color:#dda993; }}
-QPushButton#profileExport:pressed, QPushButton#profileImport:pressed {{
-    background:#ffdcd0; }}
 QScrollArea#profileScroll {{ background:transparent; border:0; }}
 QScrollBar:vertical {{ background:transparent; width:11px; margin:4px 0; }}
 QScrollBar::handle:vertical {{ background:#e8bfa8; border-radius:5px; min-height:38px; }}

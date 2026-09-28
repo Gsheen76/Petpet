@@ -242,7 +242,6 @@ class ChatWindow(KeepAliveTopLevelWindow):
             }}
             QPushButton#send:hover {{ background:#e19179; }}
             QPushButton#send:disabled {{ background:#ccb9ae; }}
-            QPushButton#send:pressed {{ background:#c66e5b; }}
             QFrame#chatTools {{
                 background:#f8f2ed;
                 border:1px solid #eaded5;
@@ -274,9 +273,6 @@ class ChatWindow(KeepAliveTopLevelWindow):
             QPushButton#chatTool:hover {{
                 background:#f8e9e1; color:#8f604e; border-color:#ddbaa8;
             }}
-            QPushButton#chatTool:pressed {{
-                background:#efd9cc;
-            }}
             QPushButton#exportTool {{
                 background:#fffdfb; color:#76594b;
                 border:1px solid #e5d5ca; border-radius:20px;
@@ -285,9 +281,6 @@ class ChatWindow(KeepAliveTopLevelWindow):
             }}
             QPushButton#exportTool:hover {{
                 background:#f8e9e1; color:#8f604e; border-color:#ddbaa8;
-            }}
-            QPushButton#exportTool:pressed {{
-                background:#efd9cc;
             }}
             QPushButton#roundTool {{
                 min-width:40px; max-width:40px;
