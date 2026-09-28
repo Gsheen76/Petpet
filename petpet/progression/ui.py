@@ -2728,6 +2728,15 @@ class ShopWindow(CozyProgressWindow):
         self._rebuild_current_page()
 
     def _rebuild_current_page(self):
+        # 构建期间冻结重绘（2026-09-28 加载轮）：逐卡 addWidget 的
+        # 中间布局/重绘合并为一次——几十张卡的页首建明显提速。
+        self.setUpdatesEnabled(False)
+        try:
+            self._rebuild_current_page_inner()
+        finally:
+            self.setUpdatesEnabled(True)
+
+    def _rebuild_current_page_inner(self):
         _clear_layout(self.content_layout)
         if self.page == "pets":
             self._build_pets_page()

@@ -11,6 +11,7 @@ from PyQt5.QtCore import QPoint, QPointF, QRect, QRectF, Qt, QTimer
 from PyQt5.QtGui import (
     QColor,
     QFont,
+    QImage,
     QFontDatabase,
     QLinearGradient,
     QPainter,
@@ -261,8 +262,21 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
         self.save_state(self.state)
 
     def refresh_pet_assets(self, pet_id: str | None = None) -> None:
-        """Load the home artwork registered for the selected stable pet."""
+        """Load the home artwork registered for the selected stable pet.
 
+        签名短路（2026-09-28 小屋加载轮）：show_scene 每次都调本函数
+        重载全部精灵（pathlib resolve+PIL 解码 ~0.5s/次）——宠物与
+        装备未变时直接跳过；显式传 pet_id 仍然强制重载。
+        """
+        signature = (
+            pet_id or self.state.get("active_pet_id", "lunch_meat"),
+            progression.equipped_outfit(self.state),
+        )
+        if (pet_id is None
+                and getattr(self, "_pet_assets_signature", None)
+                == signature):
+            return
+        self._pet_assets_signature = signature
         self._home_pet_animation_source_rects = {}
         definition = pet_definition(
             pet_id or self.state.get("active_pet_id", "lunch_meat")
@@ -1559,26 +1573,34 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
         )
         painter.restore()
 
+    _ICE_SHADOW_PARAM_CACHE = {}  # 模块级（跨开窗，参数只依赖帧键）
+
     def _ice_shadow_params(self, pixmap, frame_index, mirrored,
                            sheet_key=""):
-        """Measure a walk frame's body lean and foot center (cached)."""
+        """Measure a walk frame's body lean and foot center (cached).
 
-        import io
+        小屋打开提速（2026-09-28）：原实现对 32 帧各做 QPixmap→PNG
+        编码→PIL 解码（save 单次 ~69ms，32 帧 2.2s——开屋 3.4s 的
+        大头）。改 QImage 直读 numpy（跳过 PNG 编解码，单帧几 ms），
+        且缓存升模块级（窗口重建不重算）。
+        """
+
         import math
+
         import numpy
-        from PIL import Image as PILImage
-        from PyQt5.QtCore import QBuffer, QIODevice
 
         key = (sheet_key, frame_index, mirrored)
-        cache = self.__dict__.setdefault("_ice_shadow_param_cache", {})
+        cache = HomeSceneWindow._ICE_SHADOW_PARAM_CACHE
         if key in cache:
             return cache[key]
 
-        buffer = QBuffer()
-        buffer.open(QIODevice.ReadWrite)
-        pixmap.save(buffer, "PNG")
-        frame = PILImage.open(io.BytesIO(bytes(buffer.data()))).convert("RGBA")
-        arr = numpy.asarray(frame)
+        img = pixmap.toImage().convertToFormat(QImage.Format_RGBA8888)
+        bpl = img.bytesPerLine()
+        raw = img.constBits()
+        raw.setsize(bpl * img.height())
+        arr = numpy.frombuffer(bytes(raw), dtype=numpy.uint8).reshape(
+            img.height(), bpl)[:, : img.width() * 4].reshape(
+            img.height(), img.width(), 4)
         alpha = arr[:, :, 3]
         ys, xs = numpy.nonzero(alpha >= 32)
         if len(ys) == 0:
