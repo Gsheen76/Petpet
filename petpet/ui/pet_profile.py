@@ -547,7 +547,7 @@ class _TabButton(QWidget):
         rect = QRect(self._side_margin, self._headroom,
                      w - 2 * self._side_margin, h - 2 * self._headroom)
         if self._pressed:
-            rect = rect.adjusted(5, 5, -5, -5)
+            rect = rect.adjusted(4, 4, -4, -4)
         elif self._hovered:
             rect = rect.adjusted(-2, -2, 2, 2)
         if not self._art.isNull():
@@ -583,7 +583,7 @@ class _TabButton(QWidget):
             (scaled.height() if not self._art.isNull() else rect.height()),
         )
         if self._pressed:
-            painter.setBrush(QColor(70, 42, 28, 60))
+            painter.setBrush(QColor(70, 42, 28, 40))
             painter.drawRoundedRect(art_pos, 12, 12)
         # 悬浮纯放大（2026-09-28 用户定稿统一）：白洗撤除。
 
@@ -669,9 +669,9 @@ class _AvatarButton(QWidget):
         painter.setRenderHint(QPainter.Antialiasing)
         w, h = self.width(), self.height()
         # 纯缩放反馈：常态头像四周留 2px 余量，悬浮放大到全幅、
-        # 按压内缩 6px——绘制永远在 widget 边界内，不裁角。
+        # 按压内缩 5px——绘制永远在 widget 边界内，不裁角。
         if self._pressed:
-            box = QRect(6, 6, w - 12, h - 12)
+            box = QRect(5, 5, w - 10, h - 10)
         elif self._hovered:
             box = QRect(0, 0, w, h)
         else:
@@ -690,7 +690,7 @@ class _AvatarButton(QWidget):
         pen_w = max(3, round(4 * _FIT))
         if self._pressed:
             painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor(70, 42, 28, 60))
+            painter.setBrush(QColor(70, 42, 28, 40))
             painter.drawRoundedRect(box, radius, radius)
         elif self.selected:
             # 选中（当前宠物）：淡琥珀虚线常驻描边（语义状态）。
@@ -739,8 +739,8 @@ class _ArtButton(QWidget):
         full = QRect(0, 0, self.width(), self.height())
         base = full.adjusted(m, m, -m, -m) if m else full
         if self._phase == "pressed":
-            # 按住持续缩小（2026-09-28 二轮：3→5px，用户反馈按压太小）。
-            rect = base.adjusted(5, 5, -5, -5)
+            # 按住持续缩小（2026-09-28 三轮：3→5→4px 折中回摆）。
+            rect = base.adjusted(4, 4, -4, -4)
         elif self.hovered and self._phase is None:
             g = self._hover_grow
             rect = base.adjusted(-g, -g, g, g)
@@ -772,7 +772,7 @@ class _ArtButton(QWidget):
         )
         if self._phase == "pressed":
             # 黑闪盖素材实际范围（第三十四轮：alpha 80→60 略减）。
-            painter.setBrush(QColor(70, 42, 28, 60))
+            painter.setBrush(QColor(70, 42, 28, 40))
             painter.drawRoundedRect(art_pos, 10, 10)
         # 悬浮纯放大（2026-09-28 用户定稿统一）：白洗撤除。
 

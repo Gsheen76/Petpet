@@ -798,10 +798,10 @@ class PreservedTextLabel(QLabel):
 class FeedbackButton(QPushButton):
     """Push button with the app-standard hover/press feedback.
 
-    悬浮 = 素材放大 2px；按住 = 内缩 5px + 压暗（持续整个按住期间）；
-    松开在键内 = 点击音即刻响、回弹原大小 15ms 后才触发 clicked
-    （宠物面板/家园同款；2026-09-28 二轮：按压 3→5px、回弹 40→15ms、
-    音效提前到松开瞬间——用户反馈按压太小/反馈有延迟）。checkable
+    悬浮 = 素材放大 2px；按住 = 内缩 4px + 压暗（持续整个按住期间）；
+    松开在键内 = 点击音即刻响、回弹原大小 8ms 后才触发 clicked
+    （宠物面板/家园同款；2026-09-28 三轮手感链：按压 3→5→4px、
+    回弹 40→15→8ms、压暗 70→45、音效提前到松开瞬间）。checkable
     键（页签/筛选）保留原生释放时序。QSS 皮肤全铺满
     widget、几何余量为零，无法直接放大矩形——用 render 抓素颜帧后
     整体缩放绘制。
@@ -811,11 +811,12 @@ class FeedbackButton(QPushButton):
     直线段、只剩四角的弧段——正是用户拍到的「四角锁定特效」，此类
     叠层禁止复活。
 
-    统一点击音（2026-09-28 用户定稿）：回弹触发瞬间播 click.wav
-    （跟随 sound_enabled 全局开关；checkable/禁用键不响）。
+    统一点击音（2026-09-28 三轮用户定稿「所有按键都要响，包括分栏」）：
+    松开瞬间响（本地调用 + pet.py 应用级过滤器兜底其余按键，sounds
+    层 25ms 节流去重；跟随 sound_enabled 全局开关）。
     """
 
-    RECOVER_MS = 15  # 2026-09-28 用户反馈延迟：40→15ms（低于感知阈）
+    RECOVER_MS = 8  # 2026-09-28 三轮：40→15→8ms（回弹再加快）（低于感知阈）
 
     def __init__(self, text="", parent=None):
         super().__init__(text, parent)
@@ -913,11 +914,11 @@ class FeedbackButton(QPushButton):
         painter.setRenderHint(QPainter.SmoothPixmapTransform)
         painter.setRenderHint(QPainter.Antialiasing)
         # 纯缩放反馈（2026-09-28 用户定稿）：hover=素材放大 2px、
-        # recover=回原大小、pressed=内缩 5px+压暗（同日二轮：按压
-        # 幅度 3→5px，用户反馈缩小太小）——不再画任何描边/白洗
+        # recover=回原大小、pressed=内缩 4px+压暗（三轮：3→5→4px
+        # 折中回摆，压暗 70→45 减淡）——不再画任何描边/白洗
         # （描边曾因画在 rect±2 被裁成四角取景框角标）。
         if phase == "pressed":
-            target = self.rect().adjusted(5, 5, -5, -5)
+            target = self.rect().adjusted(4, 4, -4, -4)
         else:
             d = 2 if phase == "hover" else 0
             target = self.rect().adjusted(-d, -d, d, d)
@@ -925,7 +926,7 @@ class FeedbackButton(QPushButton):
         if phase == "pressed":
             path = QPainterPath()
             path.addRoundedRect(QRectF(target), 16, 16)
-            painter.fillPath(path, QColor(150, 60, 40, 70))
+            painter.fillPath(path, QColor(150, 60, 40, 45))
         painter.end()
 
 

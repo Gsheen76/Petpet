@@ -2282,6 +2282,14 @@ def main():
         apply_app_font(app)
     except Exception:
         pass
+    # 应用级点击音兜底（2026-09-28 三轮用户定稿「所有按键都要响」）：
+    # 覆盖非 FeedbackButton 体系的一切按键（含分栏页签/QCheckBox/
+    # 自绘贴图键），25ms 节流与显式调用层去重
+    try:
+        from petpet.app.sounds import install_click_sound_filter
+        install_click_sound_filter(app)
+    except Exception:
+        pass
     instance_server = SingleInstanceServer()
     if not instance_server.start():
         return 0

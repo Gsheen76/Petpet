@@ -55,7 +55,7 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
 
     # 胶囊按键两段式按压反馈：前段缩小+变暗，后段回弹原大小+悬浮高亮；
     # 总时长（含延迟触发动作）须保持短于旧版单段 100ms。
-    BUTTON_PRESS_FLASH_MS = 15  # 2026-09-28 用户反馈延迟：40→15ms
+    BUTTON_PRESS_FLASH_MS = 8  # 2026-09-28 三轮：40→15→8ms（回弹再加快）
 
     def __init__(self, pet, save_state):
         super().__init__()
@@ -832,11 +832,11 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
         if state == "hover":
             draw_rect = rect.adjusted(-3, -3, 3, 3)
         elif state == "pressed":
-            draw_rect = rect.adjusted(5, 5, -5, -5)
+            draw_rect = rect.adjusted(4, 4, -4, -4)
         painter.drawPixmap(draw_rect, pixmap)
         if state == "pressed":
             painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor(70, 42, 28, 150))
+            painter.setBrush(QColor(70, 42, 28, 95))
             painter.drawRoundedRect(draw_rect, 14, 14)
         if label:
             painter.setFont(self._cute_button_font())
@@ -854,7 +854,7 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
         if state == "hover":
             rect = rect.adjusted(-3, -3, 3, 3)
         elif state == "pressed":
-            rect = rect.adjusted(5, 5, -5, -5)
+            rect = rect.adjusted(4, 4, -4, -4)
         painter.save()
         painter.setPen(Qt.NoPen)
         painter.setBrush(QColor(78, 47, 36, 76))
@@ -881,7 +881,7 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
         painter.setPen(text)
         if state == "pressed":
             painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor(70, 42, 28, 150))
+            painter.setBrush(QColor(70, 42, 28, 95))
             painter.drawRoundedRect(rect, 14, 14)
             # 压暗盖后补回文字色——NoPen 下 drawText 不绘制（评审轮抓出
             # 的按压文字消失回归）。
@@ -2004,7 +2004,7 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
             if state == "hover":
                 rect = rect.adjusted(-2, -2, 2, 2)
             elif state == "pressed":
-                rect = rect.adjusted(3, 3, -3, -3)
+                rect = rect.adjusted(2, 2, -2, -2)
             selected = category == self._decoration_category
             fill = "#cf846a" if selected else "#f9e7ce"
             if state == "pressed":
@@ -2068,7 +2068,7 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
             if state == "hover":
                 action_rect = action_rect.adjusted(-2, -2, 2, 2)
             elif state == "pressed":
-                action_rect = action_rect.adjusted(3, 3, -3, -3)
+                action_rect = action_rect.adjusted(2, 2, -2, -2)
             painter.setBrush(QColor("#e8b98c" if state == "pressed" else "#f5d6b3"))
             painter.setPen(Qt.NoPen)
             painter.drawRoundedRect(action_rect, 7, 7)
