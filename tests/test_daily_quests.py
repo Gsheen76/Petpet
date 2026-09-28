@@ -537,3 +537,50 @@ class DreamMoodPoolTests(unittest.TestCase):
         self.assertEqual(len(said), 1)
         low_pool = set(pet.PetWindow.LOW_MOOD_DREAM_LINES)
         self.assertIn(said[0], low_pool)
+
+
+class DailyAttentionStateTests(unittest.TestCase):
+    """每日按钮双态点（2026-09-26 用户定稿）：红=可领（优先）、
+    蓝=今日任务未做完、None=全清。"""
+
+    def _state(self):
+        state = fresh_state()
+        from petpet.progression.core import ensure_check_in
+        ensure_check_in(state)
+        ensure_daily_quests(state, now=datetime(2026, 9, 26, 9, 0, 0))
+        return state
+
+    def test_none_when_all_claimed(self):
+        from petpet.progression.daily import daily_attention_state
+        from petpet.progression.core import claim_daily_quest
+
+        state = self._state()
+        state["check_in"]["last_date"] = "2026-09-26"  # 已签
+        for i, q in enumerate(state["daily_quests"]["quests"]):
+            q["progress"] = q["target"]
+            claim_daily_quest(state, i, now=datetime(2026, 9, 26, 10, 0, 0))
+        from petpet.progression.core import claim_daily_bonus
+        claim_daily_bonus(state, now=datetime(2026, 9, 26, 10, 30, 0))
+        self.assertIsNone(daily_attention_state(
+            state, now=datetime(2026, 9, 26, 11, 0, 0)))
+
+    def test_blue_when_quests_pending_nothing_claimable(self):
+        from petpet.progression.daily import daily_attention_state
+
+        state = self._state()
+        state["check_in"]["last_date"] = "2026-09-26"  # 已签
+        self.assertEqual(daily_attention_state(
+            state, now=datetime(2026, 9, 26, 11, 0, 0)), "blue")
+
+    def test_red_priority_over_blue(self):
+        from petpet.progression.daily import daily_attention_state
+
+        state = self._state()
+        quest = state["daily_quests"]["quests"][0]
+        quest["progress"] = quest["target"]  # 可领 + 其余未完
+        self.assertEqual(daily_attention_state(
+            state, now=datetime(2026, 9, 26, 11, 0, 0)), "red")
+        # 签到也可领（未签）同样是红
+        state2 = self._state()
+        self.assertEqual(daily_attention_state(
+            state2, now=datetime(2026, 9, 26, 11, 0, 0)), "red")

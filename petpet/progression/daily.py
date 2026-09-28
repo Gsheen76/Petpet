@@ -268,3 +268,21 @@ def daily_activity_series(state, days=7, now=None):
         label = _WEEKDAY_LABELS[day.weekday()]
         series.append((label, int(log.get(key, 0))))
     return series
+
+
+def daily_attention_state(state, now=None):
+    """每日按钮双态点（2026-09-26 用户定稿）。
+
+    返回 "red"（有可领：签到可签/任务完成可领/全勤可领——优先）、
+    "blue"（今日任务块存在且尚有未领取的任务——「没做完」提醒）、
+    None（全清）。红蓝同真时红优先。
+    """
+    if daily_rewards_claimable(state, now=now):
+        return "red"
+    block = state.get("daily_quests")
+    if not isinstance(block, dict) or block.get("date") != _daily_quest_date(now):
+        return None
+    quests = block.get("quests", [])
+    if quests and any(not q.get("claimed") for q in quests):
+        return "blue"
+    return None

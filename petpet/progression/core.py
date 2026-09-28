@@ -2117,6 +2117,7 @@ from petpet.progression.daily import (  # noqa: E402,F401
     claim_daily_bonus,
     claim_daily_quest,
     daily_activity_series,
+    daily_attention_state,
     note_daily_activity,
     daily_quest_hook,
     daily_rewards_claimable,

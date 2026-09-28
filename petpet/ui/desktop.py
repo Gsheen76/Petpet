@@ -560,17 +560,41 @@ class BubbleMenu(KeepAliveTopLevelWindow):
     @staticmethod
     def action_needs_attention(action, *, has_claimable,
                                needs_personal_setup, zero_actions=(),
-                               daily_ready=False):
+                               daily_state=None):
         zero_actions = set(zero_actions)
         return (
             (action in ("more", "achievements") and has_claimable)
             or (action == "chat" and needs_personal_setup)
             or action in zero_actions
             or (action == "interaction" and bool(zero_actions))
-            # 每日可领：主菜单「每日」专属键 + 「更多」入口亮红点
-            # （2026-09-25 每日独立成窗，记录键不再提示）
-            or (action in ("daily_rewards", "more") and daily_ready)
+            # 每日双态点（2026-09-26 用户定稿）：红=可领（优先）、
+            # 蓝=今日任务没做完——主菜单「每日」专属键 + 「更多」入口
+            or (action in ("daily_rewards", "more")
+                and daily_state is not None)
         )
+
+    @staticmethod
+    def attention_dot_color(action, *, has_claimable=False,
+                            needs_personal_setup=False, zero_actions=(),
+                            daily_state=None):
+        """红点族颜色（2026-09-26 双态）：红 #ee5e62、蓝 #4a90d9。
+
+        每日键/更多键在 daily_state 下取红或蓝（红优先已在状态函数
+        内裁决）；其余既有红点条件一律红。
+        """
+        if (action in ("daily_rewards", "more")
+                and daily_state is not None
+                and not has_claimable):
+            return "#ee5e62" if daily_state == "red" else "#4a90d9"
+        if not BubbleMenu.action_needs_attention(
+            action,
+            has_claimable=has_claimable,
+            needs_personal_setup=needs_personal_setup,
+            zero_actions=zero_actions,
+            daily_state=daily_state,
+        ):
+            return None
+        return "#ee5e62"
 
     def __init__(self, pet, page="primary", show_window=True):
         super().__init__()
@@ -705,11 +729,12 @@ class BubbleMenu(KeepAliveTopLevelWindow):
                     }[action]
                     for action in zero_record_actions
                 },
-                # 第四元素（2026-09-24 反馈轮）：签到/任务/全勤任一可领
-                _dependency("progression").daily_rewards_claimable(
+                # 第四元素（2026-09-26 双态点）："red"=可领（优先）、
+                # "blue"=今日任务没做完、None=全清
+                _dependency("progression").daily_attention_state(
                     self.pet.state),
             )
-        has_claimable, needs_api_key, zero_actions, daily_ready = (
+        has_claimable, needs_api_key, zero_actions, daily_state = (
             self._attention_flags)
         for i, (emoji, label, action, color) in enumerate(self.actions):
             row = i // columns
@@ -794,13 +819,21 @@ class BubbleMenu(KeepAliveTopLevelWindow):
                     has_claimable=has_claimable,
                     needs_personal_setup=needs_api_key,
                     zero_actions=zero_actions,
-                    daily_ready=daily_ready):
-                dot_center = QPointF(rect.right() - 10, rect.top() + 10)
-                p.setBrush(QColor(255, 255, 255))
-                p.setPen(Qt.NoPen)
-                p.drawEllipse(dot_center, 8, 8)
-                p.setBrush(QColor("#ee5e62"))
-                p.drawEllipse(dot_center, 5.5, 5.5)
+                    daily_state=daily_state):
+                dot_color = self.attention_dot_color(
+                    action,
+                    has_claimable=has_claimable,
+                    needs_personal_setup=needs_api_key,
+                    zero_actions=zero_actions,
+                    daily_state=daily_state,
+                )
+                if dot_color is not None:
+                    dot_center = QPointF(rect.right() - 10, rect.top() + 10)
+                    p.setBrush(QColor(255, 255, 255))
+                    p.setPen(Qt.NoPen)
+                    p.drawEllipse(dot_center, 8, 8)
+                    p.setBrush(QColor(dot_color))
+                    p.drawEllipse(dot_center, 5.5, 5.5)
 
     def leaveEvent(self, e):
         # 2026-09-25 用户反馈：鼠标移出菜单后悬浮高亮残留在最后键上

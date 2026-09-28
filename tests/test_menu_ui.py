@@ -1337,7 +1337,7 @@ class DailyRewardAttentionTests(unittest.TestCase):
 
         kwargs_true = dict(
             has_claimable=False, needs_personal_setup=False,
-            zero_actions=(), daily_ready=True,
+            zero_actions=(), daily_state="red",
         )
         self.assertFalse(pet.BubbleMenu.action_needs_attention(
             "records", **kwargs_true),
@@ -1348,8 +1348,35 @@ class DailyRewardAttentionTests(unittest.TestCase):
             "chat", **kwargs_true))
         self.assertFalse(pet.BubbleMenu.action_needs_attention(
             "records", has_claimable=False, needs_personal_setup=False,
-            zero_actions=(), daily_ready=False,
+            zero_actions=(), daily_state=None,
         ))
+        # 2026-09-26 双态点：蓝态同样亮每日/更多；点色红优先、蓝次之
+        self.assertTrue(pet.BubbleMenu.action_needs_attention(
+            "daily_rewards", has_claimable=False,
+            needs_personal_setup=False, zero_actions=(),
+            daily_state="blue"))
+        self.assertEqual(
+            pet.BubbleMenu.attention_dot_color(
+                "daily_rewards", has_claimable=False,
+                needs_personal_setup=False, zero_actions=(),
+                daily_state="blue"),
+            "#4a90d9")
+        self.assertEqual(
+            pet.BubbleMenu.attention_dot_color(
+                "daily_rewards", has_claimable=False,
+                needs_personal_setup=False, zero_actions=(),
+                daily_state="red"),
+            "#ee5e62")
+        self.assertIsNone(pet.BubbleMenu.attention_dot_color(
+            "daily_rewards", has_claimable=False,
+            needs_personal_setup=False, zero_actions=(),
+            daily_state=None))
+        # 成就可领的红点优先级保持（more 键成就是红）
+        self.assertEqual(
+            pet.BubbleMenu.attention_dot_color(
+                "more", has_claimable=True, needs_personal_setup=False,
+                zero_actions=(), daily_state="blue"),
+            "#ee5e62")
 
 
 class FullCellHoverFallbackTests(unittest.TestCase):
