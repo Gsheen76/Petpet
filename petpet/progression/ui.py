@@ -9,7 +9,7 @@ import os
 import time
 import copy
 
-from PyQt5.QtCore import Qt, QPoint, QRect, QRectF, QSize, QTimer
+from PyQt5.QtCore import Qt, QUrl, QPoint, QRect, QRectF, QSize, QTimer
 from PyQt5.QtGui import (
     QColor,
     QFont,
@@ -54,6 +54,7 @@ from petpet.app.paths import (
 )
 from petpet.app.fonts import APP_FONT_FAMILY
 from petpet.ui.common import independent_pixel_font
+from petpet.app.paths import RESOURCE_DIR
 from petpet.app.pets import (
     load_pet_registry,
     pet_asset_path,
@@ -803,9 +804,13 @@ class FeedbackButton(QPushButton):
     clicked（宠物面板/家园同款）。checkable 键（页签/筛选）保留
     原生释放时序，仅视觉反馈相同。QSS 皮肤全铺满 widget、几何余量
     为零，无法直接放大矩形——用 render 抓素颜帧后整体缩放绘制。
+
+    统一点击音（2026-09-28 用户定稿）：回弹触发瞬间播 click.wav
+    （跟随 sound_enabled 全局开关；checkable/禁用键不响）。
     """
 
     RECOVER_MS = 40
+    _CLICK_SOUND = None  # 类级共享 SoundEffect（全按钮一个实例）
 
     def __init__(self, text="", parent=None):
         super().__init__(text, parent)
@@ -824,11 +829,20 @@ class FeedbackButton(QPushButton):
             return
         pixmap = QPixmap(self.size())
         pixmap.fill(Qt.transparent)
+        # 四角折角根因（2026-09-28 用户反馈）：键被点击后持有焦点，
+        # render 抓帧把焦点框（Windows 角标样式）一起抓进缓存，hover
+        # 帧从此带"四角锁定"特效。抓帧前置 hasFocus=False、抓完还原，
+        # 素颜帧永远无焦点框；运行时焦点改由键盘导航自然持有。
+        had_focus = self.hasFocus()
+        if had_focus:
+            self.clearFocus()
         self._plain_render = True
         try:
             self.render(pixmap)
         finally:
             self._plain_render = False
+            if had_focus:
+                self.setFocus()
         self._skin_cache = pixmap
         self.update()
 
@@ -861,10 +875,40 @@ class FeedbackButton(QPushButton):
         self._pending_fire = False
         super().mouseReleaseEvent(event)
 
+    @classmethod
+    def _play_click(cls):
+        """统一点击音（懒加载类级共享实例；失败静默）。"""
+        if cls._CLICK_SOUND is None:
+            try:
+                from PyQt5.QtMultimedia import QSoundEffect
+
+                effect = QSoundEffect()
+                effect.setSource(
+                    QUrl.fromLocalFile(
+                        str(RESOURCE_DIR / "sounds" / "click.wav")
+                    )
+                )
+                effect.setVolume(0.35)
+                effect.setMuted(True)  # 预热（首次播放 600ms 卡顿坑）
+                effect.play()
+                effect.setMuted(False)
+                cls._CLICK_SOUND = effect
+            except Exception:
+                cls._CLICK_SOUND = False  # 失败不再尝试
+            return
+        if cls._CLICK_SOUND is False:
+            return
+        try:
+            cls._CLICK_SOUND.stop()
+            cls._CLICK_SOUND.play()
+        except RuntimeError:
+            pass
+
     def _fire_deferred(self):
         if not self._pending_fire:
             return
         self._pending_fire = False
+        self._play_click()
         try:
             self.clicked.emit(False)
         except RuntimeError:
