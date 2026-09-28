@@ -798,9 +798,11 @@ class PreservedTextLabel(QLabel):
 class FeedbackButton(QPushButton):
     """Push button with the app-standard hover/press feedback.
 
-    悬浮 = 素材放大 2px；按住 = 内缩 3px + 压暗（持续整个按住期间）；
-    松开在键内 = 回弹原大小 40ms 后才触发 clicked（宠物面板/家园同款）。
-    checkable 键（页签/筛选）保留原生释放时序。QSS 皮肤全铺满
+    悬浮 = 素材放大 2px；按住 = 内缩 5px + 压暗（持续整个按住期间）；
+    松开在键内 = 点击音即刻响、回弹原大小 15ms 后才触发 clicked
+    （宠物面板/家园同款；2026-09-28 二轮：按压 3→5px、回弹 40→15ms、
+    音效提前到松开瞬间——用户反馈按压太小/反馈有延迟）。checkable
+    键（页签/筛选）保留原生释放时序。QSS 皮肤全铺满
     widget、几何余量为零，无法直接放大矩形——用 render 抓素颜帧后
     整体缩放绘制。
 
@@ -813,7 +815,7 @@ class FeedbackButton(QPushButton):
     （跟随 sound_enabled 全局开关；checkable/禁用键不响）。
     """
 
-    RECOVER_MS = 40
+    RECOVER_MS = 15  # 2026-09-28 用户反馈延迟：40→15ms（低于感知阈）
 
     def __init__(self, text="", parent=None):
         super().__init__(text, parent)
@@ -871,6 +873,7 @@ class FeedbackButton(QPushButton):
             self.setDown(False)
             self._pending_fire = True
             self.released.emit()
+            self._play_click()  # 松开瞬间即响（2026-09-28 用户反馈音延迟）
             event.accept()
             self.update()
             self._fire_timer.start(self.RECOVER_MS)
@@ -890,7 +893,7 @@ class FeedbackButton(QPushButton):
         if not self._pending_fire:
             return
         self._pending_fire = False
-        self._play_click()
+        # 点击音已提前到 mouseReleaseEvent 松开瞬间（2026-09-28 延迟轮）。
         try:
             self.clicked.emit(False)
         except RuntimeError:
@@ -910,10 +913,11 @@ class FeedbackButton(QPushButton):
         painter.setRenderHint(QPainter.SmoothPixmapTransform)
         painter.setRenderHint(QPainter.Antialiasing)
         # 纯缩放反馈（2026-09-28 用户定稿）：hover=素材放大 2px、
-        # recover=回原大小、pressed=内缩 3px+压暗——不再画任何
-        # 描边/白洗（描边曾因画在 rect±2 被裁成四角取景框角标）。
+        # recover=回原大小、pressed=内缩 5px+压暗（同日二轮：按压
+        # 幅度 3→5px，用户反馈缩小太小）——不再画任何描边/白洗
+        # （描边曾因画在 rect±2 被裁成四角取景框角标）。
         if phase == "pressed":
-            target = self.rect().adjusted(3, 3, -3, -3)
+            target = self.rect().adjusted(5, 5, -5, -5)
         else:
             d = 2 if phase == "hover" else 0
             target = self.rect().adjusted(-d, -d, d, d)

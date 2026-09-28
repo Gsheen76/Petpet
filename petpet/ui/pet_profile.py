@@ -547,7 +547,7 @@ class _TabButton(QWidget):
         rect = QRect(self._side_margin, self._headroom,
                      w - 2 * self._side_margin, h - 2 * self._headroom)
         if self._pressed:
-            rect = rect.adjusted(3, 3, -3, -3)
+            rect = rect.adjusted(5, 5, -5, -5)
         elif self._hovered:
             rect = rect.adjusted(-2, -2, 2, 2)
         if not self._art.isNull():
@@ -669,9 +669,9 @@ class _AvatarButton(QWidget):
         painter.setRenderHint(QPainter.Antialiasing)
         w, h = self.width(), self.height()
         # 纯缩放反馈：常态头像四周留 2px 余量，悬浮放大到全幅、
-        # 按压内缩 4px——绘制永远在 widget 边界内，不裁角。
+        # 按压内缩 6px——绘制永远在 widget 边界内，不裁角。
         if self._pressed:
-            box = QRect(4, 4, w - 8, h - 8)
+            box = QRect(6, 6, w - 12, h - 12)
         elif self._hovered:
             box = QRect(0, 0, w, h)
         else:
@@ -739,8 +739,8 @@ class _ArtButton(QWidget):
         full = QRect(0, 0, self.width(), self.height())
         base = full.adjusted(m, m, -m, -m) if m else full
         if self._phase == "pressed":
-            # 按住持续缩小（第三十四轮：幅度 4→3px 略减）。
-            rect = base.adjusted(3, 3, -3, -3)
+            # 按住持续缩小（2026-09-28 二轮：3→5px，用户反馈按压太小）。
+            rect = base.adjusted(5, 5, -5, -5)
         elif self.hovered and self._phase is None:
             g = self._hover_grow
             rect = base.adjusted(-g, -g, g, g)

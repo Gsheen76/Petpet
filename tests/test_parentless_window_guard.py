@@ -60,6 +60,7 @@ class ParentlessWindowGuardTests(unittest.TestCase):
         import weakref
 
         from PyQt5 import sip
+        from PyQt5.QtCore import QTimer
         from PyQt5.QtWidgets import QApplication
 
         from petpet.ui.common import KeepAliveTopLevelWindow
@@ -68,6 +69,8 @@ class ParentlessWindowGuardTests(unittest.TestCase):
 
         class _Probe(KeepAliveTopLevelWindow):
             pass
+
+        _Probe.CLOSE_GRACE_MS = 20  # 测试用短缓冲（生产 2500ms）
 
         probe = _Probe()
         ref = weakref.ref(probe)
@@ -79,7 +82,19 @@ class ParentlessWindowGuardTests(unittest.TestCase):
         self.assertFalse(sip.isdeleted(ref()))
         ref().close()
         QApplication.processEvents()
-        self.assertNotIn(ref(), _Probe._keep_alive)
+        # 延迟出表（2026-09-28 15:56 第六案加固）：close 后仍在表内
+        # （缓冲在途窗口事件），缓冲期过后才出表。
+        self.assertIn(
+            ref(), _Probe._keep_alive, "close 当场出表会同步析构——必须缓冲"
+        )
+        deadline = QTimer()
+        deadline.setSingleShot(True)
+        fired = []
+        deadline.timeout.connect(lambda: fired.append(1))
+        deadline.start(60)
+        while not fired:
+            QApplication.processEvents()
+        self.assertNotIn(ref(), _Probe._keep_alive, "缓冲期后必须出表")
 
 
 if __name__ == "__main__":

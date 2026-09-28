@@ -1179,9 +1179,11 @@ class BonusBubbleKeepAliveTests(unittest.TestCase):
         self.assertIsNotNone(ref(), "无外部引用时气泡必须由类级注册表保活")
         self.assertFalse(sip.isdeleted(ref()), "C++ 对象不得被 GC 回收")
 
+        BonusBubble.CLOSE_GRACE_MS = 20
         ref().close()
         QApplication.processEvents()
         gc.collect()
+        _drain_close_grace(BonusBubble)
         self.assertNotIn(ref(), BonusBubble._keep_alive,
                          "close 后必须从保活表移除")
 
@@ -1216,9 +1218,11 @@ class SpeechBubbleKeepAliveTests(unittest.TestCase):
         self.assertIsNotNone(ref(), "无外部引用时气泡必须由类级注册表保活")
         self.assertFalse(sip.isdeleted(ref()), "C++ 对象不得被 GC 回收")
 
+        SpeechBubble.CLOSE_GRACE_MS = 20
         ref().close()
         QApplication.processEvents()
         gc.collect()
+        _drain_close_grace(SpeechBubble)
         self.assertNotIn(ref(), SpeechBubble._keep_alive,
                          "close 后必须从保活表移除")
 
@@ -1249,9 +1253,11 @@ class StatBubbleKeepAliveTests(unittest.TestCase):
         QApplication.processEvents()
         self.assertIsNotNone(ref())
         self.assertFalse(sip.isdeleted(ref()))
+        StatBubble.CLOSE_GRACE_MS = 20
         ref().close()
         QApplication.processEvents()
         gc.collect()
+        _drain_close_grace(StatBubble)
         self.assertNotIn(ref(), StatBubble._keep_alive)
 
 
@@ -1283,9 +1289,11 @@ class BubbleMenuKeepAliveTests(unittest.TestCase):
         QApplication.processEvents()
         self.assertIsNotNone(ref(), "无外部引用时菜单必须由类级注册表保活")
         self.assertFalse(sip.isdeleted(ref()))
+        pet.BubbleMenu.CLOSE_GRACE_MS = 20
         ref()._close()
         QApplication.processEvents()
         gc.collect()
+        _drain_close_grace(pet.BubbleMenu)
         self.assertNotIn(ref(), pet.BubbleMenu._keep_alive)
 
 
@@ -1322,9 +1330,11 @@ class InteractiveBubbleKeepAliveTests(unittest.TestCase):
         self.assertIsNotNone(ref(), "无外部引用时气泡必须由类级注册表保活")
         self.assertFalse(sip.isdeleted(ref()), "C++ 对象不得被 GC 回收")
 
+        InteractiveBubble.CLOSE_GRACE_MS = 20
         ref().close()
         QApplication.processEvents()
         gc.collect()
+        _drain_close_grace(InteractiveBubble)
         self.assertNotIn(ref(), InteractiveBubble._keep_alive,
                          "close 后必须从保活表移除")
 
@@ -1379,6 +1389,20 @@ class DailyRewardAttentionTests(unittest.TestCase):
                 zero_actions=(), daily_state="blue"),
             "#ee5e62")
 
+
+
+def _drain_close_grace(window_cls, timeout_ms=400):
+    """等待延迟出表落地（2026-09-28 缓冲出表改版：close 后
+    CLOSE_GRACE_MS 内仍在表，期满才 discard）。"""
+    from PyQt5.QtCore import QTimer
+
+    fired = []
+    t = QTimer()
+    t.setSingleShot(True)
+    t.timeout.connect(lambda: fired.append(1))
+    t.start(int(window_cls.CLOSE_GRACE_MS) + 30)
+    while not fired and t.isActive():
+        QApplication.processEvents()
 
 class FullCellHoverFallbackTests(unittest.TestCase):
     """全域悬浮兜底（2026-09-26 手感修复）：不依赖窗口自身 mouseMove

@@ -55,7 +55,7 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
 
     # 胶囊按键两段式按压反馈：前段缩小+变暗，后段回弹原大小+悬浮高亮；
     # 总时长（含延迟触发动作）须保持短于旧版单段 100ms。
-    BUTTON_PRESS_FLASH_MS = 40
+    BUTTON_PRESS_FLASH_MS = 15  # 2026-09-28 用户反馈延迟：40→15ms
 
     def __init__(self, pet, save_state):
         super().__init__()
@@ -832,7 +832,7 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
         if state == "hover":
             draw_rect = rect.adjusted(-3, -3, 3, 3)
         elif state == "pressed":
-            draw_rect = rect.adjusted(3, 3, -3, -3)
+            draw_rect = rect.adjusted(5, 5, -5, -5)
         painter.drawPixmap(draw_rect, pixmap)
         if state == "pressed":
             painter.setPen(Qt.NoPen)
@@ -854,7 +854,7 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
         if state == "hover":
             rect = rect.adjusted(-3, -3, 3, 3)
         elif state == "pressed":
-            rect = rect.adjusted(3, 3, -3, -3)
+            rect = rect.adjusted(5, 5, -5, -5)
         painter.save()
         painter.setPen(Qt.NoPen)
         painter.setBrush(QColor(78, 47, 36, 76))
@@ -2004,7 +2004,7 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
             if state == "hover":
                 rect = rect.adjusted(-2, -2, 2, 2)
             elif state == "pressed":
-                rect = rect.adjusted(2, 2, -2, -2)
+                rect = rect.adjusted(3, 3, -3, -3)
             selected = category == self._decoration_category
             fill = "#cf846a" if selected else "#f9e7ce"
             if state == "pressed":
@@ -2068,7 +2068,7 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
             if state == "hover":
                 action_rect = action_rect.adjusted(-2, -2, 2, 2)
             elif state == "pressed":
-                action_rect = action_rect.adjusted(2, 2, -2, -2)
+                action_rect = action_rect.adjusted(3, 3, -3, -3)
             painter.setBrush(QColor("#e8b98c" if state == "pressed" else "#f5d6b3"))
             painter.setPen(Qt.NoPen)
             painter.drawRoundedRect(action_rect, 7, 7)

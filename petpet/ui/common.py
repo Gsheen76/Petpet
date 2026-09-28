@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QPoint, QRect, Qt
+from PyQt5.QtCore import QPoint, QRect, Qt, QTimer
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import QWidget
 
@@ -167,10 +167,18 @@ class KeepAliveTopLevelWindow(QWidget):
     周期面板（关后复用）的实例定时器不能被误杀；短命浮窗在各自
     closeEvent 里先停自身定时器再 super() 出表。
 
+    延迟出表（2026-09-28 15:56 第六案复发加固）：closeEvent 当场
+    discard 会让最后一个引用在【嵌套事件投递进行中】同步析构 C++
+    对象（42528.dmp：qwindows 窗口过程→Qt5Widgets 事件→嵌套
+    notify×3→AV 读已释放对象）——改为缓冲期后再松手，在途消息
+    排空后才允许 GC。复用面板在此期间重新 show 不受影响（表里
+    多留一份引用无害；宿主引用着的面板本就不靠本表活着）。
+
     规矩（tests/test_parentless_window_guard.py 强制）：petpet 里任何
     设 Qt.Tool 标志的顶层 QWidget 子类必须继承本类，零豁免。
     """
 
+    CLOSE_GRACE_MS = 2500
     _keep_alive = set()
 
     def __init_subclass__(cls, **kwargs):
@@ -182,7 +190,10 @@ class KeepAliveTopLevelWindow(QWidget):
         type(self)._keep_alive.add(self)
 
     def closeEvent(self, event):
-        type(self)._keep_alive.discard(self)
+        def _drop(widget=self, registry=type(self)._keep_alive):
+            registry.discard(widget)
+
+        QTimer.singleShot(self.CLOSE_GRACE_MS, _drop)
         super().closeEvent(event)
 
 
