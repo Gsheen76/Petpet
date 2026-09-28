@@ -730,6 +730,7 @@ def _build_chip_bar(entries, bar_name, *, use_chip_property=True,
         button = FeedbackButton(label)
         button.setObjectName(object_name)
         button.setProperty("chipTab", True)
+        button.setFlatFeedback(True)
         button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         button.setCheckable(True)
         button.setChecked(bool(checked))
@@ -825,6 +826,10 @@ class FeedbackButton(QPushButton):
         self._plain_render = False   # render 抓帧时的递归护栏
         self._pending_fire = False   # 键内松开，待回弹播完触发
         self._skin_cache = None      # 素颜帧缓存（paint 期内 render 不可靠）
+        # 轻反馈模式（2026-09-28 用户定稿：分栏/页签只要悬浮颜色变化，
+        # 不要缩放——整帧缩放会把文字压扁）：paintEvent 全交 QSS，
+        # 不做任何放大/内缩/压暗，也不需要皮肤帧。
+        self._flat_feedback = False
         self._fire_timer = QTimer(self)
         self._fire_timer.setSingleShot(True)
         self._fire_timer.timeout.connect(self._fire_deferred)
@@ -900,8 +905,17 @@ class FeedbackButton(QPushButton):
         except RuntimeError:
             pass  # 窗口已销毁的延迟触发
 
+    def setFlatFeedback(self, enabled):
+        """轻反馈模式（页签/分栏类）：只留 QSS 的悬浮变色，
+        无缩放/按压视觉（用户 2026-09-28：缩放会把字压扁）。"""
+        self._flat_feedback = bool(enabled)
+        if self._flat_feedback:
+            self._skin_cache = None
+
     def showEvent(self, event):
         super().showEvent(event)
+        if self._flat_feedback:
+            return  # 轻反馈不需要皮肤帧
         # 皮肤帧预抓（2026-09-28 手感延迟轮）：皮肤缓存原是懒抓——
         # 首次悬浮/按下某个键的那一帧 skin is None，画的是素颜（无
         # 放大/内缩反馈），下一拍抓完才有反馈——每个键的"第一次"
@@ -911,6 +925,9 @@ class FeedbackButton(QPushButton):
         QTimer.singleShot(0, self._capture_skin)
 
     def paintEvent(self, event):
+        if self._flat_feedback:
+            super().paintEvent(event)  # QSS 的 :hover/:checked 自己画
+            return
         phase = self._phase()
         skin = self._skin_cache
         if self._plain_render or phase is None or skin is None:
@@ -1472,6 +1489,7 @@ class DailyWindow(CozyProgressWindow):
         for key, label in (("records", "温馨记录"), ("daily", "签到任务")):
             button = FeedbackButton(label)
             button.setObjectName("petTabButton")
+            button.setFlatFeedback(True)
             button.setCheckable(True)
             button.setChecked(self.record_page == key)
             button.setCursor(Qt.PointingHandCursor)
@@ -2195,6 +2213,7 @@ class AchievementsWindow(CozyProgressWindow):
         for prefix, label in available:
             button = FeedbackButton(label)
             button.setObjectName("filterTabButton")
+            button.setFlatFeedback(True)
             button.setCheckable(True)
             button.setChecked(self.achievement_filter == prefix)
             button.setCursor(Qt.PointingHandCursor)
@@ -2619,6 +2638,12 @@ class ShopWindow(CozyProgressWindow):
 
     def __init__(self, pet, save_callback):
         self.save_callback = save_callback
+        # 分栏页缓存（2026-09-28 商店卡顿轮）：切分栏原是整页销毁重建
+        #（套装首建实测 1.7s）——切走时把整页卡片存进隐藏容器，切回
+        # 直接挂回（布局级开销）。refresh()（购买/装备等数据变化入口）
+        # 主动失效缓存重建，保证数据新鲜。
+        self._page_cache = {}
+        self._page_sink = None  # 惰性建（super().__init__ 前不能造 QWidget）
         self.page = "pets" if isinstance(pet.state.get("pets"), dict) else "outfits"
         self.decoration_category = "neck"
         self.gift_filter = "all"
@@ -2661,6 +2686,7 @@ class ShopWindow(CozyProgressWindow):
         ):
             button = FeedbackButton(text)
             button.setObjectName("tabButton")
+            button.setFlatFeedback(True)  # 栏目键：只悬浮变色（用户定稿）
             icon_path = self._tab_icons.get(page)
             if icon_path and os.path.exists(icon_path):
                 button.setIcon(QIcon(icon_path))
@@ -2684,11 +2710,15 @@ class ShopWindow(CozyProgressWindow):
             button.setChecked(self.page == page)
 
     def refresh(self):
+        # 数据变化入口（购买/装备/重开窗口）：整页缓存失效重建。
+        self._invalidate_page_cache()
         progression.ensure_progression(self.pet.state)
         self._refresh_coin_label()
         self._sync_tab_bar()
-        _clear_layout(self.content_layout)
+        self._rebuild_current_page()
 
+    def _rebuild_current_page(self):
+        _clear_layout(self.content_layout)
         if self.page == "pets":
             self._build_pets_page()
         elif self.page == "outfits":
@@ -2701,13 +2731,47 @@ class ShopWindow(CozyProgressWindow):
             self._build_upgrades_page()
         self.content_layout.addStretch(1)
 
+    def _detach_current_page(self):
+        """把当前页的全部卡片摘进隐藏容器（保留实例供切回挂回）。"""
+        widgets = []
+        while self.content_layout.count():
+            item = self.content_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                if self._page_sink is None:  # 隐藏存放处（不进布局）
+                    self._page_sink = QWidget(self)
+                widget.setParent(self._page_sink)
+                widgets.append(widget)
+        if widgets and self.page:
+            self._page_cache[self.page] = widgets
+
+    def _invalidate_page_cache(self):
+        for widgets in self._page_cache.values():
+            for widget in widgets:
+                try:
+                    widget.setParent(None)
+                    widget.deleteLater()
+                except RuntimeError:
+                    pass
+        self._page_cache.clear()
+
     def _set_page(self, page):
         if page not in self.page_ids() or page == self.page:
             return
+        self._detach_current_page()
         self.page = page
         self.status_label.clear()
         self.scroll.verticalScrollBar().setValue(0)
-        self.refresh()
+        cached = self._page_cache.get(page)
+        if cached:
+            # 挂回缓存页（布局级开销，重访瞬时）
+            for widget in cached:
+                self.content_layout.addWidget(widget)
+            self.content_layout.addStretch(1)
+            self._refresh_coin_label()
+            self._sync_tab_bar()
+            return
+        self._rebuild_current_page()
 
     @staticmethod
     def page_ids():
