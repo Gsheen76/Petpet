@@ -2705,22 +2705,11 @@ class ShopWindow(CozyProgressWindow):
             button.setVisible(page != "pets" or has_pets)
             button.setChecked(self.page == page)
 
-    _predecode_started = False
-
     def refresh(self):
-        # 首次进店触发后台素材预解码（2026-09-28 加载轮）：磁盘 IO+
-        # 解码离开 UI 线程，后续各页首建从 QImage 热备轻转换（商店
-        # 全部相关素材仅 ~8.6MB，一次全热）。
-        if not ShopWindow._predecode_started:
-            ShopWindow._predecode_started = True
-            try:
-                from petpet.app.imgcache import (
-                    predecode_async, shop_asset_paths,
-                )
-                predecode_async(shop_asset_paths())
-            except Exception:
-                pass
         # 数据变化入口（购买/装备/重开窗口）：整页缓存失效重建。
+        # （2026-09-29 预解码触发已回滚：解码线程与 UI 的 GIL 竞争
+        # 把开窗 272ms 拖到 3.3s，收益不抵代价——imgcache 按需双键
+        # 缓存保留，重访/重建依然零磁盘读。）
         self._invalidate_page_cache()
         progression.ensure_progression(self.pet.state)
         self._refresh_coin_label()

@@ -13,11 +13,13 @@
 """
 import os
 import threading
+import time
 
 _PIXMAP_CACHE = {}      # (path, height|None) -> QPixmap
 _IMAGE_CACHE = {}       # path -> QImage（后台预解码产物）
 _PENDING = set()
 _LOCK = threading.Lock()
+_DECODE_LOCK = threading.Lock()  # 解码线程全局串行（多路调用排队）
 _WORKERS = []           # 持线程引用防 GC
 
 
@@ -62,24 +64,63 @@ def predecode_async(paths):
 
     def _worker():
         from PyQt5.QtGui import QImage
-        try:
-            for p in todo:
-                if not os.path.exists(p):
-                    continue
-                img = QImage(p)
-                if not img.isNull():
-                    with _LOCK:
-                        _IMAGE_CACHE[p] = img
-                        _PENDING.discard(p)
-        finally:
-            with _LOCK:
+        # 全局串行 + 图间小睡：多路预解码排队执行，且每张图让出
+        # GIL 一小口——后台解码与 UI 线程的 GIL 竞争曾把商店开窗
+        # 从 300ms 拖到 3s（2026-09-29 实测）。
+        with _DECODE_LOCK:
+            try:
                 for p in todo:
-                    _PENDING.discard(p)
+                    if not os.path.exists(p):
+                        continue
+                    img = QImage(p)
+                    if not img.isNull():
+                        with _LOCK:
+                            _IMAGE_CACHE[p] = img
+                            _PENDING.discard(p)
+                    time.sleep(0.025)
+            finally:
+                with _LOCK:
+                    for p in todo:
+                        _PENDING.discard(p)
 
     t = threading.Thread(target=_worker, daemon=True)
     t.start()
     _WORKERS.append(t)
     del _WORKERS[:-4]  # 只留引用防 GC，不累积
+
+
+def home_asset_paths():
+    """家园窗口全部静态素材路径（预解码清单）。"""
+    from petpet.home.rendering import (
+        HOME_BUTTON_PATHS, HOME_FURNITURE_PATHS, HOME_NAV_ARROW_PATH,
+        HOME_NAV_PAW_PATH, HOME_NAV_TARGET_PATH,
+    )
+
+    paths = list(HOME_BUTTON_PATHS.values())
+    paths += list(HOME_FURNITURE_PATHS.values())
+    paths += [HOME_NAV_PAW_PATH, HOME_NAV_TARGET_PATH, HOME_NAV_ARROW_PATH]
+    # 宠物 home 精灵（idle/走路表/睡觉——首开 refresh_pet_assets 的
+    # 磁盘读大头）
+    import glob
+    from petpet.app.paths import PETS_MANIFEST_PATH
+
+    root = os.path.dirname(PETS_MANIFEST_PATH)
+    paths += list(glob.glob(os.path.join(root, "*", "home", "**", "*.png"),
+                            recursive=True))
+    return paths
+
+
+def predecode_all_async():
+    """宠物启动后调用：后台预解码商店+家园全部素材——用户第一次
+    开商店/小屋时图已全热（2026-09-29 首开提速轮）。"""
+    try:
+        predecode_async(home_asset_paths())
+    except Exception:
+        pass
+    try:
+        predecode_async(shop_asset_paths())
+    except Exception:
+        pass
 
 
 def shop_asset_paths():

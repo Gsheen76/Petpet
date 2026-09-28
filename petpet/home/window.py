@@ -107,17 +107,21 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
             "walk": "home",
             "sleep": "home",
         }
-        self.home_nav_paw = QPixmap(HOME_NAV_PAW_PATH)
-        self.home_nav_target = QPixmap(HOME_NAV_TARGET_PATH)
-        self.home_nav_arrow = QPixmap(HOME_NAV_ARROW_PATH)
+        from petpet.app.imgcache import pixmap as _cpixmap
+
+        # 家园静态图全量走 imgcache（2026-09-29 首开提速轮）：
+        # 启动后后台预解码 → 首开/重建零磁盘读。
+        self.home_nav_paw = _cpixmap(HOME_NAV_PAW_PATH)
+        self.home_nav_target = _cpixmap(HOME_NAV_TARGET_PATH)
+        self.home_nav_arrow = _cpixmap(HOME_NAV_ARROW_PATH)
         self.furniture = {
-            item_id: QPixmap(path)
+            item_id: _cpixmap(path)
             for item_id, path in HOME_FURNITURE_PATHS.items()
         }
         self.furniture["home_status_card"] = render_status_card_art(
             HOME_STATUS_CARD_SIZE)
         self.action_button_pixmaps = {
-            name: QPixmap(path)
+            name: _cpixmap(path)
             for name, path in HOME_BUTTON_PATHS.items()
         }
         self._manual_destination = None
@@ -282,12 +286,19 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
             pet_id or self.state.get("active_pet_id", "lunch_meat")
         )
         selected_pet_id = definition["id"]
+        from petpet.app.imgcache import pixmap as _cpixmap
+
         idle_path = pet_asset_path(selected_pet_id, "home", "idle")
-        idle_pixmap = QPixmap(idle_path) if idle_path else QPixmap()
+        # 走 imgcache（2026-09-29 首开提速轮）：启动后已后台预解码，
+        # 此处 QImage→QPixmap 轻转换，磁盘读归零。
+        idle_pixmap = _cpixmap(idle_path) if idle_path else QPixmap()
 
         def resolve(action):
+            # 存在性探测不再整图加载（2026-09-29 首开提速轮）：
+            # 原 QPixmap(path).isNull() 每候选全量读盘解码——首开
+            # 0.42s 纯探测开销；损坏图另有加载回退兜底。
             path = pet_asset_path(selected_pet_id, "home", action)
-            if path and not QPixmap(path).isNull():
+            if path and os.path.exists(path):
                 return path
             return idle_path
 
@@ -387,7 +398,9 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
 
         if columns <= 0 or rows <= 0:
             return ()
-        sheet = QPixmap(path)
+        from petpet.app.imgcache import pixmap as _cpixmap
+
+        sheet = _cpixmap(path)  # 预解码热备（2026-09-29）
         if sheet.isNull():
             return ()
         frames = []

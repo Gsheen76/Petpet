@@ -231,7 +231,6 @@ class PetWindow(QWidget):
         # The offscreen test platform has no audio backend and must not try.
         if self.sounds and not _dependency("IS_OFFSCREEN_PLATFORM")():
             self._prewarm_sounds()
-
         # physics
         self.vx = 0.0
         self.vy = 0.0
