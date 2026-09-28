@@ -87,18 +87,27 @@ class ClickSoundFilterTests(unittest.TestCase):
             def play(self):
                 self.plays += 1
 
-        fake = _Fake()
-        old_effect, old_ts = sounds._EFFECT, sounds._LAST_PLAY_TS
-        sounds._EFFECT = fake
+        # 推流通道（2026-09-29 终版）：mock io.write 计数
+        class _FakeIO:
+            def __init__(self):
+                self.writes = 0
+
+            def write(self, *_):
+                self.writes += 1
+                return 1
+
+        fake = _FakeIO()
+        old_push, old_ts = sounds._PUSH, sounds._LAST_PLAY_TS
+        sounds._PUSH = {"io": fake, "out": None, "pcm": b"x"}
         sounds._LAST_PLAY_TS = 0.0
         try:
             sounds.play_click()
             sounds.play_click()  # 同一毫秒级的第二层命中——节流掉
             self.assertEqual(
-                fake.plays, 1, "40ms 节流内只允许播一次（防双响）"
+                fake.writes, 1, "40ms 节流内只允许播一次（防双响）"
             )
         finally:
-            sounds._EFFECT = old_effect
+            sounds._PUSH = old_push
             sounds._LAST_PLAY_TS = old_ts
 
 
