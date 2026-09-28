@@ -1477,7 +1477,7 @@ class DailyWindow(CozyProgressWindow):
         title = QLabel(f"{year} 年 {month} 月")
         title.setAlignment(Qt.AlignCenter)
         title.setStyleSheet(
-            "color:#c96f52;font-size:17px;font-weight:800;"
+            "color:#c96f52;font-size:21px;font-weight:800;"
         )
         header.addWidget(prev)
         header.addWidget(title, 1)
@@ -1501,29 +1501,29 @@ class DailyWindow(CozyProgressWindow):
         for column, name in enumerate("日一二三四五六"):
             head = QLabel(name)
             head.setAlignment(Qt.AlignCenter)
-            head.setFixedHeight(20)
-            head.setStyleSheet("color:#a58b7c;font-size:13px;font-weight:700;")
+            head.setFixedHeight(24)
+            head.setStyleSheet("color:#a58b7c;font-size:16px;font-weight:700;")
             grid.addWidget(head, 0, column)
         for day in range(1, days_in_month + 1):
             slot = first_weekday + day - 1
             row, column = slot // 7 + 1, slot % 7
             cell = QLabel(str(day))
             cell.setAlignment(Qt.AlignCenter)
-            cell.setFixedSize(38, 32)
+            cell.setFixedSize(48, 38)
             is_today = (year, month, day) == (today.year, today.month, today.day)
             is_future = (year, month, day) > (today.year, today.month, today.day)
             if day in signed:
                 cell.setStyleSheet(
                     "background:#f28f76;color:#ffffff;border-radius:16px;"
-                    "font-size:15px;font-weight:800;"
+                    "font-size:18px;font-weight:800;"
                 )
             elif is_today:
                 cell.setStyleSheet(
                     "color:#e0533d;border:2px solid #f28f76;border-radius:16px;"
-                    "font-size:15px;font-weight:800;"
+                    "font-size:18px;font-weight:800;"
                 )
             elif is_future:
-                cell.setStyleSheet("color:#c9b8ac;font-size:14px;")
+                cell.setStyleSheet("color:#c9b8ac;font-size:17px;")
             else:
                 heat = month_counts[day - 1]
                 wash = ""
@@ -1538,12 +1538,12 @@ class DailyWindow(CozyProgressWindow):
                     else:
                         wash = "background:#fdf1e4;"
                 cell.setStyleSheet(
-                    f"{wash}color:#7b564a;border-radius:16px;font-size:14px;"
+                    f"{wash}color:#7b564a;border-radius:19px;font-size:17px;"
                 )
             grid.addWidget(cell, row, column)
         outer.addLayout(grid)
         legend = QLabel("底色越暖 = 那天陪 TA 越多")
-        legend.setStyleSheet("color:#a58b7c;font-size:12px;")
+        legend.setStyleSheet("color:#a58b7c;font-size:15px;")
         legend.setAlignment(Qt.AlignRight)
         outer.addWidget(legend)
         return card
@@ -1570,7 +1570,7 @@ class DailyWindow(CozyProgressWindow):
         layout.setSpacing(4)
         title = QLabel("每日签到")
         title.setStyleSheet(
-            "color:#c96f52;font-size:17px;font-weight:800;"
+            "color:#c96f52;font-size:21px;font-weight:800;"
         )
         layout.addWidget(title)
         row = QHBoxLayout()
@@ -1578,7 +1578,7 @@ class DailyWindow(CozyProgressWindow):
         note = f"已连续签到 {streak} 天" if streak else "今天也要来看我呀"
         label = QLabel(note)
         label.setStyleSheet(
-            "color:#7b564a;font-size:16px;font-weight:600;"
+            "color:#7b564a;font-size:19px;font-weight:600;"
         )
         row.addWidget(label, 1)
         button = FeedbackButton()
@@ -1624,7 +1624,7 @@ class DailyWindow(CozyProgressWindow):
         layout.setSpacing(4)
         title = QLabel("今日任务")
         title.setStyleSheet(
-            "color:#c96f52;font-size:17px;font-weight:800;"
+            "color:#c96f52;font-size:21px;font-weight:800;"
         )
         layout.addWidget(title)
         for index, quest in enumerate(block["quests"]):
@@ -1633,7 +1633,7 @@ class DailyWindow(CozyProgressWindow):
                 f"{quest['label']}　{quest['progress']}/{quest['target']}"
             )
             label.setStyleSheet(
-                "color:#7b564a;font-size:16px;font-weight:600;"
+                "color:#7b564a;font-size:19px;font-weight:600;"
             )
             row.addWidget(label, 1)
             button = FeedbackButton()
@@ -1798,7 +1798,7 @@ class RecordsWindow(CozyProgressWindow):
             label = QLabel(line)
             label.setWordWrap(True)
             label.setStyleSheet(
-                "color:#7b564a;font-size:16px;font-weight:600;"
+                "color:#7b564a;font-size:19px;font-weight:600;"
             )
             weekly_layout.addWidget(label)
         self.content_layout.addWidget(weekly)
