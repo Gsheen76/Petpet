@@ -55,9 +55,9 @@ class HoverCloseButton(QPushButton):
         from PyQt5.QtGui import QColor, QPainter, QPainterPath
         if not self.isEnabled():
             return
-        if self.isDown():
-            tint = QColor(150, 60, 40, 90)
-        elif self.underMouse():
+        # 终版按键规范（2026-09-28）：无按压效果——只保留悬浮白晕
+        #（=悬浮颜色变化）；按打压暗已删。
+        if self.underMouse():
             tint = QColor(255, 255, 255, 80)
         else:
             return

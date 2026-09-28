@@ -2175,6 +2175,21 @@ class PetWindow(QWidget):
             except RuntimeError:
                 self._speech_bubble = None
 
+    _ANIM_PAINT_FPS = {
+        "idle": 8.0, "idle_dinosaur": 8.0, "idle_strawberry": 8.0,
+        "ask": 8.0, "drag": 8.0,
+        "sleep": 3.0, "sad": 5.0, "sit": 6.0, "walk": 6.0,
+        "drag_dinosaur": 6.0,
+    }
+
+    def _current_anim_paint_interval(self):
+        try:
+            name = self._current_animation_name() or "idle"
+        except Exception:
+            name = "idle"
+        fps = self._ANIM_PAINT_FPS.get(name, 24.0)  # 未知动画按互动上限
+        return 1.0 / fps
+
     def on_tick(self):
         if PetWindow._home_scene_active(self):
             return
@@ -2325,7 +2340,16 @@ class PetWindow(QWidget):
                 and abs(self.vx) < 0.01 and random.random() < 0.02):
             self._save_desktop_position()
 
-        self.update()
+        # 按动画帧率限频重绘（2026-09-28 流畅收官轮）：idle 动画仅
+        # 8fps，原无条件每 tick（30fps）全窗重绘——静止时 ~3/4 是
+        # 空转（idle CPU 大头）。移动/拖拽/眨眼保持每 tick 重绘；
+        # 互动动画（eat/play 20-24fps）按 24fps 上限。
+        if (self.dragging or self.blink or not self.on_ground
+                or abs(self.vx) > 0.01 or is_walking
+                or now - getattr(self, "_last_anim_paint", 0.0)
+                >= self._current_anim_paint_interval()):
+            self._last_anim_paint = now
+            self.update()
 
     def _say_ouch(self):
         """碰撞喊疼（延迟到撞击帧之后执行，窗口可能已销毁要兜底）。"""
