@@ -1386,7 +1386,7 @@ class DailyWindow(CozyProgressWindow):
             pet,
             "每日",
             "签到、日历和今日任务，每天来看我一眼。",
-            (700, 800),
+            (850, 960),
             shop_theme=True,
             title_image=False,
         )
