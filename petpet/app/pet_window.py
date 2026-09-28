@@ -93,7 +93,20 @@ class PetWindow(QWidget):
         return ai.needs_personal_setup_reminder()
 
     def pet_needs_stat_attention(self):
-        return bool(progression.zero_stat_interaction_actions(self.state))
+        # 签名缓存（2026-09-28 流畅轮）：本判定在 paintEvent 里每帧跑
+        #（21fps × zero_stat→ensure_progression 状态机）；判定结果只由
+        # 三属性决定——以三值为签名缓存，状态一变立即失效（测试直接
+        # 突变 state 也能立刻反映），paint 稳态零重算。
+        state = self.state
+        signature = (
+            state.get("hunger"), state.get("mood"), state.get("energy"),
+        )
+        cache = getattr(self, "_stat_attention_cache", None)
+        if cache is not None and cache[0] == signature:
+            return cache[1]
+        value = bool(progression.zero_stat_interaction_actions(state))
+        self._stat_attention_cache = (signature, value)
+        return value
 
     def treasure_notice_active(self):
         """Return whether the treasure notice is visible or menu-hidden."""

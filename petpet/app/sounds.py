@@ -62,6 +62,7 @@ def play_click():
                 effect.setMuted(False)
                 effects.append(effect)
             _EFFECTS = effects
+            _install_device_keepalive()
         except Exception:
             _EFFECTS = False
             return
@@ -77,6 +78,34 @@ def play_click():
         _EFFECTS[_EFFECT_SLOT].play()
     except RuntimeError:
         pass  # 音频后端已关（进程收尾等）
+
+
+def _install_device_keepalive():
+    """音频设备保活心跳（2026-09-28 流畅轮）：蓝牙/USB 音频设备省电
+    休眠后，下一次真实播放要付 ~200-800ms 的同步唤醒段（用户「点击
+    偶尔卡一下」的环境性元凶——本日音效直觉第三次命中）。每 30s 用
+    轮换实例静音播一次，让设备/会话保持活跃。启动期预热后由本模块
+    自行安装；失败静默。"""
+    try:
+        from PyQt5.QtCore import QTimer
+
+        def _beat():
+            if isinstance(_EFFECTS, list) and _EFFECTS:
+                try:
+                    eff = _EFFECTS[0]
+                    eff.setMuted(True)
+                    eff.play()
+                    eff.setMuted(False)
+                except RuntimeError:
+                    pass
+
+        timer = QTimer()
+        timer.setInterval(30000)
+        timer.timeout.connect(_beat)
+        timer.start()
+        globals()["_KEEPALIVE_TIMER"] = timer  # 持引用防 GC
+    except Exception:
+        pass
 
 
 class ClickSoundFilter:
