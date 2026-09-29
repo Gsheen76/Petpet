@@ -164,9 +164,11 @@ SHOP_THEME_STYLE = """
         font-size: 24px;
     }
     QFrame#tabBar {
+        /* 图片托盘弃用（2026-09-29 用户定稿：宠物商店不使用图片
+           素材，改与套装/强化页面相同的自建分栏）——胶囊本身
+           即分栏视觉，托盘透明。 */
         background: transparent;
         border: 0;
-        border-image: url("%(tab_bar)s");
     }
     QPushButton#tabButton {
         background: transparent;
@@ -976,10 +978,6 @@ class FeedbackButton(QPushButton):
                 elif self.underMouse():
                     # 悬浮=选中同款（选中色 65% 透明度=真"浅珊瑚"）
                     painter.setBrush(QColor(242, 143, 118, 165))
-                else:
-                    # 未选中常态：提亮浅底（2026-09-29 用户定稿「分栏
-                    # 底色稍微提亮一点」）——奶白微亮，托盘上可辨
-                    painter.setBrush(QColor(255, 250, 243, 160))
                 painter.drawRoundedRect(
                     QRectF(body), body.height() / 2, body.height() / 2)
                 painter.end()
