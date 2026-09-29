@@ -316,7 +316,7 @@ SHOP_THEME_STYLE = """
 }
 
 
-PANEL_STYLE = """
+PANEL_STYLE = ("""
     QWidget {
         background: transparent;
         color: #65483b;
@@ -450,17 +450,14 @@ PANEL_STYLE = """
         color: #a98b7b;
     }
     QPushButton#closeButton {
-        background: #ffe5dc;
-        color: #a96254;
-        border: 1px solid #efc6b8;
-        border-radius: 17px;
-        padding: 0;
-        font-size: 27px;
-        font-weight: 700;
+        background: transparent;
+        border: 0;
+        /* × 素材统一（2026-09-29 用户定稿：所有 × 键用商店的那张
+           × 贴图）——FeedbackButton 抓帧整体缩放做悬浮放大。 */
+        border-image: url("%(close_button)s");
     }
     QPushButton#closeButton:hover {
-        background: #f49a84;
-        color: white;
+        background: transparent;
     }
     QPushButton#softButton {
         background: #fff0e4;
@@ -588,7 +585,10 @@ PANEL_STYLE = """
     }
     QScrollBar::add-line:vertical,
     QScrollBar::sub-line:vertical { height: 0; }
-""" % {"app_font": APP_FONT_FAMILY}
+""" % {
+    "app_font": APP_FONT_FAMILY,
+    "close_button": _shop_asset("close_button.png").replace("\\", "/"),
+})
 
 PANEL_STYLE += """
     QLabel[priceTagRole="normal"],
@@ -951,7 +951,9 @@ class FeedbackButton(QPushButton):
                 if self.isChecked():
                     painter.setBrush(QColor("#f28f76"))
                 elif self.underMouse():
-                    painter.setBrush(QColor(255, 236, 225, 200))
+                    # 悬浮=选中同款胶囊（浅一档珊瑚，2026-09-29 用户
+                    # 定稿：悬浮选中的大小与选中一致）
+                    painter.setBrush(QColor("#f5b3a0"))
                 else:
                     painter.end()
                     painter = None
@@ -976,12 +978,10 @@ class FeedbackButton(QPushButton):
         # 最简反馈（2026-09-28 用户终版定稿）：**悬浮=放大 2px，
         # 点击/按住=还原原大小**——按压内缩与压暗全部删除，无任何
         # 叠加层（描边/白洗历史上曾致四角取景框角标，禁用）。
-        # 贴边安全模式（2026-09-29）：常态内缩 2、悬浮到全幅（d 反转）
-        #——悬浮净放大感保留、永不越出画布。
-        if self._edge_safe:
-            d = 0 if phase == "hover" else -2
-        else:
-            d = 2 if phase == "hover" else 0
+        # （2026-09-29 晚回滚 edge-safe：常态内缩手感差——用户定稿
+        # 「还是原来那样好，增大一点画布就好」；贴边键由画布留白
+        # 保悬浮空间，非键自身缩水。）
+        d = 2 if phase == "hover" else 0
         target = self.rect().adjusted(-d, -d, d, d)
         painter.drawPixmap(target, skin)
         painter.end()
@@ -1238,6 +1238,11 @@ class CozyProgressWindow(KeepAliveTopLevelWindow):
         self.root_layout = root
         if self.shop_theme:
             root.setContentsMargins(25, 18, 25, 0)
+        # 画布右上留边（2026-09-29 用户定稿：× 悬浮放大 2px 不越出
+        # 画布——由画布留白保空间，非键缩水）。
+        root.setContentsMargins(25, 18, 29, 20)
+        if self.shop_theme:
+            root.setContentsMargins(25, 18, 29, 0)
 
         title_bar = QFrame()
         title_bar.setCursor(Qt.ArrowCursor)
@@ -1258,12 +1263,22 @@ class CozyProgressWindow(KeepAliveTopLevelWindow):
         else:
             self.coin_label = QLabel()
             self.coin_label.setObjectName("coinPill")
-        close_button = FeedbackButton("" if self.shop_theme else "×")
+        close_button = FeedbackButton("")
         close_button.setObjectName("closeButton")
-        close_button.setEdgeSafe(True)  # 贴画布角：悬浮放大永不越界
         close_button.setCursor(Qt.PointingHandCursor)
         close_button.setFixedSize(38, 38)
-        close_button.clicked.connect(self.close)
+
+        def _close_once():
+            # 防双击双关双响（2026-09-29 用户反馈：偶尔响两次、窗口
+            # 开一下才退出）——首次触发即禁用，二次点击不再响应。
+            # edge-safe 已按用户定稿回滚（手感差），越界由画布右上
+            # 留白兜住。
+            if not close_button.isEnabled():
+                return
+            close_button.setEnabled(False)
+            self.close()
+
+        close_button.clicked.connect(_close_once)
         title_row.addWidget(title_label)
         title_row.addStretch(1)
         if self.coin_label is not None:

@@ -721,9 +721,17 @@ class BubbleMenu(KeepAliveTopLevelWindow):
         if self._attention_flags is None:
             zero_record_actions = _dependency(
                 "progression").zero_stat_interaction_actions(self.pet.state)
+            # 蓝点让位（2026-09-29 用户定稿：「成就有东西可以领取亮
+            # 红点，每日不要跟着亮」）——成就红在场时每日蓝点不显示，
+            # 红点（签到/任务可领）不受影响仍优先提示。
+            _has_achievements = _dependency(
+                "progression").has_claimable_achievements(self.pet.state)
+            _daily_state = _dependency(
+                "progression").daily_attention_state(self.pet.state)
+            if _daily_state == "blue" and _has_achievements:
+                _daily_state = None
             self._attention_flags = (
-                _dependency("progression").has_claimable_achievements(
-                    self.pet.state),
+                _has_achievements,
                 self.needs_api_key_configuration(),
                 {
                     {
@@ -735,9 +743,8 @@ class BubbleMenu(KeepAliveTopLevelWindow):
                     for action in zero_record_actions
                 },
                 # 第四元素（2026-09-26 双态点）："red"=可领（优先）、
-                # "blue"=今日任务没做完、None=全清
-                _dependency("progression").daily_attention_state(
-                    self.pet.state),
+                # "blue"=今日任务没做完（成就红在场时让位）、None=全清
+                _daily_state,
             )
         has_claimable, needs_api_key, zero_actions, daily_state = (
             self._attention_flags)
