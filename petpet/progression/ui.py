@@ -225,7 +225,8 @@ SHOP_THEME_STYLE = """
         color: #9c6b58;
         border: 0;
         border-radius: 12px;
-        padding: 7px 3px;
+        /* padding 增大（2026-09-30 用户：成就胶囊高度增加） */
+        padding: 12px 3px;
         font-size: 14px;
         font-weight: 800;
     }
@@ -2320,7 +2321,7 @@ class AchievementsWindow(CozyProgressWindow):
         # Adaptive warm panel: the shared four-slot tab_bar asset cannot
         # stretch to a different button count.
         bar.setObjectName("filterBar")
-        bar.setFixedHeight(46)
+        bar.setFixedHeight(52)
         bar_layout = QHBoxLayout(bar)
         bar_layout.setContentsMargins(4, 4, 4, 4)
         bar_layout.setSpacing(3)

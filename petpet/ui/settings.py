@@ -602,19 +602,35 @@ class SettingsWindow(KeepAliveTopLevelWindow):
         if autostart.is_supported():
             auto = ToggleSwitch()
             auto.setChecked(autostart.is_enabled())
+            auto_state = QLabel("已开启" if auto.isChecked() else "已关闭")
+            auto_state.setStyleSheet("color:#8c6252; font-size:17px;")
+
+            def _sync_auto_state():
+                auto_state.setText(
+                    "已开启" if auto.isChecked() else "已关闭")
 
             def _toggle_autostart(checked):
                 if autostart.set_enabled(checked):
+                    _sync_auto_state()
                     return
                 auto.blockSignals(True)
                 auto.setChecked(not checked)
                 auto.blockSignals(False)
+                _sync_auto_state()
                 self.status_label.setText("写入开机自启动失败")
 
-            auto.toggled.connect(_toggle_autostart)
+            auto.toggled.connect(
+                lambda _checked: _toggle_autostart(auto.isChecked()))
+            from PyQt5.QtWidgets import QHBoxLayout as _HL
+            _row = QWidget()
+            _hl = _HL(_row)
+            _hl.setContentsMargins(0, 0, 0, 0)
+            _hl.setSpacing(8)
+            _hl.addWidget(auto_state)
+            _hl.addWidget(auto)
             self._add_row(
                 layout, "开机自动启动",
-                "开机后自动把 TA 叫到桌面上（仅 Windows）", auto)
+                "开机后自动把 TA 叫到桌面上（仅 Windows）", _row)
         return group
 
     def _preference_group(self, title, hint, key, labels, field_keys, presets):
