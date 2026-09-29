@@ -258,6 +258,7 @@ class ChatWindow(KeepAliveTopLevelWindow):
                 font-weight:600;
             }}
             QPushButton#chatModeSegment:checked {{
+                background:transparent;
                 background:#f8dcd7; color:#70483c;
                 border:1px solid #efc4bb;
             }}

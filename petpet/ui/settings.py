@@ -330,10 +330,10 @@ class SettingsWindow(KeepAliveTopLevelWindow):
                 font-weight:700;
             }}
             QPushButton#threeLevelOption:hover {{
-                color:#70483c; background:#ffece1;
+                color:#70483c; background:transparent;
             }}
             QPushButton#threeLevelOption:checked {{
-                color:#ffffff; background:#f28f76;
+                color:#ffffff; background:transparent;
             }}
             QGroupBox {{
                 background:transparent;

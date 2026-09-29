@@ -206,12 +206,13 @@ SHOP_THEME_STYLE = """
         font-size: 19px;
         font-weight: 800;
     }
+    /* 自绘胶囊接管 hover/checked 背景（2026-09-30 统一轮） */
     QPushButton#petTabButton:hover {
-        background: #ffece1;
+        background: transparent;
         color: #8c5948;
     }
     QPushButton#petTabButton:checked {
-        background: #f28f76;
+        background: transparent;
         color: #ffffff;
     }
     QFrame#filterBar {
@@ -229,11 +230,11 @@ SHOP_THEME_STYLE = """
         font-weight: 800;
     }
     QPushButton#filterTabButton:hover {
-        background: #ffece1;
+        background: transparent;
         color: #8c5948;
     }
     QPushButton#filterTabButton:checked {
-        background: #f28f76;
+        background: transparent;
         color: #ffffff;
     }
     QPushButton[coralPill="true"] {
@@ -511,11 +512,11 @@ PANEL_STYLE = ("""
         font-weight: 900;
     }
     QPushButton[chipTab="true"]:hover {
-        background: #ffece1;
+        background: transparent;
         color: #8c5948;
     }
     QPushButton[chipTab="true"]:checked {
-        background: #f28f76;
+        background: transparent;
         color: #ffffff;
     }
     QPushButton#categoryTabButton {
@@ -528,10 +529,10 @@ PANEL_STYLE = ("""
         font-weight: 900;
     }
     QPushButton#categoryTabButton:hover {
-        background: #fff0df;
+        background: transparent;
     }
     QPushButton#categoryTabButton:checked {
-        background: #f7c86e;
+        background: transparent;
         color: #704532;
     }
     QLabel#upgradeSummary {
