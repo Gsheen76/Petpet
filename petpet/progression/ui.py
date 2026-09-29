@@ -474,8 +474,10 @@ PANEL_STYLE = ("""
         font-size: 19px;
         font-weight: 900;
     }
+    /* hover 背景透明化（2026-09-30 交接修复）：自绘浅珊瑚胶囊接管
+       悬浮视觉，QSS 只留文字变色——撑满整格的 #ffece1 曾叠在胶囊上 */
     QPushButton#tabButton:hover {
-        background: #ffece1;
+        background: transparent;
         color: #8c5948;
     }
     QPushButton#tabButton:checked {
