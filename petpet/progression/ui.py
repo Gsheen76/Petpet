@@ -164,11 +164,9 @@ SHOP_THEME_STYLE = """
         font-size: 24px;
     }
     QFrame#tabBar {
-        /* 图片托盘弃用（2026-09-29 用户定稿：宠物商店不使用图片
-           素材，改与套装/强化页面相同的自建分栏）——胶囊本身
-           即分栏视觉，托盘透明。 */
         background: transparent;
         border: 0;
+        border-image: url("%(tab_bar)s");
     }
     QPushButton#tabButton {
         background: transparent;
@@ -186,9 +184,10 @@ SHOP_THEME_STYLE = """
     /* 礼物页四分栏托盘（2026-09-09）：复用旧 4 槽药丸素材（正好四格，
        槽线 25/50/75%% 与等分按钮边界对齐）。仅商店主题加载本样式。 */
     QFrame#giftFilterBar {
+        /* 图片托盘弃用（2026-09-29 用户定稿：礼物商店的分栏不用
+           图片素材，与套装/强化页面自建分栏同语言）——胶囊即分栏。 */
         background: transparent;
         border: 0;
-        border-image: url("%(filter_bar4)s");
     }
     QFrame#petTabBar {
         background: #f7e8d8;
@@ -2838,7 +2837,11 @@ class ShopWindow(CozyProgressWindow):
         self.content_layout.addStretch(1)
 
     def _detach_current_page(self):
-        """把当前页的全部卡片摘进隐藏容器（保留实例供切回挂回）。"""
+        """把当前页的卡片与页头摘进隐藏容器（保留实例供切回挂回）。
+
+        页头必须随页缓存（2026-09-30 修复：各商店标题不同——切换
+        后页头停留在最后构建的页，用户看到全是礼物商店）。
+        """
         widgets = []
         while self.content_layout.count():
             item = self.content_layout.takeAt(0)
@@ -2848,17 +2851,32 @@ class ShopWindow(CozyProgressWindow):
                     self._page_sink = QWidget(self)
                 widget.setParent(self._page_sink)
                 widgets.append(widget)
-        if widgets and self.page:
-            self._page_cache[self.page] = widgets
+        headers = []
+        header_layout = getattr(self, "_page_header_layout", None)
+        if header_layout is not None:
+            while header_layout.count():
+                item = header_layout.takeAt(0)
+                widget = item.widget()
+                if widget is not None:
+                    if self._page_sink is None:
+                        self._page_sink = QWidget(self)
+                    widget.setParent(self._page_sink)
+                    headers.append(widget)
+        if (widgets or headers) and self.page:
+            self._page_cache[self.page] = {
+                "content": widgets, "header": headers}
 
     def _invalidate_page_cache(self):
-        for widgets in self._page_cache.values():
-            for widget in widgets:
-                try:
-                    widget.setParent(None)
-                    widget.deleteLater()
-                except RuntimeError:
-                    pass
+        for cached in self._page_cache.values():
+            groups = (cached.values() if isinstance(cached, dict)
+                      else [cached])
+            for group in groups:
+                for widget in group:
+                    try:
+                        widget.setParent(None)
+                        widget.deleteLater()
+                    except RuntimeError:
+                        pass
         self._page_cache.clear()
 
     def _set_page(self, page):
@@ -2872,13 +2890,17 @@ class ShopWindow(CozyProgressWindow):
         # 首建分支曾漏调，旧分栏 checked 残留，用户截图实证）。
         self._sync_tab_bar()
         cached = self._page_cache.get(page)
-        if cached:
-            # 挂回缓存页（布局级开销，重访瞬时）
-            for widget in cached:
+        if isinstance(cached, dict):
+            # 挂回缓存页（布局级开销，重访瞬时）——卡片与页头一起
+            # 挂回，各商店标题正确显示。
+            for widget in cached.get("content", []):
                 self.content_layout.addWidget(widget)
             self.content_layout.addStretch(1)
+            header_layout = getattr(self, "_page_header_layout", None)
+            if header_layout is not None:
+                for widget in cached.get("header", []):
+                    header_layout.addWidget(widget)
             self._refresh_coin_label()
-            self._sync_tab_bar()
             return
         self._rebuild_current_page()
 

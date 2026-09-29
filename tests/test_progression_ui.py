@@ -124,9 +124,30 @@ class ProgressionWindowUiTests(unittest.TestCase):
         self.windows = [shop]
 
         shop.refresh()
-        outfit_text = " ".join(
-            label.text() for label in shop.findChildren(QLabel)
-        )
+        # 页面缓存轮（2026-09-30）：切走的页头进隐藏容器（非销毁），
+        # findChildren 全窗扫描会捞到缓存页的文本——收集**活性布局**
+        # （页头+内容区）内的文字，语义=当前页显示什么。
+        def _live_texts():
+            texts = []
+
+            def walk(layout):
+                if layout is None:
+                    return
+                for i in range(layout.count()):
+                    w = layout.itemAt(i).widget()
+                    if w is None:
+                        continue
+                    texts.extend(
+                        x.text() for x in w.findChildren(QLabel)
+                        if x.text())
+                    if isinstance(w, QLabel) and w.text():
+                        texts.append(w.text())
+
+            walk(getattr(shop, "_page_header_layout", None))
+            walk(shop.content_layout)
+            return " ".join(texts)
+
+        outfit_text = _live_texts()
         tab_texts = [
             button.text() for button in shop.findChildren(QPushButton)
             if button.objectName() == "tabButton" and not button.isHidden()
@@ -156,9 +177,7 @@ class ProgressionWindowUiTests(unittest.TestCase):
         shop._set_page("upgrades")
         QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
         QApplication.processEvents()
-        upgrade_text = " ".join(
-            label.text() for label in shop.findChildren(QLabel)
-        )
+        upgrade_text = _live_texts()
         self.assertIn("成长强化", upgrade_text)
         self.assertIn("温柔抚摸", upgrade_text)
         self.assertIn("持久活力", upgrade_text)
