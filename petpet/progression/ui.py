@@ -1295,7 +1295,20 @@ class CozyProgressWindow(KeepAliveTopLevelWindow):
         # 悬浮放大感保留、永不越出画布）；QSS border-image 弃用。
         _close_art = QPixmap(_shop_asset("close_button.png"))
         if not _close_art.isNull():
-            close_button.setIcon(QIcon(_close_art))
+            # 保宽高比（2026-09-29：素材 68×72 非正方，setIconSize
+            # 是方形拉伸会纵向压扁 6%——「没以前圆了」的根因）；
+            # 先放到正方形透明画布居中，icon 缩放不变形。
+            _side = max(_close_art.width(), _close_art.height())
+            _square = QPixmap(_side, _side)
+            _square.fill(Qt.transparent)
+            _p = QPainter(_square)
+            _p.drawPixmap(
+                (_side - _close_art.width()) // 2,
+                (_side - _close_art.height()) // 2,
+                _close_art,
+            )
+            _p.end()
+            close_button.setIcon(QIcon(_square))
             close_button.setProperty("iconGrowBase", 38)
             close_button.setIconGrowMode(True)
             close_button._apply_icon_size()
