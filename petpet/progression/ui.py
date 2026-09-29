@@ -1289,8 +1289,10 @@ class CozyProgressWindow(KeepAliveTopLevelWindow):
         title_bar.mousePressEvent = self._title_bar_press
         title_bar.mouseMoveEvent = self._title_bar_move
         title_bar.mouseReleaseEvent = self._title_bar_release
-        if self.shop_theme:
-            title_bar.setFixedHeight(78)
+        # 标题行固定高（2026-09-29 × 显示完整修复）：非 shop 面板
+        # 原无固定高——布局压缩下 × 键顶部被裁一条（用户截图实证）。
+        # 42px = ×键 38px + 上下各 2px 呼吸；shop 主题 78px 不变。
+        title_bar.setFixedHeight(78 if self.shop_theme else 42)
         root.addWidget(title_bar)
 
         if not self.shop_theme:

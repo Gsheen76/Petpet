@@ -389,6 +389,9 @@ class SettingsWindow(KeepAliveTopLevelWindow):
         title_row = QHBoxLayout(title_bar)
         title_row.setContentsMargins(0, 0, 0, 0)
         title_row.setSpacing(10)
+        # 标题行固定高（2026-09-29 × 显示完整修复）：36px × 键 +
+        # 上下呼吸，布局压缩不再裁顶。
+        title_bar.setFixedHeight(42)
         self.title_label = QLabel("温馨设置")
         self.title_label.setObjectName("settingsTitle")
         self.title_label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
