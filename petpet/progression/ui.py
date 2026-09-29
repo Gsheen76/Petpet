@@ -354,6 +354,8 @@ PANEL_STYLE = ("""
     QLabel#muted, QLabel[mutedText="true"] {
         color: #a98270;
         font-size: 18px;
+        /* 家具描述行高增加（2026-09-30 用户定稿：多行介绍换行太挤） */
+        line-height: 150%;
     }
     QLabel#status {
         color: #c96f59;
