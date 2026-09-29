@@ -119,6 +119,7 @@ class ThreeLevelSlider(QWidget):
         for index, text in enumerate(labels):
             button = FeedbackButton(text)
             button.setObjectName("threeLevelOption")
+            button.setFlatFeedback(True)  # 自绘胶囊（2026-09-30 统一轮）
             button.setCheckable(True)
             button.setCursor(Qt.PointingHandCursor)
             button.setCheckable(True)
