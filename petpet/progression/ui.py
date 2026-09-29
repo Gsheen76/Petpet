@@ -998,7 +998,7 @@ class FeedbackButton(QPushButton):
                     # 悬浮=选中同款（同一 body 同尺寸、不透明实色——
                     # 2026-09-30 用户定稿大小严格一致：半透明的边缘会
                     # 视觉上显小，用实色浅珊瑚 #f7a58c 消除）
-                    painter.setBrush(QColor("#f7a58c"))
+                    painter.setBrush(QColor("#f9b8a3"))
                 painter.drawRoundedRect(
                     QRectF(body), body.height() / 2, body.height() / 2)
                 painter.end()
