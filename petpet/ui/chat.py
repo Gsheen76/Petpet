@@ -236,7 +236,7 @@ class ChatWindow(KeepAliveTopLevelWindow):
                 background:#ffffff;
             }}
             QPushButton#send {{
-                background:#dc806a; color:#fff; border:0;
+                background:#e8917a; color:#fff; border:0;
                 border-radius:15px;
                 padding:10px 23px; font-weight:700; font-size:{fs}px;
             }}
