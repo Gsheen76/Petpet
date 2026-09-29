@@ -2794,10 +2794,12 @@ class ShopWindow(CozyProgressWindow):
             button.setChecked(self.page == page)
             button.setCursor(Qt.PointingHandCursor)
             button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-            def _tab_clicked(selected=page, btn=button):
+            def _tab_clicked(_checked=False, selected=page, btn=button):
                 # 粘性选中（2026-09-30 用户定稿：已选中的分栏再点
                 # 不会取消选中）——原生 toggle 把它翻成 False 时立即
-                # 拨回，_set_page 对同页早退不变。
+                # 拨回，_set_page 对同页早退。首参数必须吸收 clicked
+                # 信号的 bool（否则 bool 覆盖 selected → _set_page
+                # 收到 True/False 不切换——上一版就是这个 bug）。
                 if not btn.isChecked():
                     btn.setChecked(True)
                 self._set_page(selected)
