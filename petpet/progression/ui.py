@@ -3067,7 +3067,9 @@ class ShopWindow(CozyProgressWindow):
                 label.setProperty("priceTagRole", role)
                 label.setPixmap(gift_pixmap)
                 label.setContentsMargins(12, 4, 12, 4)
-                label.setMinimumHeight(44)
+                # 固定高（2026-09-30 家具页免费赠送显示不完整修复）：
+                # pixmap 44 + 上下 margins 4+4 = 52；布局曾压到 48 裁底。
+                label.setFixedHeight(52)
                 label.setStyleSheet(
                     "background: transparent; border: 0; border-image: none;"
                 )
