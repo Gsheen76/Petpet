@@ -184,10 +184,11 @@ SHOP_THEME_STYLE = """
     /* 礼物页四分栏托盘（2026-09-09）：复用旧 4 槽药丸素材（正好四格，
        槽线 25/50/75%% 与等分按钮边界对齐）。仅商店主题加载本样式。 */
     QFrame#giftFilterBar {
-        /* 图片托盘弃用（2026-09-29 用户定稿：礼物商店的分栏不用
-           图片素材，与套装/强化页面自建分栏同语言）——胶囊即分栏。 */
-        background: transparent;
-        border: 0;
+        /* 自绘底盘（2026-09-30 用户定稿：图片素材弃用后仍要与前几个
+           商店一样的底盘）——与 petTabBar 同款 QSS 圆角底。 */
+        background: #f7e8d8;
+        border: 1px solid #eed3ba;
+        border-radius: 22px;
     }
     QFrame#petTabBar {
         background: #f7e8d8;
