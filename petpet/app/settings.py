@@ -22,13 +22,13 @@ DEFAULT_SETTINGS = {
     "remind_rest_min": 90,
     "remind_stand_min": 45,
     "sound_enabled": True,
-    # 三属性清醒消耗（2026-09-25 用户定稿：无强化待机 8 小时、持久活力
-    # 满级 16 小时——实际速率 = 此值 × 0.5 全局系数 × 强化减伤，三值
-    # 统一 0.0139：0.00695/2s = 0.2085/分 = 100 点约 480 分钟；
-    # 历史 0.0556（2h/4h 定稿）由 load_settings 迁移覆盖）。
-    "decay_hunger": 0.0139,
-    "decay_energy": 0.0139,
-    "decay_mood": 0.0139,
+    # 三属性清醒消耗（2026-09-30 用户定稿：无强化待机 12 小时、持久活力
+    # 满级 24 小时——实际速率 = 此值 × 0.5 全局系数 × 强化减伤，三值
+    # 统一 0.0092593：0.0046296/2s = 0.13889/分 = 100 点约 720 分钟；
+    # 历史 0.0556（2h/4h）与 0.0139（8h/16h）由 load_settings 迁移覆盖）。
+    "decay_hunger": 0.0092593,
+    "decay_energy": 0.0092593,
+    "decay_mood": 0.0092593,
     "decay_hunger_sleeping": 0.08,
     "decay_energy_sleeping_gain": 4,
     "needy_speak_chance": 0.13,
@@ -47,10 +47,13 @@ def load_settings(path=SETTINGS_PATH):
             loaded = json.load(stream)
         settings = {**DEFAULT_SETTINGS, **loaded}
         settings.pop("chat_bubble_max", None)
-        # 消耗延长迁移（2026-09-25）：旧默认三值（0.0556，2h/4h 定稿）
-        # 未被用户改过时一律升到新默认 0.0139（8h/16h）；自定义值尊重保留
+        # 消耗延长迁移（2026-09-30 更新）：历史默认（0.0556=2h/4h、
+        # 0.0139=8h/16h）未被用户改过时一律升到新默认 0.0092593
+        # （12h/24h）；自定义值尊重保留
         _decay_trio = ("decay_hunger", "decay_energy", "decay_mood")
-        if all(settings.get(key) == 0.0556 for key in _decay_trio):
+        if all(
+            settings.get(key) in (0.0556, 0.0139) for key in _decay_trio
+        ):
             for key in _decay_trio:
                 settings[key] = DEFAULT_SETTINGS[key]
         if not (20 <= settings.get("ui_font_size", 24) <= 40):
