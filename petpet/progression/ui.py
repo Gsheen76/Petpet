@@ -3058,14 +3058,16 @@ class ShopWindow(CozyProgressWindow):
     @staticmethod
     def _price_tag(text, role, object_name):
         if role == "gift":
-            gift_pixmap = _shop_pixmap_cropped("free_gift_button.png", 48)
+            # 整体缩小（2026-09-30 用户定稿：原 48 高在宠物/家具
+            # 行里超出行高约 3px——普通价签 44，对齐它）。
+            gift_pixmap = _shop_pixmap_cropped("free_gift_button.png", 44)
             if not gift_pixmap.isNull():
                 label = PreservedTextLabel(text)
                 label.setObjectName(object_name)
                 label.setProperty("priceTagRole", role)
                 label.setPixmap(gift_pixmap)
                 label.setContentsMargins(12, 4, 12, 4)
-                label.setMinimumHeight(54)
+                label.setMinimumHeight(44)
                 label.setStyleSheet(
                     "background: transparent; border: 0; border-image: none;"
                 )
