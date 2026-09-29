@@ -171,6 +171,7 @@ class MemoryProfileDialog(QDialog):
         hint = QLabel("改错了直接编辑，删掉 TA 就忘；保存后下次聊天生效")
         hint.setObjectName("profileHint")
         self._close_btn = FeedbackButton("×")
+        self._close_btn.setEdgeSafe(True)  # 贴角：悬浮不越画布
         self._close_btn.setObjectName("profileClose")
         self._close_btn.setFixedSize(32, 32)
         self._close_btn.setCursor(Qt.PointingHandCursor)

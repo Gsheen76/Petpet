@@ -332,6 +332,7 @@ class ChatWindow(KeepAliveTopLevelWindow):
         # 标题行按键（2026-09-11 A1）：接全应用按键反馈规范
         # （悬浮放大、按住内缩压暗、键内回弹 40ms 后触发——纯缩放反馈）。
         self.close_btn = FeedbackButton("×")
+        self.close_btn.setEdgeSafe(True)  # 贴角：悬浮不越画布
         self.close_btn.setFixedSize(28, 28)
         self.close_btn.setCursor(Qt.PointingHandCursor)
         self.close_btn.setToolTip("关闭")

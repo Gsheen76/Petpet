@@ -34,6 +34,7 @@ QSoundEffect 单实例——
 - 音效时长改动时必须同步评估节流值：**节流 > 音效时长**是单
   实例不撞 restart 的结构性保证。
 """
+import atexit
 import os
 import sys
 import time
@@ -67,6 +68,35 @@ def _load_click_pcm():
         scaled = tuple(int(v * VOLUME) for v in samples)
         raw = struct.pack(f"<{len(scaled)}h", *scaled)
     return raw, rate, channels, width
+
+
+def _shutdown_push_channel():
+    """进程退出早期关推流通道（atexit 注册，早于 Qt teardown）。
+
+    模块级 QAudioOutput/QIODevice 若活到解释器退出阶段，会在
+    QApplication 已析构后再被 GC 析构 C++ 对象——pytest 全量收尾
+    段错误（2026-09-29 实证：offscreen 下 start() 也返回真对象）。
+    """
+    global _PUSH
+    push, _PUSH = _PUSH, None
+    if isinstance(push, dict):
+        out = push.get("out")
+        try:
+            out.stop()
+        except Exception:
+            pass
+        # QApplication 尚存活的收尾钩子（pytest sessionfinish）里可
+        # 显式销毁 C++ 对象；atexit 路径（解释器退出晚期）只断引用。
+        try:
+            from PyQt5 import sip
+
+            if not sip.isdeleted(out):
+                sip.delete(out)
+        except Exception:
+            pass
+
+
+atexit.register(_shutdown_push_channel)
 
 
 def _open_push_channel():
