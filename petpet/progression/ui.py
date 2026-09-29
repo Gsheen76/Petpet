@@ -980,8 +980,9 @@ class FeedbackButton(QPushButton):
                 if self.isChecked():
                     painter.setBrush(QColor("#f28f76"))
                 elif self.underMouse():
-                    # 悬浮=选中同款（选中色 65% 透明度=真"浅珊瑚"）
-                    painter.setBrush(QColor(242, 143, 118, 165))
+                    # 悬浮=选中同款（同一 body 同尺寸；2026-09-30
+                    # 用户定稿大小严格一致——提实体感 alpha 190）
+                    painter.setBrush(QColor(242, 143, 118, 190))
                 painter.drawRoundedRect(
                     QRectF(body), body.height() / 2, body.height() / 2)
                 painter.end()
@@ -2793,10 +2794,15 @@ class ShopWindow(CozyProgressWindow):
             button.setChecked(self.page == page)
             button.setCursor(Qt.PointingHandCursor)
             button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-            button.clicked.connect(
-                lambda _checked=False, selected=page:
+            def _tab_clicked(selected=page, btn=button):
+                # 粘性选中（2026-09-30 用户定稿：已选中的分栏再点
+                # 不会取消选中）——原生 toggle 把它翻成 False 时立即
+                # 拨回，_set_page 对同页早退不变。
+                if not btn.isChecked():
+                    btn.setChecked(True)
                 self._set_page(selected)
-            )
+
+            button.clicked.connect(_tab_clicked)
             tab_layout.addWidget(button)
             self._tab_buttons[page] = button
         self.root_layout.insertWidget(1, tab_bar)
@@ -3812,7 +3818,7 @@ class ShopWindow(CozyProgressWindow):
     # 页内做四个分栏（总共/三档），每行两张竖版礼物卡。
 
     GIFT_FILTERS = (
-        ("all", "总共"),
+        ("all", "全部"),
         ("t1", "小小心意"),
         ("t2", "真挚款待"),
         ("t3", "豪华大礼"),
