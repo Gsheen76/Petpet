@@ -602,12 +602,13 @@ class SettingsWindow(KeepAliveTopLevelWindow):
         if autostart.is_supported():
             auto = ToggleSwitch()
             auto.setChecked(autostart.is_enabled())
-            auto_state = QLabel("已开启" if auto.isChecked() else "已关闭")
-            auto_state.setStyleSheet("color:#8c6252; font-size:17px;")
+            auto_state = QLabel("开启" if auto.isChecked() else "关闭")
+            auto_state.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            auto_state.setObjectName("switchState")
 
             def _sync_auto_state():
                 auto_state.setText(
-                    "已开启" if auto.isChecked() else "已关闭")
+                    "开启" if auto.isChecked() else "关闭")
 
             def _toggle_autostart(checked):
                 if autostart.set_enabled(checked):
