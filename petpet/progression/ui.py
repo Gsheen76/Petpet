@@ -1270,13 +1270,15 @@ class CozyProgressWindow(KeepAliveTopLevelWindow):
 
         def _close_once():
             # 防双击双关双响（2026-09-29 用户反馈：偶尔响两次、窗口
-            # 开一下才退出）——首次触发即禁用，二次点击不再响应。
-            # edge-safe 已按用户定稿回滚（手感差），越界由画布右上
-            # 留白兜住。
+            # 开一下才退出）——触发即禁用 300ms 吞掉双击的第二响，
+            # 随后恢复：复用窗口再次打开时 × 必须仍可点（上一版
+            # 只禁用不恢复，窗口重开后 × 永久失效——用户实测报障）。
             if not close_button.isEnabled():
                 return
             close_button.setEnabled(False)
             self.close()
+            QTimer.singleShot(
+                300, lambda: close_button.setEnabled(True))
 
         close_button.clicked.connect(_close_once)
         title_row.addWidget(title_label)
