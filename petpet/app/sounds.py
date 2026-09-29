@@ -49,7 +49,7 @@ VOLUME = 0.30
 _PUSH = None       # None=未建 | dict(io, out, pcm) | False=不可用（兜底）
 _QT_EFFECT = None  # 非 Windows 兜底单实例
 _LAST_PLAY_TS = 0.0
-_PLAY_THROTTLE_S = 0.040  # > 音效时长 35ms——上一次必然播完
+_PLAY_THROTTLE_S = 0.055  # 音长 35ms+20ms 余量（单击偶发双响缓解：上次播放彻底结束才接新）
 
 
 def _load_click_pcm():

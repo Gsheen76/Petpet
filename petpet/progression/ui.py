@@ -255,10 +255,7 @@ SHOP_THEME_STYLE = """
     QPushButton#closeButton {
         background: transparent;
         border: 0;
-        border-image: url("%(close_button)s");
-    }
-    QPushButton#closeButton:hover {
-        background: transparent;
+        padding: 0;
     }
     QPushButton[switchPill="true"] {
         background: transparent;
@@ -452,12 +449,8 @@ PANEL_STYLE = ("""
     QPushButton#closeButton {
         background: transparent;
         border: 0;
-        /* × 素材统一（2026-09-29 用户定稿：所有 × 键用商店的那张
-           × 贴图）——FeedbackButton 抓帧整体缩放做悬浮放大。 */
-        border-image: url("%(close_button)s");
-    }
-    QPushButton#closeButton:hover {
-        background: transparent;
+        /* × 走 icon 生长模式（2026-09-29 终版）——border-image 弃用 */
+        padding: 0;
     }
     QPushButton#softButton {
         background: #fff0e4;
@@ -834,6 +827,10 @@ class FeedbackButton(QPushButton):
         # 右上角 ×）悬浮放大曾超出画布——常态内缩 2px 绘制、悬浮
         # 放大到全幅，净效果永不越界。
         self._edge_safe = False
+        # 图标生长模式（2026-09-29 晚 × 终版）：整帧 skin 放大永远被
+        # widget rect 裁边（圆素材显示不完整的根因）——改 icon 在
+        # widget 内切换尺寸（常态小 4px、悬浮全幅），几何上永不越界。
+        self._icon_grow = False
         self._fire_timer = QTimer(self)
         self._fire_timer.setSingleShot(True)
         self._fire_timer.timeout.connect(self._fire_deferred)
@@ -909,6 +906,30 @@ class FeedbackButton(QPushButton):
         except RuntimeError:
             pass  # 窗口已销毁的延迟触发
 
+    def setIconGrowMode(self, enabled):
+        """图标生长模式（贴角 × 终版）：悬浮时 icon 在 widget 内
+        放大、离开还原——绘制恒在按钮边界内，圆素材完整不裁边。"""
+        self._icon_grow = bool(enabled)
+
+    def _apply_icon_size(self):
+        base = self.property("iconGrowBase")
+        if not base:
+            return
+        # 常态小 4px、悬浮放大到 base——绘制恒在按钮边界内（42 容器
+        # 承载 38 全幅，余量充足圆素材完整不裁边）。
+        shrink = 0 if self.underMouse() else 4
+        self.setIconSize(QSize(base - shrink, base - shrink))
+
+    def enterEvent(self, event):
+        super().enterEvent(event)
+        if self._icon_grow:
+            self._apply_icon_size()
+
+    def leaveEvent(self, event):
+        super().leaveEvent(event)
+        if self._icon_grow:
+            self._apply_icon_size()
+
     def setEdgeSafe(self, enabled):
         """贴边安全模式：常态内缩 2px、悬浮到全幅（净放大感保留、
         永不超出画布——用户定稿：所有画布设计不能因悬浮放大而超出）。"""
@@ -942,7 +963,9 @@ class FeedbackButton(QPushButton):
             # 改自绘每边内缩 5px 的圆角底，托盘素材与选中块之间
             # 留出呼吸）。
             r = self.rect()
-            inset = 5
+            # inset 比例化（2026-09-29 用户：礼物筛选胶囊也缩小）：
+            # 高 40 的分栏 →6px；更矮的 chip（~30）→5px，整体更收敛
+            inset = max(5, round(min(r.width(), r.height()) * 0.15))
             body = r.adjusted(inset, inset, -inset, -inset)
             if body.width() > 8 and body.height() > 8:
                 painter = QPainter(self)
@@ -951,9 +974,9 @@ class FeedbackButton(QPushButton):
                 if self.isChecked():
                     painter.setBrush(QColor("#f28f76"))
                 elif self.underMouse():
-                    # 悬浮=选中同款胶囊（浅一档珊瑚，2026-09-29 用户
-                    # 定稿：悬浮选中的大小与选中一致）
-                    painter.setBrush(QColor("#f5b3a0"))
+                    # 悬浮=选中同款（2026-09-29 晚重做：选中色 65%
+                    # 透明度=真"浅珊瑚"，尺寸/形状与选中完全一致）
+                    painter.setBrush(QColor(242, 143, 118, 165))
                 else:
                     painter.end()
                     painter = None
@@ -1266,7 +1289,16 @@ class CozyProgressWindow(KeepAliveTopLevelWindow):
         close_button = FeedbackButton("")
         close_button.setObjectName("closeButton")
         close_button.setCursor(Qt.PointingHandCursor)
-        close_button.setFixedSize(38, 38)
+        close_button.setFixedSize(42, 42)
+        # × 终版（2026-09-29）：icon 生长模式——素材为 icon、常态
+        # 34px 悬浮 38px，全部绘制在按钮 42px 边界内（圆素材完整、
+        # 悬浮放大感保留、永不越出画布）；QSS border-image 弃用。
+        _close_art = QPixmap(_shop_asset("close_button.png"))
+        if not _close_art.isNull():
+            close_button.setIcon(QIcon(_close_art))
+            close_button.setProperty("iconGrowBase", 38)
+            close_button.setIconGrowMode(True)
+            close_button._apply_icon_size()
 
         def _close_once():
             # 防双击双关双响（2026-09-29 用户反馈：偶尔响两次、窗口
