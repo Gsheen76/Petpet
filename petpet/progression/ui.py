@@ -974,16 +974,15 @@ class FeedbackButton(QPushButton):
                 if self.isChecked():
                     painter.setBrush(QColor("#f28f76"))
                 elif self.underMouse():
-                    # 悬浮=选中同款（2026-09-29 晚重做：选中色 65%
-                    # 透明度=真"浅珊瑚"，尺寸/形状与选中完全一致）
+                    # 悬浮=选中同款（选中色 65% 透明度=真"浅珊瑚"）
                     painter.setBrush(QColor(242, 143, 118, 165))
                 else:
-                    painter.end()
-                    painter = None
-                if painter is not None:
-                    painter.drawRoundedRect(
-                        QRectF(body), body.height() / 2, body.height() / 2)
-                    painter.end()
+                    # 未选中常态：提亮浅底（2026-09-29 用户定稿「分栏
+                    # 底色稍微提亮一点」）——奶白微亮，托盘上可辨
+                    painter.setBrush(QColor(255, 250, 243, 160))
+                painter.drawRoundedRect(
+                    QRectF(body), body.height() / 2, body.height() / 2)
+                painter.end()
             super().paintEvent(event)  # 文字/QSS hover 变色
             return
         phase = self._phase()
