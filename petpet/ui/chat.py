@@ -331,9 +331,24 @@ class ChatWindow(KeepAliveTopLevelWindow):
 
         # 标题行按键（2026-09-11 A1）：接全应用按键反馈规范
         # （悬浮放大、按住内缩压暗、键内回弹 40ms 后触发——纯缩放反馈）。
-        self.close_btn = FeedbackButton("×")
-        self.close_btn.setEdgeSafe(True)  # 贴角：悬浮不越画布
-        self.close_btn.setFixedSize(28, 28)
+        self.close_btn = FeedbackButton("")
+        self.close_btn.setFixedSize(42, 42)
+        from petpet.app.paths import SHOP_UI_DIR
+        from PyQt5.QtGui import QIcon, QPixmap as QPM
+        import os
+        _art = QPM(os.path.join(SHOP_UI_DIR, "close_button.png"))
+        if not _art.isNull():
+            _side = max(_art.width(), _art.height())
+            _sq = QPM(_side, _side)
+            _sq.fill(Qt.transparent)
+            _pp = QPainter(_sq)
+            _pp.drawPixmap((_side - _art.width()) // 2,
+                           (_side - _art.height()) // 2, _art)
+            _pp.end()
+            self.close_btn.setIcon(QIcon(_sq))
+            self.close_btn.setProperty("iconGrowBase", 38)
+            self.close_btn.setIconGrowMode(True)
+            self.close_btn._apply_icon_size()
         self.close_btn.setCursor(Qt.PointingHandCursor)
         self.close_btn.setToolTip("关闭")
         self.close_btn.setStyleSheet(
@@ -344,6 +359,7 @@ class ChatWindow(KeepAliveTopLevelWindow):
         self.close_btn.clicked.connect(self.close)
 
         self.avatar_btn = FeedbackButton("头像")
+        self.avatar_btn.setQssHover(True)
         self.avatar_btn.setObjectName("avatarEdit")
         self.avatar_btn.setCursor(Qt.PointingHandCursor)
         self.avatar_btn.setToolTip("编辑我的头像")
@@ -357,6 +373,7 @@ class ChatWindow(KeepAliveTopLevelWindow):
 
         # 档案入口（2026-09-11）：查看/编辑长期记忆六栏档案。
         self.profile_btn = FeedbackButton("档案")
+        self.profile_btn.setQssHover(True)
         self.profile_btn.setObjectName("avatarEdit")
         self.profile_btn.setCursor(Qt.PointingHandCursor)
         self.profile_btn.setToolTip("查看和编辑 TA 记住的我")
@@ -410,12 +427,14 @@ class ChatWindow(KeepAliveTopLevelWindow):
         )
         self.input.returnPressed.connect(self.send)
         self.send_btn = FeedbackButton("发送")
+        self.send_btn.setQssHover(True)
         self.send_btn.setObjectName("send")
         self.send_btn.setCursor(Qt.PointingHandCursor)
         # 流式期间同一颗键变「停止」（2026-09-12）；旁边加重新生成键。
         self.send_btn.clicked.connect(self._send_or_stop)
 
         self.regen_btn = FeedbackButton("↻")
+        self.regen_btn.setQssHover(True)
         self.regen_btn.setObjectName("roundTool")
         self.regen_btn.setCursor(Qt.PointingHandCursor)
         self.regen_btn.setToolTip("重新生成上一条回复")
@@ -448,6 +467,7 @@ class ChatWindow(KeepAliveTopLevelWindow):
         self.image_preview_name.setObjectName("imagePreviewName")
         self.image_preview_name.setStyleSheet("color:#805e50;font-weight:700;")
         self.image_remove_btn = FeedbackButton("×")
+        self.image_remove_btn.setQssHover(True)
         self.image_remove_btn.setObjectName("imageRemove")
         self.image_remove_btn.setToolTip("移除这张图片")
         self.image_remove_btn.setCursor(Qt.PointingHandCursor)
@@ -469,7 +489,9 @@ class ChatWindow(KeepAliveTopLevelWindow):
         mode_row.setContentsMargins(3, 3, 3, 3)
         mode_row.setSpacing(2)
         self.free_mode_btn = FeedbackButton("免费")
+        self.free_mode_btn.setFlatFeedback(True)
         self.personal_mode_btn = FeedbackButton("自定义")
+        self.personal_mode_btn.setFlatFeedback(True)
         self.mode_group = QButtonGroup(self)
         self.mode_group.setExclusive(True)
         segment_font = independent_pixel_font(17, QFont.DemiBold)
@@ -502,30 +524,35 @@ class ChatWindow(KeepAliveTopLevelWindow):
         self.personal_setup_dot.move(segment_width - 13, 4)
 
         self.model_btn = FeedbackButton("GLM-4.6V")
+        self.model_btn.setQssHover(True)
         self.model_btn.setObjectName("chatTool")
         self.model_btn.setCursor(Qt.PointingHandCursor)
         self.model_btn.setToolTip("当前模型：GLM-4.6V-Flash")
         self.model_btn.clicked.connect(self.configure_api_key)
 
         self.image_btn = FeedbackButton("上传")
+        self.image_btn.setQssHover(True)
         self.image_btn.setObjectName("chatTool")
         self.image_btn.setCursor(Qt.PointingHandCursor)
         self.image_btn.setToolTip("上传图片")
         self.image_btn.clicked.connect(self.select_image)
 
         self.export_btn = FeedbackButton("导出")
+        self.export_btn.setQssHover(True)
         self.export_btn.setObjectName("exportTool")
         self.export_btn.setToolTip("把聊天记录存成文本文件")
         self.export_btn.setCursor(Qt.PointingHandCursor)
         self.export_btn.clicked.connect(self.export_chat_history)
 
         self.settings_btn = FeedbackButton("⚙")
+        self.settings_btn.setQssHover(True)
         self.settings_btn.setObjectName("roundTool")
         self.settings_btn.setToolTip("API 设置")
         self.settings_btn.setCursor(Qt.PointingHandCursor)
         self.settings_btn.clicked.connect(self.configure_api_key)
 
         self.clear_btn = FeedbackButton("DEL")
+        self.clear_btn.setQssHover(True)
         self.clear_btn.setObjectName("clearTool")
         self.clear_btn.setMinimumWidth(44)
         self.clear_btn.setMaximumWidth(44)

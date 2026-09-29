@@ -835,6 +835,11 @@ class FeedbackButton(QPushButton):
         # widget rect 裁边（圆素材显示不完整的根因）——改 icon 在
         # widget 内切换尺寸（常态小 4px、悬浮全幅），几何上永不越界。
         self._icon_grow = False
+        # QSS 悬浮模式（2026-09-30 聊天按键达标轮）：QSS 已有 :hover
+        # 颜色规则的键（聊天工具条/发送/模式段等），皮肤帧缩放在零
+        # 余量下被裁=视觉几乎无反馈——此模式 paint 全交 QSS（颜色
+        # 变化=悬浮反馈），保留延迟触发+音效。
+        self._qss_hover = False
         self._fire_timer = QTimer(self)
         self._fire_timer.setSingleShot(True)
         self._fire_timer.timeout.connect(self._fire_deferred)
@@ -910,6 +915,11 @@ class FeedbackButton(QPushButton):
         except RuntimeError:
             pass  # 窗口已销毁的延迟触发
 
+    def setQssHover(self, enabled):
+        """QSS 悬浮模式：paint 全交 QSS（:hover 变色=悬浮反馈），
+        保留延迟触发+音效——适合 QSS 已定义 hover 颜色的键。"""
+        self._qss_hover = bool(enabled)
+
     def setIconGrowMode(self, enabled):
         """图标生长模式（贴角 × 终版）：悬浮时 icon 在 widget 内
         放大、离开还原——绘制恒在按钮边界内，圆素材完整不裁边。"""
@@ -961,6 +971,9 @@ class FeedbackButton(QPushButton):
         QTimer.singleShot(0, self._capture_skin)
 
     def paintEvent(self, event):
+        if self._qss_hover:
+            super().paintEvent(event)  # QSS :hover/:checked 自己画
+            return
         if self._flat_feedback:
             # 内缩胶囊底（2026-09-29 用户定稿：分栏选中/悬浮框太大、
             # 与外框素材留白太少——弃撑满按钮的 border-image 底，
