@@ -492,8 +492,10 @@ PANEL_STYLE = ("""
        outfitPetTab）。二分栏药丸素材方案试用一轮被用户否决（描边观感
        更差），恢复 QSS 托盘实现。 */
     QFrame[chipBar="true"] {
-        background: #f4e2d2;
-        border: 1px solid #e9c9b1;
+        /* 奶杏色统一（2026-09-30 用户定稿：套装/家居分栏底盘与
+           宠物/礼物条同色） */
+        background: #f7e8d8;
+        border: 1px solid #eed3ba;
         border-radius: 18px;
     }
     QPushButton[chipTab="true"] {
@@ -965,10 +967,12 @@ class FeedbackButton(QPushButton):
             # 改自绘每边内缩 5px 的圆角底，托盘素材与选中块之间
             # 留出呼吸）。
             r = self.rect()
-            # inset 比例化（2026-09-29 用户：礼物筛选胶囊也缩小）：
-            # 高 40 的分栏 →6px；更矮的 chip（~30）→5px，整体更收敛
-            inset = max(5, round(min(r.width(), r.height()) * 0.15))
-            body = r.adjusted(inset, inset, -inset, -inset)
+            # inset 比例化（2026-09-29 用户：礼物筛选胶囊也缩小）；
+            # 垂直内缩 2026-09-30 收窄（用户：主分栏选中胶囊高度
+            # 适当增加——垂直 7% 水平 15%，胶囊更饱满）。
+            inset_h = max(5, round(min(r.width(), r.height()) * 0.15))
+            inset_v = max(3, round(min(r.width(), r.height()) * 0.07))
+            body = r.adjusted(inset_h, inset_v, -inset_h, -inset_v)
             if body.width() > 8 and body.height() > 8:
                 painter = QPainter(self)
                 painter.setRenderHint(QPainter.Antialiasing)
