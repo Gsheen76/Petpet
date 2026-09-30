@@ -39,6 +39,7 @@ from PyQt5.QtWidgets import (
 )
 
 from petpet.progression import core as progression
+from petpet.progression import daily
 from petpet.ui.common import KeepAliveTopLevelWindow
 from petpet.ui.common import (
     center_window_on_screen as _center_window_on_screen,
