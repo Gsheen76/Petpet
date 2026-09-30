@@ -2043,6 +2043,10 @@ class RecordsWindow(CozyProgressWindow):
         )
         self.content_layout.addWidget(hero)
 
+        # 陪伴度分数卡（2026-09-30 用户定稿：综合所有交互的加权关怀
+        # 分——替代旧的单一互动计数作为总计页的核心展示）
+        self._add_companionship_summary(records)
+
         self._add_interaction_section(pet_records, pet_name)
 
         section = QLabel("🌿 成长足迹")
@@ -2094,6 +2098,45 @@ class RecordsWindow(CozyProgressWindow):
             )
         self.content_layout.addWidget(explore_host)
         self.content_layout.addStretch(1)
+
+    def _add_companionship_summary(self, pet_records=None):
+        """陪伴度分数卡（2026-09-30 用户定稿）：综合所有交互的加权
+        关怀分——替代旧总计页的单一互动计数。"""
+        from petpet.progression.daily import daily_activity_series
+        activity = daily_activity_series(self.pet.state)
+        today_count = activity[-1][1] if activity else 0
+        records = pet_records if pet_records is not None else (
+            self.pet.state.get("records", {}))
+        score = progression.companionship_score(records, today_count)
+        level = progression.companionship_level(score)
+
+        card = QFrame()
+        card.setObjectName("summaryCard")
+        card.setProperty("shopCard", True)
+        layout = QHBoxLayout(card)
+        layout.setContentsMargins(20, 16, 20, 16)
+        layout.setSpacing(16)
+
+        icon = QLabel("💗")
+        icon.setStyleSheet("font-size:38px; background:transparent; border:0;")
+        layout.addWidget(icon)
+
+        text_col = QVBoxLayout()
+        text_col.setSpacing(4)
+        title = QLabel(f"今日陪伴度：{score} 分")
+        title.setObjectName("cardTitle")
+        text_col.addWidget(title)
+        subtitle = QLabel(
+            f"「{level}」" if level else "今天还没来看过 TA 哦"
+        )
+        subtitle.setObjectName("muted")
+        text_col.addWidget(subtitle)
+        hint = QLabel("喂食×5 · 玩耍×5 · 聊天×3 · 抚摸×2 · 睡觉×2 · 关注×1 · 有互动+10")
+        hint.setObjectName("muted")
+        hint.setStyleSheet("font-size:15px; color:#c4a08c;")
+        text_col.addWidget(hint)
+        layout.addLayout(text_col, 1)
+        self.content_layout.addWidget(card)
 
     def _add_interaction_section(self, pet_records, pet_name):
         section = QLabel(

@@ -1062,6 +1062,17 @@ def pet_record_action(state, action, amount=1):
     pet_state = pets.get(state.get("active_pet_id"))
     if not isinstance(pet_state, dict):
         return
+    # 2026-09-30 bug 修复：四项基础互动时同步 mirror interactions_total
+    # （此前只 mirror 单项、不 mirror 合计——宠物界面总互动显示 0）
+    if action in {
+        "pettings", "feedings", "play_sessions", "sleep_sessions"
+    }:
+        pet_state.setdefault("pet_records", {})
+        pet_state["pet_records"]["interactions_total"] = (
+            _safe_int(
+                pet_state["pet_records"].get("interactions_total", 0)
+            ) + amount
+        )
     mirror = pet_state.get("pet_records")
     if isinstance(mirror, dict) and action in mirror:
         mirror[action] += _safe_int(amount)
@@ -2126,3 +2137,36 @@ from petpet.progression.daily import (  # noqa: E402,F401
     ensure_daily_quests,
     signed_dates_for_month,
 )
+
+
+def companionship_score(records, activity_count=0):
+    """陪伴度分数（2026-09-30 用户定稿）：综合所有交互行为的加权
+    关怀分——不是单一计数，而是代表「今天你对 TA 的陪伴程度」。
+
+    权重：喂食×5 玩耍×5 聊天×3 抚摸×2 睡觉×2 抓起/摇醒×1；
+    有互动即 +10（今天来看过 TA 的基础分）。
+    """
+    score = 0
+    weights = {
+        "feedings": 5, "play_sessions": 5, "chats_opened": 3,
+        "pettings": 2, "sleep_sessions": 2,
+        "pick_ups": 1, "wake_shakes": 1,
+    }
+    for key, weight in weights.items():
+        score += _safe_int(records.get(key, 0)) * weight
+    if score > 0 or activity_count > 0:
+        score += 10
+    return score
+
+
+def companionship_level(score):
+    """陪伴度等级（分数→人话标签）。"""
+    if score >= 80:
+        return "无微不至的陪伴"
+    if score >= 50:
+        return "温暖用心"
+    if score >= 25:
+        return "惦记着 TA"
+    if score >= 10:
+        return "匆匆一瞥"
+    return ""
