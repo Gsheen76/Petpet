@@ -2148,6 +2148,7 @@ class RecordsWindow(CozyProgressWindow):
         for pet_id, name in entries:
             button = FeedbackButton(name)
             button.setObjectName("petTabButton")
+            button.setFlatFeedback(True)
             button.setCheckable(True)
             button.setChecked(self.record_pet_id == pet_id)
             button.setCursor(Qt.PointingHandCursor)

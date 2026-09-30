@@ -211,6 +211,7 @@ class MemoryProfileDialog(QDialog):
         export.clicked.connect(self._export_facts)
         import_btn = FeedbackButton("导入")
         import_btn.setObjectName("profileImport")
+        import_btn.setQssHover(True)
         import_btn.setCursor(Qt.PointingHandCursor)
         import_btn.setToolTip("从 JSON 文件读入档案（导入后仍需保存生效）")
         import_btn.clicked.connect(self._import_facts)
