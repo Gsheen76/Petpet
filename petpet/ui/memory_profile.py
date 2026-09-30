@@ -191,14 +191,20 @@ class MemoryProfileDialog(QDialog):
 
     def _build_action_row(self):
         save = FeedbackButton("保存")
+
+        save .setQssHover(True)
         save.setObjectName("saveProfile")
         save.setCursor(Qt.PointingHandCursor)
         save.clicked.connect(self._on_save)
         cancel = FeedbackButton("取消")
+
+        cancel .setQssHover(True)
         cancel.setObjectName("cancelProfile")
         cancel.setCursor(Qt.PointingHandCursor)
         cancel.clicked.connect(self.reject)
         export = FeedbackButton("导出")
+
+        export .setQssHover(True)
         export.setObjectName("profileExport")
         export.setCursor(Qt.PointingHandCursor)
         export.setToolTip("把六栏档案存成 JSON 文件")
@@ -237,6 +243,8 @@ class MemoryProfileDialog(QDialog):
         hint = QLabel(_BUCKET_HINTS.get(bucket, ""))
         hint.setObjectName("bucketHint")
         add = FeedbackButton("＋添加")
+
+        add .setQssHover(True)
         add.setObjectName("addFact")
         add.setCursor(Qt.PointingHandCursor)
         add.clicked.connect(lambda _=False, b=bucket: self._add_row(b))
@@ -262,6 +270,8 @@ class MemoryProfileDialog(QDialog):
         edit.setObjectName("factEdit")
         edit.setMaxLength(60)
         delete = FeedbackButton("×")
+
+        delete .setQssHover(True)
         delete.setObjectName("delFact")
         delete.setFixedSize(26, 26)
         delete.setCursor(Qt.PointingHandCursor)

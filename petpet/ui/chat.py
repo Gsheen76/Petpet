@@ -827,6 +827,9 @@ class ChatWindow(KeepAliveTopLevelWindow):
         privacy.setWordWrap(True)
 
         show_btn = FeedbackButton("按住显示")
+
+
+        show_btn .setQssHover(True)
         show_btn.setCursor(Qt.PointingHandCursor)
         show_btn.pressed.connect(
             lambda: key_edit.setEchoMode(QLineEdit.Normal)
@@ -836,9 +839,14 @@ class ChatWindow(KeepAliveTopLevelWindow):
         )
 
         cancel_btn = FeedbackButton("取消")
+
+
+        cancel_btn .setQssHover(True)
         cancel_btn.setCursor(Qt.PointingHandCursor)
         cancel_btn.clicked.connect(dialog.reject)
         save_btn = FeedbackButton("保存")
+
+        save_btn .setQssHover(True)
         save_btn.setObjectName("saveKey")
         save_btn.setCursor(Qt.PointingHandCursor)
 
@@ -856,6 +864,8 @@ class ChatWindow(KeepAliveTopLevelWindow):
         save_btn.clicked.connect(accept_key)
         key_edit.returnPressed.connect(accept_key)
         remove_btn = FeedbackButton("移除本机 Key")
+
+        remove_btn .setQssHover(True)
         remove_btn.setObjectName("removeKey")
         remove_btn.setCursor(Qt.PointingHandCursor)
         remove_btn.setVisible(ai.load_config().get("api_key", "") != "")
