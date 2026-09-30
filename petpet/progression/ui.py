@@ -1488,12 +1488,23 @@ class CozyProgressWindow(KeepAliveTopLevelWindow):
 
 
 class _WeekBarChart(QWidget):
-    """七日互动柱状图（2026-09-25 c 线）：纯 QPainter，奶油底珊瑚柱，
-    今日高亮，柱顶标数。数据来自 activity_log（新数据当天起积累）。"""
+    """七日陪伴度柱状图（2026-09-30 用户定稿改造）：柱值=陪伴度分数
+    （activity_log 计数 → 有互动基础分 10/天），柱顶显示分数，
+    今日高亮珊瑚、往日浅珊瑚。标题行显示今日等级。"""
 
     def __init__(self, series, parent=None):
         super().__init__(parent)
-        self.series = list(series)
+        # series: [(label, raw_count)] → 转为陪伴度分数
+        from petpet.progression.core import (
+            companionship_level, companionship_score,
+        )
+        self._level_fn = companionship_level
+        self.scores = []
+        for label, count in series:
+            score = companionship_score({}, count) if count > 0 else 0
+            self.scores.append((label, score))
+        today_score = self.scores[-1][1] if self.scores else 0
+        self.today_level = companionship_level(today_score)
         self.setFixedHeight(190)
 
     def paintEvent(self, event):
@@ -1503,18 +1514,30 @@ class _WeekBarChart(QWidget):
         painter.setBrush(QColor(255, 246, 232, 200))
         painter.drawRoundedRect(QRectF(self.rect()), 16, 16)
 
-        counts = [count for _, count in self.series]
+        counts = [score for _, score in self.scores]
         peak = max(counts) or 1
         left, right = 26, self.width() - 26
         top, bottom = 30, self.height() - 30
-        slot = (right - left) / max(1, len(self.series))
+        slot = (right - left) / max(1, len(self.scores))
         bar_w = min(46.0, slot * 0.56)
-        for index, (label, count) in enumerate(self.series):
+
+        # 标题行：今日陪伴度 + 等级
+        painter.setPen(QColor("#7a5040"))
+        painter.setFont(independent_pixel_font(14, QFont.Bold))
+        title = "本周陪伴度"
+        if self.today_level:
+            title += f" · 今日「{self.today_level}」"
+        painter.drawText(
+            QRectF(left, 6, right - left, 20), Qt.AlignLeft, title,
+        )
+        painter.setPen(Qt.NoPen)
+
+        for index, (label, score) in enumerate(self.scores):
             cx = left + slot * (index + 0.5)
-            bar_h = max(6.0, (bottom - top) * (count / peak))
+            bar_h = max(6.0, (bottom - top) * (score / peak))
             rect = QRectF(cx - bar_w / 2, bottom - bar_h, bar_w, bar_h)
-            is_today = index == len(self.series) - 1
-            if count == 0:
+            is_today = index == len(self.scores) - 1
+            if score == 0:
                 painter.setBrush(QColor(232, 218, 202, 160))
                 painter.drawRoundedRect(
                     QRectF(cx - bar_w / 2, bottom - 6, bar_w, 6), 3, 3
@@ -1530,12 +1553,12 @@ class _WeekBarChart(QWidget):
                 QRectF(cx - slot / 2, bottom + 6, slot, 16),
                 Qt.AlignCenter, label,
             )
-            if count > 0:
+            if score > 0:
                 painter.setPen(QColor("#c96f52"))
                 painter.setFont(independent_pixel_font(11, QFont.Bold))
                 painter.drawText(
                     QRectF(cx - slot / 2, rect.top() - 18, slot, 16),
-                    Qt.AlignCenter, str(count),
+                    Qt.AlignCenter, str(score),
                 )
             painter.setPen(Qt.NoPen)
 
@@ -2043,10 +2066,6 @@ class RecordsWindow(CozyProgressWindow):
         )
         self.content_layout.addWidget(hero)
 
-        # 陪伴度分数卡（2026-09-30 用户定稿：综合所有交互的加权关怀
-        # 分——替代旧的单一互动计数作为总计页的核心展示）
-        self._add_companionship_summary(records)
-
         self._add_interaction_section(pet_records, pet_name)
 
         section = QLabel("🌿 成长足迹")
@@ -2098,45 +2117,6 @@ class RecordsWindow(CozyProgressWindow):
             )
         self.content_layout.addWidget(explore_host)
         self.content_layout.addStretch(1)
-
-    def _add_companionship_summary(self, pet_records=None):
-        """陪伴度分数卡（2026-09-30 用户定稿）：综合所有交互的加权
-        关怀分——替代旧总计页的单一互动计数。"""
-        from petpet.progression.daily import daily_activity_series
-        activity = daily_activity_series(self.pet.state)
-        today_count = activity[-1][1] if activity else 0
-        records = pet_records if pet_records is not None else (
-            self.pet.state.get("records", {}))
-        score = progression.companionship_score(records, today_count)
-        level = progression.companionship_level(score)
-
-        card = QFrame()
-        card.setObjectName("summaryCard")
-        card.setProperty("shopCard", True)
-        layout = QHBoxLayout(card)
-        layout.setContentsMargins(20, 16, 20, 16)
-        layout.setSpacing(16)
-
-        icon = QLabel("💗")
-        icon.setStyleSheet("font-size:38px; background:transparent; border:0;")
-        layout.addWidget(icon)
-
-        text_col = QVBoxLayout()
-        text_col.setSpacing(4)
-        title = QLabel(f"今日陪伴度：{score} 分")
-        title.setObjectName("cardTitle")
-        text_col.addWidget(title)
-        subtitle = QLabel(
-            f"「{level}」" if level else "今天还没来看过 TA 哦"
-        )
-        subtitle.setObjectName("muted")
-        text_col.addWidget(subtitle)
-        hint = QLabel("喂食×5 · 玩耍×5 · 聊天×3 · 抚摸×2 · 睡觉×2 · 关注×1 · 有互动+10")
-        hint.setObjectName("muted")
-        hint.setStyleSheet("font-size:15px; color:#c4a08c;")
-        text_col.addWidget(hint)
-        layout.addLayout(text_col, 1)
-        self.content_layout.addWidget(card)
 
     def _add_interaction_section(self, pet_records, pet_name):
         section = QLabel(
