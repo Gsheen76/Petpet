@@ -1494,18 +1494,12 @@ class _WeekBarChart(QWidget):
 
     def __init__(self, series, parent=None):
         super().__init__(parent)
-        # series: [(label, raw_count)] → 转为陪伴度分数
-        from petpet.progression.core import (
-            companionship_level, companionship_score,
-        )
-        self._level_fn = companionship_level
-        self.scores = []
-        for label, count in series:
-            score = companionship_score({}, count) if count > 0 else 0
-            self.scores.append((label, score))
+        # series: [(label, score)]——由 daily_companionship_scores 传入
+        from petpet.progression.core import companionship_level
+        self.scores = list(series)
         today_score = self.scores[-1][1] if self.scores else 0
         self.today_level = companionship_level(today_score)
-        self.setFixedHeight(190)
+        self.setFixedHeight(210)  # 加高：标题行不再压柱
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -1517,7 +1511,7 @@ class _WeekBarChart(QWidget):
         counts = [score for _, score in self.scores]
         peak = max(counts) or 1
         left, right = 26, self.width() - 26
-        top, bottom = 30, self.height() - 30
+        top, bottom = 44, self.height() - 30  # top 加大：标题行不遮柱
         slot = (right - left) / max(1, len(self.scores))
         bar_w = min(46.0, slot * 0.56)
 
@@ -1997,7 +1991,7 @@ class RecordsWindow(CozyProgressWindow):
         # 新数据当天起积累（历史无逐日数据，空白天画平条）
         if self.record_pet_id is None:
             self.content_layout.addWidget(
-                _WeekBarChart(progression.daily_activity_series(self.pet.state))
+                _WeekBarChart(daily.daily_companionship_scores(self.pet.state))
             )
 
         if self.record_pet_id is not None:

@@ -242,8 +242,9 @@ ACTIVITY_LOG_DAYS = 42  # 2026-09-25 c线二轮：够画整月热力日历
 _WEEKDAY_LABELS = ("一", "二", "三", "四", "五", "六", "日")
 
 
-def note_daily_activity(state, amount=1, now=None):
-    """按天累计互动量（2026-09-25 c 线）：喂周报图表/后续热力图。"""
+def note_daily_activity(state, amount=1, now=None, action=None):
+    """按天累计互动（2026-09-30 改造）：存 per-action 分类字典，
+    供陪伴度分数加权计算。旧 int 格式自动迁移为 dict。"""
     if int(amount) <= 0:
         return
     log = state.setdefault("activity_log", {})
@@ -251,10 +252,41 @@ def note_daily_activity(state, amount=1, now=None):
         log = {}
         state["activity_log"] = log
     key = _stamp_datetime(now).strftime("%Y-%m-%d")
-    log[key] = int(log.get(key, 0)) + int(amount)
+    entry = log.get(key)
+    if not isinstance(entry, dict):
+        # 旧格式（int）→ 迁移为 dict（保留总量为 _count）
+        entry = {"_count": int(entry or 0)}
+        log[key] = entry
+    if action:
+        entry[action] = int(entry.get(action, 0)) + int(amount)
+    else:
+        entry["_count"] = int(entry.get("_count", 0)) + int(amount)
     if len(log) > ACTIVITY_LOG_DAYS:
         for old in sorted(log)[:-ACTIVITY_LOG_DAYS]:
             del log[old]
+
+
+def daily_companionship_scores(state, days=7, now=None):
+    """最近 N 天 (星期标签, 陪伴度分数) 列表——按天的 action 分类
+    走 companionship_score 加权。旧格式（纯 int）按每互动 2 分
+    近似换算。"""
+    from petpet.progression.core import companionship_score
+    log = state.get("activity_log") or {}
+    stamp = _stamp_datetime(now)
+    series = []
+    for offset in range(days - 1, -1, -1):
+        day = stamp - datetime.timedelta(days=offset)
+        key = day.strftime("%Y-%m-%d")
+        label = _WEEKDAY_LABELS[day.weekday()]
+        entry = log.get(key)
+        if isinstance(entry, dict):
+            score = companionship_score(entry)
+        elif entry:
+            score = min(100, int(entry) * 2)  # 旧格式近似
+        else:
+            score = 0
+        series.append((label, score))
+    return series
 
 
 def daily_activity_series(state, days=7, now=None):

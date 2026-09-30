@@ -1086,7 +1086,7 @@ def record_action(state, action, amount=1, now=None):
         return add_affection(state, 0)
     state["records"][action] += amount
     daily_quest_hook(state, action, amount, now)
-    note_daily_activity(state, amount, now)
+    note_daily_activity(state, amount, now, action=action)
     if action in {
         "pettings", "feedings", "play_sessions", "sleep_sessions"
     }:
