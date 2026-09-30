@@ -231,6 +231,24 @@ class PetWindow(QWidget):
         # The offscreen test platform has no audio backend and must not try.
         if self.sounds and not _dependency("IS_OFFSCREEN_PLATFORM")():
             self._prewarm_sounds()
+        # SpeechBubble 预建（2026-09-30 摇醒卡顿根治）：原生窗创建
+        # 一次 = ~1.7s DWM 冻结（实测 500ms 循环 wall 2206ms）——
+        # 预建隐藏常驻，say() 只调 show_text 不再走新建路径。
+        self._speech_bubble = None
+        try:
+            self._speech_bubble = _dependency("SpeechBubble")(self)
+            # 首次 show 的 DWM 合成成本 ~2s（实测 400ms 循环 wall 2433ms）
+            # ——启动期 show 一帧再 hide 付掉；后续 say() 的 show 秒出。
+            # 不 show 停靠屏外（DPI 钳制坑）——用真实几何闪现一帧。
+            _sb = self._speech_bubble
+            _sb.resize(10, 10)
+            _sb.move(-5000, -5000)  # 闪现在不可见区（非 -10000 常驻，
+            #                         # 只是一帧的瞬态位置）
+            _sb.show()
+            _sb.hide()
+            _sb.move(0, 0)
+        except Exception:
+            self._speech_bubble = None
         # physics
         self.vx = 0.0
         self.vy = 0.0
@@ -298,7 +316,8 @@ class PetWindow(QWidget):
 
         # Speech uses a detached top-level window so it can wrap outside the
         # pet widget without being clipped by the pet's own bounds.
-        self._speech_bubble = None
+        # （2026-09-30：预建的常驻 bubble 在上方构造里创建，此处不再
+        #   重置为 None——重置会让 say() 走新建路径=1.7s DWM 冻结）
 
         # resize to pet size; place at saved pos
         self.resize(int(self.PET_W), int(self.PET_H))
@@ -1964,18 +1983,16 @@ class PetWindow(QWidget):
         if PetWindow.treasure_notice_active(self):
             return
         speech = self._speech_bubble
-        if speech is not None:
-            try:
-                # Do not reuse a hidden native translucent window at a new
-                # size; construct a fresh backing surface for the next line.
-                if not speech.isVisible():
-                    speech.close()
-                    speech = None
-            except RuntimeError:
-                speech = None
         if speech is None:
+            # 常驻 bubble 意外丢失时兜底新建（首次预建后不应发生）
             self._speech_bubble = _dependency("SpeechBubble")(self)
-        self._speech_bubble.show_text(text, ms)
+            speech = self._speech_bubble
+        try:
+            speech.show_text(text, ms)
+        except RuntimeError:
+            # C++ 已销毁（极端路径）：重建一次
+            self._speech_bubble = _dependency("SpeechBubble")(self)
+            self._speech_bubble.show_text(text, ms)
 
     def hide_overlays(self):
         """Close every detached bubble that visually belongs to the pet."""
