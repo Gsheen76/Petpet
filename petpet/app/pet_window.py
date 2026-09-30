@@ -3163,14 +3163,26 @@ class PetWindow(QWidget):
         self._active_animation = None
         self._animation_started_at = time.monotonic()
         self.behavior = "drag" if self.dragging else "idle"
-        self.say(random.choice([
+        # 卡顿修复（2026-09-30）：say()（SpeechBubble 新建原生窗 ~25ms）
+        # 与 save_state（同步写盘 ~9ms）从 mouseMoveEvent 拖拽路径
+        # 延迟到下一拍——同步阻塞 ~34ms 在摇醒的手速下=宠物位置跳。
+        _line = random.choice([
             "唔……被你摇醒啦！☀️",
             "汪呜？天亮了吗～",
             "醒啦醒啦，抱稳我呀～",
-        ]), 2200)
-        # Render the wake frame first; a cold audio backend can block.
-        _dependency("QTimer").singleShot(0, lambda: self.play_sound("bark"))
-        _dependency("save_state")(self.state)
+        ])
+        _state = self.state
+
+        def _post_wake():
+            try:
+                self.say(_line, 2200)
+                _dependency("save_state")(_state)
+            except RuntimeError:
+                pass  # 窗口已销毁的延迟回调
+
+        _dependency("QTimer").singleShot(0, _post_wake)
+        _dependency("QTimer").singleShot(
+            50, lambda: self.play_sound("bark"))  # 再让一拍给动画
         self.refresh_pose_from_state()
         self.update()
         return True
