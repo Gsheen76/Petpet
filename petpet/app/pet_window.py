@@ -3214,14 +3214,28 @@ class PetWindow(QWidget):
         )
         progression.record_action(self.state, "pettings")
         self.last_user_t = time.time()
-        self.say(random.choice(["汪汪！","好舒服～","再摸摸！","嘿嘿","爱你哟","蹭蹭你"]),
-                 random.randint(1000, 1800))
-        self.play_sound("pet")
-        # Play every petting frame once, then return to the current state.
+        # 卡顿修复（2026-10-01 与摇醒同款）：say/play_sound/save_state
+        # 延迟到下一拍——同步阻塞在点击帧=视觉顿挫
+        _line = random.choice(
+            ["汪汪！", "好舒服～", "再摸摸！", "嘿嘿", "爱你哟", "蹭蹭你"]
+        )
+        _ms = random.randint(1000, 1800)
+        _state = self.state
+        _effects = effects
+
+        def _post_pet():
+            try:
+                self.say(_line, _ms)
+                self.play_sound("pet")
+                self.add_xp(_effects["pet_xp"])
+                _dependency("save_state")(_state)
+            except RuntimeError:
+                pass
+
+        _dependency("QTimer").singleShot(0, _post_pet)
+        # 动画立即切（视觉反馈不延迟）
         self.pose = _dependency("POSE")["happy"]
         self.trigger_animation("pet")
-        self.add_xp(effects["pet_xp"])
-        _dependency("save_state")(self.state)
 
     def contextMenuEvent(self, event):
         """Right-click on the pet -> show the radial bubble menu."""
