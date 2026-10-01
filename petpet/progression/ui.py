@@ -1676,8 +1676,17 @@ class DailyWindow(CozyProgressWindow):
         # 陪伴热力（2026-09-25 c 线二轮）：未签到日按当日互动量四档
         # 看色（贡献图式）；已签到日保持珊瑚胶囊不被热力盖住
         activity = state.get("activity_log") or {}
+        def _activity_count(entry):
+            """activity_log 条目 → 互动总量（2026-09-30 改造：
+            dict 格式取各 action 之和，旧 int 格式直接返回）。"""
+            if isinstance(entry, dict):
+                return sum(v for k, v in entry.items() if k != "_count")
+            return int(entry or 0)
+
         month_counts = [
-            activity.get(f"{year:04d}-{month:02d}-{day:02d}", 0)
+            _activity_count(
+                activity.get(f"{year:04d}-{month:02d}-{day:02d}", 0)
+            )
             for day in range(1, days_in_month + 1)
         ]
         heat_peak = max(month_counts) or 1
