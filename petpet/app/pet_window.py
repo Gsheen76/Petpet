@@ -2055,6 +2055,8 @@ class PetWindow(QWidget):
         super().hideEvent(event)
 
     # ---------- mouse ----------
+    GRAB_DELAY_MS = 250  # 长按判定阈值（2026-10-01 用户定稿）
+
     def mousePressEvent(self, e):
         if e.button() == Qt.LeftButton:
             self._woke_from_shake = False
@@ -2063,21 +2065,43 @@ class PetWindow(QWidget):
                     e.globalPos().x(), time.monotonic())
             else:
                 self._wake_shake.reset()
-            self.dragging = True
-            self._grab_started_at = time.time()
-            self.drag_offset = e.globalPos() - self.frameGeometry().topLeft()
-            self.last_drag_pos = e.globalPos()
-            self.last_drag_t = time.time()
-            self.drag_samples = [(e.globalPos(), self.last_drag_t)]
-            self.pose = _dependency("POSE")["drag"]
-            self.behavior = "drag"
-            self.vx = 0; self.vy = 0
-            self.setCursor(Qt.ClosedHandCursor)
+            # 长按判定（2026-10-01 用户定稿）：单击=摸摸，长按/移动=抓起
+            # ——不立即进抓起模式；250ms 到达或移动超阈值时升级。
+            self._grab_pending = True
+            self._grab_press_pos = e.globalPos()
+            self._grab_timer = QTimer(self)
+            self._grab_timer.setSingleShot(True)
+            self._grab_timer.timeout.connect(self._promote_to_grab)
+            self._grab_timer.start(self.GRAB_DELAY_MS)
         elif e.button() == Qt.RightButton:
             # context menu handled by parent; here we ignore
             pass
 
+    def _promote_to_grab(self):
+        """250ms 长按到达或移动超阈值 → 正式进入抓起模式。"""
+        if not getattr(self, "_grab_pending", False):
+            return
+        self._grab_pending = False
+        press = getattr(self, "_grab_press_pos", None)
+        if press is None:
+            return
+        self.dragging = True
+        self._grab_started_at = time.time()
+        self.drag_offset = press - self.frameGeometry().topLeft()
+        self.last_drag_pos = press
+        self.last_drag_t = time.time()
+        self.drag_samples = [(press, self.last_drag_t)]
+        self.pose = _dependency("POSE")["drag"]
+        self.behavior = "drag"
+        self.vx = 0; self.vy = 0
+        self.setCursor(Qt.ClosedHandCursor)
+
     def mouseMoveEvent(self, e):
+        if getattr(self, "_grab_pending", False) and not self.dragging:
+            moved = (e.globalPos() - self._grab_press_pos).manhattanLength()
+            if moved > 12:
+                self._grab_timer.stop()
+                self._promote_to_grab()
         if self.dragging:
             now = time.time()
             if (self.state.get("sleeping")
@@ -2100,6 +2124,14 @@ class PetWindow(QWidget):
     def mouseReleaseEvent(self, e):
         if e.button() == Qt.RightButton:
             self.open_bubble_menu()
+            e.accept()
+            return
+        if e.button() == Qt.LeftButton and getattr(
+                self, "_grab_pending", False):
+            # 单击（未到达长按阈值）——取消 pending，由 pet.py 事件
+            # 过滤器的单击检测触发 pet_click
+            self._grab_pending = False
+            self._grab_timer.stop()
             e.accept()
             return
         if e.button() == Qt.LeftButton and self.dragging:
