@@ -1954,10 +1954,10 @@ class TrayApp:
         if e.button() == Qt.LeftButton and self._press_button == "left":
             moved = (e.globalPos() - self._press_pos).manhattanLength()
             dt = time.time() - self._press_t
-            if moved < 8 and dt < 0.35:
+            if moved < 8 and dt < 0.25:
                 # short left click — but wait to see if it's a double click
                 now = time.time()
-                if now - self._last_left_click_t < 0.35:
+                if now - self._last_left_click_t < 0.20:
                     # double click: cancel pending single click, open the home scene
                     self._pending_single_click.stop()
                     self._last_left_click_t = 0
@@ -1965,7 +1965,7 @@ class TrayApp:
                 else:
                     # first click: schedule single-click action after delay
                     self._last_left_click_t = now
-                    self._pending_single_click.start(320)
+                    self._pending_single_click.start(150)
             self._press_button = None
             self._press_pos = None
         elif e.button() == Qt.RightButton and self._press_button == "right":

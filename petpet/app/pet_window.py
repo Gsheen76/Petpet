@@ -3260,11 +3260,18 @@ class PetWindow(QWidget):
                 self.say(_line, _ms)
                 self.play_sound("pet")
                 self.add_xp(_effects["pet_xp"])
+            except RuntimeError:
+                pass
+
+        def _post_pet_save():
+            try:
                 _dependency("save_state")(_state)
             except RuntimeError:
                 pass
 
         _dependency("QTimer").singleShot(0, _post_pet)
+        # save 再延 200ms——让摸摸动画的前几帧不被磁盘 IO 冻住
+        _dependency("QTimer").singleShot(200, _post_pet_save)
         # 动画立即切（视觉反馈不延迟）
         self.pose = _dependency("POSE")["happy"]
         self.trigger_animation("pet")
