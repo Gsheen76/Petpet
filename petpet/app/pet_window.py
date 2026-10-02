@@ -1969,12 +1969,11 @@ class PetWindow(QWidget):
             "_user_hidden", False
         ):
             return
-        se = self.sounds.get(name)
-        if se is not None:
-            # 音量恢复挪到播放时（预热改为 muted play 不再 stop，
-            # 2026-09-28 卡顿轮——stop 每次同步 ~240ms）。
-            se.setVolume(0.5)
-            se.play()
+        # 推流通道（2026-10-01 摸摸卡顿根治）：QSoundEffect 的 play()
+        # 在真实音频设备上可能阻塞 ~500ms（与点击音 WASAPI 同款根
+        # 因——API 返回快≠出声快≠不阻塞）——改走预解码 PCM 推流。
+        from petpet.app.sounds import play_pcm
+        play_pcm(name)
 
 
     def say(self, text, ms=2200):

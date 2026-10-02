@@ -127,8 +127,14 @@ def _open_push_channel():
 
 def prewarm():
     """启动期预热（pet.py main 调用）：开推流通道（付 WASAPI 打开
-    成本，全程零出声）。失败置 False——play_click 走兜底链。"""
+    成本，全程零出声）+ 预解码宠物音效 PCM。失败置 False 走兜底。"""
     global _PUSH
+    try:
+        _preload_pet_pcm(
+            ["bark", "eat", "sleep", "pet", "drink", "rest", "stand"]
+        )
+    except Exception:
+        pass
     if not _IS_WINDOWS or _PUSH is not None:
         return
     try:
@@ -202,6 +208,60 @@ def _qt_play():
     try:
         _QT_EFFECT.play()
     except RuntimeError:
+        pass
+
+
+# 宠物音效预加载 PCM（启动时一次性解码，播放走推流零阻塞）
+_PET_PCM = {}      # name -> (pcm_bytes, rate, channels, width)
+_PET_PUSH = None   # 常开 QAudioOutput（与点击音共享同一格式时复用）
+
+
+def _preload_pet_pcm(names):
+    """启动期预解码宠物音效为 PCM 字节（后台线程安全）。"""
+    import wave
+    for name in names:
+        path = os.path.join(SOUNDS_DIR, f"{name}.wav")
+        if not os.path.exists(path):
+            continue
+        try:
+            with wave.open(path, "rb") as w:
+                rate = w.getframerate()
+                channels = w.getnchannels()
+                width = w.getsampwidth()
+                pcm = w.readframes(w.getnframes())
+            _PET_PCM[name] = (pcm, rate, channels, width)
+        except Exception:
+            pass
+
+
+def play_pcm(name):
+    """播一个宠物音效（推流通道，~10ms 出声，零阻塞）。"""
+    entry = _PET_PCM.get(name)
+    if entry is None:
+        return
+    global _PUSH
+    pcm, rate, ch, width = entry
+    if _PUSH is None:
+        try:
+            from PyQt5.QtMultimedia import QAudioFormat, QAudioOutput
+
+            fmt = QAudioFormat()
+            fmt.setSampleRate(rate)
+            fmt.setChannelCount(ch)
+            fmt.setSampleType(QAudioFormat.SignedInt)
+            fmt.setSampleSize(width * 8)
+            fmt.setCodec("audio/pcm")
+            out = QAudioOutput(fmt)
+            out.setBufferSize(max(16384, len(pcm) * 2))
+            io = out.start()
+            if io is None:
+                return
+            _PUSH = {"io": io, "out": out}
+        except Exception:
+            return
+    try:
+        _PUSH["io"].write(pcm)
+    except Exception:
         pass
 
 
