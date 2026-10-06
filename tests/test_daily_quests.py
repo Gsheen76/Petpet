@@ -75,6 +75,28 @@ class DailyQuestCoreTests(unittest.TestCase):
             progression.record_action(state, "pettings", now=ts)
         self.assertEqual(target["progress"], 2)
 
+    def test_give_gift_advances_gift_quest(self):
+        """2026-10-06 bug 修复：送礼必须推进「送它 1 份礼物」任务。
+
+        give_gift 此前直接裸加 records["gifts_given"]，绕过 record_action
+        单漏斗——任务钩子/当日活动流水全漏（用户实证：送完不显示完成）。
+        """
+        state = fresh_state()
+        ensure_daily_quests(state)  # 真实今天（give_gift 无 now 透传）
+        block = state["daily_quests"]
+        block["quests"] = [{
+            "key": "gifts_given", "label": "送它 1 份礼物",
+            "target": 1, "reward": 20, "progress": 0, "claimed": False,
+        }]
+        state["gift_inventory"]["sweet_cookie"] = 1
+        result = progression.give_gift(state, None, "sweet_cookie")
+        self.assertTrue(result["ok"])
+        self.assertEqual(state["records"]["gifts_given"], 1)
+        self.assertEqual(block["quests"][0]["progress"], 1)
+        # 活动流水同步记账（陪伴度/热力日历的漏斗，存储层直断言）
+        today_log = state["activity_log"].get(block["date"], {})
+        self.assertGreaterEqual(today_log.get("gifts_given", 0), 1)
+
     def test_claim_flow_grants_coins_once(self):
         state = fresh_state()
         now = datetime(2026, 9, 23, 10, 0, 0)

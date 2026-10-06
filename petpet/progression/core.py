@@ -1622,7 +1622,9 @@ def give_gift(state, pet_id, gift_id):
         state["gift_inventory"].pop(gift_id, None)
     else:
         state["gift_inventory"][gift_id] = count - 1
-    state["records"]["gifts_given"] += 1
+    # 2026-10-06：改走 record_action 单漏斗——每日任务钩子/当日活动流水
+    # 同步记账（好感无重复：AFFECTION_ACTION_GAINS 无 gifts_given 项）
+    record_action(state, "gifts_given")
     if preferred:
         message = (
             f"送出了 {definition['name']}，TA 超喜欢！好感 +{amount}！"
