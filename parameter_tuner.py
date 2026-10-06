@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import (
     QApplication,
     QDoubleSpinBox,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -16,6 +17,15 @@ from PyQt5.QtWidgets import (
     QSlider,
     QVBoxLayout,
     QWidget,
+)
+
+
+# key, 中文标签——顺序即预览区按钮顺序；可用性按当前宠物实际帧决定
+ANIMATION_PREVIEW_KEYS = (
+    ("idle", "待机"), ("walk", "行走"), ("eat", "进食"),
+    ("pet", "摸头"), ("play", "玩耍"), ("happy", "开心"),
+    ("dig_reward", "挖宝"), ("sleep", "睡觉"), ("drag", "抓起"),
+    ("sad", "难过"), ("sit", "坐下"), ("ask", "求关注"),
 )
 
 
@@ -174,6 +184,7 @@ class ParameterTunerWindow(QWidget):
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(2, 2, 8, 8)
         content_layout.setSpacing(12)
+        content_layout.addWidget(self._build_preview_section())
         for group_name, definitions in PARAMETER_GROUPS:
             group = QFrame()
             group.setObjectName("tunerGroup")
@@ -207,6 +218,55 @@ class ParameterTunerWindow(QWidget):
         footer.addWidget(save)
         root.addLayout(footer)
 
+    def _build_preview_section(self):
+        """动画预览分组：一排按钮点击即播，仅当前宠物实际拥有的可点。"""
+        group = QFrame()
+        group.setObjectName("tunerGroup")
+        layout = QVBoxLayout(group)
+        layout.setContentsMargins(14, 12, 14, 12)
+        layout.setSpacing(8)
+        title = QLabel("🎬 动画预览")
+        title.setObjectName("tunerGroupTitle")
+        layout.addWidget(title)
+        hint = QLabel("点击播放当前宠物的动画，播完自动回到原状态；灰键=这只宠物还没有的动画")
+        hint.setObjectName("tunerHint")
+        layout.addWidget(hint)
+        grid = QGridLayout()
+        grid.setSpacing(8)
+        self.preview_buttons = {}
+        for index, (key, label) in enumerate(ANIMATION_PREVIEW_KEYS):
+            button = QPushButton(label)
+            button.setObjectName("tunerPreview")
+            button.setMinimumHeight(42)
+            button.setCursor(Qt.PointingHandCursor)
+            button.clicked.connect(
+                lambda _checked=False, selected=key, name=label:
+                self._preview_clicked(selected, name)
+            )
+            grid.addWidget(button, index // 4, index % 4)
+            self.preview_buttons[key] = button
+        layout.addLayout(grid)
+        self.refresh_preview_buttons()
+        return group
+
+    def refresh_preview_buttons(self):
+        available = getattr(self.pet, "_animation_frame_paths", {}) or {}
+        labels = dict(ANIMATION_PREVIEW_KEYS)
+        for key, button in self.preview_buttons.items():
+            has = key in available
+            button.setEnabled(has)
+            button.setToolTip(
+                f"播放「{labels[key]}」动画"
+                if has else f"当前宠物没有「{labels[key]}」动画"
+            )
+
+    def _preview_clicked(self, key, label):
+        played = self.pet.play_debug_animation(key)
+        if played:
+            self.status.setText(f"▶ 正在播放：{label}（{key}）· 播完自动恢复")
+        else:
+            self.status.setText(f"当前宠物没有「{label}」动画（{key}）")
+
     def _apply_style(self):
         self.setStyleSheet("""
             QWidget#parameterTuner { background:#fbf7f3; color:#5f4b42;
@@ -236,6 +296,12 @@ class ParameterTunerWindow(QWidget):
                 border:1px solid #e2cfc4; border-radius:10px; padding:11px 17px;
                 min-height:44px; font-size:18px; font-weight:700; }
             QPushButton#tunerSecondary:hover { background:#f8e9e0; }
+            QPushButton#tunerPreview { background:#fffaf6; color:#866052;
+                border:1px solid #e2cfc4; border-radius:10px;
+                min-height:40px; font-size:17px; font-weight:700; }
+            QPushButton#tunerPreview:hover { background:#f8e9e0; }
+            QPushButton#tunerPreview:disabled { color:#c9b6ab; background:#f6efe9;
+                border-color:#eadfd8; }
             QPushButton#tunerPrimary { background:#d98068; color:white; border:0;
                 border-radius:10px; padding:11px 20px; min-height:44px;
                 font-size:18px; font-weight:800; }

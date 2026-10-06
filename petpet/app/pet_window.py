@@ -1620,6 +1620,19 @@ class PetWindow(QWidget):
             fps = 8.0
         return [1000.0 / fps] * frame_count
 
+    def play_debug_animation(self, name):
+        """参数调试器动画预览：有帧才播，返回该宠物是否拥有此动画。
+
+        走 __dict__ 直读（_animation_frame_paths 在宠物加载期按磁盘
+        实际存在填充，不解码帧不占内存）；trigger_animation 的时长
+        定时器到点自动回状态动画。
+        """
+        paths = self.__dict__.get("_animation_frame_paths") or {}
+        if name not in paths:
+            return False
+        self.trigger_animation(name)
+        return True
+
     def trigger_animation(
         self, name, duration_ms=None, finished_callback=None
     ):

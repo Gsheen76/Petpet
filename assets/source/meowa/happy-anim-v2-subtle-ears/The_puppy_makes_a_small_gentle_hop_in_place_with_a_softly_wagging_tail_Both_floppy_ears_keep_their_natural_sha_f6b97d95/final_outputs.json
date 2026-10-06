@@ -1,0 +1,21 @@
+{
+  "status": "success",
+  "job_id": "job_25932b9fd0314bebaac87d9dbf392b1d",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\happy-anim-v2-subtle-ears\\The_puppy_makes_a_small_gentle_hop_in_place_with_a_softly_wagging_tail_Both_floppy_ears_keep_their_natural_sha_f6b97d95\\result_output_url.bin",
+      "mime_type": "image/webp"
+    },
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\happy-anim-v2-subtle-ears\\The_puppy_makes_a_small_gentle_hop_in_place_with_a_softly_wagging_tail_Both_floppy_ears_keep_their_natural_sha_f6b97d95\\result_output_transparent_output_urls_gif.gif",
+      "mime_type": "image/gif"
+    },
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\happy-anim-v2-subtle-ears\\The_puppy_makes_a_small_gentle_hop_in_place_with_a_softly_wagging_tail_Both_floppy_ears_keep_their_natural_sha_f6b97d95\\result_output_transparent_output_urls_png.png",
+      "mime_type": "image/png"
+    }
+  ]
+}
