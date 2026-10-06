@@ -1,0 +1,21 @@
+{
+  "status": "success",
+  "job_id": "job_3231a6960ea8407b978b76e7d7e4fcac",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\play-anim-v2\\The_puppy_bounces_playfully_in_place_with_an_excited_happy_grin_and_fast_wagging_tail_springing_up_from_the_pl_3aa76a5e\\result_output_url.bin",
+      "mime_type": "image/webp"
+    },
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\play-anim-v2\\The_puppy_bounces_playfully_in_place_with_an_excited_happy_grin_and_fast_wagging_tail_springing_up_from_the_pl_3aa76a5e\\result_output_transparent_output_urls_gif.gif",
+      "mime_type": "image/gif"
+    },
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\play-anim-v2\\The_puppy_bounces_playfully_in_place_with_an_excited_happy_grin_and_fast_wagging_tail_springing_up_from_the_pl_3aa76a5e\\result_output_transparent_output_urls_png.png",
+      "mime_type": "image/png"
+    }
+  ]
+}

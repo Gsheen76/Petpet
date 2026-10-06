@@ -9,25 +9,41 @@
     "folder": "pet",
     "fps": 20,
     "loop": true,
-    "fallback": "idle"
+    "fallback": "idle",
+    "scale": 1.0,
+    "anchor_bottom": false,
+    "saturation": 1.0,
+    "brightness": 1.0
   },
   "eat": {
     "folder": "eat",
     "fps": 20,
     "loop": true,
-    "fallback": "idle"
+    "fallback": "idle",
+    "scale": 1.0,
+    "anchor_bottom": false,
+    "saturation": 1.0,
+    "brightness": 1.0
   },
   "play": {
     "folder": "play",
     "fps": 16,
     "loop": true,
-    "fallback": "idle"
+    "fallback": "idle",
+    "scale": 1.0,
+    "anchor_bottom": false,
+    "saturation": 1.0,
+    "brightness": 1.0
   },
   "happy": {
     "folder": "happy",
     "fps": 15,
     "loop": true,
-    "fallback": "idle"
+    "fallback": "idle",
+    "scale": 1.0,
+    "anchor_bottom": false,
+    "saturation": 1.0,
+    "brightness": 1.0
   },
   "sleep": {
     "spritesheet": "../../home/poses/home_pet_sleep.png",
