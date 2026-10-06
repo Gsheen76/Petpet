@@ -194,7 +194,8 @@ class FetchPlaySceneTests(unittest.TestCase):
 
 
 class PetPlayEntryTests(unittest.TestCase):
-    def test_play_opens_scene_and_updates_stats_once(self):
+    def test_play_plays_in_place_and_updates_stats_once(self):
+        """2026-10-06 用户定稿：玩耍=原地播 play 动画，不再开缩小抛球场景。"""
         fake = SimpleNamespace(
             state={
                 "sleeping": False,
@@ -208,28 +209,23 @@ class PetPlayEntryTests(unittest.TestCase):
             vx=100,
             vy=-50,
             on_ground=False,
-            _play_return_pos=None,
-            _on_play_scene_finished=Mock(),
             play_sound=Mock(),
             add_xp=Mock(),
-            pos=Mock(return_value=QPoint(120, 180)),
+            trigger_animation=Mock(),
             hide=Mock(),
         )
-        scene = Mock()
-        with patch("pet.FetchPlayScene", return_value=scene) as scene_type, \
+        scene_type = Mock()
+        with patch("pet.FetchPlayScene", return_value=scene_type) as factory, \
                 patch("pet.save_state"):
             pet.PetWindow.play(fake)
 
         self.assertEqual(fake.state["mood"], 70)
         self.assertEqual(fake.state["energy"], 50)
         self.assertEqual(fake.state["hunger"], 75)
-        self.assertEqual(fake._play_return_pos, QPoint(120, 180))
-        self.assertIs(fake.play_scene, scene)
-        fake.hide.assert_called_once_with()
-        scene.start.assert_called_once_with()
-        scene_type.assert_called_once_with(
-            fake, fake._on_play_scene_finished
-        )
+        self.assertEqual(fake.behavior, "idle")
+        fake.trigger_animation.assert_called_once_with("play")
+        factory.assert_not_called()
+        fake.hide.assert_not_called()
 
 
 if __name__ == "__main__":

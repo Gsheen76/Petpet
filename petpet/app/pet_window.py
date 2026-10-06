@@ -3111,12 +3111,6 @@ class PetWindow(QWidget):
             and effects["play_energy_cost"] > 0
         ):
             self.say("没力气了…"); return
-        if self.play_scene is not None:
-            try:
-                self.play_scene.raise_()
-            except RuntimeError:
-                self.play_scene = None
-            return
         self.state["mood"] = min(
             100, self.state["mood"] + effects["play_mood"]
         )
@@ -3136,11 +3130,9 @@ class PetWindow(QWidget):
         if grant_xp:
             self.add_xp(effects["play_xp"])
         _dependency("save_state")(self.state)
-        self._play_return_pos = QPoint(self.pos())
-        scene = _dependency("FetchPlayScene")(self, self._on_play_scene_finished)
-        self.play_scene = scene
-        self.hide()
-        scene.start()
+        # 2026-10-06 用户定稿：玩耍=原地播 play 动画（此前隐藏本体开
+        # 缩小抛球场景 FetchPlayScene；场景类保留但不再从此入口创建）
+        self.trigger_animation("play")
 
     def _restore_after_play(self, show_pet):
         if self._play_return_pos is not None:

@@ -59,13 +59,12 @@ class InteractionUpgradeIntegrationTests(unittest.TestCase):
             say=Mock(),
             play_sound=Mock(),
             add_xp=Mock(),
+            trigger_animation=Mock(),
             pos=Mock(return_value=QPoint(30, 40)),
             hide=Mock(),
         )
-        scene = Mock()
 
-        with patch("pet.FetchPlayScene", return_value=scene), \
-                patch("pet.save_state"):
+        with patch("pet.save_state"):
             pet.PetWindow.play(fake)
 
         self.assertEqual(state["energy"], 0)
@@ -74,7 +73,7 @@ class InteractionUpgradeIntegrationTests(unittest.TestCase):
         self.assertEqual(state["records"]["play_sessions"], 1)
         self.assertEqual(state["affection_points"], 5)
         fake.add_xp.assert_called_once_with(22)
-        scene.start.assert_called_once_with()
+        fake.trigger_animation.assert_called_once_with("play")
 
     def test_max_sleep_upgrade_recovers_base_energy_without_hunger_cost(self):
         state = progression.ensure_progression({
