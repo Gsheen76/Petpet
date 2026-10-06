@@ -135,10 +135,32 @@ def main() -> int:
     args = parser.parse_args()
 
     sheet = Image.open(args.sheet)
-    cols = rows = 4
-    cell_w, cell_h = sheet.width // cols, sheet.height // rows
-    total = cols * rows
-    print(f"精灵表 {sheet.size} -> {cols}x{rows} 格 {cell_w}x{cell_h}")
+    cols = 4
+    cell_w = sheet.width // cols
+    cell_h = cell_w  # Meowa 精灵表恒为方格
+    # 自动侦测内容格（行序扫描，整行空即止——walk 类可能 15/16 格且尾格空）
+    cells = []
+    alpha_probe = np.asarray(sheet)[..., 3]
+    for row in range(sheet.height // cell_h):
+        row_cells = []
+        empty_row = True
+        for col in range(cols):
+            box = alpha_probe[row * cell_h:(row + 1) * cell_h,
+                              col * cell_w:(col + 1) * cell_w]
+            if int((box > 50).sum()) >= 1000:
+                empty_row = False
+                row_cells.append(sheet.crop(
+                    (col * cell_w, row * cell_h,
+                     (col + 1) * cell_w, (row + 1) * cell_h)
+                ))
+            else:
+                row_cells.append(None)
+        if empty_row and row_cells:
+            break
+        cells.extend(row_cells)
+    cells = [cell for cell in cells if cell is not None]
+    total = len(cells)
+    print(f"精灵表 {sheet.size} -> 格 {cell_w}x{cell_h}, 内容帧 {total}")
 
     cells = [
         sheet.crop(
