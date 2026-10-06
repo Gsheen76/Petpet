@@ -135,40 +135,45 @@ def main() -> int:
     args = parser.parse_args()
 
     sheet = Image.open(args.sheet)
-    cols = 4
-    cell_w = sheet.width // cols
-    cell_h = cell_w  # Meowa 精灵表恒为方格
-    # 自动侦测内容格（行序扫描，整行空即止——walk 类可能 15/16 格且尾格空）
-    cells = []
-    alpha_probe = np.asarray(sheet)[..., 3]
-    for row in range(sheet.height // cell_h):
-        row_cells = []
-        empty_row = True
-        for col in range(cols):
-            box = alpha_probe[row * cell_h:(row + 1) * cell_h,
-                              col * cell_w:(col + 1) * cell_w]
-            if int((box > 50).sum()) >= 1000:
-                empty_row = False
-                row_cells.append(sheet.crop(
-                    (col * cell_w, row * cell_h,
-                     (col + 1) * cell_w, (row + 1) * cell_h)
-                ))
-            else:
-                row_cells.append(None)
-        if empty_row and row_cells:
-            break
-        cells.extend(row_cells)
-    cells = [cell for cell in cells if cell is not None]
-    total = len(cells)
-    print(f"精灵表 {sheet.size} -> 格 {cell_w}x{cell_h}, 内容帧 {total}")
+    # 网格侦测（2026-10-07 walk 轮）：Meowa 按帧数选网格（16帧=4x4、8帧=3x3），
+    # 且格间有>20px 空白槽——按投影间隙切；无间隙（帧贴边）回退 4 等分。
+    def _bands(mask_axis, total, min_gap=20):
+        proj = mask_axis
+        gaps, in_gap = [], False
+        for x in range(total):
+            if proj[x] == 0 and not in_gap:
+                in_gap, start = True, x
+            elif proj[x] > 0 and in_gap:
+                in_gap = False
+                if x - start > min_gap:
+                    gaps.append((start, x))
+        if in_gap and total - start > min_gap:
+            gaps.append((start, total))
+        bands, cursor = [], 0
+        for g0, g1 in gaps:
+            if g0 - cursor > 40:
+                bands.append((cursor, g0))
+            cursor = g1
+        if total - cursor > 40:
+            bands.append((cursor, total))
+        return bands
 
-    cells = [
-        sheet.crop(
-            (i % cols * cell_w, i // cols * cell_h,
-             i % cols * cell_w + cell_w, i // cols * cell_h + cell_h)
-        )
-        for i in range(total)
-    ]
+    solid_probe = np.asarray(sheet)[..., 3] > 30
+    col_bands = _bands(solid_probe.sum(axis=0), sheet.width)
+    row_bands = _bands(solid_probe.sum(axis=1), sheet.height)
+    if len(col_bands) < 2 or len(row_bands) < 2:
+        # 无间隙：回退 4x4 等分（16 帧表相邻帧贴边无槽）
+        col_bands = [(c * sheet.width // 4, (c + 1) * sheet.width // 4) for c in range(4)]
+        row_bands = [(r * sheet.height // 4, (r + 1) * sheet.height // 4) for r in range(4)]
+    cells = []
+    for r0, r1 in row_bands:
+        for c0, c1 in col_bands:
+            box = solid_probe[r0:r1, c0:c1]
+            if int(box.sum()) >= 1000:
+                cells.append(sheet.crop((c0, r0, c1, r1)))
+    total = len(cells)
+    print(f"精灵表 {sheet.size} -> 网格 {len(col_bands)}x{len(row_bands)}, 内容帧 {total}")
+
     soft_boxes, solid_boxes, dog_boxes = [], [], []
     for cell in cells:
         arr = np.asarray(cell)
