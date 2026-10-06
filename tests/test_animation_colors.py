@@ -37,8 +37,9 @@ class AnimationColorTests(unittest.TestCase):
         )
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         self.assertEqual(manifest["eat"]["fps"], 20)
-        self.assertEqual(manifest["eat"]["saturation"], 0.9)
-        self.assertEqual(manifest["eat"]["brightness"], 0.97)
+        # 2026-10-07 统一轮：颜色已在像素层对齐 idle，渲染期滤镜恒等
+        self.assertEqual(manifest["eat"]["saturation"], 1.0)
+        self.assertEqual(manifest["eat"]["brightness"], 1.0)
 
     def test_desktop_asset_lookup_uses_active_pet(self):
         self.assertTrue(
