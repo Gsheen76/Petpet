@@ -5,6 +5,24 @@
     "loop": true,
     "fallback": "idle"
   },
+  "pet": {
+    "folder": "pet",
+    "fps": 20,
+    "loop": true,
+    "fallback": "idle"
+  },
+  "eat": {
+    "folder": "eat",
+    "fps": 20,
+    "loop": true,
+    "fallback": "idle"
+  },
+  "play": {
+    "folder": "play",
+    "fps": 24,
+    "loop": true,
+    "fallback": "idle"
+  },
   "happy": {
     "folder": "happy",
     "fps": 15,

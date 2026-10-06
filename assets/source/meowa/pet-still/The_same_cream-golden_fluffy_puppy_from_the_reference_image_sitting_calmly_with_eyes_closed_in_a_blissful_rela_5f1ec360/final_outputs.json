@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "job_id": "job_c1e1d2ffd34d478ca84407ffef1e2ce6",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\pet-still\\The_same_cream-golden_fluffy_puppy_from_the_reference_image_sitting_calmly_with_eyes_closed_in_a_blissful_rela_5f1ec360\\result_images_0_url.png",
+      "mime_type": "image/png"
+    }
+  ]
+}
