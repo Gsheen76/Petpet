@@ -120,7 +120,8 @@
     "loop": true,
     "fallback": "idle",
     "scale": 1.56,
-    "anchor_bottom": true
+    "anchor_bottom": true,
+    "offset_y": -12
   },
   "eat": {
     "folder": "eat",
@@ -129,8 +130,9 @@
     "fallback": "eat",
     "scale": 1.0,
     "anchor_bottom": true,
-    "saturation": 0.9,
-    "brightness": 0.97
+    "saturation": 1.0,
+    "brightness": 1.0,
+    "offset_y": -12
   },
   "play": {
     "folder": "play",
@@ -138,7 +140,8 @@
     "loop": false,
     "fallback": "happy",
     "scale": 1.0,
-    "anchor_bottom": true
+    "anchor_bottom": true,
+    "offset_y": -12
   },
   "happy": {
     "folder": "happy",
@@ -153,8 +156,9 @@
     "fallback": "happy",
     "scale": 1.0,
     "anchor_bottom": true,
-    "saturation": 0.9,
-    "brightness": 0.97
+    "saturation": 1.0,
+    "brightness": 1.0,
+    "offset_y": -12
   },
   "dig_reward": {
     "folder": "dig_reward",
@@ -162,7 +166,8 @@
     "loop": false,
     "fallback": "happy",
     "scale": 1.0,
-    "anchor_bottom": true
+    "anchor_bottom": true,
+    "offset_y": -12
   },
   "sleep": {
     "folder": "sleep",
@@ -170,7 +175,8 @@
     "loop": true,
     "fallback": "sleep",
     "scale": 0.665,
-    "anchor_bottom": true
+    "anchor_bottom": true,
+    "offset_y": -12
   },
   "drag": {
     "folder": "drag",
