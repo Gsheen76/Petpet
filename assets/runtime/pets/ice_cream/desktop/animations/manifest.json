@@ -27,7 +27,7 @@
   },
   "play": {
     "folder": "play",
-    "fps": 16,
+    "fps": 8,
     "loop": true,
     "fallback": "idle",
     "scale": 1.0,
