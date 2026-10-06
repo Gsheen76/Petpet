@@ -2528,3 +2528,31 @@ class OcclusionHysteresisTests(unittest.TestCase):
             self.assertLess(order.index("home_pet"), order.index("home_toy_basket"))
 
 
+
+
+class HomeSharedVisualScaleTests(unittest.TestCase):
+    """家园借用动画的绘制倍率（2026-10-07 home_scale 机制）。"""
+
+    def test_default_scale_alone(self):
+        from petpet.home.window import home_shared_visual_scale
+        self.assertEqual(home_shared_visual_scale({"scale": 1.0}), 1.0)
+        self.assertEqual(home_shared_visual_scale({}), 1.0)
+
+    def test_home_scale_multiplies_spec_scale(self):
+        from petpet.home.window import home_shared_visual_scale
+        self.assertAlmostEqual(
+            home_shared_visual_scale({"scale": 1.0, "home_scale": 0.85}),
+            0.85,
+        )
+
+    def test_invalid_values_fall_back_safely(self):
+        from petpet.home.window import home_shared_visual_scale
+        self.assertEqual(
+            home_shared_visual_scale({"scale": "bad", "home_scale": None}), 1.0
+        )
+        self.assertEqual(
+            home_shared_visual_scale({"scale": 0}), 1.0
+        )
+        self.assertEqual(
+            home_shared_visual_scale({"home_scale": 99.0}), 3.0
+        )

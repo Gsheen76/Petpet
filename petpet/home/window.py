@@ -48,7 +48,24 @@ from petpet.home.geometry import (
 from petpet.home.rendering import *  # noqa: F401,F403
 
 
+def home_shared_visual_scale(spec) -> float:
+    """家园借用桌面动画的绘制倍率：spec.scale × spec.home_scale。
 
+    home_scale（2026-10-07 用户需求「统一家园触发动画的大小」）：家园
+    把内容裁剪归一到固定绘制高，宽扁构图（如狗+食盆的进食）视觉上
+    偏大——manifest 用 home_scale 单独收紧，不影响桌面端尺寸。
+    """
+
+    def _positive(value, fallback):
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            return fallback
+        return value if value > 0 else fallback
+
+    scale = _positive(spec.get("scale", 1.0), 1.0)
+    home_scale = _positive(spec.get("home_scale", 1.0), 1.0)
+    return max(0.1, scale * min(home_scale, 3.0))
 
 
 class HomeSceneWindow(KeepAliveTopLevelWindow):
@@ -1384,17 +1401,14 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
             shared_frame = getattr(self.pet, "shared_animation_frame", None)
             shared = shared_frame() if callable(shared_frame) else None
             if shared and not shared["pixmap"].isNull():
-                scale = shared.get("spec", {}).get("scale", 1.0)
-                try:
-                    scale = max(0.1, float(scale))
-                except (TypeError, ValueError):
-                    scale = 1.0
                 return HomePetWalkRenderSpec(
                     pixmap=shared["pixmap"],
                     source_rect=self._shared_animation_source_rect(shared),
                     mirrored=False,
                     frame_index=int(shared.get("frame_index", 0)),
-                    visual_scale=scale,
+                    visual_scale=home_shared_visual_scale(
+                        shared.get("spec") or {}
+                    ),
                     contact_center_x=0.5,
                     contact_width=0.7,
                     contact_foot_y=0.98,
