@@ -6,7 +6,18 @@
   <img src="assets/runtime/pets/lunch_meat/desktop/poses/idle.png" width="280" alt="Pet陪它桌面小狗">
 </p>
 
-当前版本：`v1.7.5`
+当前版本：`v1.7.6`
+
+## v1.7.6 更新亮点
+
+- **手感与音效终版**：全应用按键统一纯缩放反馈（悬浮放大/点击还原，按压效果清零）；全部按键（含分栏页签）统一可爱软糖点击音，按下瞬间零延迟出声；× 键全应用统一素材且悬浮永不越界；分栏统一胶囊设计。
+- **性能大修**：商店切分栏从最长 2.6 秒降到几十毫秒；小屋首开 3.4→1.4 秒；桌面待机 CPU 占用约降 75%；启动后首次操作冻结（曾达 5 秒）根除。
+- **新小游戏「记忆翻牌」**：4×4 图标配对，步数效率计币，完美 40 币。
+- **陪伴度分数**：记录页总计改为按关怀程度加权评分（喂食/玩耍权重最高），四档等级 + 七日分数柱状图。
+- **长按才抓起**：单击=摸摸，长按/拖动=抓起；摸摸/摇醒卡顿根治，台词不再播一半卡住。
+- **待机时长 12h/24h**：正常待机 12 小时、升级后 24 小时。
+- **稳定性**：关面板闪退残余时间窗封堵、右键菜单点完消失/每日窗打不开等修复；恐龙套装抓起/待机色差彻底校齐。
+- 全量 1023 项自动化测试，GitHub Actions 每次 push 自动回归。
 
 ## v1.7.5 更新亮点
 
@@ -141,9 +152,9 @@
 | 平台 | 文件 |
 | --- | --- |
 | Windows 直接运行 | `Petpet.exe` |
-| Windows 便携包 | `Petpet-v1.7.5-windows.zip` |
-| macOS Apple 芯片 | `Petpet-v1.7.5-macOS-arm64.zip` |
-| 校验和 | `Petpet-v1.7.5-SHA256SUMS.txt` |
+| Windows 便携包 | `Petpet-v1.7.6-windows.zip` |
+| macOS Apple 芯片 | `Petpet-v1.7.6-macOS-arm64.zip` |
+| 校验和 | `Petpet-v1.7.6-SHA256SUMS.txt` |
 
 Windows 下载 ZIP 后解压并运行 `Petpet.exe`。直接下载的 `Petpet.exe` 也可以独立运行，程序不会弹出命令行窗口。
 
@@ -383,8 +394,8 @@ dist/Petpet.app
 公开 Release 必须包含以下三项非空正式资产；校验和文件也会一并上传：
 
 - `Petpet.exe`
-- `Petpet-v1.7.5-windows.zip`
-- `Petpet-v1.7.5-macOS-arm64.zip`
+- `Petpet-v1.7.6-windows.zip`
+- `Petpet-v1.7.6-macOS-arm64.zip`
 
 中途失败时 Release 会保持草稿。修复问题后可以重复运行同一版本命令；脚本不会强推、覆盖已存在的标签或删除 worktree。已公开且完整的 Release 会先验证远端资产，避免重复修改。
 
