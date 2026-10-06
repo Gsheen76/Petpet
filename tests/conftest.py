@@ -33,14 +33,18 @@ def pytest_sessionfinish(session, exitstatus):
         reporter = session.config.pluginmanager.get_plugin("terminalreporter")
         stats = getattr(reporter, "stats", {}) if reporter else {}
         passed = len(stats.get("passed", []))
+        failed_reports = stats.get("failed", []) + stats.get("error", [])
         failed = len(stats.get("failed", []))
         errors = len(stats.get("error", []))
-        print(
-            f"\nPYTEST VERDICT: {passed} passed"
-            f"{f', {failed} FAILED' if failed else ''}"
-            f"{f', {errors} ERROR' if errors else ''}",
-            flush=True,
-        )
+        verdict = f"\nPYTEST VERDICT: {passed} passed"
+        if failed or errors:
+            verdict += (
+                f"{f', {failed} FAILED' if failed else ''}"
+                f"{f', {errors} ERROR' if errors else ''}"
+            )
+            for rep in failed_reports:
+                verdict += f"\n  {rep.outcome.upper()}: {rep.nodeid}"
+        print(verdict, flush=True)
     except Exception:
         pass
     try:
