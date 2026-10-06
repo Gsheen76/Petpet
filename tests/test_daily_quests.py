@@ -392,8 +392,9 @@ class ActivityLogTests(unittest.TestCase):
             state, "pettings", now=datetime(2026, 9, 25, 14, 0, 0).timestamp()
         )
         log = state.get("activity_log")
-        # 期望键取自固定时间戳的日期（跨午夜跑测试时真实「今天」已翻日）
-        self.assertEqual(log, {"2026-09-25": 1})
+        # 期望键取自固定时间戳的日期（跨午夜跑测试时真实「今天」已翻日）；
+        # 2026-09-30 陪伴度迁移后 activity_log 为 per-action dict
+        self.assertEqual(log["2026-09-25"].get("pettings"), 1)
 
     def test_trim_old_days(self):
         from petpet.progression.daily import note_daily_activity

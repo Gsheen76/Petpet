@@ -290,7 +290,10 @@ def daily_companionship_scores(state, days=7, now=None):
 
 
 def daily_activity_series(state, days=7, now=None):
-    """最近 N 天 (星期标签, 互动量) 列表，旧→新；无记录为 0。"""
+    """最近 N 天 (星期标签, 互动量) 列表，旧→新；无记录为 0。
+
+    activity_log 为 per-action dict（2026-09-30 陪伴度迁移）时取
+    各 action 计数之和；旧格式（纯 int）直接返回。"""
     log = state.get("activity_log") or {}
     stamp = _stamp_datetime(now)
     series = []
@@ -298,7 +301,14 @@ def daily_activity_series(state, days=7, now=None):
         day = stamp - datetime.timedelta(days=offset)
         key = day.strftime("%Y-%m-%d")
         label = _WEEKDAY_LABELS[day.weekday()]
-        series.append((label, int(log.get(key, 0))))
+        entry = log.get(key)
+        if isinstance(entry, dict):
+            amount = sum(v for v in entry.values() if isinstance(v, (int, float)))
+        elif entry:
+            amount = int(entry)
+        else:
+            amount = 0
+        series.append((label, amount))
     return series
 
 

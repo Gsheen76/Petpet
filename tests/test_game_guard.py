@@ -258,27 +258,38 @@ class HiddenPetSilenceTests(unittest.TestCase):
         self.addCleanup(window.close)
         return window
 
+    # 2026-10-02 起宠物音效走 QAudioOutput 推流通道（play_pcm），
+    # 不再触碰 QSoundEffect 实例——断言改为推流侧（隐藏时不得推流）。
     def test_auto_hidden_pet_stays_silent(self):
+        from unittest.mock import patch
+
         window = self._window()
         window._game_auto_hidden = True
 
-        window.play_sound("bark")
+        with patch("petpet.app.sounds.play_pcm") as pcm:
+            window.play_sound("bark")
 
-        window.sounds["bark"].play.assert_not_called()
+        pcm.assert_not_called()
 
     def test_user_hidden_pet_stays_silent(self):
+        from unittest.mock import patch
+
         window = self._window()
         window._user_hidden = True
 
-        window.play_sound("pet")
+        with patch("petpet.app.sounds.play_pcm") as pcm:
+            window.play_sound("pet")
 
-        window.sounds["pet"].play.assert_not_called()
+        pcm.assert_not_called()
 
     def test_visible_pet_still_plays(self):
+        from unittest.mock import patch
+
         window = self._window()
         window._game_auto_hidden = False
         window._user_hidden = False
 
-        window.play_sound("sleep")
+        with patch("petpet.app.sounds.play_pcm") as pcm:
+            window.play_sound("sleep")
 
-        window.sounds["sleep"].play.assert_called_once()
+        pcm.assert_called_once_with("sleep")
