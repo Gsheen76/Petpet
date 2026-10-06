@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "job_id": "job_fe623b7a86fc43cca020b6457e7c60d6",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\test-happy-still\\The_same_cream-golden_fluffy_puppy_from_the_reference_image_jumping_happily_mid-air_with_both_caramel_ears_fly_1983a896\\result_images_0_url.png",
+      "mime_type": "image/png"
+    }
+  ]
+}
