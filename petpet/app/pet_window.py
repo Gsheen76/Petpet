@@ -921,7 +921,10 @@ class PetWindow(QWidget):
         """
         try:
             now = time.monotonic()
-            if now - getattr(self, "_last_skit_at", 0.0) < 1200:
+            last = getattr(self, "_last_skit_at", 0.0)
+            # 0.0 = 从未演过，不进冷却判断——CI/刚开机的机器
+            # monotonic() 本身可能小于冷却窗，「从未」会被误判成「刚演过」
+            if last and now - last < 1200:
                 return
             if self.state.get("sleeping"):
                 return
