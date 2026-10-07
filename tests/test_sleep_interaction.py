@@ -69,8 +69,9 @@ class AutoSleepBehaviorTests(unittest.TestCase):
 
         result = pet.PetWindow._update_auto_sleep_state(fake, now=100.0)
 
-        self.assertEqual(result, "walking")
-        fake._begin_auto_sleep.assert_called_once_with(100.0)
+        # 2026-10-07 用户定稿：删除自动睡觉——低精力不再触发
+        self.assertIsNone(result)
+        fake._begin_auto_sleep.assert_not_called()
 
     def test_energy_at_thirty_does_not_start_auto_sleep(self):
         fake = SimpleNamespace(

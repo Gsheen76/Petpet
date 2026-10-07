@@ -69,7 +69,6 @@ PARAMETER_GROUPS = (
             ("decay_hunger", "清醒饥饿衰减", 0, 1, 0.01, "/tick", "每 2 秒减少"),
             ("decay_mood", "清醒心情衰减", 0, 1, 0.01, "/tick", "每 2 秒减少"),
             ("decay_energy", "清醒精力衰减", 0, 1, 0.5, "/tick", "每 2 秒减少"),
-            ("auto_sleep_energy_threshold", "自动睡觉阈值", 0, 80, 1, "%", "低于此精力自动休息"),
             ("auto_wake_energy_threshold", "自动醒来阈值", 20, 100, 1, "%", "高于此精力自动醒来"),
             ("autonomy_idle_weight", "自主待机权重", 0, 20, 0.5, "", "越大越常待机"),
             ("autonomy_walk_weight", "自主行走权重", 0, 20, 0.5, "", "越大越常走动"),
@@ -116,7 +115,7 @@ _IMMEDIATE_EFFECT_KEYS = {
 
 _DEFERRED_EFFECT_KEYS = {
     "walk_speed_min", "walk_speed_max", "auto_sleep_walk_speed",
-    "auto_sleep_energy_threshold", "auto_wake_energy_threshold",
+    "auto_wake_energy_threshold",
     "autonomy_idle_weight", "autonomy_walk_weight",
     "autonomy_sit_weight", "dig_discovery_chance", "dig_cooldown_minutes",
     "petting_affection_gain", "feeding_affection_gain",

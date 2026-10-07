@@ -2589,16 +2589,8 @@ class PetWindow(QWidget):
             self._auto_sleep_phase = None
         if self._auto_sleep_phase == "walking":
             return "walking"
-        sleep_threshold = getattr(
-            self, "auto_sleep_energy_threshold",
-            self.AUTO_SLEEP_ENERGY_THRESHOLD,
-        )
-        if (
-            self.state.get("energy", 0) < sleep_threshold
-            and now >= self._auto_sleep_snooze_until
-            and self._begin_auto_sleep(now)
-        ):
-            return "walking"
+        # 2026-10-07 用户定稿：删除自动睡觉——低精力不再自主入睡，
+        # 睡觉只走手动（菜单/家园），精力满格自醒逻辑保留
         return None
 
     # ---------- decay ----------
