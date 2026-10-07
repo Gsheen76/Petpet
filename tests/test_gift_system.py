@@ -593,5 +593,5 @@ class GiftReactionTests(unittest.TestCase):
 
         window.pet.trigger_animation.assert_called_once()
         args = window.pet.trigger_animation.call_args[0]
-        self.assertEqual(args[0], "play",
-                         "送礼成功应播放玩耍（开心）动画")
+        self.assertEqual(args[0], "happy",
+                         "送礼成功应播放开心动画（2026-10-07 新增站立欢呼，用户定稿）")
