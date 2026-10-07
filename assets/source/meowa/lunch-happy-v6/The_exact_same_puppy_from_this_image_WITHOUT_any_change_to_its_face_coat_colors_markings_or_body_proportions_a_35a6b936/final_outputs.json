@@ -1,0 +1,21 @@
+{
+  "status": "success",
+  "job_id": "job_beaee29ca87f4905b514693f2690aa85",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\lunch-happy-v6\\The_exact_same_puppy_from_this_image_WITHOUT_any_change_to_its_face_coat_colors_markings_or_body_proportions_a_35a6b936\\result_output_url.bin",
+      "mime_type": "image/webp"
+    },
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\lunch-happy-v6\\The_exact_same_puppy_from_this_image_WITHOUT_any_change_to_its_face_coat_colors_markings_or_body_proportions_a_35a6b936\\result_output_transparent_output_urls_gif.gif",
+      "mime_type": "image/gif"
+    },
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\lunch-happy-v6\\The_exact_same_puppy_from_this_image_WITHOUT_any_change_to_its_face_coat_colors_markings_or_body_proportions_a_35a6b936\\result_output_transparent_output_urls_png.png",
+      "mime_type": "image/png"
+    }
+  ]
+}
