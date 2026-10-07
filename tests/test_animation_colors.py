@@ -79,6 +79,6 @@ class PlayAnimationScaleTests(unittest.TestCase):
 
         self.assertEqual(
             manifest["play"].get("scale", 1.0),
-            1.0,
-            "陪我出场 play 动画 scale 应与交互动画惯例一致（1.0）",
+            1.12,  # 2026-10-07 用户微调轮：玩耍放大
+            "陪我出场 play 动画 scale（用户定稿 1.12）",
         )
