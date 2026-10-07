@@ -279,7 +279,7 @@ class PetWindowBoundaryTests(unittest.TestCase):
                 window.animation_specs["sleep"]["frame_durations_ms"],
                 [312.5] * 16,
             )
-            self.assertEqual(window.animation_specs["sleep"]["scale"], 1.0)
+            self.assertEqual(window.animation_specs["sleep"]["scale"], 1.25)  # 微调轮放大
             self.assertFalse(window.animation_specs["sleep"]["anchor_bottom"])
 
             window.refresh_pet_assets("ice_cream")
