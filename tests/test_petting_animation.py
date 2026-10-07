@@ -102,7 +102,7 @@ class PettingAnimationAssetTests(unittest.TestCase):
         for frame_path in sorted(animation_dir.glob("*.png")):
             with Image.open(frame_path) as frame:
                 between_paws = frame.getchannel("A").crop(
-                    (330, 442, 370, 448)  # 帧组居中后爪位右移；收紧到爪间严格内部避爪缘毛刺
+                    (260, 440, 300, 450)  # 帧组居中后爪位右移；收紧到爪间严格内部避爪缘毛刺
                 ).point(
                     lambda value: 255 if value > 8 else 0
                 )
