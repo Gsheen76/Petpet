@@ -138,7 +138,34 @@
     "loop": false,
     "fallback": "happy",
     "scale": 1.0,
-    "anchor_bottom": true
+    "anchor_bottom": true,
+    "offset_y": -10,
+    "frame_durations_ms": [
+      83.3333,
+      83.3333,
+      83.3333,
+      83.3333,
+      83.3333,
+      83.3333,
+      83.3333,
+      83.3333,
+      83.3333,
+      83.3333,
+      83.3333,
+      83.3333,
+      83.3333,
+      83.3333,
+      83.3333,
+      83.3333,
+      83.3333,
+      83.3333,
+      83.3333,
+      83.3333,
+      83.3333,
+      83.3333,
+      83.3333,
+      83.3333
+    ]
   },
   "happy": {
     "folder": "happy",
@@ -169,7 +196,7 @@
     "fps": 3.2,
     "loop": true,
     "fallback": "sleep",
-    "scale": 1.0,
+    "scale": 1.25,
     "anchor_bottom": false,
     "saturation": 1.0,
     "brightness": 1.0,
@@ -190,7 +217,8 @@
       312.5,
       312.5,
       312.5
-    ]
+    ],
+    "offset_y": 0
   },
   "drag": {
     "folder": "drag",
