@@ -137,7 +137,7 @@
     "fps": 24,
     "loop": false,
     "fallback": "happy",
-    "scale": 1.0,
+    "scale": 1.12,
     "anchor_bottom": true,
     "offset_y": -10,
     "frame_durations_ms": [
@@ -218,7 +218,7 @@
       312.5,
       312.5
     ],
-    "offset_y": 0
+    "offset_y": -17
   },
   "drag": {
     "folder": "drag",
