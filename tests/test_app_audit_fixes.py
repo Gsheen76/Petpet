@@ -96,6 +96,7 @@ class AutoSleepWiringTests(unittest.TestCase):
         return window
 
     def test_on_decay_starts_auto_sleep_when_energy_low(self):
+        # 2026-10-07 用户定稿：删除自动睡觉——低精力不再触发入睡
         window = self._window(sleeping=False, energy=3)
 
         with patch.object(
@@ -103,7 +104,7 @@ class AutoSleepWiringTests(unittest.TestCase):
         ) as begin:
             window.on_decay()
 
-        begin.assert_called_once()
+        begin.assert_not_called()
 
     def test_on_decay_wakes_auto_sleep_when_energy_restored(self):
         window = self._window(sleeping=True, sleep_mode="auto", energy=96)
