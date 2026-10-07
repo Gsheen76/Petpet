@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "job_id": "job_a3fdad43657447c18fb05689c8f0dd83",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\lunch-happy-v8-nuzzle\\A_16-frame_animation_sprite_sheet_arranged_in_a_strict_4x4_grid_on_a_SOLID_PURE_GREEN_background_hex_00FF00_co_93a687c8\\result_images_0_url.png",
+      "mime_type": "image/png"
+    }
+  ]
+}
