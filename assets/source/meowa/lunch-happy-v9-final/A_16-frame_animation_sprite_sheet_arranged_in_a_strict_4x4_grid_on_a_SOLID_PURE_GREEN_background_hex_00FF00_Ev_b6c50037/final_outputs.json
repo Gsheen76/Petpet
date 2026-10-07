@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "job_id": "job_0c484c66f98d4d058bf9dfb442944a1f",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\lunch-happy-v9-final\\A_16-frame_animation_sprite_sheet_arranged_in_a_strict_4x4_grid_on_a_SOLID_PURE_GREEN_background_hex_00FF00_Ev_b6c50037\\result_images_0_url.png",
+      "mime_type": "image/png"
+    }
+  ]
+}
