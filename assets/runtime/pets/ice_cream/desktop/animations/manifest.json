@@ -145,8 +145,8 @@
     "fallback": "drag",
     "scale": 1.0,
     "anchor_bottom": false,
-    "saturation": 1.0,
-    "brightness": 1.0,
+    "saturation": 1.08,
+    "brightness": 1.05,
     "frame_durations_ms": [
       125.0,
       125.0,
