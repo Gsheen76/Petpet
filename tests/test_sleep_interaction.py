@@ -114,6 +114,37 @@ class AutoSleepBehaviorTests(unittest.TestCase):
         self.assertEqual(result, "woke")
         fake._wake_from_auto_sleep.assert_called_once_with()
 
+    def test_manual_sleep_wakes_when_energy_full(self):
+        """2026-10-07 用户定稿：睡觉（含手动）精力满格自己醒来。"""
+        fake = SimpleNamespace(
+            state={"sleeping": True, "sleep_mode": "manual", "energy": 100.0},
+            _auto_sleep_phase="sleeping",
+            _auto_sleep_target_x=None,
+            behavior="idle", target_vx=0, vx=0, vy=0,
+            say=Mock(), play_sound=Mock(),
+            refresh_pose_from_state=Mock(), update=Mock(),
+        )
+        with patch("pet.save_state"):
+            pet.PetWindow._wake_from_auto_sleep(fake)
+        self.assertFalse(fake.state["sleeping"])
+
+    def test_manual_sleep_stays_asleep_below_full_energy(self):
+        fake = SimpleNamespace(
+            state={"sleeping": True, "sleep_mode": "manual", "energy": 99.0},
+            _auto_sleep_phase=None,
+            _auto_sleep_snooze_until=0.0,
+            behavior="idle", target_vx=0, vx=0,
+            say=Mock(), play_sound=Mock(),
+            refresh_pose_from_state=Mock(), update=Mock(),
+            AUTO_SLEEP_ENERGY_THRESHOLD=30.0,
+            auto_sleep_energy_threshold=30.0,
+            auto_wake_energy_threshold=80.0,
+        )
+        with patch("pet.save_state"):
+            result = pet.PetWindow._update_auto_sleep_state(fake)
+        self.assertTrue(fake.state["sleeping"])
+        self.assertEqual(result, "sleeping")
+
     def test_manual_sleep_never_uses_auto_wake(self):
         fake = SimpleNamespace(
             state={
@@ -139,9 +170,10 @@ class AutoSleepBehaviorTests(unittest.TestCase):
 
         self.assertTrue(fake.state["sleeping"])
         self.assertEqual(fake.state["sleep_mode"], "manual")
+        # 2026-10-07 新规格：精力满格（100）自己醒来
         result = pet.PetWindow._update_auto_sleep_state(fake, now=100.0)
-        self.assertEqual(result, "sleeping")
-        fake._wake_from_auto_sleep.assert_not_called()
+        self.assertEqual(result, "woke")
+        fake._wake_from_auto_sleep.assert_called_once()
 
     def test_nearest_bottom_corner_is_selected(self):
         fake = SimpleNamespace(
