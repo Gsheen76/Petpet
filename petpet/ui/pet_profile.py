@@ -1285,7 +1285,10 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
         trigger = getattr(self.pet, "trigger_animation", None)
         if callable(trigger):
             try:
-                trigger("play", 1400)
+                # 2026-10-08 用户定稿：陪我登场播开心动画（拜拜），
+                # 与 set_active_pet 的 play_entrance_animation 同键——
+                # 旧值 ("play", 1400) 会把登场 happy 覆盖成玩耍且截短
+                trigger("happy")
             except RuntimeError:
                 pass
         say = getattr(self.pet, "say", None)

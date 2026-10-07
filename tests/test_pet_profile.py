@@ -679,7 +679,10 @@ class CompanionSwitchFeedbackTests(unittest.TestCase):
         window._accompany_viewed_pet()
 
         pet.trigger_animation.assert_called_once()
-        self.assertEqual(pet.trigger_animation.call_args[0][0], "play")
+        self.assertEqual(
+            pet.trigger_animation.call_args[0][0], "happy",
+            "陪我登场播开心动画（2026-10-08 用户定稿；旧值 play 会覆盖登场 happy）",
+        )
         pet.say.assert_called_once()
         self.assertIn("冰淇淋", pet.say.call_args[0][0])
         pet.play_sound.assert_called_once_with("pet")

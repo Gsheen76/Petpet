@@ -595,3 +595,37 @@ class GiftReactionTests(unittest.TestCase):
         args = window.pet.trigger_animation.call_args[0]
         self.assertEqual(args[0], "happy",
                          "送礼成功应播放开心动画（2026-10-07 新增站立欢呼，用户定稿）")
+
+    def test_companion_switch_triggers_happy_animation(self):
+        """陪我登场播开心动画（2026-10-08 用户定稿）。
+
+        旧值 ("play", 1400) 会把 set_active_pet 的登场 happy
+        覆盖成玩耍且截短——用户实测「陪我登场还是玩耍动画」。
+        """
+        state = progression.ensure_progression({
+            "pets": {"lunch_meat": {}, "ice_cream": {}},
+            "owned_pet_ids": ["lunch_meat", "ice_cream"],
+            "active_pet_id": "lunch_meat",
+        })
+        from petpet.ui import pet_profile as pp
+
+        window = pp.PetProfileWindow.__new__(pp.PetProfileWindow)
+        window._viewing_pet_id = "ice_cream"
+        window.pet = SimpleNamespace(
+            state=state,
+            say=Mock(),
+            trigger_animation=Mock(),
+            set_active_pet=Mock(return_value={"ok": True}),
+            play_sound=Mock(),
+        )
+        window._save_state = Mock()
+        window.refresh = Mock()
+        window._start_idle_animation = Mock()
+        window._active_pet_id = lambda: "lunch_meat"
+
+        window._accompany_viewed_pet()
+
+        window.pet.trigger_animation.assert_called_once()
+        args = window.pet.trigger_animation.call_args[0]
+        self.assertEqual(args[0], "happy",
+                         "陪我切换应播放开心（拜拜登场）动画，不是玩耍")
