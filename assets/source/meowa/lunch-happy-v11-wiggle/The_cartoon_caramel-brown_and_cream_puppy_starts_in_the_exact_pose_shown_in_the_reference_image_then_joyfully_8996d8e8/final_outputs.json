@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "job_id": "job_52cb62ace4af495fbf1a0ca7a34297bb",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\lunch-happy-v11-wiggle\\The_cartoon_caramel-brown_and_cream_puppy_starts_in_the_exact_pose_shown_in_the_reference_image_then_joyfully_8996d8e8\\meowa_animation_background.webp",
+      "mime_type": "image/webp"
+    }
+  ]
+}

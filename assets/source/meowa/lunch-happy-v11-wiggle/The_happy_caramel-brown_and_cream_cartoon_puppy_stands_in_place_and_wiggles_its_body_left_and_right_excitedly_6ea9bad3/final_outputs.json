@@ -1,0 +1,16 @@
+{
+  "status": "success",
+  "job_id": "job_09af61039d7f4d50b269c06fbcdbb368",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\lunch-happy-v11-wiggle\\The_happy_caramel-brown_and_cream_cartoon_puppy_stands_in_place_and_wiggles_its_body_left_and_right_excitedly_6ea9bad3\\meowa_animation.webp",
+      "mime_type": "image/webp"
+    },
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\lunch-happy-v11-wiggle\\The_happy_caramel-brown_and_cream_cartoon_puppy_stands_in_place_and_wiggles_its_body_left_and_right_excitedly_6ea9bad3\\meowa_animation_background.webp",
+      "mime_type": "image/webp"
+    }
+  ]
+}

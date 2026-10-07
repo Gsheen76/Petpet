@@ -1,0 +1,16 @@
+{
+  "status": "success",
+  "job_id": "job_219c3075d2054d02bafb46f684f7c969",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\lunch-happy-v10-frameanim\\The_cute_caramel-brown_and_cream_cartoon_puppy_joyfully_lowers_its_head_toward_the_ground_and_affectionately_r_d4b1d082\\meowa_animation_2.webp",
+      "mime_type": "image/webp"
+    },
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\lunch-happy-v10-frameanim\\The_cute_caramel-brown_and_cream_cartoon_puppy_joyfully_lowers_its_head_toward_the_ground_and_affectionately_r_d4b1d082\\meowa_animation_background_2.webp",
+      "mime_type": "image/webp"
+    }
+  ]
+}
