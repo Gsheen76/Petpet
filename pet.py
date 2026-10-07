@@ -1668,6 +1668,13 @@ class TrayApp:
             self.pet.refresh_pet_assets(pet_id)
         self.pet.place_initial()
         self.pet._capture_desktop_position()
+        # 切宠登场（2026-10-07 用户需求）：播完整动画迎接新伙伴登场
+        entrance = getattr(self.pet, "play_entrance_animation", None)
+        if callable(entrance):
+            try:
+                entrance()
+            except Exception:
+                pass
         save_state(self.state)
 
         home = getattr(self.pet, "home_scene_window", None)

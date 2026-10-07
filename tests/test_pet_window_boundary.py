@@ -272,10 +272,15 @@ class PetWindowBoundaryTests(unittest.TestCase):
         state.update({"x": 100, "y": 100, "tutorial_completed": True})
         window = pet.PetWindow(state)
         try:
-            self.assertEqual(len(window.animation_frames["sleep"]), 12)
-            self.assertEqual(window.animation_specs["sleep"]["fps"], 2.4)
-            self.assertEqual(window.animation_specs["sleep"]["scale"], 0.665)
-            self.assertTrue(window.animation_specs["sleep"]["anchor_bottom"])
+            # 2026-10-07 睡觉重做轮：16 帧 5s 呼吸循环，渲染恒等。
+            # 节奏钉 frame_durations_ms（fps 会被调试参数三层覆盖，非权威）
+            self.assertEqual(len(window.animation_frames["sleep"]), 16)
+            self.assertEqual(
+                window.animation_specs["sleep"]["frame_durations_ms"],
+                [312.5] * 16,
+            )
+            self.assertEqual(window.animation_specs["sleep"]["scale"], 1.0)
+            self.assertFalse(window.animation_specs["sleep"]["anchor_bottom"])
 
             window.refresh_pet_assets("ice_cream")
 
@@ -969,3 +974,47 @@ class FloorCollisionSmoothnessTests(unittest.TestCase):
                 patch.object(pet, "save_state") as save2:
             window.on_tick()           # 静止帧
         save2.assert_called_once()
+
+
+class PetEntranceAnimationTests(unittest.TestCase):
+    """切宠登场播完整动画（2026-10-07 用户需求）。"""
+
+    def _shell(self, available):
+        import pet
+        from petpet.app.pet_window import PetWindow
+
+        window = PetWindow.__new__(PetWindow)
+        window._animation_frame_paths = available
+        window.triggered = []
+        window.trigger_animation = (
+            lambda name, duration_ms=None, finished_callback=None:
+            window.triggered.append(name)
+        )
+        return window
+
+    def test_prefers_happy_when_available(self):
+        window = self._shell({"idle": ["a"], "happy": ["b"], "play": ["c"]})
+        self.assertEqual(window.play_entrance_animation(), "happy")
+        self.assertEqual(window.triggered, ["happy"])
+
+    def test_falls_back_to_play_without_happy(self):
+        window = self._shell({"idle": ["a"], "play": ["c"]})
+        self.assertEqual(window.play_entrance_animation(), "play")
+        self.assertEqual(window.triggered, ["play"])
+
+    def test_returns_none_without_either(self):
+        window = self._shell({"idle": ["a"]})
+        self.assertIsNone(window.play_entrance_animation())
+        self.assertEqual(window.triggered, [])
+
+    def test_shell_without_paths_is_safe(self):
+        import pet
+        from petpet.app.pet_window import PetWindow
+
+        window = PetWindow.__new__(PetWindow)
+        window.triggered = []
+        window.trigger_animation = (
+            lambda name, duration_ms=None, finished_callback=None:
+            window.triggered.append(name)
+        )
+        self.assertIsNone(window.play_entrance_animation())

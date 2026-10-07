@@ -166,18 +166,40 @@
   },
   "sleep": {
     "folder": "sleep",
-    "fps": 2.4,
+    "fps": 3.2,
     "loop": true,
     "fallback": "sleep",
-    "scale": 0.665,
-    "anchor_bottom": true
+    "scale": 1.0,
+    "anchor_bottom": false,
+    "saturation": 1.0,
+    "brightness": 1.0,
+    "frame_durations_ms": [
+      312.5,
+      312.5,
+      312.5,
+      312.5,
+      312.5,
+      312.5,
+      312.5,
+      312.5,
+      312.5,
+      312.5,
+      312.5,
+      312.5,
+      312.5,
+      312.5,
+      312.5,
+      312.5
+    ]
   },
   "drag": {
     "folder": "drag",
     "fps": 8,
     "loop": true,
     "fallback": "drag",
-    "scale": 0.95
+    "scale": 0.95,
+    "saturation": 1.06,
+    "brightness": 1.05
   },
   "sad": {
     "folder": "sad",

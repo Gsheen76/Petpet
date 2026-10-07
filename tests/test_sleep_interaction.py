@@ -44,11 +44,12 @@ class SleepAnimationAssetTests(unittest.TestCase):
         )
         frames = sorted((animation_dir / "sleep").glob("*.png"))
 
-        self.assertEqual(len(frames), 12)
-        self.assertEqual(manifest["sleep"]["fps"], 2.4)
+        # 2026-10-07 睡觉重做轮：16 帧 5s 呼吸循环，渲染恒等（狗锚定导入）
+        self.assertEqual(len(frames), 16)
+        self.assertEqual(manifest["sleep"]["fps"], 3.2)
         self.assertTrue(manifest["sleep"]["loop"])
-        self.assertEqual(manifest["sleep"]["scale"], 0.665)
-        self.assertTrue(manifest["sleep"]["anchor_bottom"])
+        self.assertEqual(manifest["sleep"]["scale"], 1.0)
+        self.assertFalse(manifest["sleep"]["anchor_bottom"])
 
 
 class AutoSleepBehaviorTests(unittest.TestCase):

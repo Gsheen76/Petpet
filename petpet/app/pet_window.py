@@ -559,6 +559,23 @@ class PetWindow(QWidget):
         if hasattr(self, "update"):
             self.update()
 
+    def play_entrance_animation(self):
+        """切宠登场（2026-10-07 用户需求）：播一整段动画迎接登场。
+
+        happy 优先；无 happy 动画的宠物回落 play（两只都有）。trigger_
+        animation 默认时长=完整一个循环，播完自动回 idle——"完整动画"
+        即此。失败静默（登场彩蛋不拖垮切换主流程）。
+        """
+        paths = self.__dict__.get("_animation_frame_paths") or {}
+        for name in ("happy", "play"):
+            if name in paths:
+                try:
+                    self.trigger_animation(name)
+                except Exception:
+                    return None
+                return name
+        return None
+
     def set_active_pet(self, pet_id):
         """Forward active-pet switching to the application transaction."""
         callback = getattr(self, "_set_active_pet_callback", None)
