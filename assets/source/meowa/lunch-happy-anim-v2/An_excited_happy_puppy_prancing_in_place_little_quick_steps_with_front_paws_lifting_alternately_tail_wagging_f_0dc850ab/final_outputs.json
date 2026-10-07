@@ -1,0 +1,21 @@
+{
+  "status": "success",
+  "job_id": "job_db2df23e688b466eadd85d6097e05efd",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\lunch-happy-anim-v2\\An_excited_happy_puppy_prancing_in_place_little_quick_steps_with_front_paws_lifting_alternately_tail_wagging_f_0dc850ab\\result_output_url.bin",
+      "mime_type": "image/webp"
+    },
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\lunch-happy-anim-v2\\An_excited_happy_puppy_prancing_in_place_little_quick_steps_with_front_paws_lifting_alternately_tail_wagging_f_0dc850ab\\result_output_transparent_output_urls_gif.gif",
+      "mime_type": "image/gif"
+    },
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\lunch-happy-anim-v2\\An_excited_happy_puppy_prancing_in_place_little_quick_steps_with_front_paws_lifting_alternately_tail_wagging_f_0dc850ab\\result_output_transparent_output_urls_png.png",
+      "mime_type": "image/png"
+    }
+  ]
+}
