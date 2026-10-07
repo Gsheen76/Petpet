@@ -1676,12 +1676,13 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
             self._play_gift_hearts()
             # 送礼反应（2026-09-15；同日修正）：只在送给出勤宠物时
             # 播放——桌面那只就是收礼的它；送给未出勤宠物时屏幕上
-            # 不是它，不该由出勤宠替演。
+            # 不是它，不该由出勤宠替演。2026-10-07：改播 happy
+            # （新增站立欢呼动画，用户定稿登场/送礼/每日领取共用）。
             if self._view_pet_id() == self._active_pet_id():
                 trigger = getattr(self.pet, "trigger_animation", None)
                 if callable(trigger):
                     try:
-                        trigger("play")
+                        trigger("happy")
                     except RuntimeError:
                         pass
         if callable(say) and message and (

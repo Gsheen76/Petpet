@@ -1,0 +1,21 @@
+{
+  "status": "success",
+  "job_id": "job_4d314070dc8b48339d63c1575ac63ba7",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\lunch-happy-anim\\The_puppy_stands_upright_on_its_hind_legs_cheering_happily_both_raised_front_paws_wave_up_and_down_excitedly_l_cf4078e3\\result_output_url.bin",
+      "mime_type": "image/webp"
+    },
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\lunch-happy-anim\\The_puppy_stands_upright_on_its_hind_legs_cheering_happily_both_raised_front_paws_wave_up_and_down_excitedly_l_cf4078e3\\result_output_transparent_output_urls_gif.gif",
+      "mime_type": "image/gif"
+    },
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\lunch-happy-anim\\The_puppy_stands_upright_on_its_hind_legs_cheering_happily_both_raised_front_paws_wave_up_and_down_excitedly_l_cf4078e3\\result_output_transparent_output_urls_png.png",
+      "mime_type": "image/png"
+    }
+  ]
+}

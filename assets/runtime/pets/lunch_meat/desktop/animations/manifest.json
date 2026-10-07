@@ -169,9 +169,31 @@
   },
   "happy": {
     "folder": "happy",
-    "fps": 15,
+    "fps": 9,
     "loop": true,
-    "fallback": "happy"
+    "fallback": "happy",
+    "scale": 1.0,
+    "anchor_bottom": false,
+    "saturation": 1.0,
+    "brightness": 1.0,
+    "frame_durations_ms": [
+      110.0,
+      110.0,
+      110.0,
+      110.0,
+      110.0,
+      110.0,
+      110.0,
+      110.0,
+      110.0,
+      110.0,
+      110.0,
+      110.0,
+      110.0,
+      110.0,
+      110.0,
+      110.0
+    ]
   },
   "pet": {
     "folder": "pet",

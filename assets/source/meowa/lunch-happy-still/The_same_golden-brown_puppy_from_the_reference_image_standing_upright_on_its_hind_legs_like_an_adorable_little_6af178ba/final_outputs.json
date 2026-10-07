@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "job_id": "job_168d40c6d0c04a0985557edceb1e574e",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\lunch-happy-still\\The_same_golden-brown_puppy_from_the_reference_image_standing_upright_on_its_hind_legs_like_an_adorable_little_6af178ba\\result_images_0_url.png",
+      "mime_type": "image/png"
+    }
+  ]
+}
