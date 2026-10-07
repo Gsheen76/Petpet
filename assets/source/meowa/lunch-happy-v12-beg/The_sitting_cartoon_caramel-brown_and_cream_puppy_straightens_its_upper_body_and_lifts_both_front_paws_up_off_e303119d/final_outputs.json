@@ -1,0 +1,16 @@
+{
+  "status": "success",
+  "job_id": "job_fa87afeb0b644e8abc12c5bf7a335eee",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\lunch-happy-v12-beg\\The_sitting_cartoon_caramel-brown_and_cream_puppy_straightens_its_upper_body_and_lifts_both_front_paws_up_off_e303119d\\meowa_animation.webp",
+      "mime_type": "image/webp"
+    },
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\lunch-happy-v12-beg\\The_sitting_cartoon_caramel-brown_and_cream_puppy_straightens_its_upper_body_and_lifts_both_front_paws_up_off_e303119d\\meowa_animation_background.webp",
+      "mime_type": "image/webp"
+    }
+  ]
+}
