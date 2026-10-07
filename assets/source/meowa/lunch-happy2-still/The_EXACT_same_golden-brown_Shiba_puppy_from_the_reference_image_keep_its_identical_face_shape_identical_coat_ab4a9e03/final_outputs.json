@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "job_id": "job_cdcf014d89e44d60acba59ef6970536f",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\lunch-happy2-still\\The_EXACT_same_golden-brown_Shiba_puppy_from_the_reference_image_keep_its_identical_face_shape_identical_coat_ab4a9e03\\result_images_0_url.png",
+      "mime_type": "image/png"
+    }
+  ]
+}
