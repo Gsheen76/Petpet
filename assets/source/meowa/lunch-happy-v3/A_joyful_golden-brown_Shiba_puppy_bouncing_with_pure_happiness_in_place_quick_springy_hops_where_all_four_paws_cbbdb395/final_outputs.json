@@ -1,0 +1,21 @@
+{
+  "status": "success",
+  "job_id": "job_d5b8aa8dd2e34c90a47a1a98433e2482",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\lunch-happy-v3\\A_joyful_golden-brown_Shiba_puppy_bouncing_with_pure_happiness_in_place_quick_springy_hops_where_all_four_paws_cbbdb395\\result_output_url.bin",
+      "mime_type": "image/webp"
+    },
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\lunch-happy-v3\\A_joyful_golden-brown_Shiba_puppy_bouncing_with_pure_happiness_in_place_quick_springy_hops_where_all_four_paws_cbbdb395\\result_output_transparent_output_urls_gif.gif",
+      "mime_type": "image/gif"
+    },
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\lunch-happy-v3\\A_joyful_golden-brown_Shiba_puppy_bouncing_with_pure_happiness_in_place_quick_springy_hops_where_all_four_paws_cbbdb395\\result_output_transparent_output_urls_png.png",
+      "mime_type": "image/png"
+    }
+  ]
+}
