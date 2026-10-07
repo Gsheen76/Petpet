@@ -48,7 +48,7 @@ class SleepAnimationAssetTests(unittest.TestCase):
         self.assertEqual(len(frames), 16)
         self.assertEqual(manifest["sleep"]["fps"], 3.2)
         self.assertTrue(manifest["sleep"]["loop"])
-        self.assertEqual(manifest["sleep"]["scale"], 1.0)
+        self.assertEqual(manifest["sleep"]["scale"], 1.25)  # 2026-10-07 微调轮：放大 25% 与待机协调
         self.assertFalse(manifest["sleep"]["anchor_bottom"])
 
 

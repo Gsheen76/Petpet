@@ -121,7 +121,7 @@ class PettingAnimationAssetTests(unittest.TestCase):
             {name: manifest[name]["scale"] for name in (
                 "pet", "eat", "dig_reward", "sleep"
             )},
-            {"pet": 1.0, "eat": 1.0, "dig_reward": 1.0, "sleep": 1.0},
+            {"pet": 1.0, "eat": 1.0, "dig_reward": 1.0, "sleep": 1.25},
         )
 
     def test_ice_cream_sleep_animation_is_gently_larger_than_original(self):
