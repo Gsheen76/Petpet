@@ -16,20 +16,16 @@ class PettingAnimationAssetTests(unittest.TestCase):
         )
         frames = sorted((animation_dir / "outfits" / "dinosaur" / "idle").glob("*.png"))
 
-        self.assertEqual(len(frames), 16)
+        self.assertEqual(len(frames), 24)
         self.assertEqual(manifest["idle_dinosaur"]["fps"], 8)
-        self.assertEqual(
-            manifest["idle_dinosaur"]["frame_sequence"],
-            list(range(1, 17)) + list(range(7, 12)),
-        )
+        self.assertNotIn("frame_sequence", manifest["idle_dinosaur"])
         self.assertEqual(
             manifest["idle_dinosaur"]["frame_durations_ms"],
-            [160.0, 160.0, 40.0, 40.0, 40.0]
-            + [160.0] * 11,
+            [125.0] * 24,
         )
         self.assertAlmostEqual(
             sum(manifest["idle_dinosaur"]["frame_durations_ms"]),
-            2200.0,
+            3000.0,
             places=3,
         )
 
