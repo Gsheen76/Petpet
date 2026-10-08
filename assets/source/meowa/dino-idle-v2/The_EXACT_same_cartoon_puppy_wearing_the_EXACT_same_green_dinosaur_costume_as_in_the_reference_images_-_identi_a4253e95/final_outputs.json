@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "job_id": "job_3d7e68cbfae54d01b1de408c408fb005",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\dino-idle-v2\\The_EXACT_same_cartoon_puppy_wearing_the_EXACT_same_green_dinosaur_costume_as_in_the_reference_images_-_identi_a4253e95\\result_images_0_url.png",
+      "mime_type": "image/png"
+    }
+  ]
+}

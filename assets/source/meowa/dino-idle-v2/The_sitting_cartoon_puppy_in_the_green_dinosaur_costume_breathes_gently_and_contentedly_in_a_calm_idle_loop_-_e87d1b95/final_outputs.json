@@ -1,0 +1,16 @@
+{
+  "status": "success",
+  "job_id": "job_53a3ce0c760043348de28b0dcabae22d",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\dino-idle-v2\\The_sitting_cartoon_puppy_in_the_green_dinosaur_costume_breathes_gently_and_contentedly_in_a_calm_idle_loop_-_e87d1b95\\meowa_animation.webp",
+      "mime_type": "image/webp"
+    },
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\dino-idle-v2\\The_sitting_cartoon_puppy_in_the_green_dinosaur_costume_breathes_gently_and_contentedly_in_a_calm_idle_loop_-_e87d1b95\\meowa_animation_background.webp",
+      "mime_type": "image/webp"
+    }
+  ]
+}
