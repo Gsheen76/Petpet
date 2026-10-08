@@ -10,26 +10,23 @@ import pet
 
 class PettingAnimationAssetTests(unittest.TestCase):
     def test_dinosaur_outfit_has_a_sixteen_frame_idle_sequence(self):
+        """恐龙待机 2026-10-08 重做：旧 16 帧歪头版 → 新 24 帧头正呼吸版。"""
         animation_dir = Path(pet.ANIMATIONS_DIR)
         manifest = json.loads(
             (animation_dir / "manifest.json").read_text(encoding="utf-8")
         )
         frames = sorted((animation_dir / "outfits" / "dinosaur" / "idle").glob("*.png"))
 
-        self.assertEqual(len(frames), 16)
+        self.assertEqual(len(frames), 24)
         self.assertEqual(manifest["idle_dinosaur"]["fps"], 8)
-        self.assertEqual(
-            manifest["idle_dinosaur"]["frame_sequence"],
-            list(range(1, 17)) + list(range(7, 12)),
-        )
+        self.assertNotIn("frame_sequence", manifest["idle_dinosaur"])
         self.assertEqual(
             manifest["idle_dinosaur"]["frame_durations_ms"],
-            [160.0, 160.0, 40.0, 40.0, 40.0]
-            + [160.0] * 11,
+            [125.0] * 24,
         )
         self.assertAlmostEqual(
             sum(manifest["idle_dinosaur"]["frame_durations_ms"]),
-            2200.0,
+            3000.0,
             places=3,
         )
 
