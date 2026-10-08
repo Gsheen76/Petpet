@@ -1,0 +1,16 @@
+{
+  "status": "success",
+  "job_id": "job_87ad8b86cf7c47ed9279eabb0f8a7275",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\lunch-happy-v14-earbounce\\The_sitting_cartoon_caramel-brown_and_cream_puppy_stays_in_one_perfectly_statue-still_pose_for_the_whole_anima_5dc81589\\meowa_animation.webp",
+      "mime_type": "image/webp"
+    },
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\lunch-happy-v14-earbounce\\The_sitting_cartoon_caramel-brown_and_cream_puppy_stays_in_one_perfectly_statue-still_pose_for_the_whole_anima_5dc81589\\meowa_animation_background.webp",
+      "mime_type": "image/webp"
+    }
+  ]
+}
