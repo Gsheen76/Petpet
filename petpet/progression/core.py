@@ -246,6 +246,15 @@ OUTFIT_DEFINITIONS = {
         "animation": "idle_dinosaur",
         "drag_animation": "drag_dinosaur",
         "home_walk_action": "walk_right_dinosaur",
+        # 2026-10-09 套装全动作：互动动画的装备感知变体（缺失键回落素狗动画）
+        "action_animations": {
+            "pet": "pet_dinosaur",
+            "eat": "eat_dinosaur",
+            "play": "play_dinosaur",
+            "dig_reward": "dig_dinosaur",
+            "happy": "happy_dinosaur",
+            "sleep": "sleep_dinosaur",
+        },
         "description": "绿色小恐龙连体套装，装备后直接替换小狗的待机动画。",
         "pet_id": "lunch_meat",
     },
@@ -1467,6 +1476,19 @@ def equipped_outfit_drag_animation(state):
     outfit_id = equipped_outfit(state)
     definition = OUTFIT_DEFINITIONS.get(outfit_id)
     return definition.get("drag_animation") if definition else None
+
+
+def equipped_outfit_action_animation(state, action):
+    """互动动画的装备感知变体（2026-10-09 套装全动作）。
+
+    返回装备套装对应动作的变体名；无套装/该套装未定义该动作时返回
+    None（回落素狗动画）。
+    """
+    outfit_id = equipped_outfit(state)
+    definition = OUTFIT_DEFINITIONS.get(outfit_id)
+    if not definition:
+        return None
+    return (definition.get("action_animations") or {}).get(action)
 
 
 def purchase_outfit(state, outfit_id):

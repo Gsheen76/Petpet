@@ -1410,6 +1410,14 @@ class PetWindow(QWidget):
         drag_variant = progression.equipped_outfit_drag_animation(self.state)
         if drag_variant and drag_variant in self._animation_frame_paths:
             self._persistent_animation_names.add(drag_variant)
+        # 套装互动变体（2026-10-09 全动作）同样预载，摸摸/吃饭/玩耍
+        # 首次触发不等解码。
+        equipped_outfit = progression.equipped_outfit(self.state)
+        if equipped_outfit:
+            definition = progression.OUTFIT_DEFINITIONS.get(equipped_outfit) or {}
+            for variant in (definition.get("action_animations") or {}).values():
+                if variant in self._animation_frame_paths:
+                    self._persistent_animation_names.add(variant)
         for animation_name in self._persistent_animation_names:
             self._ensure_animation_loaded(animation_name)
 
@@ -1654,6 +1662,9 @@ class PetWindow(QWidget):
         self, name, duration_ms=None, finished_callback=None
     ):
         """Temporarily override state animation, optionally for one full run."""
+        variant = self._outfit_action_variant(name)
+        if variant:
+            name = variant
         if duration_ms is None:
             duration_ms = self._animation_duration_ms(name)
         self._animation_override_token += 1
@@ -1674,10 +1685,29 @@ class PetWindow(QWidget):
         QTimer.singleShot(max(1, int(duration_ms)), finish)
         self.update()
 
+    def _outfit_action_variant(self, action):
+        """装备套装的互动动画变体（2026-10-09 套装全动作）。
+
+        仅当变体的帧资源存在时返回变体名，否则 None（回落素狗动画）——
+        帧缺失时静默降级，与 idle 装备路由同一语义。
+        """
+        variant = progression.equipped_outfit_action_animation(
+            self.state, action
+        )
+        if not variant:
+            return None
+        if variant in self.__dict__.get("animation_frames", {}) or (
+                variant in self.__dict__.get("_animation_frame_paths", {})):
+            return variant
+        return None
+
     def _current_animation_name(self):
         if self._animation_override:
             return self._animation_override
         if self.state.get("sleeping"):
+            sleep_variant = self._outfit_action_variant("sleep")
+            if sleep_variant:
+                return sleep_variant
             return "sleep"
         if self.dragging:
             drag_variant = (

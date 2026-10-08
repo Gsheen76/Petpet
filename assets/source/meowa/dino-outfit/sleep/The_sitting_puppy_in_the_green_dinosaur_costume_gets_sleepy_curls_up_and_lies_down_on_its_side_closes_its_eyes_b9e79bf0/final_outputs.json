@@ -1,0 +1,16 @@
+{
+  "status": "success",
+  "job_id": "job_a4d3ad316387415c9769950bf671da16",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "D:\\Agent_project\\Petpet\\assets\\source\\meowa\\dino-outfit\\sleep\\The_sitting_puppy_in_the_green_dinosaur_costume_gets_sleepy_curls_up_and_lies_down_on_its_side_closes_its_eyes_b9e79bf0\\meowa_animation.webp",
+      "mime_type": "image/webp"
+    },
+    {
+      "type": "media",
+      "path": "D:\\Agent_project\\Petpet\\assets\\source\\meowa\\dino-outfit\\sleep\\The_sitting_puppy_in_the_green_dinosaur_costume_gets_sleepy_curls_up_and_lies_down_on_its_side_closes_its_eyes_b9e79bf0\\meowa_animation_background.webp",
+      "mime_type": "image/webp"
+    }
+  ]
+}

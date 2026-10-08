@@ -1,0 +1,16 @@
+{
+  "status": "success",
+  "job_id": "job_352dfd9aef46422890910a40fa854d20",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "D:\\Agent_project\\Petpet\\assets\\source\\meowa\\dino-outfit\\play\\The_sitting_puppy_in_the_green_dinosaur_costume_plays_joyfully_in_place_it_makes_small_energetic_happy_bounces_7329f00d\\meowa_animation.webp",
+      "mime_type": "image/webp"
+    },
+    {
+      "type": "media",
+      "path": "D:\\Agent_project\\Petpet\\assets\\source\\meowa\\dino-outfit\\play\\The_sitting_puppy_in_the_green_dinosaur_costume_plays_joyfully_in_place_it_makes_small_energetic_happy_bounces_7329f00d\\meowa_animation_background.webp",
+      "mime_type": "image/webp"
+    }
+  ]
+}

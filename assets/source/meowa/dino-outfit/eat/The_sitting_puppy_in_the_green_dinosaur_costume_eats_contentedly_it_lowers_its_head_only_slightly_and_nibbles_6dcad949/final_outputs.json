@@ -1,0 +1,16 @@
+{
+  "status": "success",
+  "job_id": "job_7468e5754f4c45ffae8d270f9266a4ca",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "D:\\Agent_project\\Petpet\\assets\\source\\meowa\\dino-outfit\\eat\\The_sitting_puppy_in_the_green_dinosaur_costume_eats_contentedly_it_lowers_its_head_only_slightly_and_nibbles_6dcad949\\meowa_animation.webp",
+      "mime_type": "image/webp"
+    },
+    {
+      "type": "media",
+      "path": "D:\\Agent_project\\Petpet\\assets\\source\\meowa\\dino-outfit\\eat\\The_sitting_puppy_in_the_green_dinosaur_costume_eats_contentedly_it_lowers_its_head_only_slightly_and_nibbles_6dcad949\\meowa_animation_background.webp",
+      "mime_type": "image/webp"
+    }
+  ]
+}

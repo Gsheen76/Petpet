@@ -1,0 +1,16 @@
+{
+  "status": "success",
+  "job_id": "job_60083444fbdc46b7a241ed6e346f0ae9",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "D:\\Agent_project\\Petpet\\assets\\source\\meowa\\dino-outfit\\dig\\The_sitting_puppy_in_the_green_dinosaur_costume_just_discovered_a_buried_treasure_and_celebrates_with_pure_joy_e9711fee\\meowa_animation.webp",
+      "mime_type": "image/webp"
+    },
+    {
+      "type": "media",
+      "path": "D:\\Agent_project\\Petpet\\assets\\source\\meowa\\dino-outfit\\dig\\The_sitting_puppy_in_the_green_dinosaur_costume_just_discovered_a_buried_treasure_and_celebrates_with_pure_joy_e9711fee\\meowa_animation_background.webp",
+      "mime_type": "image/webp"
+    }
+  ]
+}

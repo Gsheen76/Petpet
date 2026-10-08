@@ -1,0 +1,16 @@
+{
+  "status": "success",
+  "job_id": "job_26717d0b374f42d9b48eb3e698752952",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "D:\\Agent_project\\Petpet\\assets\\source\\meowa\\dino-outfit\\happy\\The_sitting_puppy_in_the_green_dinosaur_costume_tilts_its_head_to_one_side_in_curious_delight_one_ear_flopping_ce02d570\\meowa_animation.webp",
+      "mime_type": "image/webp"
+    },
+    {
+      "type": "media",
+      "path": "D:\\Agent_project\\Petpet\\assets\\source\\meowa\\dino-outfit\\happy\\The_sitting_puppy_in_the_green_dinosaur_costume_tilts_its_head_to_one_side_in_curious_delight_one_ear_flopping_ce02d570\\meowa_animation_background.webp",
+      "mime_type": "image/webp"
+    }
+  ]
+}
