@@ -11,6 +11,7 @@ from PyQt5.QtWidgets import (
     QFrame,
     QGridLayout,
     QHBoxLayout,
+    QComboBox,
     QLabel,
     QPushButton,
     QScrollArea,
@@ -218,7 +219,7 @@ class ParameterTunerWindow(QWidget):
         root.addLayout(footer)
 
     def _build_preview_section(self):
-        """动画预览分组：一排按钮点击即播，仅当前宠物实际拥有的可点。"""
+        """动画预览分组：宠物+套装选择器，一排按钮点击即播，实际拥有的可点。"""
         group = QFrame()
         group.setObjectName("tunerGroup")
         layout = QVBoxLayout(group)
@@ -227,37 +228,167 @@ class ParameterTunerWindow(QWidget):
         title = QLabel("🎬 动画预览")
         title.setObjectName("tunerGroupTitle")
         layout.addWidget(title)
-        hint = QLabel("点击播放当前宠物的动画，播完自动回到原状态；灰键=这只宠物还没有的动画")
+        hint = QLabel("选角色和套装后点按钮预览对应动作；播完自动回到原状态；灰键=该角色/套装还没有的动画")
         hint.setObjectName("tunerHint")
         layout.addWidget(hint)
-        grid = QGridLayout()
-        grid.setSpacing(8)
+
+        selector_row = QHBoxLayout()
+        selector_row.setSpacing(10)
+        pet_label = QLabel("角色")
+        pet_label.setObjectName("tunerLabel")
+        selector_row.addWidget(pet_label)
+        self.pet_combo = QComboBox()
+        self.pet_combo.setObjectName("tunerCombo")
+        self.pet_combo.setMinimumWidth(170)
+        self.pet_combo.currentIndexChanged.connect(self._pet_selected)
+        selector_row.addWidget(self.pet_combo)
+        selector_row.addSpacing(12)
+        outfit_label = QLabel("套装")
+        outfit_label.setObjectName("tunerLabel")
+        selector_row.addWidget(outfit_label)
+        self.outfit_combo = QComboBox()
+        self.outfit_combo.setObjectName("tunerCombo")
+        self.outfit_combo.setMinimumWidth(190)
+        self.outfit_combo.currentIndexChanged.connect(self._outfit_selected)
+        selector_row.addWidget(self.outfit_combo)
+        selector_row.addStretch(1)
+        layout.addLayout(selector_row)
+
+        self.preview_grid_host = QWidget()
+        self.preview_grid_layout = QGridLayout(self.preview_grid_host)
+        self.preview_grid_layout.setContentsMargins(0, 0, 0, 0)
+        self.preview_grid_layout.setSpacing(8)
+        layout.addWidget(self.preview_grid_host)
+        self._populate_pet_combo()
+        return group
+
+    # ---- 宠物/套装选择（2026-10-09 用户需求：调参器可直接选角色套装预览）----
+
+    def _populate_pet_combo(self):
+        from petpet.app.pets import pet_definition
+        self._syncing = True
+        self.pet_combo.blockSignals(True)
+        self.pet_combo.clear()
+        active = self._pet_state().get("active_pet_id") or "lunch_meat"
+        pets = list(self._pet_state().get("pets", {}).keys()) or [active]
+        for pet_id in pets:
+            name = (pet_definition(pet_id) or {}).get("default_name", pet_id)
+            self.pet_combo.addItem(name, pet_id)
+        index = max(0, self.pet_combo.findData(active))
+        self.pet_combo.setCurrentIndex(index)
+        self.pet_combo.blockSignals(False)
+        self._syncing = False
+        self._populate_outfit_combo()
+
+    def _populate_outfit_combo(self):
+        from petpet.progression import core as progression
+        self._syncing = True
+        self.outfit_combo.blockSignals(True)
+        self.outfit_combo.clear()
+        active = self._pet_state().get("active_pet_id") or "lunch_meat"
+        equipped = self._pet_state().get("equipped_outfit")
+        self.outfit_combo.addItem("不穿套装", None)
+        for outfit_id, definition in progression.OUTFIT_DEFINITIONS.items():
+            if definition.get("pet_id") != active:
+                continue
+            owned = progression.outfit_owned(self._pet_state(), outfit_id)
+            suffix = "" if owned else "（未购买）"
+            self.outfit_combo.addItem(definition.get("name", outfit_id) + suffix, outfit_id)
+        index = 0
+        if equipped:
+            found = self.outfit_combo.findData(equipped)
+            index = max(0, found)
+        self.outfit_combo.setCurrentIndex(index)
+        self.outfit_combo.blockSignals(False)
+        self._syncing = False
+        self._rebuild_preview_grid()
+
+    def _pet_selected(self, index):
+        if self._syncing:
+            return
+        pet_id = self.pet_combo.itemData(index)
+        if not pet_id or pet_id == self._pet_state().get("active_pet_id"):
+            return
+        self.pet.set_active_pet(pet_id)
+        self.status.setText(f"已切换到「{self.pet_combo.currentText()}」")
+        self._populate_outfit_combo()
+
+    def _outfit_selected(self, index):
+        if self._syncing:
+            return
+        from petpet.progression import core as progression
+        outfit_id = self.outfit_combo.itemData(index)
+        equipped = self._pet_state().get("equipped_outfit")
+        if outfit_id == equipped:
+            return
+        if outfit_id is None:
+            result = progression.unequip_outfit(self.pet.state)
+        else:
+            result = progression.equip_outfit(self.pet.state, outfit_id)
+        message = result.get("message", "")
+        if result.get("ok"):
+            import pet
+            pet.save_state(self.pet.state)
+            self.pet.update()
+            home = getattr(self.pet, "home_scene_window", None)
+            refresh_home = getattr(home, "refresh_pet_assets", None)
+            if callable(refresh_home):
+                refresh_home()
+        self.status.setText(message or "套装状态已更新")
+        self._rebuild_preview_grid()
+
+    def _pet_state(self):
+        return getattr(self.pet, "state", None) or {}
+
+    def _preview_key_list(self):
+        """当前角色+套装下的预览键表：素体动作 + 装备变体动作。"""
+        from petpet.progression import core as progression
+        entries = list(ANIMATION_PREVIEW_KEYS)
+        outfit_id = self._pet_state().get("equipped_outfit")
+        definition = progression.OUTFIT_DEFINITIONS.get(outfit_id) if outfit_id else None
+        if definition:
+            short = (definition.get("name") or outfit_id).replace("套装", "")
+            base_labels = dict(ANIMATION_PREVIEW_KEYS)
+            variants = []
+            idle_variant = definition.get("animation")
+            if idle_variant:
+                variants.append((idle_variant, f"待机·{short}"))
+            for action, variant in (definition.get("action_animations") or {}).items():
+                variants.append((variant, f"{base_labels.get(action, action)}·{short}"))
+            drag_variant = definition.get("drag_animation")
+            if drag_variant:
+                variants.append((drag_variant, f"抓起·{short}"))
+            entries.extend(variants)
+        return entries
+
+    def _rebuild_preview_grid(self):
+        layout = self.preview_grid_layout
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
         self.preview_buttons = {}
-        for index, (key, label) in enumerate(ANIMATION_PREVIEW_KEYS):
+        available = getattr(self.pet, "_animation_frame_paths", {}) or {}
+        for index, (key, label) in enumerate(self._preview_key_list()):
             button = QPushButton(label)
             button.setObjectName("tunerPreview")
             button.setMinimumHeight(42)
             button.setCursor(Qt.PointingHandCursor)
+            has = key in available
+            button.setEnabled(has)
+            button.setToolTip(
+                f"播放「{label}」动画" if has else f"该角色/套装没有「{label}」动画"
+            )
             button.clicked.connect(
                 lambda _checked=False, selected=key, name=label:
                 self._preview_clicked(selected, name)
             )
-            grid.addWidget(button, index // 4, index % 4)
+            layout.addWidget(button, index // 4, index % 4)
             self.preview_buttons[key] = button
-        layout.addLayout(grid)
-        self.refresh_preview_buttons()
-        return group
 
     def refresh_preview_buttons(self):
-        available = getattr(self.pet, "_animation_frame_paths", {}) or {}
-        labels = dict(ANIMATION_PREVIEW_KEYS)
-        for key, button in self.preview_buttons.items():
-            has = key in available
-            button.setEnabled(has)
-            button.setToolTip(
-                f"播放「{labels[key]}」动画"
-                if has else f"当前宠物没有「{labels[key]}」动画"
-            )
+        self._rebuild_preview_grid()
 
     def _preview_clicked(self, key, label):
         played = self.pet.play_debug_animation(key)
@@ -281,6 +412,13 @@ class ParameterTunerWindow(QWidget):
                 padding-bottom:4px; }
             QLabel#tunerLabel { color:#624d43; font-size:18px; font-weight:700; }
             QLabel#tunerHint { color:#ad9487; font-size:15px; }
+            QComboBox#tunerCombo { background:#fffdfa; color:#624d43;
+                border:1px solid #ead8cc; border-radius:11px; padding:8px 12px;
+                font-size:17px; font-weight:700; }
+            QComboBox#tunerCombo::drop-down { border:none; width:28px; }
+            QComboBox#tunerCombo QAbstractItemView { background:#fffdfa;
+                color:#624d43; selection-background-color:#f6ddd3;
+                selection-color:#704b3d; border:1px solid #ead8cc; }
             QLabel#tunerFeedback { color:#9a7563; font-size:15px; padding:2px 0; }
             QDoubleSpinBox { background:#fff; color:#5d493f; border:1px solid #decabd;
                 border-radius:9px; padding:7px 9px; min-width:124px; min-height:38px;
