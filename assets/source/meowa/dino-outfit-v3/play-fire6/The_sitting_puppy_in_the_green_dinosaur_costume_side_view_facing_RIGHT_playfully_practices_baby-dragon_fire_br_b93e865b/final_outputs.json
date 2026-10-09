@@ -1,0 +1,16 @@
+{
+  "status": "success",
+  "job_id": "job_b82e34f864014af49d6b3b08352fadec",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\dino-outfit-v3\\play-fire6\\The_sitting_puppy_in_the_green_dinosaur_costume_side_view_facing_RIGHT_playfully_practices_baby-dragon_fire_br_b93e865b\\meowa_animation.webp",
+      "mime_type": "image/webp"
+    },
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\dino-outfit-v3\\play-fire6\\The_sitting_puppy_in_the_green_dinosaur_costume_side_view_facing_RIGHT_playfully_practices_baby-dragon_fire_br_b93e865b\\meowa_animation_background.webp",
+      "mime_type": "image/webp"
+    }
+  ]
+}
