@@ -1,0 +1,16 @@
+{
+  "status": "success",
+  "job_id": "job_be084255d60b4fefbcaecfea51d47304",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\dino-idle-v3\\The_sitting_puppy_in_the_green_dinosaur_costume_stays_in_one_perfectly_statue-still_pose_for_the_whole_animati_66b83b5d\\meowa_animation.webp",
+      "mime_type": "image/webp"
+    },
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\dino-idle-v3\\The_sitting_puppy_in_the_green_dinosaur_costume_stays_in_one_perfectly_statue-still_pose_for_the_whole_animati_66b83b5d\\meowa_animation_background.webp",
+      "mime_type": "image/webp"
+    }
+  ]
+}
