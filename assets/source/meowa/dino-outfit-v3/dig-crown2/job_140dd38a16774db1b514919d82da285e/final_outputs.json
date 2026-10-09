@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "job_id": "job_140dd38a16774db1b514919d82da285e",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\dino-outfit-v3\\dig-crown2\\job_140dd38a16774db1b514919d82da285e\\meowa_animation.webp",
+      "mime_type": "image/webp"
+    }
+  ]
+}
