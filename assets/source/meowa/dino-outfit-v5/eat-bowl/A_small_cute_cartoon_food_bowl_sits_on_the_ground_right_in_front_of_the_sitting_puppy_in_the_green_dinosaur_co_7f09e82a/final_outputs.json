@@ -1,0 +1,16 @@
+{
+  "status": "success",
+  "job_id": "job_336d95a0f0a449c6ae35021f68f8e76f",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\dino-outfit-v5\\eat-bowl\\A_small_cute_cartoon_food_bowl_sits_on_the_ground_right_in_front_of_the_sitting_puppy_in_the_green_dinosaur_co_7f09e82a\\meowa_animation.webp",
+      "mime_type": "image/webp"
+    },
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\dino-outfit-v5\\eat-bowl\\A_small_cute_cartoon_food_bowl_sits_on_the_ground_right_in_front_of_the_sitting_puppy_in_the_green_dinosaur_co_7f09e82a\\meowa_animation_background.webp",
+      "mime_type": "image/webp"
+    }
+  ]
+}
