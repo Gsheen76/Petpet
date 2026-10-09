@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "job_id": "job_486eb8267bcd43bd84adce93eadd5acc",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\dino-idle-v3-blink\\Exactly_the_same_image_with_only_one_change_the_puppy_s_two_visible_eyes_are_now_gently_closed_into_soft_curve_47e05413\\remove_bg.png",
+      "mime_type": "image/png"
+    }
+  ]
+}
