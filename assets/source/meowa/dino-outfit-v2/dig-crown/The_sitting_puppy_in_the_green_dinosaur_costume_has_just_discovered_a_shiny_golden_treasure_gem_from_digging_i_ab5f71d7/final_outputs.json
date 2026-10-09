@@ -1,0 +1,16 @@
+{
+  "status": "success",
+  "job_id": "job_079fc3335fe94ee48c741e56d1125288",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\dino-outfit-v2\\dig-crown\\The_sitting_puppy_in_the_green_dinosaur_costume_has_just_discovered_a_shiny_golden_treasure_gem_from_digging_i_ab5f71d7\\meowa_animation.webp",
+      "mime_type": "image/webp"
+    },
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\dino-outfit-v2\\dig-crown\\The_sitting_puppy_in_the_green_dinosaur_costume_has_just_discovered_a_shiny_golden_treasure_gem_from_digging_i_ab5f71d7\\meowa_animation_background.webp",
+      "mime_type": "image/webp"
+    }
+  ]
+}
