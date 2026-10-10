@@ -1,0 +1,16 @@
+{
+  "status": "success",
+  "job_id": "job_ab2824415ead4f7081948525dc7f989b",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\dino-outfit-v7\\dig\\The_sitting_puppy_in_the_green_dinosaur_costume_discovers_a_small_pile_of_shiny_golden_coins_on_the_ground_in_066477b7\\meowa_animation.webp",
+      "mime_type": "image/webp"
+    },
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\dino-outfit-v7\\dig\\The_sitting_puppy_in_the_green_dinosaur_costume_discovers_a_small_pile_of_shiny_golden_coins_on_the_ground_in_066477b7\\meowa_animation_background.webp",
+      "mime_type": "image/webp"
+    }
+  ]
+}
