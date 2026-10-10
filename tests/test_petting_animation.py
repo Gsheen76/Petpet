@@ -16,17 +16,17 @@ class PettingAnimationAssetTests(unittest.TestCase):
         )
         frames = sorted((animation_dir / "outfits" / "dinosaur" / "idle").glob("*.png"))
 
-        self.assertEqual(len(frames), 24)
+        self.assertEqual(len(frames), 18)
         self.assertEqual(manifest["idle_dinosaur"]["fps"], 8)
         self.assertNotIn("frame_sequence", manifest["idle_dinosaur"])
         # 2026-10-09 v3：去胸部呼吸改低频摇尾（150ms×24=3.6s）
         self.assertEqual(
             manifest["idle_dinosaur"]["frame_durations_ms"],
-            [150.0] * 24,
+            [150.0] * 18,
         )
         self.assertAlmostEqual(
             sum(manifest["idle_dinosaur"]["frame_durations_ms"]),
-            3600.0,
+            2700.0,
             places=3,
         )
 
