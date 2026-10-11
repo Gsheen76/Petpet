@@ -1,0 +1,16 @@
+{
+  "status": "success",
+  "job_id": "job_eab4acd7b00a45b4ad6eae390d5d06d7",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\strawberry-outfit\\v1\\eat\\The_sitting_puppy_in_the_strawberry_costume_holds_a_small_cute_strawberry_with_both_front_paws_and_eats_it_hap_9ab9038f\\meowa_animation.webp",
+      "mime_type": "image/webp"
+    },
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\strawberry-outfit\\v1\\eat\\The_sitting_puppy_in_the_strawberry_costume_holds_a_small_cute_strawberry_with_both_front_paws_and_eats_it_hap_9ab9038f\\meowa_animation_background.webp",
+      "mime_type": "image/webp"
+    }
+  ]
+}

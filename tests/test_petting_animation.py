@@ -46,20 +46,15 @@ class PettingAnimationAssetTests(unittest.TestCase):
 
         self.assertEqual(len(frames), 16)
         self.assertEqual(manifest["idle_strawberry"]["fps"], 8)
-        self.assertEqual(
-            manifest["idle_strawberry"]["frame_sequence"],
-            list(range(5, 17)) + list(range(8, 14)),
-        )
+        # 2026-10-10 v1 全动作重制：帧序/durations 已随新版更新
+        self.assertNotIn("frame_sequence", manifest["idle_strawberry"])
         self.assertEqual(
             manifest["idle_strawberry"]["frame_durations_ms"],
-            [160.0] * 5 + [60.0, 60.0] + [160.0] * 9,
+            [150.0] * 16,
         )
         self.assertAlmostEqual(
-            sum(
-                manifest["idle_strawberry"]["frame_durations_ms"][index - 1]
-                for index in manifest["idle_strawberry"]["frame_sequence"]
-            ),
-            2680.0,
+            sum(manifest["idle_strawberry"]["frame_durations_ms"]),
+            2400.0,
             places=3,
         )
 

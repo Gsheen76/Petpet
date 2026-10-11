@@ -28,6 +28,10 @@ class OutfitActionVariantTests(unittest.TestCase):
              "play": "play_dinosaur", "dig_reward": "dig_dinosaur",
              "happy": "happy_dinosaur", "sleep": "sleep_dinosaur"},
         )
+        stw = progression.OUTFIT_DEFINITIONS["strawberry_suit"]
+        self.assertEqual(
+            stw["action_animations"]["pet"], "pet_strawberry",
+        )
 
     def test_helper_returns_variant_when_equipped(self):
         self.assertEqual(

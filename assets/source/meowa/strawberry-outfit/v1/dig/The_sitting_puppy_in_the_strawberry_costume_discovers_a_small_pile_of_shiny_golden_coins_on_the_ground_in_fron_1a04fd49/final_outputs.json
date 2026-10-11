@@ -1,0 +1,16 @@
+{
+  "status": "success",
+  "job_id": "job_579d787fd43d4b53a9b8414e10d0b048",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\strawberry-outfit\\v1\\dig\\The_sitting_puppy_in_the_strawberry_costume_discovers_a_small_pile_of_shiny_golden_coins_on_the_ground_in_fron_1a04fd49\\meowa_animation.webp",
+      "mime_type": "image/webp"
+    },
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\strawberry-outfit\\v1\\dig\\The_sitting_puppy_in_the_strawberry_costume_discovers_a_small_pile_of_shiny_golden_coins_on_the_ground_in_fron_1a04fd49\\meowa_animation_background.webp",
+      "mime_type": "image/webp"
+    }
+  ]
+}

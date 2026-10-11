@@ -266,6 +266,15 @@ OUTFIT_DEFINITIONS = {
         "preview_asset": "preview.png",
         "animation": "idle_strawberry",
         "home_walk_action": "walk_right_strawberry",
+        # 2026-10-10 套装全动作：互动动画的装备感知变体
+        "action_animations": {
+            "pet": "pet_strawberry",
+            "eat": "eat_strawberry",
+            "play": "play_strawberry",
+            "dig_reward": "dig_strawberry",
+            "happy": "happy_strawberry",
+            "sleep": "sleep_strawberry",
+        },
         "description": "草莓连帽与叶子领结套装，装备后播放专属待机动画。",
         "pet_id": "lunch_meat",
     },

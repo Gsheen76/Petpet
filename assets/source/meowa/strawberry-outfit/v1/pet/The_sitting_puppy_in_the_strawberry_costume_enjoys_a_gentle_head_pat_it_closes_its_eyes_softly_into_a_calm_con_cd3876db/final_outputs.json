@@ -1,0 +1,16 @@
+{
+  "status": "success",
+  "job_id": "job_1e0d63dce4f042ba90f2ecc827066b9c",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\strawberry-outfit\\v1\\pet\\The_sitting_puppy_in_the_strawberry_costume_enjoys_a_gentle_head_pat_it_closes_its_eyes_softly_into_a_calm_con_cd3876db\\meowa_animation.webp",
+      "mime_type": "image/webp"
+    },
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\strawberry-outfit\\v1\\pet\\The_sitting_puppy_in_the_strawberry_costume_enjoys_a_gentle_head_pat_it_closes_its_eyes_softly_into_a_calm_con_cd3876db\\meowa_animation_background.webp",
+      "mime_type": "image/webp"
+    }
+  ]
+}

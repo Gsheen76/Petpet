@@ -54,11 +54,12 @@ class TunerOutfitPreviewTests(unittest.TestCase):
         self.assertIn("pet", keys)
 
     def test_strawberry_has_no_action_variants_but_keeps_idle(self):
+        """2026-10-10 草莓全动作后：有 pet_strawberry 变体。"""
         w = self._tuner(self._state("strawberry_suit"))
         w._state_owned = None
         keys = [k for k, _ in w._preview_key_list()]
         self.assertIn("idle_strawberry", keys)
-        self.assertNotIn("pet_strawberry", keys)
+        self.assertIn("pet_strawberry", keys)
 
     def test_outfit_combo_only_lists_active_pets_outfits(self):
         w = self._tuner(self._state())

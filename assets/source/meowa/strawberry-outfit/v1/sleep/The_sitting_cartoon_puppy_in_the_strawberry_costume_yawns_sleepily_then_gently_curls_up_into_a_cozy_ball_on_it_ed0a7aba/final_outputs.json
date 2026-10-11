@@ -1,0 +1,16 @@
+{
+  "status": "success",
+  "job_id": "job_6c55872b5f1a41efa06538444e365b59",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\strawberry-outfit\\v1\\sleep\\The_sitting_cartoon_puppy_in_the_strawberry_costume_yawns_sleepily_then_gently_curls_up_into_a_cozy_ball_on_it_ed0a7aba\\meowa_animation.webp",
+      "mime_type": "image/webp"
+    },
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\strawberry-outfit\\v1\\sleep\\The_sitting_cartoon_puppy_in_the_strawberry_costume_yawns_sleepily_then_gently_curls_up_into_a_cozy_ball_on_it_ed0a7aba\\meowa_animation_background.webp",
+      "mime_type": "image/webp"
+    }
+  ]
+}

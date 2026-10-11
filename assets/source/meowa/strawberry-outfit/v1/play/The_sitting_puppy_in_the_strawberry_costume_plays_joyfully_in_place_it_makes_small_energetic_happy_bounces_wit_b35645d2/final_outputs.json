@@ -1,0 +1,16 @@
+{
+  "status": "success",
+  "job_id": "job_e70878e5d4224c02bf5919d0750d7564",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\strawberry-outfit\\v1\\play\\The_sitting_puppy_in_the_strawberry_costume_plays_joyfully_in_place_it_makes_small_energetic_happy_bounces_wit_b35645d2\\meowa_animation.webp",
+      "mime_type": "image/webp"
+    },
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\strawberry-outfit\\v1\\play\\The_sitting_puppy_in_the_strawberry_costume_plays_joyfully_in_place_it_makes_small_energetic_happy_bounces_wit_b35645d2\\meowa_animation_background.webp",
+      "mime_type": "image/webp"
+    }
+  ]
+}
