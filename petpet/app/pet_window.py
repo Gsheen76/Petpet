@@ -2565,9 +2565,17 @@ class PetWindow(QWidget):
         self.update()
         return True
 
+    MINIMUM_SLEEP_SECONDS = 10.0  # 2026-10-10 用户定稿：至少睡 10s 再起床
+
     def _wake_from_auto_sleep(self):
         if not self.state.get("sleeping"):
             return False
+        # 2026-10-10 用户定稿：即使精力满格也至少睡 10 秒
+        entered = getattr(self, "_sleep_entered_at", None)
+        if entered is not None:
+            elapsed = time.time() - float(entered)
+            if elapsed < self.MINIMUM_SLEEP_SECONDS:
+                return False
         # 2026-10-07 用户定稿：手动睡觉精力满格也自己醒来（调用方按
         # 模式定阈值：auto>wake_threshold、manual>=100 满格）
         self.state["sleeping"] = False
@@ -3232,6 +3240,7 @@ class PetWindow(QWidget):
         if self.state["sleeping"]:
             # Manual sleep is intentionally excluded from automatic wake-up.
             self.state["sleep_mode"] = "manual"
+            self._sleep_entered_at = time.time()
             progression.record_sleep(self.state, "manual")
             self.behavior = "idle"; self.target_vx = 0; self.vx = 0
             self.say("晚安主人，睡饱了我就自己醒来啦～", 2400)

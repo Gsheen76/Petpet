@@ -217,3 +217,41 @@ class AutoSleepBehaviorTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MinimumSleepDurationTests(unittest.TestCase):
+    """2026-10-10 用户定稿：至少睡 10s 再起床（即使精力满格）。"""
+
+    def test_wake_blocked_before_10s(self):
+        from petpet.app.pet_window import PetWindow
+        import time as _time
+
+        w = PetWindow.__new__(PetWindow)
+        w.state = {"sleeping": True, "sleep_mode": "manual", "energy": 100.0}
+        w._sleep_entered_at = _time.time() - 5.0  # 只睡了5秒
+        self.assertFalse(w._wake_from_auto_sleep(),
+                         "5秒内不应被唤醒")
+
+    def test_wake_allowed_after_10s(self):
+        from petpet.app.pet_window import PetWindow
+        import time as _time
+        from unittest.mock import MagicMock, patch
+
+        w = PetWindow.__new__(PetWindow)
+        w.state = {"sleeping": True, "sleep_mode": "manual", "energy": 100.0}
+        w._sleep_entered_at = _time.time() - 11.0  # 已睡11秒
+        w.say = MagicMock()
+        w.play_sound = MagicMock()
+        w.refresh_pose_from_state = MagicMock()
+        w.behavior = "idle"
+        w.behavior_until = 0
+        w.next_behavior_at = 0
+        w.target_vx = 0
+        w.vx = 0
+        w.vy = 0
+        w._auto_sleep_phase = None
+        w._auto_sleep_target_x = None
+        w.update = lambda: None
+        with patch("pet.save_state"):
+            self.assertTrue(w._wake_from_auto_sleep(),
+                            "11秒后精力满格应能唤醒")
