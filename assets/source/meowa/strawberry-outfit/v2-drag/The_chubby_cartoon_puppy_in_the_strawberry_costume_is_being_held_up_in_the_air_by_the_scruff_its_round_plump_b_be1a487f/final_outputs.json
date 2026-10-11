@@ -1,0 +1,16 @@
+{
+  "status": "success",
+  "job_id": "job_c8ead8ecc4c642e28f7fa61e2a55971a",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\strawberry-outfit\\v2-drag\\The_chubby_cartoon_puppy_in_the_strawberry_costume_is_being_held_up_in_the_air_by_the_scruff_its_round_plump_b_be1a487f\\meowa_animation.webp",
+      "mime_type": "image/webp"
+    },
+    {
+      "type": "media",
+      "path": "assets\\source\\meowa\\strawberry-outfit\\v2-drag\\The_chubby_cartoon_puppy_in_the_strawberry_costume_is_being_held_up_in_the_air_by_the_scruff_its_round_plump_b_be1a487f\\meowa_animation_background.webp",
+      "mime_type": "image/webp"
+    }
+  ]
+}
