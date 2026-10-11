@@ -266,6 +266,7 @@ OUTFIT_DEFINITIONS = {
         "preview_asset": "preview.png",
         "animation": "idle_strawberry",
         "home_walk_action": "walk_right_strawberry",
+        "drag_animation": "drag_strawberry",
         # 2026-10-10 套装全动作：互动动画的装备感知变体
         "action_animations": {
             "pet": "pet_strawberry",

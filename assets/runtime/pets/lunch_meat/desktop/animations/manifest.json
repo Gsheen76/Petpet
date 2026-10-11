@@ -595,5 +595,41 @@
       400.0,
       400.0
     ]
+  },
+  "drag_strawberry": {
+    "folder": "outfits/strawberry/drag",
+    "fps": 8,
+    "loop": true,
+    "fallback": "drag",
+    "scale": 1.0,
+    "anchor_bottom": false,
+    "saturation": 1.0,
+    "brightness": 1.0,
+    "frame_durations_ms": [
+      125.0,
+      125.0,
+      125.0,
+      125.0,
+      125.0,
+      125.0,
+      125.0,
+      125.0,
+      125.0,
+      125.0,
+      125.0,
+      125.0,
+      125.0,
+      125.0,
+      125.0,
+      125.0,
+      125.0,
+      125.0,
+      125.0,
+      125.0,
+      125.0,
+      125.0,
+      125.0,
+      125.0
+    ]
   }
 }
