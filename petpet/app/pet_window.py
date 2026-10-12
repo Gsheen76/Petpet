@@ -2465,33 +2465,38 @@ class PetWindow(QWidget):
                         self.vy = 0
                 else:
                     # landing from a fall/fling -> bounce
-                    # 连续碰撞（2026-09-12 卡顿修复）：把过冲量按反弹
-                    # 系数镜像回地面之上——撞击帧立即起跳，消除"触底
-                    # 停一拍再弹起"的顿挫。
-                    # 触底音效已删（2026-09-12 用户指示）：QSoundEffect
-                    # 播放调用会在 UI 线程做音频后端工作，是撞击帧
-                    # 剩余的可疑掉帧源。
-                    penetration = new_y - ground_y
-                    new_y = ground_y
-                    if abs(self.vy) > 60:
-                        self.vy = -self.vy * BOUNCE_FLOOR
-                        new_y = ground_y - penetration * BOUNCE_FLOOR
-                        if abs(self.vy) > 250:
-                            # 喊疼挪到下一轮事件循环：碰撞帧绝不新建
-                            # 半透明气泡窗口（曾致撞击瞬间掉帧）。
-                            QTimer.singleShot(0, self._say_ouch)
-                    else:
-                        self.vy = 0
-                    # settle to ground if bounce too small
-                    if abs(self.vy) < 50:
-                        self.vy = 0
-                        was_airborne = not self.on_ground
-                        self.on_ground = True
+                    # 2026-10-12 草莓拖拽特殊机制：falling 状态不弹起
+                    if self.__dict__.get("_drag_anim_state") == "falling":
                         new_y = ground_y
-                        # 2026-10-12 三态拖拽：落地→播回稳动画（Part 2，不弹起）
-                        if was_airborne:
-                            self._trigger_drag_land()
-                            self.vx = 0; self.vy = 0
+                        self.vy = 0
+                        self.vx = 0
+                        self.on_ground = True
+                        self._trigger_drag_land()
+                    else:
+                        # 连续碰撞（2026-09-12 卡顿修复）：把过冲量按反弹
+                        # 系数镜像回地面之上——撞击帧立即起跳，消除"触底
+                        # 停一拍再弹起"的顿挫。
+                        # 触底音效已删（2026-09-12 用户指示）：QSoundEffect
+                        # 播放调用会在 UI 线程做音频后端工作，是撞击帧
+                        # 剩余的可疑掉帧源。
+                        penetration = new_y - ground_y
+                        new_y = ground_y
+                        if abs(self.vy) > 60:
+                            self.vy = -self.vy * BOUNCE_FLOOR
+                            new_y = ground_y - penetration * BOUNCE_FLOOR
+                            if abs(self.vy) > 250:
+                                QTimer.singleShot(0, self._say_ouch)
+                        else:
+                            self.vy = 0
+                        # settle to ground if bounce too small
+                        if abs(self.vy) < 50:
+                            self.vy = 0
+                            was_airborne = not self.on_ground
+                            self.on_ground = True
+                            new_y = ground_y
+                            if was_airborne:
+                                self._trigger_drag_land()
+                                self.vx = 0; self.vy = 0
                     else:
                         # still bouncing, leave airborne
                         self.on_ground = False
