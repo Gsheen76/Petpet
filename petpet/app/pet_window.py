@@ -2174,8 +2174,13 @@ class PetWindow(QWidget):
         self.setCursor(Qt.ClosedHandCursor)
         # 2026-10-12 三态拖拽：初始=静止拎姿（sway 末帧）
         self._drag_anim_state = "held"
-        self._animation_started_at = 0.0  # far past → sway 末帧
-        self._active_animation = None
+        # 不设 None：设 None 会让 _animation_frame 重锚计时从帧0播。
+        # 保持 active=sway名 + started_at=0 → elapsed 极大 → 末帧
+        sway = progression.equipped_outfit_drag_animation(self.state)
+        if sway:
+            sway = sway.replace("drag", "drag_sway")
+            self._active_animation = sway
+        self._animation_started_at = 0.0
         self._drag_stop_timer = QTimer(self)
         self._drag_stop_timer.setSingleShot(True)
         self._drag_stop_timer.timeout.connect(self._on_drag_mouse_stopped)
@@ -2216,7 +2221,6 @@ class PetWindow(QWidget):
             if getattr(self, "_drag_anim_state", "held") != "moving":
                 self._drag_anim_state = "moving"
                 self._animation_started_at = 0.0  # far past → 末帧
-                self._active_animation = None
             if hasattr(self, "_drag_stop_timer"):
                 self._drag_stop_timer.start(200)  # 200ms 无移动 = 停下
             now = time.time()
