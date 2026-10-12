@@ -2209,6 +2209,7 @@ class PetWindow(QWidget):
         if not self.dragging or self._drag_anim_state != "moving":
             return
         self._drag_anim_state = "sway"
+        self._drag_move_dist = 0.0
         self._animation_started_at = time.monotonic()
         self._active_animation = None
         # sway 播完后切回 hover 循环
@@ -2252,8 +2253,21 @@ class PetWindow(QWidget):
                 self._grab_timer.stop()
                 self._promote_to_grab()
         if self.dragging:
-            # 2026-10-12 四态拖拽：鼠标在动 → moving（hover 循环继续）
-            self._drag_anim_state = "moving"
+            # 2026-10-12 四态拖拽：仅明显移动才触发重播
+            # 轻微移动（<8px 累计）不打断 hover 循环
+            last_pos = getattr(self, "_drag_last_move_pos", None)
+            if last_pos is None:
+                self._drag_last_move_pos = e.globalPos()
+                self._drag_move_dist = 0.0
+            else:
+                self._drag_move_dist = (
+                    getattr(self, "_drag_move_dist", 0.0)
+                    + (e.globalPos() - last_pos).manhattanLength()
+                )
+                self._drag_last_move_pos = e.globalPos()
+            if self._drag_move_dist > 8:
+                self._drag_anim_state = "moving"
+                self._drag_move_dist = 0.0
             if hasattr(self, "_drag_stop_timer"):
                 self._drag_stop_timer.start(200)
             now = time.time()
