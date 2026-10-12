@@ -1776,9 +1776,17 @@ class PetWindow(QWidget):
             self._animation_frame_index = None
             return None
         if self._active_animation != name:
-            self._release_inactive_animation_frames(name)
-            self._active_animation = name
-            self._animation_started_at = time.monotonic()
+            # 2026-10-12 三态拖拽守卫：拖拽中 held/moving 状态
+            # 不重锚计时（保持 far-past → sway 末帧静止）
+            is_drag_hold = (
+                self.dragging
+                and getattr(self, "_drag_anim_state", None) in ("held", "moving")
+                and "drag" in name
+            )
+            if not is_drag_hold:
+                self._release_inactive_animation_frames(name)
+                self._active_animation = name
+                self._animation_started_at = time.monotonic()
         spec = self.animation_specs.get(name, {})
         durations = self._frame_durations_ms(spec, len(frames))
         duration_ms = sum(durations)
