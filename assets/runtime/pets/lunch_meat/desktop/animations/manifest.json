@@ -52,7 +52,7 @@
   "idle_strawberry": {
     "folder": "outfits/strawberry/idle",
     "fps": 8,
-    "loop": false,
+    "loop": true,
     "fallback": "idle",
     "scale": 1.0,
     "anchor_bottom": false,
