@@ -1710,6 +1710,17 @@ class PetWindow(QWidget):
     def _current_animation_name(self):
         if self._animation_override:
             return self._animation_override
+        # 2026-10-12 草莓拖拽特殊机制：掉落中保持 sway 末帧
+        if (not self.dragging
+                and self.__dict__.get("_drag_anim_state") == "falling"):
+            drag_variant = progression.equipped_outfit_drag_animation(
+                self.state)
+            if drag_variant:
+                sv = drag_variant.replace("drag", "drag_sway")
+                paths = self.__dict__.get("_animation_frame_paths", {})
+                frames = self.__dict__.get("animation_frames", {})
+                if sv in paths or sv in frames:
+                    return sv
         if self.state.get("sleeping"):
             sleep_variant = self._outfit_action_variant("sleep")
             if sleep_variant:
@@ -1784,7 +1795,11 @@ class PetWindow(QWidget):
             self._animation_frame_index = None
             return None
         if self._active_animation != name:
-            is_drag_hold = False  # hover 是循环，无需守卫
+            # 2026-10-12 falling 状态：不重锚（保持 far-past→末帧）
+            is_drag_hold = (
+                getattr(self, "_drag_anim_state", None) == "falling"
+                and "drag" in name
+            )
             if not is_drag_hold:
                 self._release_inactive_animation_frames(name)
                 self._active_animation = name
@@ -2214,6 +2229,7 @@ class PetWindow(QWidget):
 
     def _trigger_drag_land(self):
         """松手落地 → 播放回稳动画（Part 2，只播一次）。"""
+        self._drag_anim_state = None  # 清除 falling
         if getattr(self, "_drag_land_played", False):
             return
         self._drag_land_played = True
