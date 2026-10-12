@@ -2497,9 +2497,9 @@ class PetWindow(QWidget):
                             if was_airborne:
                                 self._trigger_drag_land()
                                 self.vx = 0; self.vy = 0
-                    else:
-                        # still bouncing, leave airborne
-                        self.on_ground = False
+                        else:
+                            # still bouncing, leave airborne
+                            self.on_ground = False
             else:
                 self.on_ground = False
 
