@@ -2157,7 +2157,7 @@ class PetWindow(QWidget):
         super().hideEvent(event)
 
     # ---------- mouse ----------
-    GRAB_DELAY_MS = 250  # 长按判定阈值（2026-10-01 用户定稿）
+    GRAB_DELAY_MS = 150  # 2026-10-12 用户反馈加速（原250ms 感觉延迟）
 
     def mousePressEvent(self, e):
         if e.button() == Qt.LeftButton:
