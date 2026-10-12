@@ -1716,7 +1716,9 @@ class PetWindow(QWidget):
                 return sleep_variant
             return "sleep"
         if self.dragging:
-            # 2026-10-12 用户定稿三态拖拽：移动→静止播摇晃→悬停静止图→落地播回稳
+            # 2026-10-12 用户定稿三态拖拽：
+            # moving/held → sway 最后一帧（静止拎姿）
+            # sway → sway 从头播（摇晃动画）
             drag_variant = (
                 progression.equipped_outfit_drag_animation(self.state)
             )
@@ -1726,13 +1728,11 @@ class PetWindow(QWidget):
                     "_animation_frame_paths", {}
                 )
             ):
-                # 三态：sway=鼠标停后播摇晃 / land=落地播回稳 / 其余=静止图
                 sway_variant = drag_variant.replace("drag", "drag_sway")
-                if (self._drag_anim_state == "sway"
-                        and (sway_variant in self.__dict__.get(
-                             "animation_frames", {})
-                             or sway_variant in self.__dict__.get(
-                                 "_animation_frame_paths", {}))):
+                if (sway_variant in self.__dict__.get(
+                        "animation_frames", {})
+                        or sway_variant in self.__dict__.get(
+                            "_animation_frame_paths", {})):
                     return sway_variant
                 return drag_variant
             return "drag"
@@ -2172,8 +2172,10 @@ class PetWindow(QWidget):
         self.behavior = "drag"
         self.vx = 0; self.vy = 0
         self.setCursor(Qt.ClosedHandCursor)
-        # 2026-10-12 三态拖拽：初始为静止图状态
+        # 2026-10-12 三态拖拽：初始=静止拎姿（sway 末帧）
         self._drag_anim_state = "held"
+        self._animation_started_at = 0.0  # far past → sway 末帧
+        self._active_animation = None
         self._drag_stop_timer = QTimer(self)
         self._drag_stop_timer.setSingleShot(True)
         self._drag_stop_timer.timeout.connect(self._on_drag_mouse_stopped)
@@ -2187,7 +2189,10 @@ class PetWindow(QWidget):
         self._active_animation = None
 
     def _trigger_drag_land(self):
-        """松手落地 → 播放回稳动画（Part 2）。"""
+        """松手落地 → 播放回稳动画（Part 2，只播一次）。"""
+        if getattr(self, "_drag_land_played", False):
+            return
+        self._drag_land_played = True
         land_variant = None
         drag_variant = progression.equipped_outfit_drag_animation(
             self.state)
@@ -2207,9 +2212,11 @@ class PetWindow(QWidget):
                 self._grab_timer.stop()
                 self._promote_to_grab()
         if self.dragging:
-            # 2026-10-12 三态拖拽：鼠标在动 → moving 状态
+            # 2026-10-12 三态拖拽：鼠标在动 → moving（显示 sway 末帧）
             if getattr(self, "_drag_anim_state", "held") != "moving":
                 self._drag_anim_state = "moving"
+                self._animation_started_at = 0.0  # far past → 末帧
+                self._active_animation = None
             if hasattr(self, "_drag_stop_timer"):
                 self._drag_stop_timer.start(200)  # 200ms 无移动 = 停下
             now = time.time()
@@ -2250,6 +2257,7 @@ class PetWindow(QWidget):
             if hasattr(self, "_drag_stop_timer"):
                 self._drag_stop_timer.stop()
             self._drag_anim_state = None
+            self._drag_land_played = False
             # A grab is a deliberate pick-up: a long-press hold, with or
             # without dragging afterwards. Quick single clicks don't count.
             held_for = time.time() - getattr(
