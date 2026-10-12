@@ -35,7 +35,7 @@ class PettingAnimationAssetTests(unittest.TestCase):
                 self.assertEqual(frame.size, (640, 640))
                 self.assertEqual(frame.mode, "RGBA")
 
-    def test_strawberry_outfit_has_a_sixteen_frame_idle_sequence(self):
+    def test_strawberry_outfit_has_a_twenty_four_frame_idle_sequence(self):
         animation_dir = Path(pet.ANIMATIONS_DIR)
         manifest = json.loads(
             (animation_dir / "manifest.json").read_text(encoding="utf-8")
@@ -44,17 +44,18 @@ class PettingAnimationAssetTests(unittest.TestCase):
             (animation_dir / "outfits" / "strawberry" / "idle").glob("*.png")
         )
 
-        self.assertEqual(len(frames), 16)
+        self.assertEqual(len(frames), 24)
         self.assertEqual(manifest["idle_strawberry"]["fps"], 8)
-        # 2026-10-10 v1 全动作重制：帧序/durations 已随新版更新
+        # 2026-10-12 v3 重制：雕像级锁位（躯干 0.13px 源级稳定）
+        # + 眨眼（帧 7-12）；150ms×24=3.6s 循环
         self.assertNotIn("frame_sequence", manifest["idle_strawberry"])
         self.assertEqual(
             manifest["idle_strawberry"]["frame_durations_ms"],
-            [150.0] * 16,
+            [150.0] * 24,
         )
         self.assertAlmostEqual(
             sum(manifest["idle_strawberry"]["frame_durations_ms"]),
-            2400.0,
+            3600.0,
             places=3,
         )
 
