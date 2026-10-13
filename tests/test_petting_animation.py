@@ -47,17 +47,18 @@ class PettingAnimationAssetTests(unittest.TestCase):
         self.assertEqual(len(frames), 24)
         self.assertEqual(manifest["idle_strawberry"]["fps"], 8)
         # 2026-10-12 v3 重制：雕像级锁位（躯干 0.13px 源级稳定）
-        # + 眨眼（帧 7-12）；微调轮：眨眼段压 900→620ms（闭眼 400ms）、
-        # 两处摆尾极限停拍帧 150→120ms，总循环 3260ms
+        # + 眨眼（帧 7-12）；2026-10-13 用户定稿：眨眼帧回归自然 150ms
+        # （微调轮 100-110ms 提速被否），仅两处近重复停拍帧保留 120ms，
+        # 总循环 3540ms
         self.assertNotIn("frame_sequence", manifest["idle_strawberry"])
         self.assertEqual(
             manifest["idle_strawberry"]["frame_durations_ms"],
-            [150.0, 150.0, 150.0, 150.0, 120.0, 150.0, 150.0, 110.0,
-             100.0, 100.0, 100.0, 100.0, 110.0, 120.0] + [150.0] * 10,
+            [150.0, 150.0, 150.0, 150.0, 120.0] + [150.0] * 8
+            + [120.0] + [150.0] * 10,
         )
         self.assertAlmostEqual(
             sum(manifest["idle_strawberry"]["frame_durations_ms"]),
-            3260.0,
+            3540.0,
             places=3,
         )
 

@@ -2197,12 +2197,38 @@ class PetWindow(QWidget):
         self.behavior = "drag"
         self.vx = 0; self.vy = 0
         self.setCursor(Qt.ClosedHandCursor)
-        # 2026-10-12 四态拖拽：初始=hover 循环
-        self._drag_anim_state = "held"
-        self._active_animation = None
+        # 2026-10-13 用户定稿：抓起先播完第一阶段（sway 全段）再进 hover
+        # 循环——切动画必须同时给 active=名字 + started_at=now（只设
+        # started_at 会被 _animation_frame 的换片重锚再盖一次，顺序耦合）
+        self._drag_anim_state = "sway"
+        grab_variant = progression.equipped_outfit_drag_animation(self.state)
+        if grab_variant:
+            self._active_animation = grab_variant.replace(
+                "drag", "drag_sway")
+        self._animation_started_at = time.monotonic()
         self._drag_stop_timer = QTimer(self)
         self._drag_stop_timer.setSingleShot(True)
         self._drag_stop_timer.timeout.connect(self._on_drag_mouse_stopped)
+        # sway 播完定时器用可重启的 QTimer 成员（QTimer.singleShot 不可
+        # 取消：快速「动→停」双触发时旧 shot 会把新 sway 拦腰切断——
+        # 正是「定住之后感觉没播放完整」的根因）
+        self._drag_sway_timer = QTimer(self)
+        self._drag_sway_timer.setSingleShot(True)
+        self._drag_sway_timer.timeout.connect(self._on_sway_finished)
+        self._start_sway_finish_timer()
+
+    def _start_sway_finish_timer(self):
+        """sway 时长后自动切回 hover；重复调用会替换未到期的旧定时。"""
+        if not hasattr(self, "_drag_sway_timer"):
+            return
+        total_ms = 12 * 160
+        drag_variant = progression.equipped_outfit_drag_animation(
+            self.state)
+        if drag_variant:
+            sway_variant = drag_variant.replace("drag", "drag_sway")
+            spec = self.animation_specs.get(sway_variant, {})
+            total_ms = sum(spec.get("frame_durations_ms", [160.0] * 12))
+        self._drag_sway_timer.start(int(total_ms) + 30)
 
     def _on_drag_mouse_stopped(self):
         """鼠标在拖拽中停下 → 播摇晃一次 → 自动回 hover 循环。"""
@@ -2211,16 +2237,12 @@ class PetWindow(QWidget):
         self._drag_anim_state = "sway"
         self._drag_move_dist = 0.0
         self._animation_started_at = time.monotonic()
-        self._active_animation = None
-        # sway 播完后切回 hover 循环
         drag_variant = progression.equipped_outfit_drag_animation(
             self.state)
         if drag_variant:
-            sway_variant = drag_variant.replace("drag", "drag_sway")
-            spec = self.animation_specs.get(sway_variant, {})
-            total_ms = sum(spec.get("frame_durations_ms", [160.0] * 12))
-            QTimer.singleShot(
-                int(total_ms) + 30, self._on_sway_finished)
+            self._active_animation = drag_variant.replace(
+                "drag", "drag_sway")
+        self._start_sway_finish_timer()
 
     def _on_sway_finished(self):
         """sway 播完 → 回到 hover 循环。"""
@@ -2266,7 +2288,10 @@ class PetWindow(QWidget):
                 )
                 self._drag_last_move_pos = e.globalPos()
             if self._drag_move_dist > 8:
-                self._drag_anim_state = "moving"
+                # sway（抓起第一阶段/停顿摇晃）播完前不打断——用户定稿
+                # 「播放完再进入后面的循环」；播完后自然回 hover 循环
+                if self._drag_anim_state in ("held", "moving"):
+                    self._drag_anim_state = "moving"
                 self._drag_move_dist = 0.0
             if hasattr(self, "_drag_stop_timer"):
                 self._drag_stop_timer.start(200)
@@ -2307,6 +2332,8 @@ class PetWindow(QWidget):
             # 2026-10-12 三态拖拽：清理
             if hasattr(self, "_drag_stop_timer"):
                 self._drag_stop_timer.stop()
+            if hasattr(self, "_drag_sway_timer"):
+                self._drag_sway_timer.stop()
             # 掉落时显示 sway 末帧（静止拎姿）
             self._drag_anim_state = "falling"
             drag_variant = progression.equipped_outfit_drag_animation(
