@@ -6,7 +6,15 @@
   <img src="assets/runtime/pets/lunch_meat/desktop/poses/idle.png" width="280" alt="Pet陪它桌面小狗">
 </p>
 
-当前版本：`v1.7.6`
+当前版本：`v1.7.7`
+
+## v1.7.7 更新亮点
+
+- **两套全新装扮**：恐龙套装（待机/摸摸/喂食/玩耍/挖宝/开心/睡觉/抓起 8 组全套动画）与草莓小子套装（7 组动作 + 三段式抓起）上架商店。
+- **抓起交互四态**：抓住先播完挣扎摇晃，静止时进入悬挂呼吸循环，鼠标停下再摇一次，松手落地带回稳动画不弹跳。
+- **玩耍运镜**：草莓小狗玩耍改为镜头语言——蓄力拉远、腾跃全貌、落地推回，大动作完整入画。
+- **动画定位工艺升级**：待机/喂食/睡觉逐帧位置根治（源级雕像锁定、接地锚、无缝呼吸环），动作切换零跳变。
+- 全量 1061 项自动化测试，GitHub Actions 每次 push 自动回归。
 
 ## v1.7.6 更新亮点
 
@@ -152,8 +160,8 @@
 | 平台 | 文件 |
 | --- | --- |
 | Windows 直接运行 | `Petpet.exe` |
-| Windows 便携包 | `Petpet-v1.7.6-windows.zip` |
-| macOS Apple 芯片 | `Petpet-v1.7.6-macOS-arm64.zip` |
+| Windows 便携包 | `Petpet-v1.7.7-windows.zip` |
+| macOS Apple 芯片 | `Petpet-v1.7.7-macOS-arm64.zip` |
 | 校验和 | `Petpet-v1.7.6-SHA256SUMS.txt` |
 
 Windows 下载 ZIP 后解压并运行 `Petpet.exe`。直接下载的 `Petpet.exe` 也可以独立运行，程序不会弹出命令行窗口。
@@ -394,8 +402,8 @@ dist/Petpet.app
 公开 Release 必须包含以下三项非空正式资产；校验和文件也会一并上传：
 
 - `Petpet.exe`
-- `Petpet-v1.7.6-windows.zip`
-- `Petpet-v1.7.6-macOS-arm64.zip`
+- `Petpet-v1.7.7-windows.zip`
+- `Petpet-v1.7.7-macOS-arm64.zip`
 
 中途失败时 Release 会保持草稿。修复问题后可以重复运行同一版本命令；脚本不会强推、覆盖已存在的标签或删除 worktree。已公开且完整的 Release 会先验证远端资产，避免重复修改。
 
