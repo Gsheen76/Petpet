@@ -1,7 +1,7 @@
 # Petpet 项目交接文档
 
-**版本**：**v1.7.6 已发布**（2026-10-06 14:39 本地，tag 于 `8ac2346`，[GitHub Release](https://github.com/Gsheen76/Petpet/releases/tag/v1.7.6)，published_at 2026-10-06T06:39:09Z，4 资产、windows.zip/exe 本地哈希与远端一致）；v1.7.5 后 43 轮待发已全部随 v1.7.6 发布（按键手感与音效终版/性能大修/记忆翻牌/陪伴度分数/长按抓起/待机 12h24h/闪退第六案/恐龙色差校齐——见最近变更表对应各行）；**发布特记**：发布门拦下 os._exit 吞汇总的三个测试失败（`daily_activity_series` dict 兼容等），conftest 新增 `PYTEST VERDICT` 行（含失败 nodeid）根治假阴性——**此后全量判定以 VERDICT 行为准，勿再 grep FAILED**；发布后 CI 跟进两笔（`ebd212c` VERDICT 带 nodeid、`37da865` 小剧场冷却门 0 值误判修复）。v1.7.6 后新改动见最近变更表顶部各行（v1.7.6 后待发）
-**日期**：2026-10-06
+**版本**：**v1.7.7 已发布**（2026-10-13 20:30 本地，tag `v1.7.7`，[GitHub Release](https://github.com/Gsheen76/Petpet/releases/tag/v1.7.7)，published_at 2026-10-13T12:30:44Z，4 资产、windows.zip/exe 本地哈希与远端一致；发布内容=恐龙+草莓两套装扮/抓起四态/玩耍运镜/逐帧定位工艺，套件 1061）（2026-10-06 14:39 本地，tag 于 `8ac2346`，[GitHub Release](https://github.com/Gsheen76/Petpet/releases/tag/v1.7.6)，published_at 2026-10-06T06:39:09Z，4 资产、windows.zip/exe 本地哈希与远端一致）；v1.7.5 后 43 轮待发已全部随 v1.7.6 发布（按键手感与音效终版/性能大修/记忆翻牌/陪伴度分数/长按抓起/待机 12h24h/闪退第六案/恐龙色差校齐——见最近变更表对应各行）；**发布特记**：发布门拦下 os._exit 吞汇总的三个测试失败（`daily_activity_series` dict 兼容等），conftest 新增 `PYTEST VERDICT` 行（含失败 nodeid）根治假阴性——**此后全量判定以 VERDICT 行为准，勿再 grep FAILED**；发布后 CI 跟进两笔（`ebd212c` VERDICT 带 nodeid、`37da865` 小剧场冷却门 0 值误判修复）。v1.7.6 后新改动见最近变更表顶部各行（v1.7.6 后待发）
+**日期**：2026-10-13
 **核心分支**：main（与远端一致；发布链 5acc9e6→657b393→62438ff→54da3ce→a70e0db）
 
 > **先记录后写行（2026-10-11 维护方增补，「详见指向无内容」连续五轮复发后立规）**：往最近变更表写新行前，必须先在 Obsidian 开发记录落好该行「详见」所指内容（新建当日篇或当日追加；追记编号取现有最大号+1，禁止虚构跳号）；行内日期以实际提交日为准（凌晨跨日尤须核对）——详见行禁止指向不存在的内容。条款见 `AGENTS.md`「Obsidian 实时记录」。
