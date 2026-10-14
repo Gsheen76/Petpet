@@ -2990,8 +2990,10 @@ class ShopWindow(CozyProgressWindow):
         card.setObjectName(f"petCard_{pet_id}")
         card.setProperty("shopCard", True)
         layout = QHBoxLayout(card)
-        layout.setContentsMargins(14, 16, 14, 16)
-        layout.setSpacing(14)
+        # 2026-10-14 三宠卡适配：价格签为 187px 固定素材件不可缩，通过
+        # 卡内边距/间距收紧（14→10 / 14→9）把卡片最小宽压回视口内
+        layout.setContentsMargins(10, 16, 10, 16)
+        layout.setSpacing(9)
 
         preview = RoundedPixmapLabel(radius=26)
         preview.setObjectName(f"petPreview_{pet_id}")
@@ -3031,7 +3033,8 @@ class ShopWindow(CozyProgressWindow):
         price_row_container = QWidget()
         price_row_container.setFixedHeight(54)
         price_row = QHBoxLayout(price_row_container)
-        price_row.setContentsMargins(0, 0, 5, 0)
+        price_row.setContentsMargins(0, 0, 0, 0)
+        price_row.setSpacing(4)
         price = int(definition.get("price", 0))
         pricing = progression.first_purchase_price(
             state, "pets", definition.get("original_price", price)
@@ -3077,13 +3080,9 @@ class ShopWindow(CozyProgressWindow):
         info.addWidget(price_row_container)
         layout.addLayout(info, 1)
 
-        # 2026-10-14 第三宠上架：价格行收缩——显式最小宽下限覆盖文字
-        # hint（卡片可随视口收缩到 ~522px），标签永不塌成 0 宽。
-        # 勿用 Ignored 策略（stretch 会吃光空间致价格不可见）
-        for shrinkable, floor in ((price_label, 130), (original, 130),
-                                  (discounted, 110)):
-            if shrinkable is not None:
-                shrinkable.setMinimumWidth(floor)
+        # 2026-10-14 第三宠上架：价格签=固定尺寸素材件（setFixedSize
+        # asset.size()），绝不参与收缩（曾被我设宽度下限压扁素材比例，
+        # 用户实测「价格素材比例不对」）；卡片收缩由描述行独担
         if discount_badge is not None:
             title_row.addWidget(discount_badge, 0, Qt.AlignRight)
         if active:
