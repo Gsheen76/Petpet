@@ -50,6 +50,11 @@ class SpeechBubbleTests(unittest.TestCase):
         self.assertEqual(replacement._pending_messages, [])
         self.assertTrue(replacement.isVisible())
 
+        # 2026-10-14 加固（全量负载下第 4 次偶发闪烁）：replacement 是
+        # 刚创建的窗口，负载下单次 processEvents 不保证完成首绘——
+        # grab() 到未绘制窗口=全透明图，右缘 alpha=0 断言误挂。grab 前
+        # 强制同步 repaint（单跑恒过/全量偶发正是这个负载相关性）。
+        replacement.repaint()
         image = replacement.grab().toImage()
         right_edge = image.pixelColor(
             max(0, image.width() - 4), image.height() // 2
