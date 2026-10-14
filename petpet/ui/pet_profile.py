@@ -1329,6 +1329,9 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
                 icon = _grayscale_pixmap(icon_path) if icon_path else QPixmap()
             card["button"].set_pixmap(icon)
             card["button"].selected = pet_id == view_id
+            # 2026-10-14 用户定稿：未拥有的宠物卡不仅灰显，而且禁止
+            # 点击（禁用后无悬停/按压反馈、无手型、不发 clicked）
+            card["button"].setEnabled(owned)
             card["button"].update()
             if card.get("tag") is not None:
                 card["tag"].setVisible(pet_id == view_id)

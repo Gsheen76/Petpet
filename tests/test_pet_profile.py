@@ -193,6 +193,16 @@ class ProfileWindowShellTests(unittest.TestCase):
         window._select_pet("ice_cream")
         pet.set_active_pet.assert_called_once_with("ice_cream")
 
+    def test_unowned_pet_cards_are_disabled(self):
+        """2026-10-14 用户定稿：未拥有宠物卡=灰显+禁止点击。"""
+        state = _fresh_state()
+        state["owned_pet_ids"] = ["lunch_meat", "ice_cream"]
+        window, pet = self._window(state)
+        # 棉花糖未拥有：按钮禁用（无悬停/按压/点击）；已拥有两只启用
+        self.assertFalse(window._pet_cards["marshmallow"]["button"].isEnabled())
+        self.assertTrue(window._pet_cards["lunch_meat"]["button"].isEnabled())
+        self.assertTrue(window._pet_cards["ice_cream"]["button"].isEnabled())
+
     def test_pet_card_icons_enlarged_and_closer(self):
         from petpet.ui.pet_profile import PET_CARD_SIZE, PET_CARD_SLOTS
 
