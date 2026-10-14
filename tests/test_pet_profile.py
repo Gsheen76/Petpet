@@ -184,7 +184,8 @@ class ProfileWindowShellTests(unittest.TestCase):
         state = _fresh_state()
         state["owned_pet_ids"] = ["lunch_meat", "ice_cream"]
         window, pet = self._window(state)
-        self.assertEqual(len(window._pet_cards), 2)
+        # 2026-10-14 第三宠棉花糖：侧栏卡位扩到三席（未拥有也展示头像卡）
+        self.assertEqual(len(window._pet_cards), 3)
         # 二十轮：卡下名字删去，卡片只剩头像按钮（tag 已停用为 None）。
         for card in window._pet_cards.values():
             self.assertNotIn("name", card)
