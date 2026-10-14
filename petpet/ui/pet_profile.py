@@ -1220,7 +1220,14 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
     def _start_idle_animation(self):
         """加载当前宠物 idle 动画帧并按 8fps 循环播放。"""
         view_id = self._view_pet_id()
-        self._idle_frames = _load_idle_frames(view_id, IDLE_FRAME_HEIGHT)
+        # 2026-10-14 高个宠适配：棉花糖耳朵几乎顶满画布上缘（内容 y32-606），
+        # 预览框 430 高按 410 缩放在框顶截断耳尖——预览高度单独 ×0.86，
+        # 耳尖完整落在框内（用户令「适当调整缩小一点」）
+        preview_h = (
+            round(IDLE_FRAME_HEIGHT * 0.86) if view_id == "marshmallow"
+            else IDLE_FRAME_HEIGHT
+        )
+        self._idle_frames = _load_idle_frames(view_id, preview_h)
         # 待机动画竖向微调（2026-09-15 五调）：冰淇凌再下一点、
         # 午餐肉上一点（自统一 +20 基础上分化）。
         offset_y = 34 if view_id == "ice_cream" else 10
