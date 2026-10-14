@@ -53,5 +53,32 @@
       "berry_basket",
       "warm_blanket"
     ]
+  },
+  "marshmallow": {
+    "id": "marshmallow",
+    "default_name": "棉花糖",
+    "description": "软软糯糯的水彩小兔，安静地陪着你。",
+    "chat_personality": "温柔恬静、软糯慢节奏，说话轻声细语，像一团安静的棉花糖；会用轻轻的语气关心主人，但不过度撒娇，不频繁重复口癖。",
+    "original_price": 1000,
+    "discount": 0.76,
+    "price": 760,
+    "preview": "pets/marshmallow/desktop/poses/idle.png",
+    "avatar": "pets/marshmallow/avatar.png",
+    "desktop": {
+      "root": "pets/marshmallow/desktop",
+      "animations_manifest": "pets/marshmallow/desktop/animations/manifest.json"
+    },
+    "home": {
+      "root": "pets/marshmallow/home",
+      "idle": "pets/marshmallow/home/poses/home_pet_idle_sit.png",
+      "walk_down": "pets/marshmallow/home/poses/home_pet_walk_down.png",
+      "walk_back_right": "pets/marshmallow/home/poses/home_pet_walk_back_right.png",
+      "sleep": "pets/marshmallow/home/poses/home_pet_sleep.png"
+    },
+    "gift_preferences": [
+      "berry_basket",
+      "plush_ball",
+      "warm_blanket"
+    ]
   }
 }

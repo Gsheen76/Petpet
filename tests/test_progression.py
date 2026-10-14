@@ -40,8 +40,9 @@ def test_purchase_pet_uses_shared_coins_once():
 
 
 def test_available_pet_ids_preserve_registry_order():
+    # 2026-10-14 第三宠 marshmallow（棉花糖）上架
     assert progression.available_pet_ids() == (
-        "lunch_meat", "ice_cream"
+        "lunch_meat", "ice_cream", "marshmallow"
     )
 
 

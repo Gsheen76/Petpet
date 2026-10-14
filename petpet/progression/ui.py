@@ -3022,6 +3022,10 @@ class ShopWindow(CozyProgressWindow):
         description.setObjectName(f"petDescription_{pet_id}")
         description.setProperty("mutedText", True)
         description.setWordWrap(False)
+        # 2026-10-14 第三宠上架：纵向滚动条出现时视口收窄 15px，描述行
+        # 的 sizeHint 不再贡献卡片最小宽（可收缩），卡片不会横向溢出
+        description.setMinimumWidth(0)
+        description.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
         info.addWidget(description)
 
         price_row_container = QWidget()
@@ -3058,6 +3062,7 @@ class ShopWindow(CozyProgressWindow):
         if button is not None:
             button.setObjectName(f"petAction_{pet_id}")
         discount_badge = None
+        original = discounted = None
         if not owned and pricing["eligible"]:
             original, discounted, discount_badge = self._price_labels(
                 state, "pets", pricing["original_price"], pet_id
@@ -3072,6 +3077,13 @@ class ShopWindow(CozyProgressWindow):
         info.addWidget(price_row_container)
         layout.addLayout(info, 1)
 
+        # 2026-10-14 第三宠上架：未拥有卡的价格行（原价签+折扣签+购买键）
+        # sizeHint 曾把卡片最小宽顶到 680，纵向滚动条出现即横向溢出——
+        # 价格标签改为可收缩（不贡献最小宽），价格行整体跟随视口
+        for shrinkable in (price_label, original, discounted):
+            if shrinkable is not None:
+                shrinkable.setMinimumWidth(0)
+                shrinkable.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
         if discount_badge is not None:
             title_row.addWidget(discount_badge, 0, Qt.AlignRight)
         if active:
