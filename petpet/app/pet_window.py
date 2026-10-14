@@ -68,6 +68,51 @@ def progression_daily_ready(state):
     except Exception:
         return False
 
+
+# 2026-10-14 物种语料池：狗狗词是历史默认（午餐肉/冰淇淋都是小狗）；
+# 非犬物种（棉花糖=小兔）在此登记自己的池——未登记的物种回落默认池。
+_SPECIES_SPEECH = {
+    "marshmallow": {
+        "idle_hungry": [
+            "想吃东西了呢", "有小零食吗？", "嗅嗅…闻到甜甜的味道啦",
+            "一小口就好嘛", "要是有小浆果就好啦",
+        ],
+        "idle_bored": [
+            "想玩呀🎾", "陪我玩一小会儿嘛", "想轻轻蹦一下的心情",
+            "耳朵已经竖起来等主人啦", "主人，碰碰鼻尖！",
+        ],
+        "idle_sleepy": [
+            "想睡觉💤", "找个舒服的姿势窝着", "我先眯一小会儿",
+            "困意轻轻飘过来啦", "小兔也要充充电",
+        ],
+        "idle_normal": [
+            "噗？我在这里哟", "想贴贴❤️", "偷偷看主人一眼",
+            "耳朵今天竖得软软的", "主人现在在忙什么呀",
+            "我刚刚发了一会儿呆", "有我陪着你呢", "今天也要开心一点",
+            "路过，蹭一下主人", "我的耳朵刚才动了一下",
+            "嘿嘿，突然想叫你一声", "要不要摸摸我的头？",
+        ],
+        "morning_extra": ["早上的空气真好呀", "主人吃早饭了吗？"],
+        "evening_extra": ["晚上也陪着你呀", "今天辛苦啦，蹭蹭"],
+        "wake": ["唔……被你摇醒啦！☀️", "咦？天亮了吗～", "醒啦醒啦，抱稳我呀～"],
+        "drag_spin": ["咻~Whee~", "嗖——", "飞起来啦！", "耳朵飘起来啦！"],
+        "pet_reaction": ["好舒服～", "再摸摸！", "嘿嘿", "爱你哟", "蹭蹭你", "耳朵贴贴❤️"],
+        "fetch_again": ["蹦蹦，再来一次！"],
+        "hydrate_pool": [
+            "主人，该喝口水啦～💧", "喝杯水吧，对身体好哦💧", "…你已经很久没喝水了💧",
+        ],
+        "stand_pool": ["站起来活动一下呀！🧘", "坐太久不好，站起来伸个懒腰～", "陪我站着玩一会儿？"],
+        "poke": "咦？",
+    },
+}
+
+def _species_lines(pet_id, key, dog_default):
+    """物种语料：非犬物种（_SPECIES_SPEECH 登记者）用自己的池，否则回落
+    狗狗默认词（午餐肉/冰淇淋都是小狗）。模块级函数——mock 窗口也可调。"""
+    pool = _SPECIES_SPEECH.get(pet_id, {}).get(key)
+    return pool if pool is not None else dog_default
+
+
 class PetWindow(QWidget):
     # Runtime frames are displayed at roughly half this size on desktop.
     # Keeping a 2x-ish buffer preserves crispness while bounding Qt memory.
@@ -784,19 +829,19 @@ class PetWindow(QWidget):
         msgs = []
         fired_sound = None
         if drink_min > 0 and now - self._last_drink_t > drink_min * 60:
-            msgs.append(random.choice([
+            msgs.append(random.choice(_species_lines(getattr(self, "_current_pet_id", None), "hydrate_pool", [
                 "主人，该喝口水啦～💧",
                 "喝杯水吧，对身体好哦💧",
                 "汪…你已经很久没喝水了💧",
-            ]))
+            ])))
             self._last_drink_t = now
             fired_sound = "drink"
         if stand_min > 0 and now - self._last_stand_t > stand_min * 60:
-            msgs.append(random.choice([
+            msgs.append(random.choice(_species_lines(getattr(self, "_current_pet_id", None), "stand_pool", [
                 "站起来活动一下呀！🧘",
                 "坐太久不好，站起来伸个懒腰～",
                 "汪汪！陪我站着玩一会儿？",
-            ]))
+            ])))
             self._last_stand_t = now
             fired_sound = "stand"
         if rest_min > 0 and now - self._last_rest_t > rest_min * 60:
@@ -2384,7 +2429,7 @@ class PetWindow(QWidget):
             self.next_behavior_at = time.time() + random.uniform(2, 5)
             speed = math.hypot(self.vx, self.vy)
             if speed > 120:
-                self.say(random.choice(["汪！Whee~","嗖——","飞起来啦！","汪汪！"]), 1200)
+                self.say(random.choice(_species_lines(getattr(self, "_current_pet_id", None), "drag_spin", ["汪！Whee~","嗖——","飞起来啦！","汪汪！"])), 1200)
             self.drag_samples = []
             self._wake_shake.reset()
             self._woke_from_shake = False
@@ -3228,33 +3273,33 @@ class PetWindow(QWidget):
                 self.behavior = "ask"
                 self.behavior_until = now + 1.5
                 if self.state["hunger"] < 50:
-                    self.say(random.choice([
+                    self.say(random.choice(_species_lines(getattr(self, "_current_pet_id", None), "idle_hungry", [
                         "想吃东西🍗", "今天有小零食吗？", "鼻子闻到香味啦",
                         "一小口就好嘛", "要是有肉干就好啦",
-                    ]))
+                    ])))
                 elif self.state["mood"] < 50:
-                    self.say(random.choice([
+                    self.say(random.choice(_species_lines(getattr(self, "_current_pet_id", None), "idle_bored", [
                         "想玩🎾", "我们来追小球吧", "陪我玩一小会儿嘛",
                         "尾巴已经准备好摇啦", "主人，来碰个爪！",
-                    ]))
+                    ])))
                 elif self.state["energy"] < 40:
-                    self.say(random.choice([
+                    self.say(random.choice(_species_lines(getattr(self, "_current_pet_id", None), "idle_sleepy", [
                         "想睡觉💤", "找个舒服的姿势趴下", "我先眯一小会儿",
                         "困意追上我啦", "小狗也要充充电",
-                    ]))
+                    ])))
                 else:
                     h = time.localtime().tm_hour
-                    normal_lines = [
+                    normal_lines = list(_species_lines(getattr(self, "_current_pet_id", None), "idle_normal", [
                         "汪！我在这里", "想贴贴❤️", "偷偷看主人一眼",
                         "尾巴今天摇得很有精神", "主人现在在忙什么呀",
                         "我刚刚发了一会儿呆", "有我陪着你呢", "今天也要开心一点",
                         "路过，蹭一下主人", "我的耳朵刚才动了一下",
                         "嘿嘿，突然想叫你一声", "要不要摸摸我的头？",
-                    ]
+                    ]))
                     if 5 <= h < 11:
-                        normal_lines.extend(["早上的空气真好呀", "主人吃早饭了吗？"])
+                        normal_lines.extend(_species_lines(getattr(self, "_current_pet_id", None), "morning_extra", ["早上的空气真好呀", "主人吃早饭了吗？"]))
                     elif 18 <= h < 23:
-                        normal_lines.extend(["晚上也陪着你呀", "今天辛苦啦，蹭蹭"])
+                        normal_lines.extend(_species_lines(getattr(self, "_current_pet_id", None), "evening_extra", ["晚上也陪着你呀", "今天辛苦啦，蹭蹭"]))
                     self.say(random.choice(normal_lines))
             else:
                 self.behavior = "idle"
@@ -3365,11 +3410,11 @@ class PetWindow(QWidget):
         if completed:
             progression.record_action(self.state, "fetch_catches")
             _dependency("save_state")(self.state)
-            self.say(random.choice([
+            self.say(random.choice(_species_lines(getattr(self, "_current_pet_id", None), "fetch_again", [
                 "接住啦！🎾",
                 "嘿！我扑到球啦～",
                 "汪汪，再来一次！",
-            ]), 1900)
+            ])), 1900)
             self.play_sound("bark")
 
     def cancel_play_scene(self, show_pet=True):
@@ -3430,11 +3475,11 @@ class PetWindow(QWidget):
         # 卡顿修复（2026-09-30）：say()（SpeechBubble 新建原生窗 ~25ms）
         # 与 save_state（同步写盘 ~9ms）从 mouseMoveEvent 拖拽路径
         # 延迟到下一拍——同步阻塞 ~34ms 在摇醒的手速下=宠物位置跳。
-        _line = random.choice([
+        _line = random.choice(_species_lines(getattr(self, "_current_pet_id", None), "wake", [
             "唔……被你摇醒啦！☀️",
             "汪呜？天亮了吗～",
             "醒啦醒啦，抱稳我呀～",
-        ])
+        ]))
         _state = self.state
 
         def _post_wake():
@@ -3463,9 +3508,8 @@ class PetWindow(QWidget):
         self.last_user_t = time.time()
         # 卡顿修复（2026-10-01 与摇醒同款）：say/play_sound/save_state
         # 延迟到下一拍——同步阻塞在点击帧=视觉顿挫
-        _line = random.choice(
-            ["汪汪！", "好舒服～", "再摸摸！", "嘿嘿", "爱你哟", "蹭蹭你"]
-        )
+        _line = random.choice(_species_lines(getattr(self, "_current_pet_id", None), "pet_reaction",
+            ["汪汪！", "好舒服～", "再摸摸！", "嘿嘿", "爱你哟", "蹭蹭你"]))
         _ms = random.randint(1000, 1800)
         _state = self.state
         _effects = effects
