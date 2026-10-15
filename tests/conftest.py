@@ -44,6 +44,20 @@ def pytest_sessionfinish(session, exitstatus):
             )
             for rep in failed_reports:
                 verdict += f"\n  {rep.outcome.upper()}: {rep.nodeid}"
+                # 2026-10-15 闪烁追踪（第 6 犯）：VERDICT 行带失败摘要
+                try:
+                    text = getattr(rep, "longrepr", None)
+                    if text is not None:
+                        if not isinstance(text, str):
+                            try:
+                                text = text.reprcrash.message
+                            except AttributeError:
+                                text = str(text)
+                        for ln in [l for l in text.splitlines()
+                                   if l.strip()][-4:]:
+                            verdict += f"\n    | {ln}"
+                except Exception:
+                    pass
         print(verdict, flush=True)
     except Exception:
         pass
