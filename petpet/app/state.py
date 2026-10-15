@@ -295,7 +295,13 @@ def ensure_state_schema(
         pet_id for index, pet_id in enumerate(owned_pet_ids)
         if isinstance(pet_id, str) and pet_id not in owned_pet_ids[:index]
     ]
-    for pet_id in (DEFAULT_PET_ID, active_pet_id):
+    # 2026-10-15 教程选宠（用户令）：完成教程后不再强制回填默认宠——
+    # 初始宠由教程选择授予（owned 只留选中那只）；教程未完成期间维持
+    # 默认宠可用（桌面在教程前就需要一只活着的宠物）。
+    force_ids = (active_pet_id,)
+    if not state.get("tutorial_completed", False):
+        force_ids = (DEFAULT_PET_ID, active_pet_id)
+    for pet_id in force_ids:
         if pet_id not in owned_pet_ids:
             owned_pet_ids.append(pet_id)
     state["owned_pet_ids"] = owned_pet_ids

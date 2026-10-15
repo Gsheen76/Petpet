@@ -21,7 +21,7 @@ def shop_window():
     app = QApplication.instance() or QApplication([])
     pet = SimpleNamespace(
         state=progression.ensure_progression({
-            "player": {"pet_coins": 760},
+            "player": {"pet_coins": 1000},  # 2026-10-15 明码价
             "pets": {"lunch_meat": {"pet_name": "午餐肉"}},
             "owned_pet_ids": ["lunch_meat"],
             "active_pet_id": "lunch_meat",
@@ -84,8 +84,9 @@ def test_shop_defaults_to_pets_and_keeps_owned_pet_price_and_description(
     )
 
     assert card is not None
-    assert price.text() == "免费赠送"
-    assert price.property("priceTagRole") == "gift"
+    # 2026-10-15 定价定稿：明码 1000，无免费赠送标签
+    assert price.text() == "1000 Pet币"
+    assert price.property("priceTagRole") == "normal"
     assert description.text() == "元气满满的陪伴小狗，喜欢在桌面上撒娇。"
     assert description.wordWrap() is False
 
@@ -137,7 +138,7 @@ def test_pets_page_shows_preview_nickname_status_and_one_action(shop_window):
     assert "甜筒" in " ".join(
         label.text() for label in card.findChildren(ui.QLabel)
     )
-    assert "760 Pet币" in " ".join(
+    assert "1000 Pet币" in " ".join(
         label.text() for label in card.findChildren(ui.QLabel)
     )
     assert len(card.findChildren(ui.QPushButton)) == 1
@@ -160,31 +161,27 @@ def test_pet_cards_are_framed_and_keep_discount_details_inside_the_card(shop_win
     assert lunch_card.property("shopCard") is True
     assert ice_card.property("shopCard") is True
 
+    # 2026-10-15 定价定稿：宠物卡无折扣徽章/现价签——结构断言改为
+    # 「明码价签+购买键在卡内」
     actions = shop_window.findChild(ui.QFrame, "petActions_ice_cream")
-    badge = shop_window.findChild(ui.QLabel, "discountBadge_ice_cream")
-    discounted = shop_window.findChild(ui.QLabel, "discountPrice_ice_cream")
     action = shop_window.findChild(ui.QPushButton, "petAction_ice_cream")
     assert actions is None
-    assert ice_card.isAncestorOf(badge)
-    assert ice_card.isAncestorOf(discounted)
     assert ice_card.isAncestorOf(action)
-    assert badge.property("discountBubble") is True
-    assert badge.fontMetrics().height() < discounted.fontMetrics().height()
+    assert shop_window.findChild(
+        ui.QLabel, "discountBadge_ice_cream") is None
+    assert shop_window.findChild(
+        ui.QLabel, "discountPrice_ice_cream") is None
+    assert shop_window.findChild(
+        ui.QLabel, "petPrice_ice_cream").text() == "1000 Pet币"
 
 
 def test_pet_discount_price_row_matches_compact_reference_style(shop_window):
+    """2026-10-15 定价定稿：宠物卡无折扣行（原价/现价/徽章全部不存在）。"""
     shop_window.refresh()
     QApplication.processEvents()
-    original = shop_window.findChild(ui.QLabel, "originalPrice_ice_cream")
-    discounted = shop_window.findChild(ui.QLabel, "discountPrice_ice_cream")
-    badge = shop_window.findChild(ui.QLabel, "discountBadge_ice_cream")
-    assert original.text() == "原价：1000 Pet币"
-    assert discounted.text() == "现价：760 Pet币"
-    assert badge.text() == "-24%"
-    assert original.property("priceTagRole") == "normal"
-    assert discounted.property("priceTagRole") == "sale"
-    assert badge.property("priceTagRole") == "discount"
-    assert original.font().strikeOut() is True
+    assert shop_window.findChild(ui.QLabel, "originalPrice_ice_cream") is None
+    assert shop_window.findChild(ui.QLabel, "discountPrice_ice_cream") is None
+    assert shop_window.findChild(ui.QLabel, "discountBadge_ice_cream") is None
 
 
 def test_price_tags_reserve_a_text_safe_height(shop_window):

@@ -9,7 +9,7 @@ def test_tutorial_window_reexports_package_content():
     from petpet.ui.tutorial import TUTORIAL_PAGES
 
     assert pet.TutorialWindow.PAGES is TUTORIAL_PAGES
-    assert len(TUTORIAL_PAGES) == 6
+    assert len(TUTORIAL_PAGES) == 7  # 2026-10-15 选宠页加入
     assert all(len(page) == 3 for page in TUTORIAL_PAGES)
 
 

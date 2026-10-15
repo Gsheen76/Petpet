@@ -628,9 +628,10 @@ class PetpetConfirmDialog(QDialog):
 
 class PetNameEditDialog(QDialog):
     """Small warm name editor used by the desktop attribute card."""
-    def __init__(self, current_name, on_apply, parent=None):
+    def __init__(self, current_name, on_apply, parent=None, default_name=None):
         super().__init__(parent)
         self.on_apply = on_apply
+        self.default_name = default_name
         self.setWindowTitle("给TA改名")
         self.setModal(True)
         self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
@@ -654,9 +655,15 @@ class PetNameEditDialog(QDialog):
         self.error_label.setFont(independent_pixel_font(15, QFont.Bold))
         cancel = QPushButton("取消")
         cancel.setObjectName("petNameEditSecondary")
+        # 2026-10-15 用户令：默认按钮——不想起名的玩家一键用默认宠物名
+        self.default_button = QPushButton(
+            f"默认「{default_name}」" if default_name else "默认")
+        self.default_button.setObjectName("petNameEditSecondary")
+        self.default_button.setVisible(bool(default_name))
+        self.default_button.clicked.connect(self._use_default)
         apply_button = QPushButton("保存")
         apply_button.setObjectName("petNameEditPrimary")
-        for button in (cancel, apply_button):
+        for button in (cancel, self.default_button, apply_button):
             button.setFont(independent_pixel_font(17, QFont.Bold))
             button.setMinimumHeight(40)
         cancel.clicked.connect(self.reject)
@@ -672,6 +679,7 @@ class PetNameEditDialog(QDialog):
         actions = QHBoxLayout()
         actions.addStretch(1)
         actions.addWidget(cancel)
+        actions.addWidget(self.default_button)
         actions.addWidget(apply_button)
         layout.addLayout(actions)
         outer = QVBoxLayout(self)
@@ -710,6 +718,12 @@ class PetNameEditDialog(QDialog):
             screen_rect.x() + (screen_rect.width() - self.width()) // 2,
             screen_rect.y() + (screen_rect.height() - self.height()) // 2,
         )
+
+    def _use_default(self):
+        if self.default_name:
+            self.name_input.setText(self.default_name)
+            self.error_label.clear()
+            self.name_input.setFocus()
 
     def _apply(self):
         raw_name = " ".join(self.name_input.text().split())
@@ -1567,6 +1581,9 @@ class TrayApp:
         save_state(self.state)
         self.pet = PetWindow(self.state)
         self.pet._set_active_pet_callback = self.set_active_pet
+        # 2026-10-15 教程选宠/首次获得命名（用户令）：暴露给教程窗口与商店
+        self.pet._grant_starter_pet_callback = self.grant_starter_pet
+        self.pet._open_new_pet_naming_callback = self.open_new_pet_naming
         self.pet._app_action_cb = self._handle_bubble_action
         ai.set_pet_name(
             self.pet.pet_name,
@@ -1633,6 +1650,63 @@ class TrayApp:
             return callback(*args)
         except RuntimeError:
             setattr(owner, attribute, None)
+
+    def grant_starter_pet(self, pet_id: str) -> dict:
+        """教程选宠授予（2026-10-15 用户令）：未完成教程时，把选中宠设为
+        唯一初始宠物（owned 只留 TA——默认赠送的午餐肉被替换），绑定出勤。
+        已完成教程的玩家重开教程不授不夺。"""
+        registry = load_pet_registry()
+        if pet_id not in registry:
+            return {"ok": False, "message": "没有找到这只宠物。"}
+        if self.state.get("tutorial_completed", False):
+            return {"ok": True, "message": "教程已完成，选择仅作展示。"}
+        if pet_id in self.state.get("owned_pet_ids", []):
+            self._grant_finish(pet_id)
+            return {"ok": True, "pet_id": pet_id}
+        # 未拥有（选了冰淇淋/棉花糖）：清掉默认赠送、授予选中
+        self.state["owned_pet_ids"] = [pet_id]
+        profile = self.state.setdefault("pets", {}).setdefault(pet_id, {})
+        profile["pet_name"] = registry[pet_id].get("default_name", "Petpet")
+        self._grant_finish(pet_id)
+        return {"ok": True, "pet_id": pet_id}
+
+    def _grant_finish(self, pet_id: str):
+        app_state.bind_active_pet(self.state, pet_id)
+        switch_assets = getattr(self.pet, "switch_pet_assets", None)
+        if callable(switch_assets):
+            switch_assets(pet_id)
+        else:
+            self.pet.refresh_pose_from_state()
+        self.state["pet_name"] = self.state.get("pets", {}).get(
+            pet_id, {}
+        ).get("pet_name", ai.DEFAULT_PET_NAME)
+        ai.set_pet_name(self.state["pet_name"], pet_id=pet_id)
+        save_state(self.state)
+        self.refresh_menu()
+
+    def open_new_pet_naming(self, pet_id: str):
+        """首次拥有新宠物时弹命名框（2026-10-15 用户令）——带默认按钮。"""
+        registry = load_pet_registry()
+        default_name = registry.get(pet_id, {}).get("default_name", "Petpet")
+        profile = self.state.get("pets", {}).get(pet_id, {})
+        current = profile.get("pet_name") or default_name
+
+        def _apply(name):
+            pets = self.state.setdefault("pets", {})
+            prof = pets.setdefault(pet_id, {})
+            prof["pet_name"] = name
+            if self.state.get("active_pet_id") == pet_id:
+                self.pet.set_pet_name(name)
+            else:
+                ai.set_pet_name(name, pet_id=pet_id)
+            save_state(self.state)
+
+        dialog = PetNameEditDialog(
+            current, _apply, self.pet.window() if hasattr(self.pet, "window") else None,
+            default_name=default_name,
+        )
+        dialog.center_on_screen(self.pet.interface_screen_rect())
+        dialog.exec_()
 
     def set_active_pet(self, pet_id: str) -> dict:
         """Switch the selected pet and refresh every live surface once."""

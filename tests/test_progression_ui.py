@@ -270,7 +270,7 @@ class ProgressionWindowUiTests(unittest.TestCase):
         self.assertIn("墙面装饰画", labels)
         self.assertIn("小狗状态卡", labels)
         self.assertIn(
-            "免费领取",
+            "购买",  # 2026-10-15 明码定价：无免费领取
             [button.text() for button in shop.findChildren(QPushButton)],
         )
 

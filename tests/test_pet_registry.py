@@ -19,9 +19,10 @@ def test_registry_contains_lunch_meat_and_ice_cream():
     assert "lunch_meat" in registry
     assert registry["lunch_meat"]["default_name"] == "午餐肉"
     assert registry["ice_cream"]["default_name"] == "冰淇淋"
-    assert registry["ice_cream"]["original_price"] == 1000
-    assert registry["ice_cream"]["discount"] == 0.76
-    assert registry["ice_cream"]["price"] == 760
+    # 2026-10-15 定价定稿（用户令）：一律明码 1000，无折扣字段
+    assert registry["ice_cream"]["price"] == 1000
+    assert "original_price" not in registry["ice_cream"]
+    assert "discount" not in registry["ice_cream"]
 
 
 def test_valid_action_is_selected_before_current_pet_idle(monkeypatch, tmp_path):

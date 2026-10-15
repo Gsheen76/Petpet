@@ -14,6 +14,7 @@ from PyQt5.QtWidgets import (
 
 from petpet.progression.ui import FeedbackButton
 from petpet.chat import api as ai
+from petpet.app import pets as pet_registry
 from petpet.ui.common import KeepAliveTopLevelWindow
 from petpet.ui.common import independent_pixel_font
 
@@ -49,8 +50,13 @@ TUTORIAL_PAGES = (
         "设置里可以选择健康提醒和性格偏好，不需要调整复杂数值。",
     ),
     (
+        "🐾",
+        "选择你的伙伴",
+        "三只小伙伴都在等你。点一下头像认识 TA，选中后进入下一步。",
+    ),
+    (
         "🏷️",
-        "最后，给小狗取个名字吧",
+        "最后，给TA取个名字吧",
         "名字会显示在聊天和档案中，最多 6 个字符。",
     ),
 )
@@ -139,7 +145,19 @@ class TutorialWindow(KeepAliveTopLevelWindow):
                 padding:4px 12px;
                 min-height:38px;
             }
-            QPushButton#later:hover {
+            QPushButton#petChoiceButton {
+                background:#fffdf8;
+                border:3px solid #f0dcc8;
+                border-radius:20px;
+            }
+            QPushButton#petChoiceButton:hover {
+                border-color:#f5b39c;
+            }
+            QPushButton#petChoiceButton[chosen="true"] {
+                border-color:#f28f76;
+                background:#fff3ea;
+            }
+            QPushButton#later {
                 background:#ffebe3;
                 color:#a45d4e;
             }
@@ -185,6 +203,43 @@ class TutorialWindow(KeepAliveTopLevelWindow):
         self.body_label.setMaximumHeight(92)
         root.addWidget(self.body_label)
 
+        # ---- 2026-10-15 选宠页（命名页前一步，用户令）----
+        self.chooser_card = QFrame()
+        self.chooser_card.setObjectName("nameCard")
+        chooser_layout = QVBoxLayout(self.chooser_card)
+        chooser_layout.setContentsMargins(16, 12, 16, 10)
+        chooser_layout.setSpacing(8)
+        self.pet_chooser_row = QHBoxLayout()
+        self.pet_chooser_row.setSpacing(14)
+        self._pet_choice_buttons = {}
+        for pet_id, definition in pet_registry.load_pet_registry().items():
+            button = QPushButton()
+            button.setObjectName("petChoiceButton")
+            button.setFixedSize(104, 104)
+            avatar_path = pet_registry.pet_avatar_path(pet_id)
+            from PyQt5.QtGui import QPixmap, QIcon
+            pm = QPixmap(avatar_path) if avatar_path else QPixmap()
+            if not pm.isNull():
+                button.setIcon(QIcon(pm.scaled(
+                    88, 88, Qt.KeepAspectRatio, Qt.SmoothTransformation)))
+                button.setIconSize(pm.scaled(
+                    88, 88, Qt.KeepAspectRatio).size())
+            button.setToolTip(definition.get("default_name", pet_id))
+            button.clicked.connect(
+                lambda _checked=False, pid=pet_id: self._select_starter(pid))
+            self._pet_choice_buttons[pet_id] = button
+            self.pet_chooser_row.addWidget(button)
+        self.pet_chooser_row.addStretch(1)
+        self.pet_info_label = QLabel("点一只头像，认识一下TA吧～")
+        self.pet_info_label.setObjectName("tutorialBody")
+        self.pet_info_label.setAlignment(Qt.AlignCenter)
+        self.pet_info_label.setWordWrap(True)
+        self.pet_info_label.setFont(independent_pixel_font(19))
+        chooser_layout.addLayout(self.pet_chooser_row)
+        chooser_layout.addWidget(self.pet_info_label)
+        root.addWidget(self.chooser_card)
+        self._starter_pet_id = None
+
         self.name_card = QFrame()
         self.name_card.setObjectName("nameCard")
         name_layout = QVBoxLayout(self.name_card)
@@ -200,6 +255,12 @@ class TutorialWindow(KeepAliveTopLevelWindow):
         self.name_hint.setAlignment(Qt.AlignCenter)
         name_layout.addWidget(self.name_input)
         name_layout.addWidget(self.name_hint)
+        # 2026-10-15 用户令：默认按钮——不想起名的玩家一键用默认宠物名
+        self.default_name_button = FeedbackButton("用默认名字")
+        self.default_name_button.setObjectName("secondary")
+        self.default_name_button.setQssHover(True)
+        self.default_name_button.clicked.connect(self._use_default_name)
+        name_layout.addWidget(self.default_name_button)
         root.addWidget(self.name_card)
 
         root.addStretch(1)
@@ -236,6 +297,9 @@ class TutorialWindow(KeepAliveTopLevelWindow):
     def start(self):
         """Restart the guide from page one and center it on the pet's screen."""
         self.page_index = 0
+        self._starter_pet_id = None
+        for button in self._pet_choice_buttons.values():
+            button.setProperty("chosen", False)
         current_name = self.pet.pet_name
         if (
             not self.pet.state.get("tutorial_completed", False)
@@ -255,14 +319,18 @@ class TutorialWindow(KeepAliveTopLevelWindow):
         self.raise_()
         self.activateWindow()
 
+    CHOOSER_PAGE_INDEX = -2  # 倒数第二页=选宠（构造后按 len 计算）
+
     def _refresh_page(self):
         emoji, title, body = self.PAGES[self.page_index]
         is_last = self.page_index == len(self.PAGES) - 1
+        is_chooser = self.page_index == len(self.PAGES) - 2
         self.icon_label.setText(emoji)
         self.title_label.setText(title)
         self.body_label.setText(body)
         self.name_card.setVisible(is_last)
-        self.body_label.setMaximumHeight(58 if is_last else 92)
+        self.chooser_card.setVisible(is_chooser)
+        self.body_label.setMaximumHeight(58 if (is_last or is_chooser) else 92)
         self.back_button.setVisible(self.page_index > 0)
         self.next_button.setText("完成相遇" if is_last else "下一步")
         self.progress_label.setText(
@@ -283,7 +351,42 @@ class TutorialWindow(KeepAliveTopLevelWindow):
             self.name_hint.clear()
             self._refresh_page()
 
+    def _select_starter(self, pet_id):
+        """选宠页：点亮头像 + 展示基本信息。"""
+        registry = pet_registry.load_pet_registry()
+        definition = registry.get(pet_id, {})
+        self._starter_pet_id = pet_id
+        for pid, button in self._pet_choice_buttons.items():
+            button.setProperty("chosen", pid == pet_id)
+            button.style().unpolish(button)
+            button.style().polish(button)
+        name = definition.get("default_name", pet_id)
+        desc = definition.get("description", "")
+        personality = definition.get("chat_personality", "")
+        brief = "、".join(
+            personality.replace("；", "，").split("，")[:2]) if personality else ""
+        extra = f"性格：{brief}" if brief else ""
+        combined = f"{name} · {desc}" + (("\n" + extra) if extra else "")
+        self.pet_info_label.setText(combined)
+
+    def _use_default_name(self):
+        """命名页默认按钮：一键填入选中宠的默认名。"""
+        registry = pet_registry.load_pet_registry()
+        pet_id = self._starter_pet_id or self.pet.state.get(
+            "active_pet_id", "lunch_meat")
+        default_name = registry.get(pet_id, {}).get("default_name", "午餐肉")
+        self.name_input.setText(default_name)
+        self.name_hint.clear()
+
     def _next(self):
+        # 选宠页：未选不能过；确认后授予（教程未完成=唯一初始宠）
+        if self.page_index == len(self.PAGES) - 2:
+            if not self._starter_pet_id:
+                self.pet_info_label.setText("先点一只头像选出你的伙伴吧～")
+                return
+            grant = getattr(self.pet, "_grant_starter_pet_callback", None)
+            if callable(grant):
+                grant(self._starter_pet_id)
         if self.page_index < len(self.PAGES) - 1:
             self.page_index += 1
             self._refresh_page()

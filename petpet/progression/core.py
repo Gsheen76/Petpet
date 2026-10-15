@@ -621,9 +621,9 @@ def purchase_pet(state, pet_id):
             "message": "这只宠物已经拥有啦。",
         }
 
-    original_price = _safe_int(definition.get("original_price", definition.get("price", 0)))
-    pricing = first_purchase_price(state, "pets", original_price)
-    price = pricing["price"]
+    # 2026-10-15 定价定稿（用户令）：宠物一律明码 1000 Pet币——不再走
+    # 首购折扣（first_purchase_price 保留给套装等其他品类）
+    price = _safe_int(definition.get("price", 0))
     coins = _shared_pet_coins(state)
     if coins["pet_coins"] < price:
         return {
@@ -637,7 +637,6 @@ def purchase_pet(state, pet_id):
     if coins is not state and "pet_coins" in state:
         state["pet_coins"] = coins["pet_coins"]
     owned_pet_ids.append(pet_id)
-    _consume_first_purchase_discount(state, "pets", price)
     player = state.get("player")
     if isinstance(player, dict) and isinstance(player.get("owned_pet_ids"), list):
         player["owned_pet_ids"] = list(state["owned_pet_ids"])
@@ -645,8 +644,6 @@ def purchase_pet(state, pet_id):
         "ok": True,
         "pet_id": pet_id,
         "price": price,
-        "original_price": pricing["original_price"],
-        "discount": pricing["discount"],
         "message": f"已购买 {definition['default_name']}！",
     }
 

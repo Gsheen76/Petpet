@@ -4,7 +4,7 @@
     "default_name": "午餐肉",
     "description": "元气满满的陪伴小狗，喜欢在桌面上撒娇。",
     "chat_personality": "活泼开朗、反应轻快、好奇热情，喜欢和主人一起开心探索；可以偶尔用“汪”、摇尾巴等小狗口吻，但不要连续吵闹或频繁重复口癖。",
-    "price": 0,
+    "price": 1000,
     "preview": "pets/lunch_meat/desktop/poses/idle.png",
     "avatar": "pets/lunch_meat/avatar.png",
     "desktop": {
@@ -31,9 +31,7 @@
     "default_name": "冰淇淋",
     "description": "安静温柔的家园小狗，期待和你一起生活。",
     "chat_personality": "温柔可爱、语气柔软、会耐心安慰主人，善于陪伴并让人感到亲近；用词轻柔亲近，但不要过度撒娇或频繁重复口癖。",
-    "original_price": 1000,
-    "discount": 0.76,
-    "price": 760,
+    "price": 1000,
     "preview": "pets/ice_cream/home/poses/home_pet_idle_sit.png",
     "avatar": "pets/ice_cream/avatar.png",
     "desktop": {
@@ -59,9 +57,7 @@
     "default_name": "棉花糖",
     "description": "软软糯糯的水彩小兔，安静地陪着你。",
     "chat_personality": "温柔恬静、软糯慢节奏，说话轻声细语，像一团安静的棉花糖；会用轻轻的语气关心主人，但不过度撒娇，不频繁重复口癖。",
-    "original_price": 1000,
-    "discount": 0.76,
-    "price": 760,
+    "price": 1000,
     "preview": "pets/marshmallow/desktop/poses/idle.png",
     "avatar": "pets/marshmallow/avatar.png",
     "desktop": {

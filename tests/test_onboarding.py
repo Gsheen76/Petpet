@@ -48,7 +48,8 @@ class OnboardingTests(unittest.TestCase):
         self.assertNotIn("长按右键", tutorial_copy)
 
     def test_tutorial_has_six_current_feature_pages(self):
-        self.assertEqual(len(pet.TutorialWindow.PAGES), 6)
+        # 2026-10-15 选宠页加入：6→7 页
+        self.assertEqual(len(pet.TutorialWindow.PAGES), 7)
         tutorial_copy = "\n".join(
             text for page in pet.TutorialWindow.PAGES for text in page
         )

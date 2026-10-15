@@ -52,7 +52,7 @@ class SnapshotTests(unittest.TestCase):
         snap = pet_profile_snapshot(_fresh_state(), "ice_cream")
         self.assertFalse(snap["owned"])
         self.assertFalse(snap["active"])
-        self.assertEqual(snap["price"], 760)
+        self.assertEqual(snap["price"], 1000)  # 2026-10-15 明码定价
         self.assertEqual(snap["outfits"], [])
         self.assertEqual(snap["name"], "冰淇淋")
 

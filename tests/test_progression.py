@@ -20,7 +20,7 @@ def fresh_state(**overrides):
 def test_purchase_pet_uses_shared_coins_once():
     state = {
         "player": {
-            "pet_coins": 900,
+            "pet_coins": 1200,
             "owned_pet_ids": ["lunch_meat"],
         },
         "owned_pet_ids": ["lunch_meat"],
@@ -29,11 +29,12 @@ def test_purchase_pet_uses_shared_coins_once():
 
     result = progression.purchase_pet(state, "ice_cream")
 
+    # 2026-10-15 定价定稿：明码 1000，无折扣字段
     assert result["ok"] is True
-    assert result["price"] == 760
-    assert result["original_price"] == 1000
-    assert result["discount"] == 0.76
-    assert state["player"]["pet_coins"] == 140
+    assert result["price"] == 1000
+    assert "original_price" not in result
+    assert "discount" not in result
+    assert state["player"]["pet_coins"] == 200
     assert state["owned_pet_ids"] == ["lunch_meat", "ice_cream"]
     assert "ice_cream" not in state["pets"]
     assert progression.purchase_pet(state, "ice_cream")["ok"] is False
@@ -76,8 +77,8 @@ def test_pet_owned_does_not_normalize_render_state():
 
 def test_purchase_pet_keeps_the_legacy_coin_facade_in_sync():
     state = {
-        "player": {"pet_coins": 760},
-        "pet_coins": 760,
+        "player": {"pet_coins": 1000},
+        "pet_coins": 1000,
         "owned_pet_ids": ["lunch_meat"],
     }
 
@@ -89,16 +90,18 @@ def test_purchase_pet_keeps_the_legacy_coin_facade_in_sync():
 
 def test_first_purchase_discount_only_applies_to_pets():
     state = fresh_state(pet_coins=2000)
+    # 2026-10-15 定价定稿：宠物明码 1000（不消耗 pets 首购折扣标记）
     result = progression.purchase_pet(state, "ice_cream")
-    assert result["price"] == 760
-    assert state["pet_coins"] == 1240
-    assert state["shop_first_purchase_discounts"]["pets"] is False
+    assert result["price"] == 1000
+    assert state["pet_coins"] == 1000
+    # 宠物明码后不再消耗 pets 首购标记（标记对宠物已无意义，保持未用）
+    assert state["shop_first_purchase_discounts"]["pets"] is True
 
     outfit = progression.purchase_outfit(state, "dinosaur_suit")
     assert outfit["price"] == 600
     home = progression.purchase_home_decoration(state, "home_sofa")
     assert home["price"] == 240
-    assert state["pet_coins"] == 400
+    assert state["pet_coins"] == 160
 
 
 def test_old_outfit_and_home_discount_flags_are_ignored():

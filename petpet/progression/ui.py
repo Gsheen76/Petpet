@@ -3035,22 +3035,16 @@ class ShopWindow(CozyProgressWindow):
         price_row = QHBoxLayout(price_row_container)
         price_row.setContentsMargins(0, 0, 0, 0)
         price_row.setSpacing(4)
+        # 2026-10-15 定价定稿（用户令）：宠物一律明码价签（当前 1000
+        # Pet币）——去除打折（原价/现价/折扣徽章）与免费赠送标签逻辑
         price = int(definition.get("price", 0))
-        pricing = progression.first_purchase_price(
-            state, "pets", definition.get("original_price", price)
-        )
-        displayed_price = price if owned else pricing["price"]
         price_label = self._price_tag(
-            "免费赠送" if displayed_price == 0 else f"{displayed_price} Pet币",
-            "gift" if displayed_price == 0 else "normal",
-            f"petPrice_{pet_id}",
+            f"{price} Pet币", "normal", f"petPrice_{pet_id}"
         )
         button = None
         if not owned:
-            button = FeedbackButton(
-                "免费领取" if pricing["price"] == 0 else "购买"
-            )
-            button.setEnabled(_coin_balance(state) >= pricing["price"])
+            button = FeedbackButton("购买")
+            button.setEnabled(_coin_balance(state) >= price)
             button.setProperty("coralPill", True)
             button.clicked.connect(
                 lambda _checked=False, selected=pet_id: self._purchase_pet(selected)
@@ -3064,27 +3058,13 @@ class ShopWindow(CozyProgressWindow):
             )
         if button is not None:
             button.setObjectName(f"petAction_{pet_id}")
-        discount_badge = None
-        original = discounted = None
-        if not owned and pricing["eligible"]:
-            original, discounted, discount_badge = self._price_labels(
-                state, "pets", pricing["original_price"], pet_id
-            )
-            price_row.addWidget(original)
-            price_row.addWidget(discounted)
-        else:
-            price_row.addWidget(price_label)
+        price_row.addWidget(price_label)
         price_row.addStretch(1)
         if button is not None:
             price_row.addWidget(button)
         info.addWidget(price_row_container)
         layout.addLayout(info, 1)
 
-        # 2026-10-14 第三宠上架：价格签=固定尺寸素材件（setFixedSize
-        # asset.size()），绝不参与收缩（曾被我设宽度下限压扁素材比例，
-        # 用户实测「价格素材比例不对」）；卡片收缩由描述行独担
-        if discount_badge is not None:
-            title_row.addWidget(discount_badge, 0, Qt.AlignRight)
         if active:
             status_badge = _status_badge_label("🐾 使用中", "active")
         elif owned:
@@ -3203,6 +3183,11 @@ class ShopWindow(CozyProgressWindow):
             switch_result = self._set_active_pet_result(pet_id)
             if switch_result.get("ok"):
                 save_purchase = False
+                # 2026-10-15 用户令：首次拥有新宠物→弹命名框（带默认按钮）
+                naming = getattr(
+                    self.pet, "_open_new_pet_naming_callback", None)
+                if callable(naming):
+                    QTimer.singleShot(80, lambda pid=pet_id: naming(pid))
             else:
                 result["message"] = (
                     f"购买成功，但切换失败："
