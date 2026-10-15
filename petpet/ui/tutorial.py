@@ -98,6 +98,7 @@ class TutorialWindow(KeepAliveTopLevelWindow):
             }
             QFrame#tutorialCard {
                 background:#fff8ec;
+                border-image: url(ui/tutorial/tutorial_bg.png) 0 stretch stretch;
                 border:1px solid #e7c4ad;
                 border-radius:24px;
                 color:#65483b;
@@ -205,7 +206,7 @@ QPushButton {
         root.setSpacing(14)
 
         top = QHBoxLayout()
-        brand = QLabel("🌼 Pet陪它 · 新手教程")
+        brand = QLabel("Pet陪它 · 新手教程")
         brand.setFont(independent_pixel_font(17, QFont.Bold))
         brand.setStyleSheet("font-weight:900; color:#93624f;")
         self.later_button = FeedbackButton("稍后再说")
@@ -228,7 +229,7 @@ QPushButton {
         self.icon_label = QLabel()
         self.icon_label.setObjectName("tutorialIcon")
         self.icon_label.setAlignment(Qt.AlignCenter)
-        self.icon_label.setFixedSize(646, 96)
+        self.icon_label.setFixedSize(646, 112)
         root.addWidget(self.icon_label)
 
         self.title_label = QLabel()
@@ -240,7 +241,7 @@ QPushButton {
         self.body_label.setObjectName("tutorialBody")
         self.body_label.setAlignment(Qt.AlignCenter)
         self.body_label.setWordWrap(True)
-        self.body_label.setMinimumHeight(58)
+        self.body_label.setMinimumHeight(64)
         self.body_label.setMaximumHeight(92)
         root.addWidget(self.body_label)
 
@@ -256,22 +257,25 @@ QPushButton {
         for pet_id, definition in pet_registry.load_pet_registry().items():
             button = QPushButton()
             button.setObjectName("petChoiceButton")
-            button.setFixedSize(92, 92)
+            button.setFixedSize(100, 100)
             avatar_path = pet_registry.pet_avatar_path(pet_id)
             from PyQt5.QtGui import QPixmap, QIcon
             pm = QPixmap(avatar_path) if avatar_path else QPixmap()
             if not pm.isNull():
                 button.setIcon(QIcon(pm.scaled(
-                    78, 78, Qt.KeepAspectRatio, Qt.SmoothTransformation)))
+                    84, 84, Qt.KeepAspectRatio, Qt.SmoothTransformation)))
                 button.setIconSize(pm.scaled(
-                    78, 78, Qt.KeepAspectRatio).size())
+                    84, 84, Qt.KeepAspectRatio).size())
             button.setToolTip(definition.get("default_name", pet_id))
             button.clicked.connect(
                 lambda _checked=False, pid=pet_id: self._select_starter(pid))
             self._pet_choice_buttons[pet_id] = button
             self.pet_chooser_row.addWidget(button)
+        # 居中（2026-10-15 修正）：insertStretch(0) 是零系数弹簧（第一参
+        # 是索引！）——右端 factor-1 弹簧吃光空隙、按钮被推到左边。两侧都
+        # 必须显式系数 1
         self.pet_chooser_row.addStretch(1)
-        self.pet_chooser_row.insertStretch(0)
+        self.pet_chooser_row.insertStretch(0, 1)
         self.pet_info_label = QLabel("点一只头像，认识一下TA吧～")
         self.pet_info_label.setObjectName("tutorialBody")
         self.pet_info_label.setAlignment(Qt.AlignCenter)
@@ -308,10 +312,17 @@ QPushButton {
         root.addWidget(self.name_card)
 
         root.addStretch(1)
+        # 底部严格对齐（2026-10-15 用户令）：进度点与按键行绝对定位钉在
+        # 卡底同一 y——hero/图标/选宠卡等页内容高度不同时不再漂移
+        self.bottom_bar = QWidget(self.tutorial_card)
+        self.bottom_bar.setObjectName("tutorialBottom")
+        bottom_layout = QVBoxLayout(self.bottom_bar)
+        bottom_layout.setContentsMargins(0, 0, 0, 0)
+        bottom_layout.setSpacing(10)
         self.progress_label = QLabel()
         self.progress_label.setObjectName("tutorialProgress")
         self.progress_label.setAlignment(Qt.AlignCenter)
-        root.addWidget(self.progress_label)
+        bottom_layout.addWidget(self.progress_label)
 
         controls = QHBoxLayout()
         controls.setSpacing(12)
@@ -325,7 +336,9 @@ QPushButton {
         controls.addWidget(self.back_button)
         controls.addStretch(1)
         controls.addWidget(self.next_button)
-        root.addLayout(controls)
+        bottom_layout.addLayout(controls)
+        # 卡高=窗 700-外边距16=684；底栏高 96，贴卡底内边距 18
+        self.bottom_bar.setGeometry(38, 684 - 18 - 96, 646, 96)
 
         # hero 插画（Meowa 生成，缺文件静默回退 emoji）
         from petpet.app.paths import ASSETS_DIR as _ASSETS
@@ -448,7 +461,7 @@ QPushButton {
             from PyQt5.QtGui import QPixmap as _QPM
             cache[name] = (
                 _QPM(path).scaled(
-                    88, 88, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                    104, 104, Qt.KeepAspectRatio, Qt.SmoothTransformation)
                 if _os.path.exists(path) else _QPM())
         return cache[name] or None
 

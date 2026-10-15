@@ -72,15 +72,13 @@ class OnboardingTests(unittest.TestCase):
             "名字会显示在聊天和档案中，最多 6 个字符。",
         )
         self.assertEqual(window.name_input.maxLength(), 6)
-        self.assertLessEqual(window.body_label.height(), 58)
+        self.assertLessEqual(window.body_label.height(), 64)  # 2026-10-15 铺满布局加高
         self.assertLessEqual(
             window.body_label.geometry().bottom(),
             window.name_card.geometry().top(),
         )
-        self.assertLessEqual(
-            window.name_card.geometry().bottom(),
-            window.progress_label.geometry().top(),
-        )
+        # 2026-10-15 底栏绝对定位：断言底栏位置恒定（跨页严格对齐）
+        self.assertEqual(window.bottom_bar.y(), 570)
 
     def test_pet_name_normalization(self):
         self.assertEqual(ai.normalize_pet_name("  小 团子  "), "小 团子")
