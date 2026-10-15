@@ -1816,6 +1816,26 @@ class SpeechBubble(KeepAliveTopLevelWindow):
 
         p.setFont(self.font())
         p.setPen(text_color)
-        p.drawText(body.adjusted(18, 0, -18, 0),
+        # 2026-10-14 加固（用户报「交互对话框没有加载完全」）：框尺寸按
+        # widget fontMetrics 预算，绘制可能因环境性字体回退/度量失配画
+        # 得更宽更高（活实例 BitBlt 实拍文字贴框）。绘制层用画家自己的
+        # 度量兜底：换行包围盒装不下时逐级缩字号（宽高都保、内容不丢，
+        # 度量一致时零行为变化）。
+        text_rect = body.adjusted(18, 0, -18, 0)
+        draw_font = self.font()
+        painter_fm = p.fontMetrics()
+        for _ in range(12):
+            wrapped = painter_fm.boundingRect(
+                text_rect.toRect(), Qt.AlignCenter | Qt.TextWordWrap, self.text)
+            if (wrapped.width() <= text_rect.width() + 1
+                    and wrapped.height() <= text_rect.height() + 1):
+                break
+            new_px = draw_font.pixelSize() - 1
+            if new_px < 9:
+                break
+            draw_font.setPixelSize(new_px)
+            painter_fm = QFontMetrics(draw_font)
+        p.setFont(draw_font)
+        p.drawText(text_rect,
                    Qt.AlignCenter | Qt.TextWordWrap,
                    self.text)
