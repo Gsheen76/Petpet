@@ -72,6 +72,7 @@ class TutorialWindow(KeepAliveTopLevelWindow):
         self.pet = pet_window
         self.on_complete = on_complete
         self.page_index = 0
+        self.pages = self.PAGES  # start() 按首次/重看切换页集
         self.setWindowFlags(
             Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
         )
@@ -79,7 +80,7 @@ class TutorialWindow(KeepAliveTopLevelWindow):
         self.setAttribute(Qt.WA_DeleteOnClose, False)
         self.setObjectName("tutorialWindow")
         self.setWindowTitle("初次见面 · 新手教程")
-        self.setFixedSize(740, 620)
+        self.setFixedSize(740, 660)
         self.setStyleSheet("""
             QWidget#tutorialWindow {
                 background:transparent;
@@ -185,6 +186,14 @@ class TutorialWindow(KeepAliveTopLevelWindow):
         top.addWidget(self.later_button)
         root.addLayout(top)
 
+        # 2026-10-15 素材升级（用户令）：欢迎页顶部 hero 插画（Meowa 生成，
+        # 素材缺失回退 emoji 大图标不拖垮）
+        self.hero_label = QLabel()
+        self.hero_label.setObjectName("tutorialHero")
+        self.hero_label.setAlignment(Qt.AlignCenter)
+        self.hero_label.setFixedSize(608, 160)
+        root.addWidget(self.hero_label)
+
         self.icon_label = QLabel()
         self.icon_label.setObjectName("tutorialIcon")
         self.icon_label.setAlignment(Qt.AlignCenter)
@@ -207,33 +216,35 @@ class TutorialWindow(KeepAliveTopLevelWindow):
         self.chooser_card = QFrame()
         self.chooser_card.setObjectName("nameCard")
         chooser_layout = QVBoxLayout(self.chooser_card)
-        chooser_layout.setContentsMargins(16, 12, 16, 10)
-        chooser_layout.setSpacing(8)
+        chooser_layout.setContentsMargins(16, 14, 16, 12)
+        chooser_layout.setSpacing(10)
         self.pet_chooser_row = QHBoxLayout()
-        self.pet_chooser_row.setSpacing(14)
+        self.pet_chooser_row.setSpacing(18)
         self._pet_choice_buttons = {}
         for pet_id, definition in pet_registry.load_pet_registry().items():
             button = QPushButton()
             button.setObjectName("petChoiceButton")
-            button.setFixedSize(104, 104)
+            button.setFixedSize(92, 92)
             avatar_path = pet_registry.pet_avatar_path(pet_id)
             from PyQt5.QtGui import QPixmap, QIcon
             pm = QPixmap(avatar_path) if avatar_path else QPixmap()
             if not pm.isNull():
                 button.setIcon(QIcon(pm.scaled(
-                    88, 88, Qt.KeepAspectRatio, Qt.SmoothTransformation)))
+                    78, 78, Qt.KeepAspectRatio, Qt.SmoothTransformation)))
                 button.setIconSize(pm.scaled(
-                    88, 88, Qt.KeepAspectRatio).size())
+                    78, 78, Qt.KeepAspectRatio).size())
             button.setToolTip(definition.get("default_name", pet_id))
             button.clicked.connect(
                 lambda _checked=False, pid=pet_id: self._select_starter(pid))
             self._pet_choice_buttons[pet_id] = button
             self.pet_chooser_row.addWidget(button)
         self.pet_chooser_row.addStretch(1)
+        self.pet_chooser_row.insertStretch(0)
         self.pet_info_label = QLabel("点一只头像，认识一下TA吧～")
         self.pet_info_label.setObjectName("tutorialBody")
         self.pet_info_label.setAlignment(Qt.AlignCenter)
         self.pet_info_label.setWordWrap(True)
+        self.pet_info_label.setMinimumHeight(46)
         self.pet_info_label.setFont(independent_pixel_font(19))
         chooser_layout.addLayout(self.pet_chooser_row)
         chooser_layout.addWidget(self.pet_info_label)
@@ -283,6 +294,15 @@ class TutorialWindow(KeepAliveTopLevelWindow):
         controls.addWidget(self.next_button)
         root.addLayout(controls)
 
+        # hero 插画（Meowa 生成，缺文件静默回退 emoji）
+        from petpet.app.paths import ASSETS_DIR as _ASSETS
+        import os as _os
+        _hero_path = _os.path.join(
+            _ASSETS, "ui", "tutorial", "tutorial_hero.png")
+        from PyQt5.QtGui import QPixmap as _QPM
+        self._hero_pixmap = (
+            _QPM(_hero_path) if _os.path.exists(_hero_path) else _QPM())
+
         self.icon_label.setFont(independent_pixel_font(80))
         self.title_label.setFont(independent_pixel_font(31, QFont.Bold))
         self.body_label.setFont(independent_pixel_font(23))
@@ -295,7 +315,13 @@ class TutorialWindow(KeepAliveTopLevelWindow):
         self._refresh_page()
 
     def start(self):
-        """Restart the guide from page one and center it on the pet's screen."""
+        """Restart the guide from page one and center it on the pet's screen.
+
+        2026-10-15 用户令：选宠+起名只属于**下载后第一次**教程（教程未完
+        成）；已完成教程再打开（菜单重看）只展示玩法五页，不重选不重名。
+        """
+        first_run = not self.pet.state.get("tutorial_completed", False)
+        self.pages = self.PAGES if first_run else self.PAGES[:5]
         self.page_index = 0
         self._starter_pet_id = None
         for button in self._pet_choice_buttons.values():
@@ -322,21 +348,36 @@ class TutorialWindow(KeepAliveTopLevelWindow):
     CHOOSER_PAGE_INDEX = -2  # 倒数第二页=选宠（构造后按 len 计算）
 
     def _refresh_page(self):
-        emoji, title, body = self.PAGES[self.page_index]
-        is_last = self.page_index == len(self.PAGES) - 1
-        is_chooser = self.page_index == len(self.PAGES) - 2
+        emoji, title, body = self.pages[self.page_index]
+        is_last = self.page_index == len(self.pages) - 1
+        is_chooser = (
+            len(self.pages) == 7 and self.page_index == len(self.pages) - 2)
+        # 遮挡根治（2026-10-15 用户令）：选宠页隐藏 emoji 大图标给内容让位
+        self.icon_label.setVisible(not is_chooser)
         self.icon_label.setText(emoji)
         self.title_label.setText(title)
         self.body_label.setText(body)
-        self.name_card.setVisible(is_last)
+        self.name_card.setVisible(is_last and len(self.pages) == 7)
         self.chooser_card.setVisible(is_chooser)
         self.body_label.setMaximumHeight(58 if (is_last or is_chooser) else 92)
+        # hero 插画只在欢迎页（素材缺失静默回退 emoji）
+        hero = getattr(self, "_hero_pixmap", None)
+        self.hero_label.setVisible(
+            self.page_index == 0 and hero is not None and not hero.isNull())
+        if self.hero_label.isVisible():
+            from PyQt5.QtCore import Qt as _Qt
+            self.hero_label.setPixmap(hero.scaled(
+                600, 155, _Qt.KeepAspectRatio,
+                _Qt.SmoothTransformation))
+            self.icon_label.setVisible(False)
         self.back_button.setVisible(self.page_index > 0)
-        self.next_button.setText("完成相遇" if is_last else "下一步")
+        self.next_button.setText(
+            ("完成相遇" if len(self.pages) == 7 else "完成回顾")
+            if is_last else "下一步")
         self.progress_label.setText(
             " ".join(
                 "●" if index == self.page_index else "○"
-                for index in range(len(self.PAGES))
+                for index in range(len(self.pages))
             )
         )
         self.later_button.setText(
@@ -380,16 +421,20 @@ class TutorialWindow(KeepAliveTopLevelWindow):
 
     def _next(self):
         # 选宠页：未选不能过；确认后授予（教程未完成=唯一初始宠）
-        if self.page_index == len(self.PAGES) - 2:
+        if len(self.pages) == 7 and self.page_index == len(self.pages) - 2:
             if not self._starter_pet_id:
                 self.pet_info_label.setText("先点一只头像选出你的伙伴吧～")
                 return
             grant = getattr(self.pet, "_grant_starter_pet_callback", None)
             if callable(grant):
                 grant(self._starter_pet_id)
-        if self.page_index < len(self.PAGES) - 1:
+        if self.page_index < len(self.pages) - 1:
             self.page_index += 1
             self._refresh_page()
+            return
+        if len(self.pages) < 7:
+            # 重看模式末页：直接关闭，不起名不重复授予
+            self.close()
             return
         raw_name = " ".join(self.name_input.text().split())
         if not any(char.isalnum() for char in raw_name):

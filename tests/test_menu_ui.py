@@ -369,7 +369,7 @@ class MenuUiTests(unittest.TestCase):
 
         tutorial.start()
 
-        self.assertEqual(tutorial.pos(), QPoint(590, 230))
+        self.assertEqual(tutorial.pos(), QPoint(590, 210))  # 2026-10-15 窗高 620→660
         pet_host.interface_screen_rect.assert_called_once_with()
 
     def test_pet_outside_actual_screens_is_not_visible(self):

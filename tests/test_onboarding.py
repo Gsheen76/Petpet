@@ -62,7 +62,7 @@ class OnboardingTests(unittest.TestCase):
     def test_final_tutorial_page_uses_short_copy_without_layout_overlap(self):
         window = pet.TutorialWindow(FakeTutorialPet(), lambda _name: None)
         self.addCleanup(window.close)
-        window.page_index = len(window.PAGES) - 1
+        window.page_index = len(window.pages) - 1
         window._refresh_page()
         window.show()
         QApplication.processEvents()
@@ -107,7 +107,8 @@ class OnboardingTests(unittest.TestCase):
             FakeTutorialPet(), completed.append
         )
         self.addCleanup(window.close)
-        self.assertEqual((window.width(), window.height()), (740, 620))
+        # 2026-10-15 布局优化：内容余量加高 620→660
+        self.assertEqual((window.width(), window.height()), (740, 660))
         self.assertIn("QLabel#tutorialBody", window.styleSheet())
         self.assertEqual(window.body_label.font().pixelSize(), 23)
         window.page_index = len(window.PAGES) - 1
