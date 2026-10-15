@@ -18,6 +18,16 @@ from petpet.app import pets as pet_registry
 from petpet.ui.common import KeepAliveTopLevelWindow
 from petpet.ui.common import independent_pixel_font
 
+# 2026-10-15 素材升级：emoji→Meowa Image-2 生成图标（缺素材回退 emoji）
+TUTORIAL_PAGE_ICONS = {
+    1: "tutorial_icon_mouse.png",
+    2: "tutorial_icon_flower.png",
+    3: "tutorial_icon_house.png",
+    4: "tutorial_icon_chat.png",
+    5: "tutorial_icon_paw.png",
+    6: "tutorial_icon_nametag.png",
+}
+
 TUTORIAL_PAGES = (
     (
         "🐶",
@@ -80,7 +90,7 @@ class TutorialWindow(KeepAliveTopLevelWindow):
         self.setAttribute(Qt.WA_DeleteOnClose, False)
         self.setObjectName("tutorialWindow")
         self.setWindowTitle("初次见面 · 新手教程")
-        self.setFixedSize(740, 660)
+        self.setFixedSize(740, 700)
         self.setStyleSheet("""
             QWidget#tutorialWindow {
                 background:transparent;
@@ -196,7 +206,7 @@ QPushButton {
 
         top = QHBoxLayout()
         brand = QLabel("🌼 Pet陪它 · 新手教程")
-        brand.setFont(independent_pixel_font(18, QFont.Bold))
+        brand.setFont(independent_pixel_font(17, QFont.Bold))
         brand.setStyleSheet("font-weight:900; color:#93624f;")
         self.later_button = FeedbackButton("稍后再说")
         self.later_button.setObjectName("later")
@@ -212,12 +222,13 @@ QPushButton {
         self.hero_label = QLabel()
         self.hero_label.setObjectName("tutorialHero")
         self.hero_label.setAlignment(Qt.AlignCenter)
-        self.hero_label.setFixedSize(608, 160)
+        self.hero_label.setFixedSize(608, 192)
         root.addWidget(self.hero_label)
 
         self.icon_label = QLabel()
         self.icon_label.setObjectName("tutorialIcon")
         self.icon_label.setAlignment(Qt.AlignCenter)
+        self.icon_label.setFixedSize(646, 96)
         root.addWidget(self.icon_label)
 
         self.title_label = QLabel()
@@ -266,7 +277,7 @@ QPushButton {
         self.pet_info_label.setAlignment(Qt.AlignCenter)
         self.pet_info_label.setWordWrap(True)
         self.pet_info_label.setMinimumHeight(46)
-        self.pet_info_label.setFont(independent_pixel_font(19))
+        self.pet_info_label.setFont(independent_pixel_font(18))
         chooser_layout.addLayout(self.pet_chooser_row)
         chooser_layout.addWidget(self.pet_info_label)
         root.addWidget(self.chooser_card)
@@ -325,14 +336,14 @@ QPushButton {
         self._hero_pixmap = (
             _QPM(_hero_path) if _os.path.exists(_hero_path) else _QPM())
 
-        self.icon_label.setFont(independent_pixel_font(80))
-        self.title_label.setFont(independent_pixel_font(31, QFont.Bold))
-        self.body_label.setFont(independent_pixel_font(23))
-        self.progress_label.setFont(independent_pixel_font(20, QFont.Bold))
-        self.name_input.setFont(independent_pixel_font(23))
-        self.name_hint.setFont(independent_pixel_font(20, QFont.Bold))
+        self.icon_label.setFont(independent_pixel_font(64))
+        self.title_label.setFont(independent_pixel_font(27, QFont.Bold))
+        self.body_label.setFont(independent_pixel_font(21))
+        self.progress_label.setFont(independent_pixel_font(17, QFont.Bold))
+        self.name_input.setFont(independent_pixel_font(22))
+        self.name_hint.setFont(independent_pixel_font(18, QFont.Bold))
         for button in (self.later_button, self.back_button, self.next_button):
-            button.setFont(independent_pixel_font(22, QFont.Bold))
+            button.setFont(independent_pixel_font(20, QFont.Bold))
 
         self._refresh_page()
 
@@ -377,7 +388,11 @@ QPushButton {
         is_last = self.page_index == len(self.pages) - 1
         is_chooser = (
             len(self.pages) == 7 and self.page_index == len(self.pages) - 2)
-        self.icon_label.setText(emoji)
+        icon_pixmap = self._page_icon_pixmap(self.page_index)
+        if icon_pixmap is not None and not icon_pixmap.isNull():
+            self.icon_label.setPixmap(icon_pixmap)
+        else:
+            self.icon_label.setText(emoji)
         self.title_label.setText(title)
         self.body_label.setText(body)
         self.name_card.setVisible(is_last and len(self.pages) == 7)
@@ -393,7 +408,7 @@ QPushButton {
         if hero_active:
             from PyQt5.QtCore import Qt as _Qt
             self.hero_label.setPixmap(hero.scaled(
-                600, 150, _Qt.KeepAspectRatio,
+                596, 186, _Qt.KeepAspectRatio,
                 _Qt.SmoothTransformation))
         self.icon_label.setVisible(not is_chooser and not hero_active)
         self.back_button.setVisible(self.page_index > 0)
@@ -417,6 +432,25 @@ QPushButton {
             self.page_index -= 1
             self.name_hint.clear()
             self._refresh_page()
+
+    def _page_icon_pixmap(self, page_index):
+        """页图标素材（Meowa 生成）；缺素材返回 None 回退 emoji。"""
+        from petpet.app.paths import ASSETS_DIR as _ASSETS
+        import os as _os
+        name = TUTORIAL_PAGE_ICONS.get(page_index)
+        if not name:
+            return None
+        cache = getattr(self, "_page_icon_cache", None)
+        if cache is None:
+            cache = self._page_icon_cache = {}
+        if name not in cache:
+            path = _os.path.join(_ASSETS, "ui", "tutorial", name)
+            from PyQt5.QtGui import QPixmap as _QPM
+            cache[name] = (
+                _QPM(path).scaled(
+                    88, 88, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                if _os.path.exists(path) else _QPM())
+        return cache[name] or None
 
     def _select_starter(self, pet_id):
         """选宠页：点亮头像 + 展示基本信息。"""
