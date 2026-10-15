@@ -52,7 +52,7 @@ TUTORIAL_PAGES = (
     (
         "🐾",
         "选择你的伙伴",
-        "三只小伙伴都在等你。点一下头像认识 TA，选中后进入下一步。",
+        "挑选一只作为你的初始桌宠。点一下头像认识 TA，确认后开始陪伴。",
     ),
     (
         "🏷️",
@@ -125,34 +125,55 @@ class TutorialWindow(KeepAliveTopLevelWindow):
                 selection-background-color:#ffc9b8;
             }
             QLineEdit:focus { border-color:#f19a7f; }
-            QPushButton {
-                min-height:52px;
-                padding:7px 25px;
+QPushButton {
+                min-height:56px;
+                padding:8px 34px;
                 border:0;
-                border-radius:17px;
-                background:#f28f76;
+                border-radius:28px;
+                background:qlineargradient(x1:0,y1:0,x2:0,y2:1,
+                    stop:0 #f6a289, stop:1 #ee8266);
                 color:#ffffff;
                 font-weight:800;
+                letter-spacing:2px;
             }
-            QPushButton:hover { background:#f5a08a; }
+            QPushButton:hover {
+                background:qlineargradient(x1:0,y1:0,x2:0,y2:1,
+                    stop:0 #f8b39c, stop:1 #f29377);
+            }
+            QPushButton:pressed {
+                background:qlineargradient(x1:0,y1:0,x2:0,y2:1,
+                    stop:0 #e87a5e, stop:1 #de6e52);
+            }
             QPushButton#secondary {
-                background:#f1dfd2;
+                background:#f7e6d8;
                 color:#7e5b4c;
+                border:2px solid #ecd2bd;
             }
-            QPushButton#secondary:hover { background:#ead1c1; }
+            QPushButton#secondary:hover {
+                background:#f3dbc8;
+                border-color:#e5bfa5;
+            }
             QPushButton#later {
                 background:transparent;
                 color:#ad8170;
-                padding:4px 12px;
-                min-height:38px;
+                padding:4px 16px;
+                min-height:40px;
+                border-radius:20px;
+            }
+            QPushButton#later:hover {
+                background:#ffebe3;
+                color:#a45d4e;
             }
             QPushButton#petChoiceButton {
                 background:#fffdf8;
                 border:3px solid #f0dcc8;
-                border-radius:20px;
+                border-radius:26px;
+                padding:0;
+                min-height:0;
             }
             QPushButton#petChoiceButton:hover {
                 border-color:#f5b39c;
+                background:#fff6ee;
             }
             QPushButton#petChoiceButton[chosen="true"] {
                 border-color:#f28f76;
@@ -259,6 +280,7 @@ class TutorialWindow(KeepAliveTopLevelWindow):
         self.name_input = QLineEdit()
         self.name_input.setObjectName("petNameInput")
         self.name_input.setMaxLength(6)
+        self.name_input.setMinimumHeight(58)
         self.name_input.setPlaceholderText("例如：团子、旺财、Sheen")
         self.name_input.returnPressed.connect(self._next)
         self.name_hint = QLabel("")
@@ -355,24 +377,25 @@ class TutorialWindow(KeepAliveTopLevelWindow):
         is_last = self.page_index == len(self.pages) - 1
         is_chooser = (
             len(self.pages) == 7 and self.page_index == len(self.pages) - 2)
-        # 遮挡根治（2026-10-15 用户令）：选宠页隐藏 emoji 大图标给内容让位
-        self.icon_label.setVisible(not is_chooser)
         self.icon_label.setText(emoji)
         self.title_label.setText(title)
         self.body_label.setText(body)
         self.name_card.setVisible(is_last and len(self.pages) == 7)
         self.chooser_card.setVisible(is_chooser)
         self.body_label.setMaximumHeight(58 if (is_last or is_chooser) else 92)
-        # hero 插画只在欢迎页（素材缺失静默回退 emoji）
+        # hero 插画只在欢迎页。isVisible() 在窗口未 show 前恒 False，
+        # 不能用它判定（曾致 hero+emoji 双显、页面顶部大片空白）——用
+        # 素材有效性直接推导。
         hero = getattr(self, "_hero_pixmap", None)
-        self.hero_label.setVisible(
-            self.page_index == 0 and hero is not None and not hero.isNull())
-        if self.hero_label.isVisible():
+        hero_ready = hero is not None and not hero.isNull()
+        hero_active = self.page_index == 0 and hero_ready
+        self.hero_label.setVisible(hero_active)
+        if hero_active:
             from PyQt5.QtCore import Qt as _Qt
             self.hero_label.setPixmap(hero.scaled(
-                600, 155, _Qt.KeepAspectRatio,
+                600, 150, _Qt.KeepAspectRatio,
                 _Qt.SmoothTransformation))
-            self.icon_label.setVisible(False)
+        self.icon_label.setVisible(not is_chooser and not hero_active)
         self.back_button.setVisible(self.page_index > 0)
         self.next_button.setText(
             ("完成相遇" if len(self.pages) == 7 else "完成回顾")
