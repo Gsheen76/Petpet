@@ -314,13 +314,16 @@ class TutorialWindow(KeepAliveTopLevelWindow):
 
         self._refresh_page()
 
-    def start(self):
+    def start(self, force_full=False):
         """Restart the guide from page one and center it on the pet's screen.
 
         2026-10-15 用户令：选宠+起名只属于**下载后第一次**教程（教程未完
         成）；已完成教程再打开（菜单重看）只展示玩法五页，不重选不重名。
+        force_full（调试入口）：无视完成态强制完整 7 页（选宠授予对已完成
+        玩家自动 no-op，仅展示）。
         """
-        first_run = not self.pet.state.get("tutorial_completed", False)
+        first_run = force_full or not self.pet.state.get(
+            "tutorial_completed", False)
         self.pages = self.PAGES if first_run else self.PAGES[:5]
         self.page_index = 0
         self._starter_pet_id = None

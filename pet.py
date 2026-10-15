@@ -1823,13 +1823,17 @@ class TrayApp:
         self.pet.raise_()
         self.pet.say("我已经在这里啦～", 1800)
 
-    def open_tutorial(self):
-        """Open or restart the first-run guide."""
+    def open_tutorial(self, force_full=False):
+        """Open or restart the first-run guide.
+
+        force_full（2026-10-15 调试入口，用户令）：无视教程完成态展示
+        完整 7 页（选宠+起名）——授予对已完成玩家自动 no-op。
+        """
         if self.tutorial_win is None:
             self.tutorial_win = TutorialWindow(
                 self.pet, self._complete_tutorial
             )
-        self.tutorial_win.start()
+        self.tutorial_win.start(force_full=force_full)
 
     def _complete_tutorial(self, pet_name):
         """Persist onboarding completion and apply the chosen name."""
@@ -2152,6 +2156,11 @@ class TrayApp:
         a_reset_shop = QAction("♻ 重置商店购买", dm)
         a_reset_shop.triggered.connect(self._debug_reset_shop_purchases)
         dm.addAction(a_reset_shop)
+        dm.addSeparator()
+        # 2026-10-15 用户令：调试入口查看完整教程（含选宠+起名，7 页全量）
+        a_full_tut = QAction("📖 查看完整教程（选宠+起名）", dm)
+        a_full_tut.triggered.connect(lambda: self.open_tutorial(force_full=True))
+        dm.addAction(a_full_tut)
         parent_menu.addMenu(dm)
 
     def _debug_set_stats(self, hunger=None, mood=None, energy=None):
