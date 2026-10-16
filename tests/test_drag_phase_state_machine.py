@@ -68,18 +68,18 @@ class DragPhaseStateMachineTests(unittest.TestCase):
         self.assertEqual(window._drag_anim_state, "sway")
         self.assertTrue(window._drag_sway_timer.isActive())
 
-    def test_stop_after_move_replays_sway_then_hover(self):
+    def test_stop_after_move_keeps_hover_loop(self):
+        """2026-10-15 用户定稿：停住不再重播 sway，保持 hover 循环。"""
         window = self._window()
         self._grab(window)
         window._on_sway_finished()  # 第一阶段播完 → hover
         self.assertEqual(window._drag_anim_state, "held")
         window._drag_anim_state = "moving"  # 模拟移动后停住
         window._on_drag_mouse_stopped()
-        self.assertEqual(window._drag_anim_state, "sway")
-        self.assertEqual(
-            window._current_animation_name(), "drag_sway_strawberry")
-        window._on_sway_finished()
+        # 停住 → 直接回 held（hover 循环继续），不重播 sway
         self.assertEqual(window._drag_anim_state, "held")
+        self.assertEqual(
+            window._current_animation_name(), "drag_hover_strawberry")
 
     def test_sway_finish_timer_is_restarted_not_stacked(self):
         """再次进入 sway 时同一 QTimer 成员被 restart（start 语义=取消

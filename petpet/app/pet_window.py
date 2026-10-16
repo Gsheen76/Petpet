@@ -2316,24 +2316,14 @@ class PetWindow(QWidget):
         self._drag_sway_timer.start(int(total_ms) + 30)
 
     def _on_drag_mouse_stopped(self):
-        """鼠标在拖拽中停下 → 播摇晃一次 → 自动回 hover 循环。"""
-        if not self.dragging or self._drag_anim_state != "moving":
+        """鼠标在拖拽中停下 → 保持悬浮循环（2026-10-15 用户定稿：
+        停住不再重播 sway，直接继续 hover 循环）。"""
+        if not self.dragging:
             return
-        self._drag_anim_state = "sway"
+        # 停住只是重置移动距离计数，动画保持 hover 循环不中断
         self._drag_move_dist = 0.0
-        self._animation_started_at = time.monotonic()
-        drag_variant = progression.equipped_outfit_drag_animation(
-            self.state)
-        if not drag_variant:
-            # 2026-10-15 基础宠三段拖拽同款 fallback
-            paths = self.__dict__.get("_animation_frame_paths", {})
-            frames = self.__dict__.get("animation_frames", {})
-            if ("drag_sway" in paths or "drag_sway" in frames):
-                drag_variant = "drag"
-        if drag_variant:
-            self._active_animation = drag_variant.replace(
-                "drag", "drag_sway")
-        self._start_sway_finish_timer()
+        if self._drag_anim_state == "moving":
+            self._drag_anim_state = "held"
 
     def _on_sway_finished(self):
         """sway 播完 → 回到 hover 循环。"""
