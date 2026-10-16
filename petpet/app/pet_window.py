@@ -2242,15 +2242,26 @@ class PetWindow(QWidget):
         self.behavior = "drag"
         self.vx = 0; self.vy = 0
         self.setCursor(Qt.ClosedHandCursor)
+        # 2026-10-15 用户定稿：四态拖拽（sway/hover/land/不反弹）只属于
+        # 装备了专属拖拽系统的套装（草莓）；其余宠物保持原有拖拽+触底
+        # 弹跳。旗标在抓起点判定，后续 falling/land 全链由此门控。
+        grab_variant = progression.equipped_outfit_drag_animation(self.state)
+        sway_available = False
+        if grab_variant:
+            sway_variant = grab_variant.replace("drag", "drag_sway")
+            paths = self.__dict__.get("_animation_frame_paths", {})
+            frames = self.__dict__.get("animation_frames", {})
+            sway_available = (
+                sway_variant in paths or sway_variant in frames)
+        self._drag_four_state = sway_available
         # 2026-10-13 用户定稿：抓起先播完第一阶段（sway 全段）再进 hover
         # 循环——切动画必须同时给 active=名字 + started_at=now（只设
         # started_at 会被 _animation_frame 的换片重锚再盖一次，顺序耦合）
-        self._drag_anim_state = "sway"
-        grab_variant = progression.equipped_outfit_drag_animation(self.state)
-        if grab_variant:
+        self._drag_anim_state = "sway" if sway_available else None
+        if sway_available:
             self._active_animation = grab_variant.replace(
                 "drag", "drag_sway")
-        self._animation_started_at = time.monotonic()
+            self._animation_started_at = time.monotonic()
         self._drag_stop_timer = QTimer(self)
         self._drag_stop_timer.setSingleShot(True)
         self._drag_stop_timer.timeout.connect(self._on_drag_mouse_stopped)
@@ -2260,7 +2271,8 @@ class PetWindow(QWidget):
         self._drag_sway_timer = QTimer(self)
         self._drag_sway_timer.setSingleShot(True)
         self._drag_sway_timer.timeout.connect(self._on_sway_finished)
-        self._start_sway_finish_timer()
+        if getattr(self, "_drag_four_state", False):
+            self._start_sway_finish_timer()
 
     def _start_sway_finish_timer(self):
         """sway 时长后自动切回 hover；重复调用会替换未到期的旧定时。"""
@@ -2379,11 +2391,14 @@ class PetWindow(QWidget):
                 self._drag_stop_timer.stop()
             if hasattr(self, "_drag_sway_timer"):
                 self._drag_sway_timer.stop()
-            # 掉落时显示 sway 末帧（静止拎姿）
-            self._drag_anim_state = "falling"
+            # 掉落时显示 sway 末帧（静止拎姿）——仅草莓四态系统；
+            # 其余宠物保持 None 走原有触底弹跳链
+            self._drag_anim_state = (
+                "falling" if getattr(self, "_drag_four_state", False)
+                else None)
             drag_variant = progression.equipped_outfit_drag_animation(
                 self.state)
-            if drag_variant:
+            if drag_variant and self._drag_anim_state == "falling":
                 sv = drag_variant.replace("drag", "drag_sway")
                 paths = self.__dict__.get("_animation_frame_paths", {})
                 frames = self.__dict__.get("animation_frames", {})

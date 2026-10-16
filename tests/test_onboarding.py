@@ -78,7 +78,7 @@ class OnboardingTests(unittest.TestCase):
             window.name_card.geometry().top(),
         )
         # 2026-10-15 底栏绝对定位：断言底栏位置恒定（跨页严格对齐）
-        self.assertEqual(window.bottom_bar.y(), 570)
+        self.assertEqual(window.bottom_bar.y(), 606)
 
     def test_pet_name_normalization(self):
         self.assertEqual(ai.normalize_pet_name("  小 团子  "), "小 团子")
@@ -106,7 +106,7 @@ class OnboardingTests(unittest.TestCase):
         )
         self.addCleanup(window.close)
         # 2026-10-15 布局优化：内容余量加高 620→660
-        self.assertEqual((window.width(), window.height()), (740, 700))  # 2026-10-15 hero 加高
+        self.assertEqual((window.width(), window.height()), (740, 760))  # 2026-10-15 hero 加高
         self.assertIn("QLabel#tutorialBody", window.styleSheet())
         self.assertEqual(window.body_label.font().pixelSize(), 21)  # 2026-10-15 字号和谐化
         window.page_index = len(window.PAGES) - 1

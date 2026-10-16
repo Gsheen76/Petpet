@@ -90,7 +90,7 @@ class TutorialWindow(KeepAliveTopLevelWindow):
         self.setAttribute(Qt.WA_DeleteOnClose, False)
         self.setObjectName("tutorialWindow")
         self.setWindowTitle("初次见面 · 新手教程")
-        self.setFixedSize(740, 700)
+        self.setFixedSize(740, 760)
         self.setStyleSheet("""
             QWidget#tutorialWindow {
                 background:transparent;
@@ -223,7 +223,7 @@ QPushButton {
         self.hero_label = QLabel()
         self.hero_label.setObjectName("tutorialHero")
         self.hero_label.setAlignment(Qt.AlignCenter)
-        self.hero_label.setFixedSize(608, 192)
+        self.hero_label.setFixedSize(628, 268)
         root.addWidget(self.hero_label)
 
         self.icon_label = QLabel()
@@ -318,10 +318,11 @@ QPushButton {
         self.bottom_bar.setObjectName("tutorialBottom")
         bottom_layout = QVBoxLayout(self.bottom_bar)
         bottom_layout.setContentsMargins(0, 0, 0, 0)
-        bottom_layout.setSpacing(10)
+        bottom_layout.setSpacing(12)
         self.progress_label = QLabel()
         self.progress_label.setObjectName("tutorialProgress")
         self.progress_label.setAlignment(Qt.AlignCenter)
+        self.progress_label.setFixedHeight(24)  # 定高消除逐 2px 漂移
         bottom_layout.addWidget(self.progress_label)
 
         controls = QHBoxLayout()
@@ -338,7 +339,7 @@ QPushButton {
         controls.addWidget(self.next_button)
         bottom_layout.addLayout(controls)
         # 卡高=窗 700-外边距16=684；底栏高 96，贴卡底内边距 18
-        self.bottom_bar.setGeometry(38, 684 - 18 - 96, 646, 96)
+        self.bottom_bar.setGeometry(38, 744 - 20 - 118, 646, 118)
 
         # hero 插画（Meowa 生成，缺文件静默回退 emoji）
         from petpet.app.paths import ASSETS_DIR as _ASSETS
@@ -421,7 +422,7 @@ QPushButton {
         if hero_active:
             from PyQt5.QtCore import Qt as _Qt
             self.hero_label.setPixmap(hero.scaled(
-                596, 186, _Qt.KeepAspectRatio,
+                620, 262, _Qt.KeepAspectRatio,
                 _Qt.SmoothTransformation))
         self.icon_label.setVisible(not is_chooser and not hero_active)
         self.back_button.setVisible(self.page_index > 0)
