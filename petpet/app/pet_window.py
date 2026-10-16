@@ -120,7 +120,12 @@ class PetWindow(QWidget):
     ANIMATION_MAX_FRAMES = 64
     ANIMATION_MAX_SOURCE_PIXELS = 16_777_216
     PRELOADED_ANIMATIONS = (
-        "idle", "pet", "eat", "play", "sleep", "dig_reward", "drag"
+        "idle", "pet", "eat", "play", "sleep", "dig_reward", "drag",
+        # 2026-10-15 落地停顿根治：drag_land/drag_hover/drag_sway 不在
+        # 预载清单——_trigger_drag_land 调 trigger_animation→
+        # _animation_duration_ms→_ensure_animation_loaded 同步磁盘读帧
+        # （drag_land 7 帧 PNG ≈10-30ms 阻塞事件循环）= 碰底停顿根因
+        "drag_land", "drag_hover", "drag_sway",
     )
     STAT_DECAY_RATE_MULTIPLIER = 0.5
     flung = pyqtSignal()
