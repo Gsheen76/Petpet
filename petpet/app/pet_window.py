@@ -1760,6 +1760,12 @@ class PetWindow(QWidget):
                 and self.__dict__.get("_drag_anim_state") == "falling"):
             drag_variant = progression.equipped_outfit_drag_animation(
                 self.state)
+            if not drag_variant:
+                # 2026-10-15 基础宠三段拖拽：drag_sway 存在即走 sway 末帧
+                paths = self.__dict__.get("_animation_frame_paths", {})
+                frames = self.__dict__.get("animation_frames", {})
+                if ("drag_sway" in paths or "drag_sway" in frames):
+                    drag_variant = "drag"
             if drag_variant:
                 sv = drag_variant.replace("drag", "drag_sway")
                 paths = self.__dict__.get("_animation_frame_paths", {})
@@ -1776,6 +1782,14 @@ class PetWindow(QWidget):
             drag_variant = (
                 progression.equipped_outfit_drag_animation(self.state)
             )
+            if not drag_variant:
+                # 2026-10-15 基础宠三段拖拽（棉花糖）：drag_sway 变体存在
+                # 即启用四态路由
+                if ("drag_sway" in self.__dict__.get(
+                        "animation_frames", {})
+                        or "drag_sway" in self.__dict__.get(
+                            "_animation_frame_paths", {})):
+                    drag_variant = "drag"
             if drag_variant and (
                 drag_variant in self.__dict__.get("animation_frames", {})
                 or drag_variant in self.__dict__.get(
@@ -2246,9 +2260,18 @@ class PetWindow(QWidget):
         # 装备了专属拖拽系统的套装（草莓）；其余宠物保持原有拖拽+触底
         # 弹跳。旗标在抓起点判定，后续 falling/land 全链由此门控。
         grab_variant = progression.equipped_outfit_drag_animation(self.state)
+        if not grab_variant:
+            # 2026-10-15 用户令：基础宠也可有三段拖拽（棉花糖 drag_sway/
+            # drag_hover/drag_land 变体存在即启用四态系统）
+            paths = self.__dict__.get("_animation_frame_paths", {})
+            frames = self.__dict__.get("animation_frames", {})
+            if ("drag_sway" in paths or "drag_sway" in frames):
+                grab_variant = "drag"
         sway_available = False
         if grab_variant:
             sway_variant = grab_variant.replace("drag", "drag_sway")
+            if sway_variant == "drag_sway_sway":
+                sway_variant = "drag_sway"
             paths = self.__dict__.get("_animation_frame_paths", {})
             frames = self.__dict__.get("animation_frames", {})
             sway_available = (
@@ -2316,6 +2339,11 @@ class PetWindow(QWidget):
         land_variant = None
         drag_variant = progression.equipped_outfit_drag_animation(
             self.state)
+        if not drag_variant:
+            paths = self.__dict__.get("_animation_frame_paths", {})
+            frames = self.__dict__.get("animation_frames", {})
+            if ("drag_land" in paths or "drag_land" in frames):
+                drag_variant = "drag"
         if drag_variant:
             land_variant = drag_variant.replace("drag", "drag_land")
             paths = self.__dict__.get("_animation_frame_paths", {})

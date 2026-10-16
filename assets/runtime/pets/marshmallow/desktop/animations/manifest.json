@@ -248,7 +248,7 @@
   "drag": {
     "folder": "drag",
     "fps": 8,
-    "loop": true,
+    "loop": false,
     "fallback": "drag",
     "scale": 1.0,
     "anchor_bottom": false,
@@ -269,9 +269,69 @@
       180.0,
       180.0,
       180.0,
+      180.0
+    ]
+  },
+  "drag_sway": {
+    "folder": "drag",
+    "fps": 8,
+    "loop": false,
+    "fallback": "drag",
+    "scale": 1.0,
+    "anchor_bottom": false,
+    "saturation": 1.0,
+    "brightness": 1.0,
+    "frame_durations_ms": [
       180.0,
       180.0,
       180.0,
+      180.0,
+      180.0,
+      180.0,
+      180.0,
+      180.0,
+      180.0,
+      180.0,
+      180.0,
+      180.0,
+      180.0,
+      180.0,
+      180.0
+    ]
+  },
+  "drag_hover": {
+    "folder": "drag_hover",
+    "fps": 8,
+    "loop": true,
+    "fallback": "drag",
+    "scale": 1.0,
+    "anchor_bottom": false,
+    "saturation": 1.0,
+    "brightness": 1.0,
+    "frame_durations_ms": [
+      180.0,
+      180.0,
+      180.0,
+      180.0,
+      180.0,
+      180.0,
+      180.0,
+      180.0,
+      180.0,
+      180.0,
+      180.0
+    ]
+  },
+  "drag_land": {
+    "folder": "drag_land",
+    "fps": 8,
+    "loop": false,
+    "fallback": "drag",
+    "scale": 1.0,
+    "anchor_bottom": false,
+    "saturation": 1.0,
+    "brightness": 1.0,
+    "frame_durations_ms": [
       180.0,
       180.0,
       180.0,
