@@ -2324,6 +2324,12 @@ class PetWindow(QWidget):
         self._animation_started_at = time.monotonic()
         drag_variant = progression.equipped_outfit_drag_animation(
             self.state)
+        if not drag_variant:
+            # 2026-10-15 基础宠三段拖拽同款 fallback
+            paths = self.__dict__.get("_animation_frame_paths", {})
+            frames = self.__dict__.get("animation_frames", {})
+            if ("drag_sway" in paths or "drag_sway" in frames):
+                drag_variant = "drag"
         if drag_variant:
             self._active_animation = drag_variant.replace(
                 "drag", "drag_sway")
