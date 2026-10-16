@@ -61,6 +61,7 @@ D:\Agent_project\Petpet
 
 | 领域 | 内容 |
 |------|------|
+| **抓起不移动重播 sway**（2026-10-15 追记二十六，v1.7.7 后待发） | _on_drag_mouse_stopped 补基础宠 fallback（第四处扩展——drag_variant=None 时 drag_sway 变体存在即启用）。VERDICT **1074**；PID 45420；提交 6ce050f |
 | **拖拽碰底停顿根治**（2026-10-15 追记二十五，v1.7.7 后待发） | drag_land/drag_hover/drag_sway 加入 PRELOADED_ANIMATIONS——首次落地时 _ensure_animation_loaded 同步磁盘 IO（10-30ms）是停顿根因。VERDICT **1074**；PID 14024；提交 abccd02 |
 | **拖拽落地高度对齐**（2026-10-15 追记二十四，v1.7.7 后待发） | drag_land 统一 +20 使末帧底线 606=idle 底线（保留下落弧线）；末帧五维匹配（底/左/右/高/后躯质心）。VERDICT **1074**；PID 45384；提交 04a9215 |
 | **棉花糖三段拖拽**（2026-10-15 追记二十三，v1.7.7 后待发） | 用户删 000/001 后令先播全段→循环→松手下落停末帧；素材拆 drag/drag_hover/drag_land 三夹；四态路由三处扩展到基础宠（drag_sway 变体存在即启用 sway→hover→falling→land+不弹起）。VERDICT **1074**；PID 25736；提交 50f56a6 |
