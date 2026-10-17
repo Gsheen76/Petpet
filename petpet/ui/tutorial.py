@@ -2,7 +2,10 @@ from pathlib import Path
 """Static content for Petpet's first-run tutorial."""
 
 from PyQt5.QtCore import QPoint, Qt, QTimer
+from PyQt5.QtGui import QPainter, QPainterPath
+from PyQt5.QtCore import QRectF
 from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QPainter
 from PyQt5.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -70,6 +73,37 @@ TUTORIAL_PAGES = (
         "名字会显示在聊天和档案中，最多 6 个字符。",
     ),
 )
+
+
+
+
+class _TutorialCard(QFrame):
+    """教程卡片：paintEvent 直接绘制水彩背景图（不走 QSS border-image
+    ——那层会破坏子控件 Alpha 复合，2026-10-15 七修定稿）。"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._bg_pixmap = None
+
+    def set_background(self, pixmap):
+        self._bg_pixmap = pixmap
+        self.update()
+
+    def paintEvent(self, event):
+        if self._bg_pixmap is not None and not self._bg_pixmap.isNull():
+            painter = QPainter(self)
+            painter.setRenderHint(QPainter.SmoothPixmapTransform)
+            path = QPainterPath()
+            path.addRoundedRect(QRectF(self.rect()), 24, 24)
+            painter.setClipPath(path)
+            pm = self._bg_pixmap.scaled(
+                self.width(), self.height(),
+                Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+            x = (self.width() - pm.width()) // 2
+            y = (self.height() - pm.height()) // 2
+            painter.drawPixmap(x, y, pm)
+            painter.end()
+        super().paintEvent(event)
 
 
 class TutorialWindow(KeepAliveTopLevelWindow):
@@ -197,8 +231,15 @@ QPushButton {
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(8, 8, 8, 8)
-        self.tutorial_card = QFrame()
+        self.tutorial_card = _TutorialCard()
         self.tutorial_card.setObjectName("tutorialCard")
+        # 加载水彩背景图
+        from petpet.app.paths import ASSETS_DIR as _BG_DIR
+        import os as _bg_os
+        _bg_path = _bg_os.path.join(_BG_DIR, "ui", "tutorial", "tutorial_bg.png")
+        from PyQt5.QtGui import QPixmap as _BGP
+        if _bg_os.path.exists(_bg_path):
+            self.tutorial_card.set_background(_BGP(_bg_path))
         outer.addWidget(self.tutorial_card)
         root = QVBoxLayout(self.tutorial_card)
         root.setContentsMargins(38, 28, 38, 30)
