@@ -61,6 +61,7 @@ D:\Agent_project\Petpet
 
 | 领域 | 内容 |
 |------|------|
+| **教程四项优化**（2026-10-15 追记二十八，v1.7.7 后待发） | hero 按宽填满 628×268；按键 46px 缩小；五页插画替换小图标（三宠场景表 200px）；icon 位 210px 减留白。VERDICT **1074**；PID 35656；提交 5b34b50 |
 | **拖拽行为精调三连**（2026-10-16 追记二十七，v1.7.7 后待发） | ①drag_land 删开头两帧重编号（5 帧）②sway 前 4 帧 110ms 加速③停住不重播 sway（hover 循环持续）；④drag_land 130ms（`e0f6416`）。VERDICT **1074**；PID 19952；提交 2ac2906 |
 | **抓起不移动重播 sway**（2026-10-16 追记二十六，v1.7.7 后待发） | _on_drag_mouse_stopped 补基础宠 fallback（第四处扩展——drag_variant=None 时 drag_sway 变体存在即启用）。VERDICT **1074**；PID 45420；提交 6ce050f |
 | **拖拽碰底停顿根治**（2026-10-16 追记二十五，v1.7.7 后待发） | drag_land/drag_hover/drag_sway 加入 PRELOADED_ANIMATIONS——首次落地时 _ensure_animation_loaded 同步磁盘 IO（10-30ms）是停顿根因。VERDICT **1074**；PID 14024；提交 abccd02 |
