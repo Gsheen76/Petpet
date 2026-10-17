@@ -29,6 +29,7 @@ TUTORIAL_PAGE_ICONS = {
     3: "tutorial_page_house_cozy.png",
     4: "tutorial_page_chat_gather.png",
     5: "tutorial_page_chooser.png",
+    6: "tutorial_page_nametag.png",
 }
 
 TUTORIAL_PAGES = (
@@ -264,14 +265,14 @@ QPushButton {
         self.hero_label.setObjectName("tutorialHero")
         self.hero_label.setAlignment(Qt.AlignCenter)
         self.hero_label.setAttribute(Qt.WA_TranslucentBackground, True)
-        self.hero_label.setFixedSize(628, 344)
+        self.hero_label.setFixedSize(560, 308)
         root.addWidget(self.hero_label)
 
         self.icon_label = QLabel()
         self.icon_label.setObjectName("tutorialIcon")
         self.icon_label.setAlignment(Qt.AlignCenter)
         self.icon_label.setAttribute(Qt.WA_TranslucentBackground, True)
-        self.icon_label.setFixedSize(646, 210)
+        self.icon_label.setFixedSize(646, 260)
         root.addWidget(self.icon_label)
 
         self.title_label = QLabel()
@@ -283,6 +284,7 @@ QPushButton {
         self.body_label.setObjectName("tutorialBody")
         self.body_label.setAlignment(Qt.AlignCenter)
         self.body_label.setWordWrap(True)
+        self.body_label.setMaximumWidth(580)
         self.body_label.setMinimumHeight(64)
         self.body_label.setMaximumHeight(92)
         root.addWidget(self.body_label)
@@ -410,8 +412,8 @@ QPushButton {
             _QPM(_hero_path) if _os.path.exists(_hero_path) else _QPM())
 
         self.icon_label.setFont(independent_pixel_font(64))
-        self.title_label.setFont(independent_pixel_font(27, QFont.Bold))
-        self.body_label.setFont(independent_pixel_font(21))
+        self.title_label.setFont(independent_pixel_font(30, QFont.Bold))
+        self.body_label.setFont(independent_pixel_font(24))
         self.progress_label.setFont(independent_pixel_font(17, QFont.Bold))
         self.name_input.setFont(independent_pixel_font(22))
         self.name_hint.setFont(independent_pixel_font(18, QFont.Bold))
@@ -523,7 +525,7 @@ QPushButton {
             from PyQt5.QtGui import QPixmap as _QPM
             cache[name] = (
                 _QPM(path).scaled(
-                    200, 200, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                    240, 240, Qt.KeepAspectRatio, Qt.SmoothTransformation)
                 if _os.path.exists(path) else _QPM())
         return cache[name] or None
 
