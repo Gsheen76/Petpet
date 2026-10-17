@@ -89,7 +89,7 @@ class TutorialWindow(KeepAliveTopLevelWindow):
         self.setAttribute(Qt.WA_DeleteOnClose, False)
         self.setObjectName("tutorialWindow")
         self.setWindowTitle("初次见面 · 新手教程")
-        self.setFixedSize(740, 760)
+        self.setFixedSize(740, 800)
         self.setStyleSheet("""
             QWidget#tutorialWindow {
                 background:transparent;
@@ -222,7 +222,7 @@ QPushButton {
         self.hero_label = QLabel()
         self.hero_label.setObjectName("tutorialHero")
         self.hero_label.setAlignment(Qt.AlignCenter)
-        self.hero_label.setFixedSize(628, 268)
+        self.hero_label.setFixedSize(628, 340)
         root.addWidget(self.hero_label)
 
         self.icon_label = QLabel()
@@ -300,14 +300,17 @@ QPushButton {
         self.name_hint = QLabel("")
         self.name_hint.setObjectName("nameHint")
         self.name_hint.setAlignment(Qt.AlignCenter)
-        name_layout.addWidget(self.name_input)
-        name_layout.addWidget(self.name_hint)
-        # 2026-10-15 用户令：默认按钮——不想起名的玩家一键用默认宠物名
+        # 2026-10-15 用户定稿：输入框与默认按钮同一行左右分布
+        name_row = QHBoxLayout()
+        name_row.setSpacing(10)
+        name_row.addWidget(self.name_input, 1)
         self.default_name_button = FeedbackButton("默认名")
         self.default_name_button.setObjectName("secondary")
         self.default_name_button.setQssHover(True)
         self.default_name_button.clicked.connect(self._use_default_name)
-        name_layout.addWidget(self.default_name_button)
+        name_row.addWidget(self.default_name_button)
+        name_layout.addLayout(name_row)
+        name_layout.addWidget(self.name_hint)
         root.addWidget(self.name_card)
 
         root.addStretch(1)
@@ -338,7 +341,7 @@ QPushButton {
         controls.addWidget(self.next_button)
         bottom_layout.addLayout(controls)
         # 卡高=窗 700-外边距16=684；底栏高 96，贴卡底内边距 18
-        self.bottom_bar.setGeometry(38, 744 - 20 - 118, 646, 118)
+        self.bottom_bar.setGeometry(38, 784 - 20 - 118, 646, 118)
 
         # hero 插画（Meowa 生成，缺文件静默回退 emoji）
         from petpet.app.paths import ASSETS_DIR as _ASSETS
@@ -420,9 +423,9 @@ QPushButton {
         self.hero_label.setVisible(hero_active)
         if hero_active:
             from PyQt5.QtCore import Qt as _Qt
-            self.hero_label.setPixmap(hero.scaled(
-                620, 262, _Qt.KeepAspectRatio,
-                _Qt.SmoothTransformation))
+            self.hero_label.setPixmap(hero)
+
+
         self.icon_label.setVisible(not is_chooser and not hero_active)
         self.back_button.setVisible(self.page_index > 0)
         self.next_button.setText(
