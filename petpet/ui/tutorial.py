@@ -25,7 +25,7 @@ TUTORIAL_PAGE_ICONS = {
     2: "tutorial_page_menu_card.png",
     3: "tutorial_page_house_cozy.png",
     4: "tutorial_page_chat_gather.png",
-    5: "tutorial_page_nametag_heart.png",
+    5: "tutorial_page_chooser.png",
 }
 
 TUTORIAL_PAGES = (
@@ -223,12 +223,14 @@ QPushButton {
         self.hero_label = QLabel()
         self.hero_label.setObjectName("tutorialHero")
         self.hero_label.setAlignment(Qt.AlignCenter)
-        self.hero_label.setFixedSize(628, 290)
+        self.hero_label.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.hero_label.setFixedSize(628, 345)
         root.addWidget(self.hero_label)
 
         self.icon_label = QLabel()
         self.icon_label.setObjectName("tutorialIcon")
         self.icon_label.setAlignment(Qt.AlignCenter)
+        self.icon_label.setAttribute(Qt.WA_TranslucentBackground, True)
         self.icon_label.setFixedSize(646, 210)
         root.addWidget(self.icon_label)
 
@@ -279,13 +281,14 @@ QPushButton {
         self.pet_info_label = QLabel("点一只头像，认识一下TA吧～")
         self.pet_info_label.setObjectName("tutorialBody")
         self.pet_info_label.setAlignment(Qt.AlignCenter)
-        self.pet_info_label.setWordWrap(True)
+        self.pet_info_label.setWordWrap(False)  # 用户令：一定一行显示
         self.pet_info_label.setMinimumHeight(28)
         self.pet_info_label.setFont(independent_pixel_font(18))
         # 2026-10-15 用户令：选中后在下方展示该宠的待机动画
         self.pet_preview_label = QLabel()
         self.pet_preview_label.setObjectName("tutorialPetPreview")
         self.pet_preview_label.setAlignment(Qt.AlignCenter)
+        self.pet_preview_label.setAttribute(Qt.WA_TranslucentBackground, True)
         self.pet_preview_label.setMinimumHeight(140)
         chooser_layout.addLayout(self.pet_chooser_row)
         chooser_layout.addWidget(self.pet_info_label)
