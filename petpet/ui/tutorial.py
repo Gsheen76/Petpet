@@ -266,19 +266,19 @@ QPushButton {
         self.hero_label.setAlignment(Qt.AlignCenter)
         self.hero_label.setAttribute(Qt.WA_TranslucentBackground, True)
         self.hero_label.setFixedSize(560, 308)
-        root.addWidget(self.hero_label)
+        root.addWidget(self.hero_label, 0, Qt.AlignHCenter)
 
         self.icon_label = QLabel()
         self.icon_label.setObjectName("tutorialIcon")
         self.icon_label.setAlignment(Qt.AlignCenter)
         self.icon_label.setAttribute(Qt.WA_TranslucentBackground, True)
         self.icon_label.setFixedSize(646, 260)
-        root.addWidget(self.icon_label)
+        root.addWidget(self.icon_label, 0, Qt.AlignHCenter)
 
         self.title_label = QLabel()
         self.title_label.setObjectName("tutorialTitle")
         self.title_label.setAlignment(Qt.AlignCenter)
-        root.addWidget(self.title_label)
+        root.addWidget(self.title_label, 0, Qt.AlignHCenter)
 
         self.body_label = QLabel()
         self.body_label.setObjectName("tutorialBody")
@@ -287,7 +287,7 @@ QPushButton {
         self.body_label.setMaximumWidth(580)
         self.body_label.setMinimumHeight(64)
         self.body_label.setMaximumHeight(92)
-        root.addWidget(self.body_label)
+        root.addWidget(self.body_label, 0, Qt.AlignHCenter)
 
         # ---- 2026-10-15 选宠页（命名页前一步，用户令）----
         self.chooser_card = QFrame()
@@ -335,7 +335,7 @@ QPushButton {
         chooser_layout.addLayout(self.pet_chooser_row)
         chooser_layout.addWidget(self.pet_info_label)
         chooser_layout.addWidget(self.pet_preview_label)
-        root.addWidget(self.chooser_card)
+        root.addWidget(self.chooser_card, 0, Qt.AlignHCenter)
         # idle 帧定时器
         self._preview_frames = []
         self._preview_index = 0
@@ -370,7 +370,7 @@ QPushButton {
         name_row.addWidget(self.default_name_button)
         name_layout.addLayout(name_row)
         name_layout.addWidget(self.name_hint)
-        root.addWidget(self.name_card)
+        root.addWidget(self.name_card, 0, Qt.AlignHCenter)
 
         root.addStretch(1)
         # 底部严格对齐（2026-10-15 用户令）：进度点与按键行绝对定位钉在
@@ -484,7 +484,10 @@ QPushButton {
         self.hero_label.setVisible(hero_active)
         if hero_active:
             from PyQt5.QtCore import Qt as _Qt
-            self.hero_label.setPixmap(hero)
+            scaled_hero = hero.scaled(
+                self.hero_label.width(), self.hero_label.height(),
+                Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            self.hero_label.setPixmap(scaled_hero)
 
 
         self.icon_label.setVisible(not is_chooser and not hero_active)
