@@ -293,8 +293,8 @@ QPushButton {
         self.body_label.setAlignment(Qt.AlignCenter)
         self.body_label.setWordWrap(True)
         self.body_label.setMaximumWidth(600)
-        self.body_label.setMinimumHeight(80)
-        self.body_label.setMaximumHeight(200)
+        self.body_label.setFixedHeight(87)  # 3行×27px+6 实测计算
+       
         root.addWidget(self.body_label, 0, Qt.AlignHCenter)
 
         # ---- 2026-10-15 选宠页（命名页前一步，用户令）----
