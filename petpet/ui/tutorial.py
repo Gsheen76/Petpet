@@ -98,7 +98,6 @@ class TutorialWindow(KeepAliveTopLevelWindow):
             }
             QFrame#tutorialCard {
                 background:#fff8ec;
-                border-image: url(ui/tutorial/tutorial_bg.png) 0 stretch stretch;
                 border:1px solid #e7c4ad;
                 border-radius:24px;
                 color:#65483b;
@@ -224,7 +223,7 @@ QPushButton {
         self.hero_label.setObjectName("tutorialHero")
         self.hero_label.setAlignment(Qt.AlignCenter)
         self.hero_label.setAttribute(Qt.WA_TranslucentBackground, True)
-        self.hero_label.setFixedSize(628, 345)
+        self.hero_label.setFixedSize(628, 340)
         root.addWidget(self.hero_label)
 
         self.icon_label = QLabel()
