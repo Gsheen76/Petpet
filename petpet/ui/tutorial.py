@@ -20,12 +20,11 @@ from petpet.ui.common import independent_pixel_font
 
 # 2026-10-15 素材升级：emoji→Meowa Image-2 生成图标（缺素材回退 emoji）
 TUTORIAL_PAGE_ICONS = {
-    1: "tutorial_icon_mouse.png",
-    2: "tutorial_icon_flower.png",
-    3: "tutorial_icon_house.png",
-    4: "tutorial_icon_chat.png",
-    5: "tutorial_icon_paw.png",
-    6: "tutorial_icon_nametag.png",
+    1: "tutorial_page_pet_hand.png",
+    2: "tutorial_page_menu_card.png",
+    3: "tutorial_page_house_cozy.png",
+    4: "tutorial_page_chat_gather.png",
+    5: "tutorial_page_nametag_heart.png",
 }
 
 TUTORIAL_PAGES = (
@@ -158,7 +157,7 @@ QPushButton {
             QPushButton#secondary {
                 background:#f7e6d8;
                 color:#7e5b4c;
-                border:2px solid #ecd2bd;
+                border:1px solid #ecd2bd;
             }
             QPushButton#secondary:hover {
                 background:#f3dbc8;
@@ -229,7 +228,7 @@ QPushButton {
         self.icon_label = QLabel()
         self.icon_label.setObjectName("tutorialIcon")
         self.icon_label.setAlignment(Qt.AlignCenter)
-        self.icon_label.setFixedSize(646, 112)
+        self.icon_label.setFixedSize(646, 210)
         root.addWidget(self.icon_label)
 
         self.title_label = QLabel()
@@ -304,7 +303,7 @@ QPushButton {
         name_layout.addWidget(self.name_input)
         name_layout.addWidget(self.name_hint)
         # 2026-10-15 用户令：默认按钮——不想起名的玩家一键用默认宠物名
-        self.default_name_button = FeedbackButton("用默认名字")
+        self.default_name_button = FeedbackButton("默认名")
         self.default_name_button.setObjectName("secondary")
         self.default_name_button.setQssHover(True)
         self.default_name_button.clicked.connect(self._use_default_name)
@@ -462,7 +461,7 @@ QPushButton {
             from PyQt5.QtGui import QPixmap as _QPM
             cache[name] = (
                 _QPM(path).scaled(
-                    104, 104, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                    200, 200, Qt.KeepAspectRatio, Qt.SmoothTransformation)
                 if _os.path.exists(path) else _QPM())
         return cache[name] or None
 
