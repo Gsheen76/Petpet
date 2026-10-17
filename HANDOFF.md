@@ -61,6 +61,7 @@ D:\Agent_project\Petpet
 
 | 领域 | 内容 |
 |------|------|
+| **hero 透明根治（去 border-image）**（2026-10-15 追记三十四，v1.7.7 后待发） | 第7次源头修复：tutorialCard 移除 border-image（Alpha 复合元凶），hero RGBA 透明 620×337；坑位定稿=border-image 层上放半透明子控件=白底无解。VERDICT **1074**；PID 22972；提交 7a08457+9a418de |
 | **hero 白底真正根治**（2026-10-15 追记三十三，v1.7.7 后待发） | 第6次根治：RGBA 与 QSS border-image 复合不生效（WA_Translucent 救不了）→ hero 改纯 RGB 奶油底烘入（零透明=零复合）；坑位=border-image 卡片勿放半透明子控件图。VERDICT **1074**；PID 25352；提交 729043c |
 | **教程四修**（2026-10-15 追记三十二，v1.7.7 后待发） | WA_TranslucentBackground 根治视觉白盒（QLabel 半透明混合）；选宠页 emoji→插画；信息单行；hero 加强抠图。VERDICT **1074**；PID 13360；提交 46b78a7+4371472 |
 | **hero 第5代+选宠 idle 预览+命名行精调**（2026-10-15 追记三十一，v1.7.7 后待发） | hero 三宠参照重生成；选宠页点击展示 idle 动画预览（130px 循环）；默认按钮「默认」80×44+输入框 380 限宽。坑位=pet_asset_path 返回姿势文件非动画目录。VERDICT **1074**；PID 26008；提交 3f3dada |
