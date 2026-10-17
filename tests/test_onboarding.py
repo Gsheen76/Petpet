@@ -108,7 +108,7 @@ class OnboardingTests(unittest.TestCase):
         # 2026-10-15 布局优化：内容余量加高 620→660
         self.assertEqual((window.width(), window.height()), (740, 800))  # 2026-10-15 hero 加高
         self.assertIn("QLabel#tutorialBody", window.styleSheet())
-        self.assertEqual(window.body_label.font().pixelSize(), 21)  # 2026-10-15 字号和谐化
+        self.assertEqual(window.body_label.font().pixelSize(), 24)  # 2026-10-15 字号和谐化
         window.page_index = len(window.PAGES) - 1
         window._refresh_page()
         window.name_input.setText("!!!")
@@ -127,8 +127,8 @@ class OnboardingTests(unittest.TestCase):
         self.assertIsNotNone(window.findChild(QFrame, "tutorialCard"))
         title = window.findChild(QLabel, "tutorialTitle")
         body = window.findChild(QLabel, "tutorialBody")
-        self.assertEqual(title.font().pixelSize(), 27)
-        self.assertEqual(body.font().pixelSize(), 21)
+        self.assertEqual(title.font().pixelSize(), 30)  # 2026-10-15 增大
+        self.assertEqual(body.font().pixelSize(), 24)
         self.assertEqual(window.next_button.font().pixelSize(), 20)
         window.show()
         QApplication.processEvents()
