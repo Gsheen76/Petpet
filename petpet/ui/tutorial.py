@@ -264,7 +264,7 @@ QPushButton {
         self.hero_label.setObjectName("tutorialHero")
         self.hero_label.setAlignment(Qt.AlignCenter)
         self.hero_label.setAttribute(Qt.WA_TranslucentBackground, True)
-        self.hero_label.setFixedSize(628, 340)
+        self.hero_label.setFixedSize(628, 344)
         root.addWidget(self.hero_label)
 
         self.icon_label = QLabel()
