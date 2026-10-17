@@ -333,7 +333,7 @@ QPushButton {
         self.pet_info_label.setAlignment(Qt.AlignCenter)
         self.pet_info_label.setWordWrap(False)  # 用户令：一定一行显示
         self.pet_info_label.setMinimumHeight(28)
-        self.pet_info_label.setFont(independent_pixel_font(18))
+        self.pet_info_label.setFont(independent_pixel_font(20))
         # 2026-10-15 用户令：选中后在下方展示该宠的待机动画
         self.pet_preview_label = QLabel()
         self.pet_preview_label.setObjectName("tutorialPetPreview")
@@ -421,10 +421,10 @@ QPushButton {
 
         self.icon_label.setFont(independent_pixel_font(64))
         self.title_label.setFont(independent_pixel_font(33, QFont.Bold))
-        self.body_label.setFont(independent_pixel_font(22))
+        self.body_label.setFont(independent_pixel_font(20))
         self.progress_label.setFont(independent_pixel_font(17, QFont.Bold))
-        self.name_input.setFont(independent_pixel_font(22))
-        self.name_hint.setFont(independent_pixel_font(18, QFont.Bold))
+        self.name_input.setFont(independent_pixel_font(20))
+        self.name_hint.setFont(independent_pixel_font(20, QFont.Bold))
         for button in (self.later_button, self.back_button, self.next_button):
             button.setFont(independent_pixel_font(20, QFont.Bold))
 
