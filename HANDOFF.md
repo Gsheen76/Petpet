@@ -61,6 +61,7 @@ D:\Agent_project\Petpet
 
 | 领域 | 内容 |
 |------|------|
+| **hero 透明版**（2026-10-15 追记三十七，v1.7.7 后待发） | 用户透明版 RGBA 51%→水彩背景透出。VERDICT **1074**；PID 45768；提交 6c2f3da |
 | **教程 hero 用户供图**（2026-10-15 追记三十六，v1.7.7 后待发） | 用户「萌趣三只小动物列队」1536×1024→628×344，奶油底无缝。VERDICT **1074**；PID 7260；提交 b1f83dc |
 | **教程水彩背景接入**（2026-10-15 追记三十五，v1.7.7 后待发） | 用户供图→paintEvent 直接绘制（_TutorialCard 子类，不走 border-image）；hero RGBA 透明正确融入。VERDICT **1074**；PID 43588；提交 afabc88 |
 | **hero 透明根治（去 border-image）**（2026-10-15 追记三十四，v1.7.7 后待发） | 第7次源头修复：tutorialCard 移除 border-image（Alpha 复合元凶），hero RGBA 透明 620×337；坑位定稿=border-image 层上放半透明子控件=白底无解。VERDICT **1074**；PID 22972；提交 7a08457+9a418de |
