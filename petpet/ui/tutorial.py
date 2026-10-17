@@ -1,3 +1,4 @@
+from pathlib import Path
 """Static content for Petpet's first-run tutorial."""
 
 from PyQt5.QtCore import QPoint, Qt, QTimer
@@ -222,7 +223,7 @@ QPushButton {
         self.hero_label = QLabel()
         self.hero_label.setObjectName("tutorialHero")
         self.hero_label.setAlignment(Qt.AlignCenter)
-        self.hero_label.setFixedSize(628, 340)
+        self.hero_label.setFixedSize(628, 290)
         root.addWidget(self.hero_label)
 
         self.icon_label = QLabel()
@@ -279,11 +280,22 @@ QPushButton {
         self.pet_info_label.setObjectName("tutorialBody")
         self.pet_info_label.setAlignment(Qt.AlignCenter)
         self.pet_info_label.setWordWrap(True)
-        self.pet_info_label.setMinimumHeight(46)
+        self.pet_info_label.setMinimumHeight(28)
         self.pet_info_label.setFont(independent_pixel_font(18))
+        # 2026-10-15 用户令：选中后在下方展示该宠的待机动画
+        self.pet_preview_label = QLabel()
+        self.pet_preview_label.setObjectName("tutorialPetPreview")
+        self.pet_preview_label.setAlignment(Qt.AlignCenter)
+        self.pet_preview_label.setMinimumHeight(140)
         chooser_layout.addLayout(self.pet_chooser_row)
         chooser_layout.addWidget(self.pet_info_label)
+        chooser_layout.addWidget(self.pet_preview_label)
         root.addWidget(self.chooser_card)
+        # idle 帧定时器
+        self._preview_frames = []
+        self._preview_index = 0
+        self._preview_timer = QTimer(self)
+        self._preview_timer.timeout.connect(self._advance_preview)
         self._starter_pet_id = None
 
         self.name_card = QFrame()
@@ -295,6 +307,7 @@ QPushButton {
         self.name_input.setObjectName("petNameInput")
         self.name_input.setMaxLength(6)
         self.name_input.setMinimumHeight(58)
+        self.name_input.setMaximumWidth(380)
         self.name_input.setPlaceholderText("例如：团子、旺财、Sheen")
         self.name_input.returnPressed.connect(self._next)
         self.name_hint = QLabel("")
@@ -304,10 +317,10 @@ QPushButton {
         name_row = QHBoxLayout()
         name_row.setSpacing(10)
         name_row.addWidget(self.name_input, 1)
-        self.default_name_button = FeedbackButton("默认名")
+        self.default_name_button = FeedbackButton("默认")
         self.default_name_button.setObjectName("secondary")
         self.default_name_button.setQssHover(True)
-        self.default_name_button.setFixedSize(96, 44)
+        self.default_name_button.setFixedSize(80, 44)
         self.default_name_button.clicked.connect(self._use_default_name)
         name_row.addWidget(self.default_name_button)
         name_layout.addLayout(name_row)
@@ -414,6 +427,8 @@ QPushButton {
         self.body_label.setText(body)
         self.name_card.setVisible(is_last and len(self.pages) == 7)
         self.chooser_card.setVisible(is_chooser)
+        if not is_chooser and hasattr(self, "_preview_timer"):
+            self._preview_timer.stop()
         self.body_label.setMaximumHeight(58 if (is_last or is_chooser) else 92)
         # hero 插画只在欢迎页。isVisible() 在窗口未 show 前恒 False，
         # 不能用它判定（曾致 hero+emoji 双显、页面顶部大片空白）——用
@@ -469,8 +484,16 @@ QPushButton {
                 if _os.path.exists(path) else _QPM())
         return cache[name] or None
 
+    def _advance_preview(self):
+        if not self._preview_frames:
+            return
+        pm = self._preview_frames[self._preview_index % len(self._preview_frames)]
+        self.pet_preview_label.setPixmap(pm.scaled(
+            96, 96, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        self._preview_index += 1
+
     def _select_starter(self, pet_id):
-        """选宠页：点亮头像 + 展示基本信息。"""
+        """选宠页：点亮头像 + 展示基本信息 + 加载 idle 预览。"""
         registry = pet_registry.load_pet_registry()
         definition = registry.get(pet_id, {})
         self._starter_pet_id = pet_id
@@ -486,6 +509,26 @@ QPushButton {
         extra = f"性格：{brief}" if brief else ""
         combined = f"{name} · {desc}" + (("\n" + extra) if extra else "")
         self.pet_info_label.setText(combined)
+        # 加载该宠的 idle 动画帧做预览（动画目录而非姿势文件）
+        from PyQt5.QtGui import QPixmap as _QPM2
+        from petpet.app.paths import ASSETS_DIR as _ASSETS2
+        import os as _os2
+        idle_dir = Path(_ASSETS2) / "pets" / pet_id / "desktop" / "animations" / "idle"
+        frames = []
+        if idle_dir and idle_dir.is_dir():
+            for name in sorted(
+                    n for n in _os2.listdir(idle_dir) if n.endswith(".png"))[:8]:
+                pm = _QPM2(str(idle_dir / name))
+                if not pm.isNull():
+                    frames.append(pm)
+        self._preview_frames = frames
+        self._preview_index = 0
+        if frames:
+            self._preview_timer.start(150)
+            self._advance_preview()
+        else:
+            self._preview_timer.stop()
+            self.pet_preview_label.clear()
 
     def _use_default_name(self):
         """命名页默认按钮：一键填入选中宠的默认名。"""
