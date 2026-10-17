@@ -17,8 +17,8 @@ def test_tutorial_content_keeps_current_user_guidance():
     from petpet.ui.tutorial import TUTORIAL_PAGES
 
     combined = "\n".join(text for page in TUTORIAL_PAGES for text in page)
-    assert "双击进入小屋" in combined
-    assert "免费或自定义模式" in combined
+    assert "双击可以进入小屋" in combined  # 2026-10-15 文案丰富
+    assert "免费模式或自定义模式" in combined  # 2026-10-15 文案丰富
     assert "最多 6 个字符" in combined
 
 

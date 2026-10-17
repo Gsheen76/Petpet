@@ -69,10 +69,11 @@ class OnboardingTests(unittest.TestCase):
 
         self.assertEqual(
             window.body_label.text(),
-            "名字会显示在聊天和档案中，最多 6 个字符。",
+            "给伙伴取一个专属的名字吧，它会显示在聊天和档案中。\n"
+            "名字最多 6 个字符，也可以直接使用默认名字。",
         )
         self.assertEqual(window.name_input.maxLength(), 6)
-        self.assertLessEqual(window.body_label.height(), 64)  # 2026-10-15 铺满布局加高
+        self.assertLessEqual(window.body_label.height(), 80)  # 2026-10-15  # 2026-10-15 铺满布局加高
         self.assertLessEqual(
             window.body_label.geometry().bottom(),
             window.name_card.geometry().top(),
@@ -108,7 +109,7 @@ class OnboardingTests(unittest.TestCase):
         # 2026-10-15 布局优化：内容余量加高 620→660
         self.assertEqual((window.width(), window.height()), (740, 800))  # 2026-10-15 hero 加高
         self.assertIn("QLabel#tutorialBody", window.styleSheet())
-        self.assertEqual(window.body_label.font().pixelSize(), 24)  # 2026-10-15 字号和谐化
+        self.assertEqual(window.body_label.font().pixelSize(), 22)  # 2026-10-15 字号和谐化
         window.page_index = len(window.PAGES) - 1
         window._refresh_page()
         window.name_input.setText("!!!")
@@ -127,8 +128,8 @@ class OnboardingTests(unittest.TestCase):
         self.assertIsNotNone(window.findChild(QFrame, "tutorialCard"))
         title = window.findChild(QLabel, "tutorialTitle")
         body = window.findChild(QLabel, "tutorialBody")
-        self.assertEqual(title.font().pixelSize(), 30)  # 2026-10-15 增大
-        self.assertEqual(body.font().pixelSize(), 24)
+        self.assertEqual(title.font().pixelSize(), 33)  # 2026-10-15  # 2026-10-15 增大
+        self.assertEqual(body.font().pixelSize(), 22)
         self.assertEqual(window.next_button.font().pixelSize(), 20)
         window.show()
         QApplication.processEvents()

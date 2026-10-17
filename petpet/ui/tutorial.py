@@ -36,42 +36,50 @@ TUTORIAL_PAGES = (
     (
         "🐶",
         "欢迎认识你的桌面伙伴",
-        "小狗会住在桌面上，拥有自己的状态和成长记录。\n"
-        "它会散步、撒娇、陪你聊天，也会记住一起度过的时间。",
+        "小宠物会住在你的桌面上，拥有自己的饱腹、心情和精力状态，\n"
+        "还会随着陪伴时间慢慢成长、升级、解锁各种好玩的内容。\n"
+        "它会散步、撒娇、陪你聊天，也会记住你们一起度过的每一段时间。",
     ),
     (
         "🖱️",
         "摸摸它，也可以带它走",
-        "单击小狗可以抚摸，双击进入小屋，按住左键可以拖动。\n"
-        "睡着后按住左键左右晃几下，就能温柔地把它摇醒。",
+        "单击宠物可以摸摸它，它会开心地摇尾巴或竖起耳朵。\n"
+        "双击可以进入小屋，按住左键拖动能把它带到屏幕的任何角落。\n"
+        "当它睡着后，按住左键左右晃几下，就能温柔地把它摇醒。",
     ),
     (
         "🌷",
         "右键打开快捷菜单",
-        "右键会显示状态卡和快捷菜单：聊天、小屋、商店、互动和更多。\n"
-        "记录、成就、小游戏、设置和教程都在“更多”里。",
+        "右键宠物会显示状态卡和快捷菜单，一目了然地看到它的心情。\n"
+        "菜单里有：聊天、小屋、商店、互动、喂养和更多选项。\n"
+        "记录、成就、小游戏、设置和教程都收纳在「更多」里面。",
     ),
     (
         "🏠",
         "在小屋里自由生活",
-        "左键地面可以指定移动位置，右键小狗可以和它互动。\n"
-        "精力不足时，小狗会走到垫子旁边睡觉。",
+        "小屋里有一个温暖的小家，宠物可以在这里自由活动。\n"
+        "左键点击地面可以指定它移动的位置，右键它可以互动。\n"
+        "当精力不足时，它会自己走到垫子旁边蜷成一团睡觉。",
     ),
     (
         "💬",
         "聊天与陪伴偏好",
-        "聊天可以选择免费或自定义模式；自定义模式还能上传图片交流。\n"
-        "设置里可以选择健康提醒和性格偏好，不需要调整复杂数值。",
+        "和宠物聊天可以选择免费模式或自定义模式。\n"
+        "自定义模式支持上传图片交流，它还会记住你们聊过的话题。\n"
+        "设置里可以调整健康提醒和性格偏好，都是简单直观的选项。",
     ),
     (
         "🐾",
         "选择你的伙伴",
-        "挑选一只作为你的初始桌宠。点一下头像认识 TA，确认后开始陪伴。",
+        "三只小伙伴都在等你。挑选一只作为你的初始桌宠，\n"
+        "点击头像可以认识它、看它的性格和介绍。\n"
+        "选中后进入下一步，开始你们的陪伴之旅。",
     ),
     (
         "🏷️",
         "最后，给TA取个名字吧",
-        "名字会显示在聊天和档案中，最多 6 个字符。",
+        "给伙伴取一个专属的名字吧，它会显示在聊天和档案中。\n"
+        "名字最多 6 个字符，也可以直接使用默认名字。",
     ),
 )
 
@@ -284,9 +292,9 @@ QPushButton {
         self.body_label.setObjectName("tutorialBody")
         self.body_label.setAlignment(Qt.AlignCenter)
         self.body_label.setWordWrap(True)
-        self.body_label.setMaximumWidth(580)
-        self.body_label.setMinimumHeight(64)
-        self.body_label.setMaximumHeight(92)
+        self.body_label.setMaximumWidth(600)
+        self.body_label.setMinimumHeight(80)
+        self.body_label.setMaximumHeight(200)
         root.addWidget(self.body_label, 0, Qt.AlignHCenter)
 
         # ---- 2026-10-15 选宠页（命名页前一步，用户令）----
@@ -412,8 +420,8 @@ QPushButton {
             _QPM(_hero_path) if _os.path.exists(_hero_path) else _QPM())
 
         self.icon_label.setFont(independent_pixel_font(64))
-        self.title_label.setFont(independent_pixel_font(30, QFont.Bold))
-        self.body_label.setFont(independent_pixel_font(24))
+        self.title_label.setFont(independent_pixel_font(33, QFont.Bold))
+        self.body_label.setFont(independent_pixel_font(22))
         self.progress_label.setFont(independent_pixel_font(17, QFont.Bold))
         self.name_input.setFont(independent_pixel_font(22))
         self.name_hint.setFont(independent_pixel_font(18, QFont.Bold))
