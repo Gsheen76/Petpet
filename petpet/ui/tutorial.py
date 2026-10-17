@@ -307,6 +307,7 @@ QPushButton {
         self.default_name_button = FeedbackButton("默认名")
         self.default_name_button.setObjectName("secondary")
         self.default_name_button.setQssHover(True)
+        self.default_name_button.setFixedSize(96, 44)
         self.default_name_button.clicked.connect(self._use_default_name)
         name_row.addWidget(self.default_name_button)
         name_layout.addLayout(name_row)
