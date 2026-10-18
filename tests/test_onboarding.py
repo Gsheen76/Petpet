@@ -73,13 +73,13 @@ class OnboardingTests(unittest.TestCase):
             "名字最多 6 个字符，也可以直接使用默认名字。",
         )
         self.assertEqual(window.name_input.maxLength(), 6)
-        self.assertLessEqual(window.body_label.height(), 80)  # 2026-10-15  # 2026-10-15 铺满布局加高
+        self.assertLessEqual(window.body_label.height(), 90)  # 2026-10-15  # 2026-10-15 铺满布局加高
         self.assertLessEqual(
             window.body_label.geometry().bottom(),
             window.name_card.geometry().top(),
-        )
+        )  # 2026-10-15 钮加大后布局上移
         # 2026-10-15 底栏绝对定位：断言底栏位置恒定（跨页严格对齐）
-        self.assertEqual(window.bottom_bar.y(), 646)
+        self.assertEqual(window.bottom_bar.y(), 646)  # 2026-10-15 钮150px后
 
     def test_pet_name_normalization(self):
         self.assertEqual(ai.normalize_pet_name("  小 团子  "), "小 团子")

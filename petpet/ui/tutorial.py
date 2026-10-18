@@ -295,7 +295,7 @@ QPushButton {
         self.body_label.setAlignment(Qt.AlignCenter)
         self.body_label.setWordWrap(True)
         self.body_label.setMaximumWidth(600)
-        self.body_label.setFixedHeight(100)
+        self.body_label.setFixedHeight(87)  # 3行×27px+6 计算值（100 会与命名卡重叠 6px）
        
         root.addWidget(self.body_label, 0, Qt.AlignHCenter)
 
