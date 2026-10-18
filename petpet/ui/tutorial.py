@@ -71,9 +71,8 @@ TUTORIAL_PAGES = (
     (
         "🐾",
         "选择你的伙伴",
-        "三只小伙伴都在等你。挑选一只作为你的初始桌宠，\n"
-        "点击头像可以认识它、看它的性格和介绍。\n"
-        "选中后进入下一步，开始你们的陪伴之旅。",
+        "三只小伙伴都在等你。挑选一只作为你的初始桌宠，点击头像认识它。\n"
+        "看看它的性格和介绍，选中后进入下一步，开始你们的陪伴之旅。",
     ),
     (
         "🏷️",
@@ -222,7 +221,10 @@ QPushButton {
                 border:3px solid #f0dcc8;
                 border-radius:26px;
                 padding:0;
-                min-height:0;
+                min-height:150px;
+                max-height:150px;
+                min-width:150px;
+                max-width:150px;
             }
             QPushButton#petChoiceButton:hover {
                 border-color:#f5b39c;
@@ -304,18 +306,18 @@ QPushButton {
         chooser_layout.setContentsMargins(16, 14, 16, 12)
         chooser_layout.setSpacing(10)
         self.pet_chooser_row = QHBoxLayout()
-        self.pet_chooser_row.setSpacing(18)
+        self.pet_chooser_row.setSpacing(12)
         self._pet_choice_buttons = {}
         for pet_id, definition in pet_registry.load_pet_registry().items():
             button = QPushButton()
             button.setObjectName("petChoiceButton")
-            button.setFixedSize(100, 100)
+            button.setFixedSize(150, 150)
             avatar_path = pet_registry.pet_avatar_path(pet_id)
             from PyQt5.QtGui import QPixmap, QIcon
             pm = QPixmap(avatar_path) if avatar_path else QPixmap()
             if not pm.isNull():
                 button.setIcon(QIcon(pm.scaled(
-                    84, 84, Qt.KeepAspectRatio, Qt.SmoothTransformation)))
+                    130, 130, Qt.KeepAspectRatio, Qt.SmoothTransformation)))
                 button.setIconSize(pm.scaled(
                     84, 84, Qt.KeepAspectRatio).size())
             button.setToolTip(definition.get("default_name", pet_id))
@@ -339,7 +341,7 @@ QPushButton {
         self.pet_preview_label.setObjectName("tutorialPetPreview")
         self.pet_preview_label.setAlignment(Qt.AlignCenter)
         self.pet_preview_label.setAttribute(Qt.WA_TranslucentBackground, True)
-        self.pet_preview_label.setMinimumHeight(140)
+        self.pet_preview_label.setFixedHeight(150)
         chooser_layout.addLayout(self.pet_chooser_row)
         chooser_layout.addWidget(self.pet_info_label)
         chooser_layout.addWidget(self.pet_preview_label)
