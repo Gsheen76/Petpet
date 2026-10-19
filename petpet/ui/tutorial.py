@@ -258,6 +258,7 @@ QPushButton {
             self.tutorial_card.set_background(_BGP(_bg_path))
         outer.addWidget(self.tutorial_card)
         root = QVBoxLayout(self.tutorial_card)
+        self.root_layout = root
         root.setContentsMargins(38, 28, 38, 30)
         root.setSpacing(14)
 
@@ -308,7 +309,7 @@ QPushButton {
 
         # ---- 2026-10-15 选宠页（命名页前一步，用户令）----
         self.chooser_card = QFrame()
-        self.chooser_card.setFixedSize(500, 300)  # 用户令：外框锁死不随选择变化
+        self.chooser_card.setFixedSize(500, 400)  # 用户令：外框锁死不随选择变化
         self.chooser_card.setObjectName("nameCard")
         chooser_layout = QVBoxLayout(self.chooser_card)
         chooser_layout.setContentsMargins(16, 14, 16, 12)
@@ -349,7 +350,8 @@ QPushButton {
         self.pet_preview_label.setObjectName("tutorialPetPreview")
         self.pet_preview_label.setAlignment(Qt.AlignCenter)
         self.pet_preview_label.setAttribute(Qt.WA_TranslucentBackground, True)
-        self.pet_preview_label.setFixedHeight(130)
+        # 外框加高到 400 后预览区吃掉多余空间（图像在区内居中）
+        self.pet_preview_label.setMinimumHeight(130)
         chooser_layout.addLayout(self.pet_chooser_row)
         chooser_layout.addWidget(self.pet_info_label)
         chooser_layout.addWidget(self.pet_preview_label)
@@ -492,7 +494,13 @@ QPushButton {
         self.chooser_card.setVisible(is_chooser)
         if not is_chooser and hasattr(self, "_preview_timer"):
             self._preview_timer.stop()
-        self.body_label.setMaximumHeight(58 if (is_last or is_chooser) else 92)
+        # 高/宽按页锁定（2026-10-19 根治：旧 setMaximumHeight 与构造期
+        # fixed 120 冲突、min 恒胜，「页5-6 100px」从未生效——改走
+        # setFixedHeight；选宠页外框加高到 400 后行距同步收紧防撞底栏）
+        self.body_label.setFixedHeight(
+            92 if is_chooser else (100 if is_last else 120))
+        self.body_label.setFixedWidth(500 if is_chooser else 450)
+        self.root_layout.setSpacing(10 if is_chooser else 14)
         # hero 插画只在欢迎页。isVisible() 在窗口未 show 前恒 False，
         # 不能用它判定（曾致 hero+emoji 双显、页面顶部大片空白）——用
         # 素材有效性直接推导。
@@ -555,7 +563,7 @@ QPushButton {
             return
         pm = self._preview_frames[self._preview_index % len(self._preview_frames)]
         self.pet_preview_label.setPixmap(pm.scaled(
-            96, 96, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            160, 160, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         self._preview_index += 1
 
     def _select_starter(self, pet_id):
