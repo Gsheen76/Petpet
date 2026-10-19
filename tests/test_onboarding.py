@@ -72,7 +72,7 @@ class OnboardingTests(unittest.TestCase):
         self.assertEqual(
             _re.sub(r"<[^>]+>", "", window.body_label.text()),
             "给伙伴取一个专属的名字吧，它会显示在聊天和档案中。"
-            "名字最多6 个字符，也可以直接使用默认名字。",
+            "名字最多6 个字符，也可以使用默认名字。",
         )
         self.assertEqual(window.name_input.maxLength(), 6)
         self.assertLessEqual(window.body_label.height(), 120)  # 2026-10-15  # 2026-10-15 铺满布局加高

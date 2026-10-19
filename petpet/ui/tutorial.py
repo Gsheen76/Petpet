@@ -83,7 +83,7 @@ TUTORIAL_PAGES = (
         "🏷️",
         "最后，给TA取个名字吧",
         f"给伙伴取一个{hl('专属的名字')}吧，它会显示在{hl('聊天')}和{hl('档案')}中。"
-        f"名字最多{hl('6 个字符')}，也可以直接使用{hl('默认名字')}。",
+        f"名字最多{hl('6 个字符')}，也可以使用{hl('默认名字')}。",
     ),
 )
 
@@ -175,13 +175,33 @@ class TutorialWindow(KeepAliveTopLevelWindow):
             }
             QLineEdit {
                 background:#ffffff;
-                border:2px solid #edcdb3;
-                border-radius:14px;
-                padding:12px 16px;
+                border:2px solid #f0dcc8;
+                border-radius:28px;
+                padding:0 18px;
+                min-height:52px;
+                max-height:52px;
                 color:#65483b;
                 selection-background-color:#ffc9b8;
             }
-            QLineEdit:focus { border-color:#f19a7f; }
+            QLineEdit:focus {
+                border-color:#f28f76;
+                background:#fffaf5;
+            }
+            QPushButton#defaultNameBtn {
+                background:#f7e6d8;
+                color:#7e5b4c;
+                border:1px solid #ecd2bd;
+                border-radius:28px;
+                padding:0 12px;
+                min-height:54px;
+                max-height:54px;
+                min-width:82px;
+                max-width:82px;
+            }
+            QPushButton#defaultNameBtn:hover {
+                background:#f3dbc8;
+                border-color:#e5bfa5;
+            }
 QPushButton {
                 min-height:56px;
                 padding:8px 34px;
@@ -363,33 +383,46 @@ QPushButton {
         self._preview_timer.timeout.connect(self._advance_preview)
         self._starter_pet_id = None
 
+        # ---- 命名行（2026-10-19 重设计）：500 宽与选宠卡同宽锁定，胶囊
+        # 输入框与「默认名字」键同高并排、整组水平垂直居中，提示行居中在下
         self.name_card = QFrame()
         self.name_card.setObjectName("nameCard")
+        self.name_card.setFixedSize(500, 124)
         name_layout = QVBoxLayout(self.name_card)
-        name_layout.setContentsMargins(20, 10, 20, 10)
-        name_layout.setSpacing(4)
+        name_layout.setContentsMargins(18, 10, 18, 10)
+        name_layout.setSpacing(10)
+        name_layout.addStretch(1)
+        name_row = QHBoxLayout()
+        name_row.setSpacing(14)
+        # 两侧显式系数 1 居中（insertStretch(0) 是索引不是系数——教程页踩过）
+        name_row.addStretch(1)
         self.name_input = QLineEdit()
         self.name_input.setObjectName("petNameInput")
         self.name_input.setMaxLength(6)
-        self.name_input.setMinimumHeight(58)
-        self.name_input.setMaximumWidth(380)
+        self.name_input.setFixedSize(320, 56)
+        self.name_input.setFont(independent_pixel_font(24))
+        self.name_input.setAlignment(Qt.AlignCenter)
         self.name_input.setPlaceholderText("例如：团子、旺财、Sheen")
         self.name_input.returnPressed.connect(self._next)
+        name_row.addWidget(self.name_input)
+        self.default_name_button = FeedbackButton("默认名字")
+        # 独立 ID 样式（不复用 secondary）：全局 QPushButton 规则的
+        # min-height 56+padding 8/34 会把 52 定高撑到 74——ID 选择器
+        # 覆盖之，与输入框严格同高同线
+        self.default_name_button.setObjectName("defaultNameBtn")
+        self.default_name_button.setQssHover(True)
+        self.default_name_button.setFixedSize(108, 56)
+        self.default_name_button.clicked.connect(self._use_default_name)
+        name_row.addWidget(self.default_name_button)
+        name_row.addStretch(1)
+        name_layout.addLayout(name_row)
         self.name_hint = QLabel("")
         self.name_hint.setObjectName("nameHint")
         self.name_hint.setAlignment(Qt.AlignCenter)
-        # 2026-10-15 用户定稿：输入框与默认按钮同一行左右分布
-        name_row = QHBoxLayout()
-        name_row.setSpacing(10)
-        name_row.addWidget(self.name_input, 1)
-        self.default_name_button = FeedbackButton("默认")
-        self.default_name_button.setObjectName("secondary")
-        self.default_name_button.setQssHover(True)
-        self.default_name_button.setFixedSize(80, 44)
-        self.default_name_button.clicked.connect(self._use_default_name)
-        name_row.addWidget(self.default_name_button)
-        name_layout.addLayout(name_row)
-        name_layout.addWidget(self.name_hint)
+        self.name_hint.setFixedHeight(24)
+        self.name_hint.setFont(independent_pixel_font(16))
+        name_layout.addWidget(self.name_hint, 0, Qt.AlignHCenter)
+        name_layout.addStretch(1)
         root.addWidget(self.name_card, 0, Qt.AlignHCenter)
 
         root.addStretch(1)
@@ -498,9 +531,10 @@ QPushButton {
         # fixed 120 冲突、min 恒胜，「页5-6 100px」从未生效——改走
         # setFixedHeight；选宠页外框加高到 400 后行距同步收紧防撞底栏）
         self.body_label.setFixedHeight(
-            84 if is_chooser else (100 if is_last else 120))
+            84 if (is_chooser or is_last) else 120)
         self.body_label.setFixedWidth(500 if is_chooser else 450)
-        self.root_layout.setSpacing(10 if is_chooser else 14)
+        # 选宠/命名两页行距收紧——内容件更高的这两页防撞底部按键行
+        self.root_layout.setSpacing(10 if (is_chooser or is_last) else 14)
         # hero 插画只在欢迎页。isVisible() 在窗口未 show 前恒 False，
         # 不能用它判定（曾致 hero+emoji 双显、页面顶部大片空白）——用
         # 素材有效性直接推导。
@@ -711,7 +745,7 @@ QPushButton {
             return
         raw_name = " ".join(self.name_input.text().split())
         if not any(char.isalnum() for char in raw_name):
-            self.name_hint.setText("请先给小狗取一个名字，再开始陪伴吧～")
+            self.name_hint.setText("请先给伙伴取一个名字，再开始陪伴吧～")
             self.name_input.setFocus()
             return
         name = ai.normalize_pet_name(raw_name)
