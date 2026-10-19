@@ -224,12 +224,12 @@ QPushButton {
             QPushButton#petChoiceButton {
                 background:#fffdf8;
                 border:3px solid #f0dcc8;
-                border-radius:26px;
+                border-radius:20px;
                 padding:0;
-                min-height:150px;
-                max-height:150px;
-                min-width:150px;
-                max-width:150px;
+                min-height:110px;
+                max-height:110px;
+                min-width:110px;
+                max-width:110px;
             }
             QPushButton#petChoiceButton:hover {
                 border-color:#f5b39c;
@@ -308,6 +308,7 @@ QPushButton {
 
         # ---- 2026-10-15 选宠页（命名页前一步，用户令）----
         self.chooser_card = QFrame()
+        self.chooser_card.setFixedSize(500, 300)  # 用户令：外框锁死不随选择变化
         self.chooser_card.setObjectName("nameCard")
         chooser_layout = QVBoxLayout(self.chooser_card)
         chooser_layout.setContentsMargins(16, 14, 16, 12)
@@ -318,15 +319,15 @@ QPushButton {
         for pet_id, definition in pet_registry.load_pet_registry().items():
             button = QPushButton()
             button.setObjectName("petChoiceButton")
-            button.setFixedSize(150, 150)
+            button.setFixedSize(110, 110)
             avatar_path = pet_registry.pet_avatar_path(pet_id)
             from PyQt5.QtGui import QPixmap, QIcon
             pm = QPixmap(avatar_path) if avatar_path else QPixmap()
             if not pm.isNull():
                 button.setIcon(QIcon(pm.scaled(
-                    130, 130, Qt.KeepAspectRatio, Qt.SmoothTransformation)))
+                    96, 96, Qt.KeepAspectRatio, Qt.SmoothTransformation)))
                 button.setIconSize(pm.scaled(
-                    84, 84, Qt.KeepAspectRatio).size())
+                    70, 70, Qt.KeepAspectRatio).size())
             button.setToolTip(definition.get("default_name", pet_id))
             button.clicked.connect(
                 lambda _checked=False, pid=pet_id: self._select_starter(pid))
@@ -348,7 +349,7 @@ QPushButton {
         self.pet_preview_label.setObjectName("tutorialPetPreview")
         self.pet_preview_label.setAlignment(Qt.AlignCenter)
         self.pet_preview_label.setAttribute(Qt.WA_TranslucentBackground, True)
-        self.pet_preview_label.setFixedHeight(150)
+        self.pet_preview_label.setFixedHeight(130)
         chooser_layout.addLayout(self.pet_chooser_row)
         chooser_layout.addWidget(self.pet_info_label)
         chooser_layout.addWidget(self.pet_preview_label)
