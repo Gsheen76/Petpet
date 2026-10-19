@@ -62,6 +62,7 @@ D:\Agent_project\Petpet
 
 | 领域 | 内容 |
 |------|------|
+| **宽度 650+重点词细筛**（2026-10-19 追记四十六，v1.7.7 后待发） | body 650px；高亮词 30→61 个全面补漏。VERDICT **1074**；PID 34164；提交 611589f |
 | **正文宽度+重点词高亮**（2026-10-19 追记四十五，v1.7.7 后待发） | body 640-700px；30+ 重点词珊瑚色 #d4593f 加粗（HTML b）；测试去标签断言。VERDICT **1074**；PID 15160；提交 044c390 |
 | **正文三项统一**（2026-10-19 追记四十四，v1.7.7 后待发） | body 100px/七页去换行 wordWrap/AlignLeft+VCenter/HCenter。VERDICT **1074**；PID 27852；提交 c0dd172 |
 | **选宠页钮锁定+文字修复**（2026-10-18 追记四十三，v1.7.7 后待发） | 钮 QSS min/max 150×150（QSS padding 覆盖 setFixedSize 坑位）；预览 150 恒定；body 87px。VERDICT **1074**；PID 1768；提交 9e6ccdc+adc3dcf |
