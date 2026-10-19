@@ -32,6 +32,14 @@ TUTORIAL_PAGE_ICONS = {
     6: "tutorial_page_nametag.png",
 }
 
+# 命名页（页6）插图随选中宠物切换（2026-10-19 用户令；Meowa 生成，
+# 缺素材回退上方通用名牌图）
+TUTORIAL_PAGE_NAME_ICONS = {
+    "lunch_meat": "tutorial_page_name_lunch_meat.png",
+    "ice_cream": "tutorial_page_name_ice_cream.png",
+    "marshmallow": "tutorial_page_name_marshmallow.png",
+}
+
 def hl(word):
     return f'<b style="color:#d4593f">{word}</b>'
 
@@ -399,7 +407,7 @@ QPushButton {
         self.name_input.setFixedSize(320, 56)
         self.name_input.setFont(independent_pixel_font(24))
         self.name_input.setAlignment(Qt.AlignCenter)
-        self.name_input.setPlaceholderText("例如：团子、旺财、Sheen")
+        self.name_input.setPlaceholderText("例如：团子、旺财、豆豆")
         self.name_input.returnPressed.connect(self._next)
         name_row.addWidget(self.name_input)
         self.default_name_button = FeedbackButton("默认")
@@ -565,10 +573,17 @@ QPushButton {
             self._refresh_page()
 
     def _page_icon_pixmap(self, page_index):
-        """页图标素材（Meowa 生成）；缺素材返回 None 回退 emoji。"""
+        """页图标素材（Meowa 生成）；缺素材返回 None 回退 emoji。
+
+        命名页（页6）随选中宠物换图（2026-10-19 用户令）——未选中或
+        缺素材回退通用名牌图 TUTORIAL_PAGE_ICONS[6]。
+        """
         from petpet.app.paths import ASSETS_DIR as _ASSETS
         import os as _os
         name = TUTORIAL_PAGE_ICONS.get(page_index)
+        if page_index == 6:
+            name = TUTORIAL_PAGE_NAME_ICONS.get(
+                getattr(self, "_starter_pet_id", None), name)
         if not name:
             return None
         cache = getattr(self, "_page_icon_cache", None)
@@ -602,22 +617,23 @@ QPushButton {
         name = definition.get("default_name", pet_id)
         desc = definition.get("description", "").rstrip("。")
         personality = definition.get("chat_personality", "")
-        # 介绍两行（2026-10-19 用户令）：行1「名 · 描述」/行2「性格：首词」，
-        # elidedText 兜底保证任何文案都出不了框（nameCard 内宽 466px）
-        first_trait = ""
-        for token in personality.replace("，", "、").replace(
-                "；", "、").split("、"):
-            token = token.strip()
-            if token and len(token) <= 6:
-                first_trait = token
-                break
+        # 介绍两行（2026-10-19 用户令）：行1「名 · 描述」/行2「性格：双四字
+        # 词」（manifest traits 字段，缺省回退从 personality 解析 4 字分词）
+        traits = [t for t in definition.get("traits", []) if t]
+        if not traits:
+            traits = [
+                token.strip() for token in personality.replace(
+                    "，", "、").replace("；", "、").split("、")
+                if token.strip() and len(token.strip()) == 4
+            ]
+        words = traits[:2]
         from PyQt5.QtGui import QFontMetrics
         fm = QFontMetrics(self.pet_info_label.font())
         max_w = 466
         line1 = fm.elidedText(f"{name} · {desc}", Qt.ElideRight, max_w)
         line2 = (
-            fm.elidedText(f"性格：{first_trait}", Qt.ElideRight, max_w)
-            if first_trait else "")
+            fm.elidedText("性格：" + "、".join(words), Qt.ElideRight, max_w)
+            if words else "")
         combined = line1 + (("\n" + line2) if line2 else "")
         self.pet_info_label.setText(combined)
         # 加载该宠的 idle 动画帧做预览（动画目录而非姿势文件）；

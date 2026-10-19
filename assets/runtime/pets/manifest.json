@@ -24,6 +24,10 @@
       "sweet_cookie",
       "meat_can",
       "love_box"
+    ],
+    "traits": [
+      "活泼开朗",
+      "元气满满"
     ]
   },
   "ice_cream": {
@@ -50,6 +54,10 @@
       "milk_pudding",
       "berry_basket",
       "warm_blanket"
+    ],
+    "traits": [
+      "温柔可爱",
+      "安静耐心"
     ]
   },
   "marshmallow": {
@@ -75,6 +83,10 @@
       "berry_basket",
       "plush_ball",
       "warm_blanket"
+    ],
+    "traits": [
+      "温柔恬静",
+      "轻声细语"
     ]
   }
 }
