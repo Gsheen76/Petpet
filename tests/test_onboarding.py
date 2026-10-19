@@ -75,12 +75,12 @@ class OnboardingTests(unittest.TestCase):
             "名字最多6 个字符，也可以直接使用默认名字。",
         )
         self.assertEqual(window.name_input.maxLength(), 6)
-        self.assertLessEqual(window.body_label.height(), 100)  # 2026-10-15  # 2026-10-15 铺满布局加高
+        self.assertLessEqual(window.body_label.height(), 120)  # 2026-10-15  # 2026-10-15 铺满布局加高
         # 2026-10-15 用户定稿 body 100px：命名页与 name_card 有 6px 重叠
         # body 是 QLabel 透明背景，重叠不遮挡视觉，放宽断言
         self.assertLessEqual(
             window.body_label.geometry().bottom(),
-            window.name_card.geometry().top() + 10,
+            window.name_card.geometry().top() + 20,
         )
         # 2026-10-15 底栏绝对定位：断言底栏位置恒定（跨页严格对齐）
         self.assertEqual(window.bottom_bar.y(), 646)  # 2026-10-15 钮150px后

@@ -62,8 +62,9 @@ TUTORIAL_PAGES = (
         "🏠",
         "在小屋里自由生活",
         f"小屋里有一个温暖的{hl('小家')}，宠物可以在这里{hl('自由活动')}。"
-        f"{hl('左键点击地面')}可以指定它{hl('移动')}的位置，{hl('右键')}它可以{hl('互动')}。"
-        f"当{hl('精力不足')}时，它会自己走到{hl('垫子')}旁边蜷成一团{hl('睡觉')}。",
+        f"{hl('左键点击地面')}可以指定它{hl('移动')}的位置。"
+        f"{hl('右下角的互动按键')}可以{hl('抚摸')}、{hl('喂食')}、{hl('玩耍')}或{hl('睡觉')}。"
+        f"当{hl('精力不足')}时，它会自己走到{hl('垫子')}旁边蜷成一团睡觉。",
     ),
     (
         "💬",
@@ -300,7 +301,8 @@ QPushButton {
         self.body_label.setWordWrap(True)
         self.body_label.setMinimumWidth(450)
         self.body_label.setMaximumWidth(450)
-        self.body_label.setFixedHeight(100)
+        self.body_label.setFixedHeight(
+            120 if self.page_index < 5 else 100)  # 前五页 120px 容纳长文案
        
         root.addWidget(self.body_label, 0, Qt.AlignHCenter)
 
