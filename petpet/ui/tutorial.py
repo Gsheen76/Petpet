@@ -350,8 +350,8 @@ QPushButton {
         self.pet_preview_label.setObjectName("tutorialPetPreview")
         self.pet_preview_label.setAlignment(Qt.AlignCenter)
         self.pet_preview_label.setAttribute(Qt.WA_TranslucentBackground, True)
-        # 外框加高到 400 后预览区吃掉多余空间（图像在区内居中）
-        self.pet_preview_label.setMinimumHeight(130)
+        # 画布 150 高（地线钉在画布内），保证布局压缩时也不裁脚底
+        self.pet_preview_label.setMinimumHeight(150)
         chooser_layout.addLayout(self.pet_chooser_row)
         chooser_layout.addWidget(self.pet_info_label)
         chooser_layout.addWidget(self.pet_preview_label)
@@ -498,7 +498,7 @@ QPushButton {
         # fixed 120 冲突、min 恒胜，「页5-6 100px」从未生效——改走
         # setFixedHeight；选宠页外框加高到 400 后行距同步收紧防撞底栏）
         self.body_label.setFixedHeight(
-            92 if is_chooser else (100 if is_last else 120))
+            84 if is_chooser else (100 if is_last else 120))
         self.body_label.setFixedWidth(500 if is_chooser else 450)
         self.root_layout.setSpacing(10 if is_chooser else 14)
         # hero 插画只在欢迎页。isVisible() 在窗口未 show 前恒 False，
@@ -562,8 +562,7 @@ QPushButton {
         if not self._preview_frames:
             return
         pm = self._preview_frames[self._preview_index % len(self._preview_frames)]
-        self.pet_preview_label.setPixmap(pm.scaled(
-            160, 160, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        self.pet_preview_label.setPixmap(pm)  # 帧已归一到统一画布
         self._preview_index += 1
 
     def _select_starter(self, pet_id):
@@ -578,9 +577,8 @@ QPushButton {
         name = definition.get("default_name", pet_id)
         desc = definition.get("description", "").rstrip("。")
         personality = definition.get("chat_personality", "")
-        # 介绍 ≤35 字（2026-10-19 用户令）：单行「名 · 描述 · 性格：首词」，
-        # 性格取首个顿号/逗号分词——旧实现按逗号切分在长 personality 上
-        # 拼出 40+ 字还带换行，撑爆单行标签
+        # 介绍两行（2026-10-19 用户令）：行1「名 · 描述」/行2「性格：首词」，
+        # elidedText 兜底保证任何文案都出不了框（nameCard 内宽 466px）
         first_trait = ""
         for token in personality.replace("，", "、").replace(
                 "；", "、").split("、"):
@@ -588,32 +586,102 @@ QPushButton {
             if token and len(token) <= 6:
                 first_trait = token
                 break
-        combined = f"{name} · {desc}"
-        if first_trait:
-            combined += f" · 性格：{first_trait}"
-        if len(combined) > 35:
-            combined = combined[:35]
+        from PyQt5.QtGui import QFontMetrics
+        fm = QFontMetrics(self.pet_info_label.font())
+        max_w = 466
+        line1 = fm.elidedText(f"{name} · {desc}", Qt.ElideRight, max_w)
+        line2 = (
+            fm.elidedText(f"性格：{first_trait}", Qt.ElideRight, max_w)
+            if first_trait else "")
+        combined = line1 + (("\n" + line2) if line2 else "")
         self.pet_info_label.setText(combined)
-        # 加载该宠的 idle 动画帧做预览（动画目录而非姿势文件）
-        from PyQt5.QtGui import QPixmap as _QPM2
+        # 加载该宠的 idle 动画帧做预览（动画目录而非姿势文件）；
+        # 归一化到统一画布（2026-10-19 用户令：宠物大小统一/同一地线）
         from petpet.app.paths import ASSETS_DIR as _ASSETS2
         import os as _os2
         idle_dir = Path(_ASSETS2) / "pets" / pet_id / "desktop" / "animations" / "idle"
-        frames = []
+        paths = []
         if idle_dir and idle_dir.is_dir():
-            for name in sorted(
-                    n for n in _os2.listdir(idle_dir) if n.endswith(".png"))[:8]:
-                pm = _QPM2(str(idle_dir / name))
-                if not pm.isNull():
-                    frames.append(pm)
-        self._preview_frames = frames
+            paths = [
+                idle_dir / n for n in sorted(
+                    n for n in _os2.listdir(idle_dir) if n.endswith(".png"))[:8]
+            ]
+        self._preview_frames = self._normalized_preview_frames(paths)
         self._preview_index = 0
-        if frames:
+        if self._preview_frames:
             self._preview_timer.start(150)
             self._advance_preview()
         else:
             self._preview_timer.stop()
             self.pet_preview_label.clear()
+
+    # 预览归一化画布：三宠 idle 帧同为 640² 但内容占比不同（体高
+    # 459~576/底距 32~93），统一整帧缩放必然大小不一、底线错开——
+    # 按参考帧内容 bbox 定每宠缩放（体高统一 126）+ 常量偏移（脚底
+    # 钉同一地线），逐帧画到 190×150 定格画布
+    PREVIEW_CANVAS_W, PREVIEW_CANVAS_H = 190, 150
+    PREVIEW_BODY_H = 126
+    PREVIEW_GROUND_MARGIN = 6
+
+    def _normalized_preview_frames(self, paths):
+        from PyQt5.QtGui import QPixmap
+        if not paths:
+            return []
+        try:
+            from PIL import Image
+            import numpy as np
+            boxes = []
+            for p in paths:
+                arr = np.asarray(Image.open(p).convert("RGBA"))
+                ys, xs = np.where(arr[:, :, 3] > 10)
+                if len(ys):
+                    boxes.append(
+                        (int(ys.min()), int(ys.max()),
+                         int(xs.min()), int(xs.max())))
+        except Exception:
+            boxes = []
+        if not boxes:
+            return [
+                pm for pm in (
+                    QPixmap(str(p)).scaled(
+                        self.PREVIEW_CANVAS_W, self.PREVIEW_CANVAS_H,
+                        Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                    for p in paths)
+                if not pm.isNull()
+            ]
+        ref_h, ref_w = arr.shape[0], arr.shape[1]
+        # 体高基准取全帧并集（呼吸/眨眼帧偏矮）——三宠「最大体高」严格一致
+        content_h = max(b[1] - b[0] + 1 for b in boxes)
+        y_max = boxes[0][1]
+        x_min = min(b[2] for b in boxes)
+        x_max = max(b[3] for b in boxes)
+        content_w = x_max - x_min + 1
+        src_h, src_w = ref_h, ref_w
+        scale = self.PREVIEW_BODY_H / max(content_h, 1)
+        frame_w = max(1, int(round(src_w * scale)))
+        frame_h = max(1, int(round(src_h * scale)))
+        # 内容水平居中、参考帧内容底钉地线
+        dx = (
+            (self.PREVIEW_CANVAS_W - int(round(content_w * scale))) // 2
+            - int(round(x_min * scale)))
+        dy = (
+            (self.PREVIEW_CANVAS_H - self.PREVIEW_GROUND_MARGIN)
+            - int(round((y_max + 1) * scale)))
+        frames = []
+        for path in paths:
+            pm = QPixmap(str(path))
+            if pm.isNull():
+                continue
+            canvas = QPixmap(self.PREVIEW_CANVAS_W, self.PREVIEW_CANVAS_H)
+            canvas.fill(Qt.transparent)
+            painter = QPainter(canvas)
+            painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
+            painter.drawPixmap(dx, dy, pm.scaled(
+                frame_w, frame_h,
+                Qt.IgnoreAspectRatio, Qt.SmoothTransformation))
+            painter.end()
+            frames.append(canvas)
+        return frames
 
     def _use_default_name(self):
         """命名页默认按钮：一键填入选中宠的默认名。"""
