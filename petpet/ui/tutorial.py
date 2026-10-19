@@ -298,8 +298,8 @@ QPushButton {
         self.body_label.setObjectName("tutorialBody")
         self.body_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self.body_label.setWordWrap(True)
-        self.body_label.setMinimumWidth(650)
-        self.body_label.setMaximumWidth(650)
+        self.body_label.setMinimumWidth(450)
+        self.body_label.setMaximumWidth(450)
         self.body_label.setFixedHeight(100)
        
         root.addWidget(self.body_label, 0, Qt.AlignHCenter)
