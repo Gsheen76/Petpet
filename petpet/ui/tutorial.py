@@ -195,8 +195,8 @@ class TutorialWindow(KeepAliveTopLevelWindow):
                 padding:0 12px;
                 min-height:54px;
                 max-height:54px;
-                min-width:82px;
-                max-width:82px;
+                min-width:62px;
+                max-width:62px;
             }
             QPushButton#defaultNameBtn:hover {
                 background:#f3dbc8;
@@ -383,19 +383,16 @@ QPushButton {
         self._preview_timer.timeout.connect(self._advance_preview)
         self._starter_pet_id = None
 
-        # ---- 命名行（2026-10-19 重设计）：500 宽与选宠卡同宽锁定，胶囊
-        # 输入框与「默认名字」键同高并排、整组水平垂直居中，提示行居中在下
-        self.name_card = QFrame()
-        self.name_card.setObjectName("nameCard")
-        self.name_card.setFixedSize(500, 124)
+        # ---- 命名行（2026-10-19 二轮定稿）：外框删除（用户令），胶囊
+        # 输入框与「默认」键同高并排直接放在页面上，提示行居中在下；
+        # 输入初始恒空（用户令：让玩家自己输入）
+        self.name_card = QWidget()
+        self.name_card.setObjectName("nameRowHost")  # 无 QSS=无边框透明
         name_layout = QVBoxLayout(self.name_card)
-        name_layout.setContentsMargins(18, 10, 18, 10)
+        name_layout.setContentsMargins(0, 0, 0, 0)
         name_layout.setSpacing(10)
-        name_layout.addStretch(1)
         name_row = QHBoxLayout()
         name_row.setSpacing(14)
-        # 两侧显式系数 1 居中（insertStretch(0) 是索引不是系数——教程页踩过）
-        name_row.addStretch(1)
         self.name_input = QLineEdit()
         self.name_input.setObjectName("petNameInput")
         self.name_input.setMaxLength(6)
@@ -405,24 +402,23 @@ QPushButton {
         self.name_input.setPlaceholderText("例如：团子、旺财、Sheen")
         self.name_input.returnPressed.connect(self._next)
         name_row.addWidget(self.name_input)
-        self.default_name_button = FeedbackButton("默认名字")
+        self.default_name_button = FeedbackButton("默认")
         # 独立 ID 样式（不复用 secondary）：全局 QPushButton 规则的
-        # min-height 56+padding 8/34 会把 52 定高撑到 74——ID 选择器
-        # 覆盖之，与输入框严格同高同线
+        # min-height 56+padding 8/34 会把定高撑爆——ID 选择器覆盖之，
+        # 与输入框严格同高同线
         self.default_name_button.setObjectName("defaultNameBtn")
         self.default_name_button.setQssHover(True)
-        self.default_name_button.setFixedSize(108, 56)
+        self.default_name_button.setFixedSize(88, 56)
         self.default_name_button.clicked.connect(self._use_default_name)
         name_row.addWidget(self.default_name_button)
-        name_row.addStretch(1)
         name_layout.addLayout(name_row)
+        name_layout.setAlignment(name_row, Qt.AlignHCenter)
         self.name_hint = QLabel("")
         self.name_hint.setObjectName("nameHint")
         self.name_hint.setAlignment(Qt.AlignCenter)
         self.name_hint.setFixedHeight(24)
         self.name_hint.setFont(independent_pixel_font(16))
         name_layout.addWidget(self.name_hint, 0, Qt.AlignHCenter)
-        name_layout.addStretch(1)
         root.addWidget(self.name_card, 0, Qt.AlignHCenter)
 
         root.addStretch(1)
@@ -490,14 +486,9 @@ QPushButton {
         self._starter_pet_id = None
         for button in self._pet_choice_buttons.values():
             button.setProperty("chosen", False)
-        current_name = self.pet.pet_name
-        if (
-            not self.pet.state.get("tutorial_completed", False)
-            and current_name == ai.DEFAULT_PET_NAME
-        ):
-            self.name_input.clear()
-        else:
-            self.name_input.setText(current_name)
+        # 2026-10-19 用户令：输入初始恒空让玩家自己输入（旧逻辑重看时
+        # 预填当前名「奶油」被否）——默认名一键补全交给「默认」键
+        self.name_input.clear()
         self.name_hint.clear()
         self._refresh_page()
         screen = self.pet.interface_screen_rect()
