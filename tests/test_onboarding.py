@@ -67,10 +67,12 @@ class OnboardingTests(unittest.TestCase):
         window.show()
         QApplication.processEvents()
 
+        # 2026-10-19 重点词高亮后 text() 含 HTML，去标签后比对
+        import re as _re
         self.assertEqual(
-            window.body_label.text(),
+            _re.sub(r"<[^>]+>", "", window.body_label.text()),
             "给伙伴取一个专属的名字吧，它会显示在聊天和档案中。"
-            "名字最多 6 个字符，也可以直接使用默认名字。",
+            "名字最多6 个字符，也可以直接使用默认名字。",
         )
         self.assertEqual(window.name_input.maxLength(), 6)
         self.assertLessEqual(window.body_label.height(), 100)  # 2026-10-15  # 2026-10-15 铺满布局加高

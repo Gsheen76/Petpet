@@ -16,10 +16,14 @@ def test_tutorial_window_reexports_package_content():
 def test_tutorial_content_keeps_current_user_guidance():
     from petpet.ui.tutorial import TUTORIAL_PAGES
 
-    combined = "\n".join(text for page in TUTORIAL_PAGES for text in page)
+    import re as _re
+    combined = "\n".join(
+        _re.sub(r"<[^>]+>", "", text)
+        for page in TUTORIAL_PAGES for text in page
+    )
     assert "双击可以进入小屋" in combined  # 2026-10-15 文案丰富
     assert "免费模式或自定义模式" in combined  # 2026-10-15 文案丰富
-    assert "最多 6 个字符" in combined
+    assert "最多6 个字符" in combined  # 高亮标记无空格
 
 
 def test_tutorial_window_is_owned_by_package_module():
