@@ -138,6 +138,11 @@ class TutorialWindow(KeepAliveTopLevelWindow):
         self.on_complete = on_complete
         self.page_index = 0
         self.pages = self.PAGES  # start() 按首次/重看切换页集
+        # 流程模式（2026-10-19 用户令「首次教程不许关闭」）：七页完整流程
+        # （真首次 + 调试完整教程重放）一律不可关闭，五页重看才可关；
+        # _allow_close 仅在走完命名流程时放行
+        self._full_flow = True
+        self._allow_close = False
         self.setWindowFlags(
             Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
         )
@@ -492,6 +497,8 @@ QPushButton {
         """
         first_run = force_full or not self.pet.state.get(
             "tutorial_completed", False)
+        self._full_flow = first_run
+        self._allow_close = False
         self.pages = self.PAGES if first_run else self.PAGES[:5]
         self.page_index = 0
         self._starter_pet_id = None
@@ -563,14 +570,22 @@ QPushButton {
                 for index in range(len(self.pages))
             )
         )
-        # 首次教程不可关闭/跳过（2026-10-19 用户令）：教程未完成=必读，
-        # 只有关卡完成后的重看（含调试完整教程）才显示「关闭」
-        first_run = not self.pet.state.get("tutorial_completed", False)
+        # 首次教程不可关闭/跳过（2026-10-19 用户令）：判据=流程模式而非
+        # 完成态——调试完整教程（force_full）也是七页首次流程，同样无关闭；
+        # 只有五页重看显示「关闭」
         self.later_button.setText("关闭")
-        self.later_button.setVisible(not first_run)
+        self.later_button.setVisible(not self._full_flow)
         # 命名页不再自动 setFocus：有焦点的空输入框在中文 IME 环境会隐藏
         # placeholder（用户实测只在点默认失焦的一瞬间闪现）——示例文案
         # 必须常显，玩家点击输入框时才取焦
+
+    def closeEvent(self, event):
+        # 七页首次流程不许关闭（2026-10-19 用户令）——关闭键已隐，此处
+        # 兜住一切程序化 close；走完命名（_allow_close）或五页重看放行
+        if self._full_flow and not self._allow_close:
+            event.ignore()
+            return
+        super().closeEvent(event)
 
     def _back(self):
         if self.page_index > 0:
@@ -764,5 +779,6 @@ QPushButton {
         name = ai.normalize_pet_name(raw_name)
         self.name_input.setText(name)
         self.name_hint.clear()
+        self._allow_close = True  # 走完命名流程=合法关闭
         self.on_complete(name)
         self.close()
