@@ -576,12 +576,23 @@ QPushButton {
             button.style().unpolish(button)
             button.style().polish(button)
         name = definition.get("default_name", pet_id)
-        desc = definition.get("description", "")
+        desc = definition.get("description", "").rstrip("。")
         personality = definition.get("chat_personality", "")
-        brief = "、".join(
-            personality.replace("；", "，").split("，")[:2]) if personality else ""
-        extra = f"性格：{brief}" if brief else ""
-        combined = f"{name} · {desc}" + (("\n" + extra) if extra else "")
+        # 介绍 ≤35 字（2026-10-19 用户令）：单行「名 · 描述 · 性格：首词」，
+        # 性格取首个顿号/逗号分词——旧实现按逗号切分在长 personality 上
+        # 拼出 40+ 字还带换行，撑爆单行标签
+        first_trait = ""
+        for token in personality.replace("，", "、").replace(
+                "；", "、").split("、"):
+            token = token.strip()
+            if token and len(token) <= 6:
+                first_trait = token
+                break
+        combined = f"{name} · {desc}"
+        if first_trait:
+            combined += f" · 性格：{first_trait}"
+        if len(combined) > 35:
+            combined = combined[:35]
         self.pet_info_label.setText(combined)
         # 加载该宠的 idle 动画帧做预览（动画目录而非姿势文件）
         from PyQt5.QtGui import QPixmap as _QPM2
