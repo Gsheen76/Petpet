@@ -6,7 +6,16 @@
   <img src="assets/runtime/pets/lunch_meat/desktop/poses/idle.png" width="280" alt="Pet陪它桌面小狗">
 </p>
 
-当前版本：`v1.7.7`
+当前版本：`v1.8.0`
+
+## v1.8.0 更新亮点
+
+- **新宠物棉花糖**：水彩画风白色小兔，待机/摸摸/喂食/玩耍/挖宝/开心/睡觉/三段抓起 8 组全套动画，逐帧定位零跳变。
+- **新手教程重做**：首次七页（互动教学→选宠→命名）必读不可跳过，重看五页随时可关；选宠页三只统一预览（同体高同地线），命名页随宠插图+一键默认名。
+- **统一定价 1000 Pet 币**：取消折扣与免费领取，初始伙伴改由教程亲自选宠授予并命名。
+- **全套水彩教程美术**（AI 生成）：三宠合影、信笺背景、每页插图、随宠名牌图；重点操作词珊瑚色高亮。
+- 双犬水彩新头像、棉花糖动画偏移根治、落地零停顿等修复群。
+- 全量 1074 项自动化测试，GitHub Actions 每次 push 自动回归。
 
 ## v1.7.7 更新亮点
 
@@ -160,8 +169,8 @@
 | 平台 | 文件 |
 | --- | --- |
 | Windows 直接运行 | `Petpet.exe` |
-| Windows 便携包 | `Petpet-v1.7.7-windows.zip` |
-| macOS Apple 芯片 | `Petpet-v1.7.7-macOS-arm64.zip` |
+| Windows 便携包 | `Petpet-v1.8.0-windows.zip` |
+| macOS Apple 芯片 | `Petpet-v1.8.0-macOS-arm64.zip` |
 | 校验和 | `Petpet-v1.7.6-SHA256SUMS.txt` |
 
 Windows 下载 ZIP 后解压并运行 `Petpet.exe`。直接下载的 `Petpet.exe` 也可以独立运行，程序不会弹出命令行窗口。
@@ -402,8 +411,8 @@ dist/Petpet.app
 公开 Release 必须包含以下三项非空正式资产；校验和文件也会一并上传：
 
 - `Petpet.exe`
-- `Petpet-v1.7.7-windows.zip`
-- `Petpet-v1.7.7-macOS-arm64.zip`
+- `Petpet-v1.8.0-windows.zip`
+- `Petpet-v1.8.0-macOS-arm64.zip`
 
 中途失败时 Release 会保持草稿。修复问题后可以重复运行同一版本命令；脚本不会强推、覆盖已存在的标签或删除 worktree。已公开且完整的 Release 会先验证远端资产，避免重复修改。
 
