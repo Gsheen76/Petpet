@@ -464,7 +464,7 @@ class ProfileWindowShellTests(unittest.TestCase):
             "lunch_meat", 130, anim_key="idle_dinosaur",
         )
         self.assertTrue(first)
-        key = ("lunch_meat", "idle_dinosaur", 130)
+        key = ("lunch_meat", "idle_dinosaur", 130, None)
         self.assertIn(key, module._IDLE_FRAMES_CACHE)
         # 命中缓存：返回同一列表对象（不再走磁盘）。
         second = module._load_idle_frames(

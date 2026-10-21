@@ -15,7 +15,12 @@ from petpet.ui import decorations as decoration_renderer
 from petpet.minigames import ui as minigames
 from petpet.progression import core as progression
 from petpet.app.paths import OUTFITS_DIR, SOUNDS_DIR
-from petpet.app.pets import current_pet_style, pet_asset_path, pet_definition
+from petpet.app.pets import (
+    current_pet_style,
+    is_classic_style,
+    pet_asset_path,
+    pet_definition,
+)
 from petpet.app.settings import load_settings
 from petpet.ui.common import clamp_window_into_nearest_screen, pixel_font
 from PyQt5.QtCore import (
@@ -1782,7 +1787,7 @@ class PetWindow(QWidget):
         帧缺失时静默降级，与 idle 装备路由同一语义。
         新装画风下套装整体不生效（经典限定,2026-10-21 风格切换轮）。
         """
-        if self._current_pet_style() not in (None, "classic"):
+        if not is_classic_style(self._current_pet_style()):
             return None
         variant = progression.equipped_outfit_action_animation(
             self.state, action
@@ -1868,7 +1873,7 @@ class PetWindow(QWidget):
 
     def _equipped_outfit_preview(self):
         # 新装画风下拖拽不叠经典套装预览（经典限定,2026-10-21 风格切换轮）
-        if self._current_pet_style() not in (None, "classic"):
+        if not is_classic_style(self._current_pet_style()):
             return None
         outfit_id = progression.equipped_outfit(self.state)
         cache = self.__dict__.get("_outfit_preview_cache")

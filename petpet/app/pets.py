@@ -118,8 +118,14 @@ def pet_definition(pet_id: str, style: str | None = None) -> dict:
     return definition
 
 
+def is_classic_style(style: str | None) -> bool:
+    """该画风下经典资产语义成立(经典或单风格基线)——套装生效判定的
+    共享谓词,四处调用点单源(2026-10-21 code-review 采纳)。"""
+    return style in (None, "classic")
+
+
 def resolve_pet_style(pet_id: str, style_value) -> str | None:
-    """归一化画风值:有效直返;无效/缺失回落默认(新装);单风格宠物 None。"""
+    """归一化画风值:有效直返;无效/缺失回落 DEFAULT_STYLE;单风格宠物 None。"""
     styles = available_styles(pet_id)
     if not styles:
         return None

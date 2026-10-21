@@ -24,7 +24,12 @@ from PyQt5.QtWidgets import QWidget
 
 from petpet.progression import core as progression
 from petpet.app.paths import DATA_DIR
-from petpet.app.pets import current_pet_style, pet_asset_path, pet_definition
+from petpet.app.pets import (
+    current_pet_style,
+    is_classic_style,
+    pet_asset_path,
+    pet_definition,
+)
 from petpet.home.pet import (
     HOME_DEFAULT_SLEEP_POINT,
     HomePetController,
@@ -290,7 +295,7 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
 
     def _effective_outfit(self, style):
         """新装画风下套装不生效(经典限定,2026-10-21 风格切换轮)。"""
-        if style in (None, "classic"):
+        if is_classic_style(style):
             return progression.equipped_outfit(self.state)
         return ""
 
@@ -343,7 +348,8 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
         outfit_id = self._effective_outfit(selected_style)
         outfit_definition = progression.OUTFIT_DEFINITIONS.get(outfit_id, {})
         walk_action = outfit_definition.get("home_walk_action", "walk_right")
-        walk_source = pet_asset_path(selected_pet_id, "home", walk_action)
+        walk_source = pet_asset_path(
+            selected_pet_id, "home", walk_action, style=selected_style)
         if isinstance(grid_columns, int) and isinstance(grid_rows, int):
             if walk_source and walk_source != idle_path:
                 frames = self._home_walk_grid_frames(

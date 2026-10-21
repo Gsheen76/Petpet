@@ -239,7 +239,8 @@ def pet_profile_snapshot(state: dict, pet_id: str) -> dict:
 
 def _outfit_preview_path(pet_id, outfit):
     """从桌面 idle 资产推导套装预览图的绝对路径（idle 是最终回退，必然存在）。"""
-    idle = pet_registry.pet_asset_path(pet_id, "desktop", "idle")
+    idle = pet_registry.pet_asset_path(
+        pet_id, "desktop", "idle", style="classic")
     if not idle:
         return None
     desktop_dir = os.path.dirname(os.path.dirname(idle))
@@ -274,16 +275,17 @@ def _grayscale_pixmap(path):
 _IDLE_FRAMES_CACHE = {}
 
 
-def _load_idle_frames(pet_id, height, anim_key="idle"):
+def _load_idle_frames(pet_id, height, anim_key="idle", style=None):
     """加载指定桌面动画全部帧（等高缩放）；带缓存，缺动画回退空列表。
 
     一次磁盘加载 ~124ms（16 帧），切换宠物/套装会反复取同一组帧——
     不缓存则每次 refresh 主线程冻结 250ms，按压反馈被冻在屏上。
     """
-    cache_key = (pet_id, anim_key, round(height))
+    cache_key = (pet_id, anim_key, round(height), style)
     if cache_key in _IDLE_FRAMES_CACHE:
         return _IDLE_FRAMES_CACHE[cache_key]
-    folder = pet_registry.pet_asset_path(pet_id, "desktop", "idle")
+    folder = pet_registry.pet_asset_path(
+        pet_id, "desktop", "idle", style=style)
     if not folder:
         return []
     desktop_dir = os.path.dirname(os.path.dirname(folder))
@@ -910,9 +912,14 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
         try:
             card_h = round(130 * _FIT)
             for pet_id in pet_registry.load_pet_registry():
-                _load_idle_frames(pet_id, IDLE_FRAME_HEIGHT)
+                _load_idle_frames(
+                    pet_id, IDLE_FRAME_HEIGHT,
+                    style=pet_registry.current_pet_style(
+                        pet_id, self.pet.state),
+                )
                 for anim_key in OUTFIT_IDLE_ANIM.values():
-                    _load_idle_frames(pet_id, card_h, anim_key=anim_key)
+                    _load_idle_frames(
+                        pet_id, card_h, anim_key=anim_key, style="classic")
         except RuntimeError:
             pass  # 窗口已销毁，预热无意义。
 
@@ -1176,7 +1183,9 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
         h.addWidget(title_label, 0, Qt.AlignVCenter)
         h.addSpacing(10)
         self._style_chips = {}
-        chip_h = round(52 * k)
+        # QSS min/max-height 是内容盒(AGENTS 坑位):border 2×2+padding 2×2
+        # 共 +8,widget 定高按目标视觉高 52 反推 44。
+        chip_h = round(44 * k)
         for style_key in styles:
             chip = FeedbackButton(pet_registry.STYLE_LABELS.get(style_key, style_key))
             chip.setObjectName("styleChip")
@@ -1216,6 +1225,11 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
             self._sync_style_chips(current)
             return
         self.refresh()
+        # 预览动画帧随画风重建(refresh 只刷静态值不重建帧)
+        try:
+            self._start_idle_animation()
+        except RuntimeError:
+            pass
 
     def _sync_style_chips(self, current_style):
         for style_key, chip in getattr(self, "_style_chips", {}).items():
@@ -1302,7 +1316,10 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
             round(IDLE_FRAME_HEIGHT * 0.86) if view_id == "marshmallow"
             else IDLE_FRAME_HEIGHT
         )
-        self._idle_frames = _load_idle_frames(view_id, preview_h)
+        self._idle_frames = _load_idle_frames(
+            view_id, preview_h,
+            style=pet_registry.current_pet_style(view_id, self.pet.state),
+        )
         # 待机动画竖向微调（2026-09-15 五调）：冰淇凌再下一点、
         # 午餐肉上一点（自统一 +20 基础上分化）。
         offset_y = 34 if view_id == "ice_cream" else 10
@@ -1403,7 +1420,10 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
             icon_name = SPECIES_RAIL_ICON.get(pet_id)
             icon_path = (
                 _pp_asset(icon_name) if icon_name
-                else pet_registry.pet_avatar_path(pet_id)
+                else pet_registry.pet_avatar_path(
+                    pet_id,
+                    style=pet_registry.current_pet_style(pet_id, state),
+                )
             )
             if owned:
                 icon = QPixmap(icon_path) if icon_path else QPixmap()
@@ -1518,7 +1538,7 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
             name_row.addWidget(name_label)
             style_limited = (
                 bool(snapshot.get("available_styles"))
-                and snapshot.get("style") not in (None, "classic")
+                and not pet_registry.is_classic_style(snapshot.get("style"))
             )
             if style_limited:
                 badge = QLabel("经典限定")
@@ -1568,6 +1588,7 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
             idle.set_frames(_load_idle_frames(
                 pet_id, idle_px,
                 anim_key=OUTFIT_IDLE_ANIM.get(outfit["id"], ""),
+                style="classic",
             ))
             idle.show()
             row.addWidget(idle, 0, Qt.AlignBottom)

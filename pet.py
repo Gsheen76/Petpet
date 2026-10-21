@@ -1803,16 +1803,16 @@ class TrayApp:
         镜像 set_active_pet 链:写档→清该宠双风格资产缓存→桌面重载→存盘→
         家园/聊天/商店/记录/成就联动刷新。单风格宠物与非法值拒绝。
         """
+        registry = load_pet_registry()
+        if pet_id not in registry:
+            return {"ok": False, "pet_id": pet_id, "message": "没有找到这只宠物。"}
+        pet_id = registry[pet_id]["id"]
         if not available_styles(pet_id):
             return {"ok": False, "pet_id": pet_id, "message": "这只宠物只有一种画风。"}
         try:
             app_state.set_pet_style(self.state, pet_id, style)
         except ValueError as exc:
             return {"ok": False, "pet_id": pet_id, "message": str(exc)}
-        registry = load_pet_registry()
-        if pet_id not in registry:
-            return {"ok": False, "pet_id": pet_id, "message": "没有找到这只宠物。"}
-        pet_id = registry[pet_id]["id"]
         save_state(self.state)
 
         # 非出勤宠切风格只写档——表面刷新仅对出勤宠(桌面/家园/聊天展示的
