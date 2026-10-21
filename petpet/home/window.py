@@ -24,7 +24,7 @@ from PyQt5.QtWidgets import QWidget
 
 from petpet.progression import core as progression
 from petpet.app.paths import DATA_DIR
-from petpet.app.pets import pet_asset_path, pet_definition
+from petpet.app.pets import current_pet_style, pet_asset_path, pet_definition
 from petpet.home.pet import (
     HOME_DEFAULT_SLEEP_POINT,
     HomePetController,
@@ -282,30 +282,43 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
         home_scene["pet_position"] = serialized
         self.save_state(self.state)
 
+    def _pet_assets_signature_tuple(self, pet_id):
+        """资产短路签名 (pet_id, 装备, 画风)——三者任一变化都须重载。"""
+        selected = pet_id or self.state.get("active_pet_id", "lunch_meat")
+        style = current_pet_style(pet_definition(selected)["id"], self.state)
+        return (selected, progression.equipped_outfit(self.state), style)
+
+    def _effective_outfit(self, style):
+        """新装画风下套装不生效(经典限定,2026-10-21 风格切换轮)。"""
+        if style in (None, "classic"):
+            return progression.equipped_outfit(self.state)
+        return ""
+
     def refresh_pet_assets(self, pet_id: str | None = None) -> None:
         """Load the home artwork registered for the selected stable pet.
 
         签名短路（2026-09-28 小屋加载轮）：show_scene 每次都调本函数
         重载全部精灵（pathlib resolve+PIL 解码 ~0.5s/次）——宠物与
         装备未变时直接跳过；显式传 pet_id 仍然强制重载。
+        风格维度入签名（2026-10-21 风格切换轮）：风格翻转必须重载。
         """
-        signature = (
-            pet_id or self.state.get("active_pet_id", "lunch_meat"),
-            progression.equipped_outfit(self.state),
-        )
+        signature = self._pet_assets_signature_tuple(pet_id)
         if (pet_id is None
                 and getattr(self, "_pet_assets_signature", None)
                 == signature):
             return
         self._pet_assets_signature = signature
+        selected_style = signature[2]
         self._home_pet_animation_source_rects = {}
         definition = pet_definition(
-            pet_id or self.state.get("active_pet_id", "lunch_meat")
+            pet_id or self.state.get("active_pet_id", "lunch_meat"),
+            selected_style,
         )
         selected_pet_id = definition["id"]
         from petpet.app.imgcache import pixmap as _cpixmap
 
-        idle_path = pet_asset_path(selected_pet_id, "home", "idle")
+        idle_path = pet_asset_path(
+            selected_pet_id, "home", "idle", style=selected_style)
         # 走 imgcache（2026-09-29 首开提速轮）：启动后已后台预解码，
         # 此处 QImage→QPixmap 轻转换，磁盘读归零。
         idle_pixmap = _cpixmap(idle_path) if idle_path else QPixmap()
@@ -314,7 +327,8 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
             # 存在性探测不再整图加载（2026-09-29 首开提速轮）：
             # 原 QPixmap(path).isNull() 每候选全量读盘解码——首开
             # 0.42s 纯探测开销；损坏图另有加载回退兜底。
-            path = pet_asset_path(selected_pet_id, "home", action)
+            path = pet_asset_path(
+                selected_pet_id, "home", action, style=selected_style)
             if path and os.path.exists(path):
                 return path
             return idle_path
@@ -326,7 +340,7 @@ class HomeSceneWindow(KeepAliveTopLevelWindow):
         home_definition = definition.get("home", {})
         grid_columns = home_definition.get("walk_grid_columns", 0)
         grid_rows = home_definition.get("walk_grid_rows", 0)
-        outfit_id = progression.equipped_outfit(self.state)
+        outfit_id = self._effective_outfit(selected_style)
         outfit_definition = progression.OUTFIT_DEFINITIONS.get(outfit_id, {})
         walk_action = outfit_definition.get("home_walk_action", "walk_right")
         walk_source = pet_asset_path(selected_pet_id, "home", walk_action)

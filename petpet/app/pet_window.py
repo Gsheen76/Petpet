@@ -443,8 +443,17 @@ class PetWindow(QWidget):
         )
 
     def _current_pet_style(self):
-        """当前宠的画风(经典/新装,缺省新装;单风格宠物 None)。"""
-        return current_pet_style(self.current_pet_id, self.state)
+        """当前宠的画风(经典/新装;单风格宠物 None)。
+
+        __dict__ 直取——测试壳未初始化时 PyQt 缺属性抛 RuntimeError,
+        getattr 默认值接不住(2026-09-12 既有坑位)。
+        """
+        state = self.__dict__.get("state")
+        if not isinstance(state, dict):
+            return None
+        pet_id = self.__dict__.get("_current_pet_id") or state.get(
+            "active_pet_id", "lunch_meat")
+        return current_pet_style(pet_id, state)
 
     def _pet_asset_cache_key(self, pet_id):
         """资产缓存键带画风维度——风格切换后不命中旧风格缓存。"""
@@ -1764,7 +1773,10 @@ class PetWindow(QWidget):
 
         仅当变体的帧资源存在时返回变体名，否则 None（回落素狗动画）——
         帧缺失时静默降级，与 idle 装备路由同一语义。
+        新装画风下套装整体不生效（经典限定,2026-10-21 风格切换轮）。
         """
+        if self._current_pet_style() not in (None, "classic"):
+            return None
         variant = progression.equipped_outfit_action_animation(
             self.state, action
         )
@@ -1848,6 +1860,9 @@ class PetWindow(QWidget):
         return "idle"
 
     def _equipped_outfit_preview(self):
+        # 新装画风下拖拽不叠经典套装预览（经典限定,2026-10-21 风格切换轮）
+        if self._current_pet_style() not in (None, "classic"):
+            return None
         outfit_id = progression.equipped_outfit(self.state)
         cache = self.__dict__.get("_outfit_preview_cache")
         if cache is None:
