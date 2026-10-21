@@ -664,6 +664,13 @@ class PetWindow(QWidget):
         self._current_pet_id = pet_definition(pet_id)["id"]
         return result
 
+    def set_pet_style(self, pet_id, style):
+        """Forward pet style switching to the application transaction."""
+        callback = getattr(self, "_set_pet_style_callback", None)
+        if not callable(callback):
+            return False
+        return callback(pet_id, style)
+
     def debug_parameter_defaults(self):
         defaults = dict(_dependency("DEFAULT_DEBUG_PARAMETERS"))
         if _dependency("IS_MACOS"):

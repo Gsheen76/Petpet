@@ -1581,6 +1581,7 @@ class TrayApp:
         save_state(self.state)
         self.pet = PetWindow(self.state)
         self.pet._set_active_pet_callback = self.set_active_pet
+        self.pet._set_pet_style_callback = self.set_pet_style
         # 2026-10-15 教程选宠/首次获得命名（用户令）：暴露给教程窗口与商店
         self.pet._grant_starter_pet_callback = self.grant_starter_pet
         self.pet._open_new_pet_naming_callback = self.open_new_pet_naming
@@ -1812,6 +1813,12 @@ class TrayApp:
         if pet_id not in registry:
             return {"ok": False, "pet_id": pet_id, "message": "没有找到这只宠物。"}
         pet_id = registry[pet_id]["id"]
+        save_state(self.state)
+
+        # 非出勤宠切风格只写档——表面刷新仅对出勤宠(桌面/家园/聊天展示的
+        # 都是出勤宠,提前刷新会把未选中的狗装载进窗口)。
+        if pet_id != self.state.get("active_pet_id"):
+            return {"ok": True, "pet_id": pet_id, "style": style}
 
         cache = getattr(self.pet, "_pet_assets_cache", None)
         if isinstance(cache, dict):
@@ -1821,7 +1828,6 @@ class TrayApp:
         refresh_assets = getattr(self.pet, "refresh_pet_assets", None)
         if callable(refresh_assets):
             refresh_assets(pet_id)
-        save_state(self.state)
 
         home = getattr(self.pet, "home_scene_window", None)
         if home is None:

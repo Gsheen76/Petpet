@@ -191,6 +191,8 @@ def pet_profile_snapshot(state: dict, pet_id: str) -> dict:
     level = int(profile.get("level") or 1)
     owned_outfits = profile.get("owned_outfits") or []
     equipped_outfit = profile.get("equipped_outfit")
+    available_styles = pet_registry.available_styles(pet_id)
+    style = pet_registry.current_pet_style(pet_id, state)
 
     outfits = []
     for outfit_id, outfit in progression.OUTFIT_DEFINITIONS.items():
@@ -223,8 +225,11 @@ def pet_profile_snapshot(state: dict, pet_id: str) -> dict:
         "affection_points": affection_points,
         # 注意：传等级数（传字典会被 _safe_int 兜底成 1 → 上限恒 30）。
         "affection_next": progression.affection_to_next(affection_level),
-        "avatar_path": pet_registry.pet_avatar_path(pet_id),
-        "preview_path": pet_registry.pet_asset_path(pet_id, "desktop", "idle"),
+        "avatar_path": pet_registry.pet_avatar_path(pet_id, style=style),
+        "preview_path": pet_registry.pet_asset_path(
+            pet_id, "desktop", "idle", style=style),
+        "available_styles": available_styles,
+        "style": style,
         "hunger": int(profile.get("hunger") or 0),
         "mood": int(profile.get("mood") or 0),
         "energy": int(profile.get("energy") or 0),
@@ -1143,8 +1148,78 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
             # 四模块铺满内容区（原尾部堆一堆空白不美观）。
             layout.addSpacing(8)
             layout.addStretch(1)
+        # 画风节（2026-10-21 风格切换轮）：双风格宠物显示「经典/新装」
+        # 胶囊二选一；单风格宠物(棉花糖)不渲染。
+        self._style_section_row = self._build_style_section(k)
+        if self._style_section_row is not None:
+            layout.addWidget(self._style_section_row)
+            layout.addSpacing(8)
+            layout.addStretch(1)
         scroll.setWidget(host)
         return scroll
+
+    def _build_style_section(self, k):
+        """画风切换节：图标省略,标题 + 两枚 checkable 胶囊(flat 反馈)。"""
+        styles = pet_registry.available_styles(self._active_pet_id())
+        if not styles:
+            self._style_chips = {}
+            return None
+        row = QWidget()
+        h = QHBoxLayout(row)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(6)
+        title_label = QLabel("画风")
+        title_label.setStyleSheet(
+            f"font-family:'{APP_FONT_FAMILY}';font-size:{round(27 * k)}px;"
+            "font-weight:600;color:#d29a38;background:transparent;"
+        )
+        h.addWidget(title_label, 0, Qt.AlignVCenter)
+        h.addSpacing(10)
+        self._style_chips = {}
+        chip_h = round(52 * k)
+        for style_key in styles:
+            chip = FeedbackButton(pet_registry.STYLE_LABELS.get(style_key, style_key))
+            chip.setObjectName("styleChip")
+            chip.setCheckable(True)
+            chip.setFlatFeedback(True)
+            chip.setCursor(Qt.PointingHandCursor)
+            chip.setFixedHeight(chip_h)
+            chip.setStyleSheet(
+                "QPushButton#styleChip{"
+                f"font-family:'{APP_FONT_FAMILY}';font-size:{round(24 * k)}px;"
+                "font-weight:600;color:#a8742c;background:#fdf1e4;"
+                "border:2px solid #f0d8ba;border-radius:"
+                f"{chip_h // 2}px;padding:2px 26px;}}"
+                "QPushButton#styleChip:hover{background:#fbd4bd;}"
+                "QPushButton#styleChip:checked{background:#f28f76;"
+                "color:#fff9ee;border-color:#f28f76;}"
+            )
+            chip.clicked.connect(
+                lambda _checked, key=style_key: self._choose_pet_style(key))
+            self._style_chips[style_key] = chip
+            h.addWidget(chip, 0, Qt.AlignVCenter)
+        h.addStretch(1)
+        return row
+
+    def _choose_pet_style(self, style_key):
+        """切画风经 PetWindow 转发器走 TrayApp 事务,成功后面板整体刷新。"""
+        pet_id = self._view_pet_id()
+        current = pet_registry.current_pet_style(pet_id, self.pet.state)
+        if current == style_key:
+            self._sync_style_chips(current)
+            return
+        handler = getattr(self.pet, "set_pet_style", None)
+        if not callable(handler):
+            return
+        result = handler(pet_id, style_key)
+        if isinstance(result, dict) and result.get("ok") is False:
+            self._sync_style_chips(current)
+            return
+        self.refresh()
+
+    def _sync_style_chips(self, current_style):
+        for style_key, chip in getattr(self, "_style_chips", {}).items():
+            chip.setChecked(style_key == current_style)
 
     def _intro_section(self, title, key, k):
         """图标竖跨两行居中 + 右侧两行文字（节名/数值）（第五十四轮）。"""
@@ -1377,6 +1452,12 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
         else:
             self._intro_sections["gifts"].setText("还没有特别的偏好")
 
+        # 画风节随查看对象显隐与选中同步(2026-10-21 风格切换轮)
+        if getattr(self, "_style_section_row", None) is not None:
+            dual = bool(snapshot.get("available_styles"))
+            self._style_section_row.setVisible(dual)
+            self._sync_style_chips(snapshot.get("style"))
+
     def _refresh_outfits(self, snapshot):
         """套装页（第二十七轮）：商店同款横版卡（左图右文+卡内装备钮）。"""
         while self._outfit_layout.count() > 1:
@@ -1429,6 +1510,26 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
                 f"font-size:{round(26 * _SX * _FIT)}px;font-weight:600;"
                 "color:#a8742c;background:transparent;border:0;"
             )
+            # 经典限定角标（2026-10-21 风格切换轮）：查看对象处于新装
+            # 画风时套装不生效,卡片名旁标注;切回经典即消失。
+            name_row = QHBoxLayout()
+            name_row.setContentsMargins(0, 0, 0, 0)
+            name_row.setSpacing(10)
+            name_row.addWidget(name_label)
+            style_limited = (
+                bool(snapshot.get("available_styles"))
+                and snapshot.get("style") not in (None, "classic")
+            )
+            if style_limited:
+                badge = QLabel("经典限定")
+                badge.setStyleSheet(
+                    f"font-family:'{APP_FONT_FAMILY}';"
+                    f"font-size:{round(18 * _SX * _FIT)}px;font-weight:600;"
+                    "color:#fff9ee;background:#f28f76;border-radius:10px;"
+                    "padding:2px 12px;"
+                )
+                name_row.addWidget(badge, 0, Qt.AlignVCenter)
+            name_row.addStretch(1)
             desc_label = QLabel(outfit.get("description") or "")
             desc_label.setWordWrap(True)
             # 第三十二轮：文字列加宽用控件 min-width（不能给装了控件的
@@ -1441,7 +1542,7 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
                 f"font-size:{round(23 * _SX * _FIT)}px;"
                 "color:#b08a5e;background:transparent;border:0;"
             )
-            text_col.addWidget(name_label)
+            text_col.addLayout(name_row)
             text_col.addWidget(desc_label)
             text_col.addStretch(1)
             # 装备按钮（第二十八轮）：描述小字正下方空出处。

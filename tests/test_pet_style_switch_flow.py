@@ -68,3 +68,11 @@ def test_set_pet_style_single_style_pet_rejected(app):
     result = app.set_pet_style("marshmallow", "new")
     assert result["ok"] is False
     assert "marshmallow" not in app.state["pets"]
+
+
+def test_set_pet_style_non_active_pet_only_writes_state(app):
+    result = app.set_pet_style("ice_cream", "new")
+    assert result["ok"] is True
+    assert app.state["pets"]["ice_cream"]["style"] == "new"
+    # 非出勤宠不动桌面表面
+    assert app.pet.refreshed == []
