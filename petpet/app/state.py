@@ -206,6 +206,23 @@ def bind_active_pet(state: dict, pet_id: str) -> dict:
     return _project_active_pet(state)
 
 
+def set_pet_style(state: dict, pet_id: str, style: str) -> dict:
+    """写每宠画风字段(经典/新装,2026-10-21 风格切换轮)。
+
+    单风格宠物(无 styles 块)无操作;非法值 ValueError。
+    """
+    from petpet.app.pets import available_styles, pet_definition
+    pet_id = pet_definition(pet_id)["id"]
+    styles = available_styles(pet_id)
+    if not styles:
+        return pet_profile(state, pet_id, create=False)
+    if style not in styles:
+        raise ValueError(f"unsupported pet style {style!r} for {pet_id!r}")
+    profile = pet_profile(state, pet_id)
+    profile["style"] = style
+    return profile
+
+
 def sweep_ghost_pet_profiles(state: dict) -> None:
     """清扫幽灵宠物档案（2026-09-19）：查看未拥有宠物的旧 bug 曾把纯
     默认值档案写进存档，虚增「拥有宠物」数。只删「未拥有 + 非出勤 +
