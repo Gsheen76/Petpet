@@ -19,8 +19,19 @@ from PyQt5.QtWidgets import (
 from petpet.progression.ui import FeedbackButton
 from petpet.chat import api as ai
 from petpet.app import pets as pet_registry
+from petpet.app.paths import ASSETS_DIR
 from petpet.ui.common import KeepAliveTopLevelWindow
 from petpet.ui.common import independent_pixel_font
+
+
+def _pet_idle_frames_dir(pet_id, state):
+    """按当前画风解析该宠 idle 动画帧目录(2026-10-21 风格切换轮)。"""
+    style = pet_registry.current_pet_style(pet_id, state)
+    desktop_root = pet_registry.pet_definition(pet_id, style).get(
+        "desktop", {}).get("root")
+    if not desktop_root:
+        return None
+    return Path(ASSETS_DIR) / desktop_root / "animations" / "idle"
 
 # 2026-10-15 素材升级：emoji→Meowa Image-2 生成图标（缺素材回退 emoji）
 TUTORIAL_PAGE_ICONS = {
@@ -659,9 +670,9 @@ QPushButton {
         self.pet_info_label.setText(combined)
         # 加载该宠的 idle 动画帧做预览（动画目录而非姿势文件）；
         # 归一化到统一画布（2026-10-19 用户令：宠物大小统一/同一地线）
-        from petpet.app.paths import ASSETS_DIR as _ASSETS2
+        # 画风感知目录(2026-10-21 风格切换轮):跟随当前画风解析 root
         import os as _os2
-        idle_dir = Path(_ASSETS2) / "pets" / pet_id / "desktop" / "animations" / "idle"
+        idle_dir = _pet_idle_frames_dir(pet_id, self.pet.state)
         paths = []
         if idle_dir and idle_dir.is_dir():
             paths = [

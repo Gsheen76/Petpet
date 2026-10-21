@@ -13,7 +13,12 @@ from petpet.chat.memory import (
 )
 from petpet.progression.ui import FeedbackButton
 from petpet.app.paths import SHOP_UI_DIR
-from petpet.app.pets import pet_asset_path, pet_avatar_path, pet_definition
+from petpet.app.pets import (
+    current_pet_style,
+    pet_asset_path,
+    pet_avatar_path,
+    pet_definition,
+)
 from PyQt5.QtCore import (
     QPoint, QRect, QRectF, QSize, QStandardPaths, Qt, QTimer,
 )
@@ -178,6 +183,13 @@ class ChatWindow(KeepAliveTopLevelWindow):
             self.refresh_pet_name()
             self._refresh_history_view()
         return True
+
+    def refresh_pet_avatar(self):
+        """画风切换后重建历史区头像(2026-10-21 风格切换轮)。"""
+        if getattr(self, "busy", False):
+            return
+        if getattr(self, "_ui_built", False):
+            self._refresh_history_view()
 
     def set_memory_profile(self, profile):
         """Compatibility alias for switching by the old profile name."""
@@ -1031,9 +1043,14 @@ class ChatWindow(KeepAliveTopLevelWindow):
         source = "default"
         image = QImage()
         if role == "assistant":
+            # 画风感知(2026-10-21 风格切换轮):经典/新装各自解析
+            style = None
+            pet_state = getattr(getattr(self, "pet", None), "state", None)
+            if isinstance(pet_state, dict):
+                style = current_pet_style(self.pet_id, pet_state)
             source = os.path.normpath(
-                pet_asset_path(self.pet_id, "desktop", "idle")
-                or pet_avatar_path(self.pet_id)
+                pet_asset_path(self.pet_id, "desktop", "idle", style=style)
+                or pet_avatar_path(self.pet_id, style=style)
                 or ""
             )
             image = QImage(source)

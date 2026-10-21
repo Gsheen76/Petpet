@@ -56,6 +56,7 @@ from petpet.app.paths import (
 from petpet.app.fonts import APP_FONT_FAMILY
 from petpet.ui.common import independent_pixel_font
 from petpet.app.pets import (
+    current_pet_style,
     load_pet_registry,
     pet_asset_path,
     pet_avatar_path,
@@ -2999,7 +3000,9 @@ class ShopWindow(CozyProgressWindow):
         preview.setObjectName(f"petPreview_{pet_id}")
         preview.setFixedSize(135, 135)
         preview.setAlignment(Qt.AlignCenter)
-        preview_path = pet_avatar_path(pet_id)
+        # 画风感知(2026-10-21 风格切换轮):商店宠物卡头像跟随当前画风
+        preview_path = pet_avatar_path(
+            pet_id, style=current_pet_style(pet_id, state))
         from petpet.app.imgcache import pixmap as _cpixmap
         pixmap = _cpixmap(preview_path) if preview_path else QPixmap()
         if pixmap.isNull():
