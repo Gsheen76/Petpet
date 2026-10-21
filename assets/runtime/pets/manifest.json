@@ -28,7 +28,22 @@
     "traits": [
       "活泼开朗",
       "元气满满"
-    ]
+    ],
+    "styles": {
+      "classic": {
+        "avatar": "pets/lunch_meat/avatar_classic.png"
+      },
+      "new": {
+        "preview": "pets/lunch_meat/desktop_new/poses/idle.png",
+        "desktop": {
+          "root": "pets/lunch_meat/desktop_new",
+          "animations_manifest": "pets/lunch_meat/desktop_new/animations/manifest.json"
+        },
+        "home": {
+          "idle": "pets/lunch_meat/desktop_new/poses/idle.png"
+        }
+      }
+    }
   },
   "ice_cream": {
     "id": "ice_cream",
@@ -58,7 +73,22 @@
     "traits": [
       "温柔可爱",
       "安静耐心"
-    ]
+    ],
+    "styles": {
+      "classic": {
+        "avatar": "pets/ice_cream/avatar_classic.png"
+      },
+      "new": {
+        "preview": "pets/ice_cream/desktop_new/poses/idle.png",
+        "desktop": {
+          "root": "pets/ice_cream/desktop_new",
+          "animations_manifest": "pets/ice_cream/desktop_new/animations/manifest.json"
+        },
+        "home": {
+          "idle": "pets/ice_cream/desktop_new/poses/idle.png"
+        }
+      }
+    }
   },
   "marshmallow": {
     "id": "marshmallow",

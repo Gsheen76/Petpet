@@ -56,9 +56,12 @@ def _runtime_files():
 
 
 def _declared_animation_folders():
-    """pets/<id>/desktop/animations 下被 manifest folder 字段声明的目录。"""
+    """pets/<id>/desktop*/animations 下被 manifest folder 字段声明的目录。
+
+    glob 覆盖 desktop 与风格变体目录(desktop_new 等,2026-10-21 风格切换轮)。
+    """
     declared = set()
-    for manifest in RUNTIME_DIR.glob("pets/*/desktop/animations/manifest.json"):
+    for manifest in RUNTIME_DIR.glob("pets/*/desktop*/animations/manifest.json"):
         data = json.loads(manifest.read_text(encoding="utf-8"))
         for spec in data.values():
             folder = spec.get("folder") if isinstance(spec, dict) else None
@@ -112,7 +115,7 @@ class AssetInventoryTests(unittest.TestCase):
     def test_animation_frame_folders_are_declared(self):
         declared = _declared_animation_folders()
         undeclared = []
-        for animations_dir in RUNTIME_DIR.glob("pets/*/desktop/animations"):
+        for animations_dir in RUNTIME_DIR.glob("pets/*/desktop*/animations"):
             for folder in animations_dir.rglob("*"):
                 if not folder.is_dir():
                     continue

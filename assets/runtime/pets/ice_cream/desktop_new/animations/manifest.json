@@ -1,0 +1,18 @@
+{
+  "idle": {
+    "folder": "idle",
+    "fps": 8,
+    "loop": true,
+    "fallback": "idle",
+    "scale": 0.8816,
+    "anchor_bottom": false,
+    "saturation": 1.0,
+    "brightness": 1.0,
+    "frame_durations_ms": [
+      125, 125, 125, 125,
+      125, 125, 125, 125,
+      125, 125, 125, 125,
+      125, 125, 125, 125
+    ]
+  }
+}
