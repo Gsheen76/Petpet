@@ -15,7 +15,7 @@ from petpet.ui import decorations as decoration_renderer
 from petpet.minigames import ui as minigames
 from petpet.progression import core as progression
 from petpet.app.paths import OUTFITS_DIR, SOUNDS_DIR
-from petpet.app.pets import pet_asset_path, pet_definition
+from petpet.app.pets import current_pet_style, pet_asset_path, pet_definition
 from petpet.app.settings import load_settings
 from petpet.ui.common import clamp_window_into_nearest_screen, pixel_font
 from PyQt5.QtCore import (
@@ -442,6 +442,15 @@ class PetWindow(QWidget):
             pet_definition(self.state.get("active_pet_id", "lunch_meat"))["id"],
         )
 
+    def _current_pet_style(self):
+        """当前宠的画风(经典/新装,缺省新装;单风格宠物 None)。"""
+        return current_pet_style(self.current_pet_id, self.state)
+
+    def _pet_asset_cache_key(self, pet_id):
+        """资产缓存键带画风维度——风格切换后不命中旧风格缓存。"""
+        resolved_id = pet_definition(pet_id)["id"]
+        return (resolved_id, current_pet_style(resolved_id, self.state))
+
     def _display_budget_px(self):
         """贴图常驻内存预算（2026-09-12 内存优化轮）。
 
@@ -500,8 +509,9 @@ class PetWindow(QWidget):
         """Load the selected pet's static poses, using its idle as fallback."""
         self.pose_pixmaps = {}
         self.use_png = False
+        style = self._current_pet_style()
         for name, idx in _dependency("POSE").items():
-            path = pet_asset_path(self.current_pet_id, "desktop", name)
+            path = pet_asset_path(self.current_pet_id, "desktop", name, style=style)
             if not path:
                 continue
             pixmap = QPixmap(path)
@@ -518,11 +528,14 @@ class PetWindow(QWidget):
             raise RuntimeError("no pose PNGs and pet.svg invalid")
 
     def _desktop_animation_manifest_path(self):
-        desktop = pet_definition(self.current_pet_id).get("desktop")
+        desktop = pet_definition(
+            self.current_pet_id, self._current_pet_style()
+        ).get("desktop")
         if not isinstance(desktop, dict) or not desktop.get("animations_manifest"):
             return None
         path = pet_asset_path(
-            self.current_pet_id, "desktop", "animations_manifest"
+            self.current_pet_id, "desktop", "animations_manifest",
+            style=self._current_pet_style(),
         )
         return path if path and path.lower().endswith(".json") else None
 
@@ -562,39 +575,41 @@ class PetWindow(QWidget):
 
     _MAX_PET_ASSET_CACHE_ENTRIES = 4
 
-    def _evict_stale_pet_assets(self, cache, selected_pet_id):
+    def _evict_stale_pet_assets(self, cache, cache_key):
         """Cap decoded-asset retention so pets cannot grow memory unbounded.
 
         Decoded animation frames are large; keep at most a few recent pets
-        cached and evict least-recently-used entries first.
+        cached and evict least-recently-used entries first. cache_key 是
+        (pet_id, style) 元组——同宠双风格各占一席(2026-10-21 风格切换轮)。
         """
         limit = self._MAX_PET_ASSET_CACHE_ENTRIES
         while len(cache) >= limit:
             oldest = next(iter(cache))
-            if oldest == selected_pet_id:
+            if oldest == cache_key:
                 break
             del cache[oldest]
 
     def switch_pet_assets(self, pet_id):
         """Swap to another pet's assets, reusing decoded caches when possible."""
         selected_pet_id = pet_definition(pet_id)["id"]
+        cache_key = self._pet_asset_cache_key(pet_id)
         cache = getattr(self, "_pet_assets_cache", None)
         if cache is None:
             cache = OrderedDict()
             self._pet_assets_cache = cache
         current_id = self.current_pet_id
         if current_id and current_id != selected_pet_id:
-            cache[current_id] = {
+            cache[self._pet_asset_cache_key(current_id)] = {
                 key: getattr(self, key)
                 for key in self._PET_ASSET_CACHE_KEYS
                 if hasattr(self, key)
             }
-        cached = cache.get(selected_pet_id)
+        cached = cache.get(cache_key)
         if cached is not None:
             # Refresh recency so the live pet's entry is never the LRU victim.
-            cache.move_to_end(selected_pet_id)
+            cache.move_to_end(cache_key)
         else:
-            self._evict_stale_pet_assets(cache, selected_pet_id)
+            self._evict_stale_pet_assets(cache, cache_key)
             self.refresh_pet_assets(selected_pet_id)
             return
         self._current_pet_id = selected_pet_id
@@ -1424,7 +1439,9 @@ class PetWindow(QWidget):
         animation_dir = (
             os.path.dirname(manifest_path) if manifest_path is not None else None
         )
-        idle_path = pet_asset_path(self.current_pet_id, "desktop", "idle")
+        style = self._current_pet_style()
+        idle_path = pet_asset_path(
+            self.current_pet_id, "desktop", "idle", style=style)
         for name, spec in specs.items():
             spritesheet = spec.get("spritesheet")
             if animation_dir and isinstance(spritesheet, str) and spritesheet:
@@ -1438,7 +1455,8 @@ class PetWindow(QWidget):
             )
             if not frame_dir or not os.path.isdir(frame_dir):
                 if name != "idle" and (
-                        pet_asset_path(self.current_pet_id, "desktop", name)
+                        pet_asset_path(self.current_pet_id, "desktop", name,
+                                       style=style)
                         == idle_path):
                     spec["fallback"] = "idle"
                 continue

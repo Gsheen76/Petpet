@@ -11,7 +11,10 @@ from .paths import ASSETS_DIR, PETS_MANIFEST_PATH
 
 
 DEFAULT_PET_ID = "lunch_meat"
-DEFAULT_STYLE = "new"
+# 分级默认(2026-10-21 风格切换轮):批产完成前缺省经典,防止仅有 idle 的
+# 新装树让全部交互落回待机;批产收口时翻回 "new"(用户定稿=默认新装)。
+# TODO(style-switch): 批产完成后改回 "new" 并同步翻转两处测试期望。
+DEFAULT_STYLE = "classic"
 STYLE_LABELS = {"classic": "经典", "new": "新装"}
 _PATH_KEY_HINTS = ("path", "file", "asset", "image", "preview", "root", "manifest")
 _PATH_CONTAINER_KEYS = {"desktop", "home", "resources", "assets", "actions", "poses", "animations"}

@@ -88,26 +88,29 @@ def test_asset_path_style_routes_tree(styled_registry):
     assert classic_path and "desktop_new" not in classic_path
 
 
-def test_resolve_pet_style_defaults_to_new(styled_registry):
-    assert styled_registry.DEFAULT_STYLE == "new"
-    assert styled_registry.resolve_pet_style("dog", None) == "new"
-    assert styled_registry.resolve_pet_style("dog", "bogus") == "new"
+def test_resolve_pet_style_defaults_to_classic_until_batch_done(styled_registry):
+    # 分级默认:批产完成前缺省 classic,收口时随 DEFAULT_STYLE 翻 new
+    assert styled_registry.DEFAULT_STYLE == "classic"
+    assert styled_registry.resolve_pet_style("dog", None) == "classic"
+    assert styled_registry.resolve_pet_style("dog", "bogus") == "classic"
+    assert styled_registry.resolve_pet_style("dog", "new") == "new"
     assert styled_registry.resolve_pet_style("dog", "classic") == "classic"
     assert styled_registry.resolve_pet_style("lunch_meat", "new") is None
 
 
 def test_current_pet_style_reads_state(styled_registry):
-    state = {"pets": {"dog": {"style": "classic"}}}
-    assert styled_registry.current_pet_style("dog", state) == "classic"
-    assert styled_registry.current_pet_style("dog", {}) == "new"
-    assert styled_registry.current_pet_style("dog", {"pets": {"dog": {"style": "bogus"}}}) == "new"
+    state = {"pets": {"dog": {"style": "new"}}}
+    assert styled_registry.current_pet_style("dog", state) == "new"
+    assert styled_registry.current_pet_style("dog", {}) == "classic"
+    assert styled_registry.current_pet_style("dog", {"pets": {"dog": {"style": "bogus"}}}) == "classic"
     assert styled_registry.current_pet_style("lunch_meat", {}) is None
 
 
 def test_real_registry_dual_style_pets():
-    """真实清单:两犬双风格、棉花糖单风格、缺省新装(Task 3 落地后生效)。"""
+    """真实清单:两犬双风格、棉花糖单风格(缺省经典至批产收口)。"""
     assert pets.available_styles("lunch_meat") == ["classic", "new"]
     assert pets.available_styles("ice_cream") == ["classic", "new"]
     assert pets.available_styles("marshmallow") == []
-    assert pets.current_pet_style("lunch_meat", {}) == "new"
+    assert pets.current_pet_style("lunch_meat", {}) == "classic"
+    assert pets.pet_avatar_path("lunch_meat", "new") == pets.pet_avatar_path("lunch_meat")
     assert "avatar_classic" in (pets.pet_avatar_path("lunch_meat", "classic") or "")

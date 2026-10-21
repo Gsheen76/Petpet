@@ -36,7 +36,7 @@ try:
 except Exception:
     pass
 from petpet.app import state as app_state
-from petpet.app.pets import load_pet_registry
+from petpet.app.pets import available_styles, load_pet_registry
 from petpet.app import pet_window as pet_window_controller
 from petpet.app.settings import (
     DEFAULT_SETTINGS,
@@ -1795,6 +1795,65 @@ class TrayApp:
             "pet_id": pet_id,
             "message": f"已切换到{name}。",
         }
+
+    def set_pet_style(self, pet_id: str, style: str) -> dict:
+        """切换宠物画风(经典/新装)并刷新全部活动表面(2026-10-21 风格切换轮)。
+
+        镜像 set_active_pet 链:写档→清该宠双风格资产缓存→桌面重载→存盘→
+        家园/聊天/商店/记录/成就联动刷新。单风格宠物与非法值拒绝。
+        """
+        if not available_styles(pet_id):
+            return {"ok": False, "pet_id": pet_id, "message": "这只宠物只有一种画风。"}
+        try:
+            app_state.set_pet_style(self.state, pet_id, style)
+        except ValueError as exc:
+            return {"ok": False, "pet_id": pet_id, "message": str(exc)}
+        registry = load_pet_registry()
+        if pet_id not in registry:
+            return {"ok": False, "pet_id": pet_id, "message": "没有找到这只宠物。"}
+        pet_id = registry[pet_id]["id"]
+
+        cache = getattr(self.pet, "_pet_assets_cache", None)
+        if isinstance(cache, dict):
+            for key in [k for k in cache
+                        if isinstance(k, tuple) and k[0] == pet_id]:
+                del cache[key]
+        refresh_assets = getattr(self.pet, "refresh_pet_assets", None)
+        if callable(refresh_assets):
+            refresh_assets(pet_id)
+        save_state(self.state)
+
+        home = getattr(self.pet, "home_scene_window", None)
+        if home is None:
+            home = getattr(self, "home_scene_window", None)
+        if home is not None:
+            try:
+                refresh = getattr(home, "refresh_active_pet", None)
+                if callable(refresh):
+                    refresh()
+            except RuntimeError:
+                self.pet.home_scene_window = None
+                if hasattr(self, "home_scene_window"):
+                    self.home_scene_window = None
+
+        self._refresh_active_pet_surface(
+            self.pet, "chat_win", "refresh_pet_avatar"
+        )
+        for attribute, method in (
+            ("shop_win", "refresh"),
+            ("records_win", "refresh"),
+            ("achievements_win", "refresh"),
+        ):
+            self._refresh_active_pet_surface(
+                self.pet,
+                attribute,
+                method,
+            )
+        try:
+            self.pet.update()
+        except Exception:
+            pass
+        return {"ok": True, "pet_id": pet_id, "style": style}
 
     def _handle_bubble_action(self, action):
         """Handle app-level actions from the secondary bubble canvas."""
