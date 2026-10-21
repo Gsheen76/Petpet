@@ -35,7 +35,7 @@ def test_valid_action_is_selected_before_current_pet_idle(monkeypatch, tmp_path)
     monkeypatch.setattr(
         pets,
         "pet_definition",
-        lambda _pet_id: {
+        lambda _pet_id, style=None: {
             "id": "custom",
             "default_name": "Custom",
             "preview": "pets/custom/preview.png",

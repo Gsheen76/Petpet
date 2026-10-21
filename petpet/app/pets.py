@@ -11,6 +11,8 @@ from .paths import ASSETS_DIR, PETS_MANIFEST_PATH
 
 
 DEFAULT_PET_ID = "lunch_meat"
+DEFAULT_STYLE = "new"
+STYLE_LABELS = {"classic": "经典", "new": "新装"}
 _PATH_KEY_HINTS = ("path", "file", "asset", "image", "preview", "root", "manifest")
 _PATH_CONTAINER_KEYS = {"desktop", "home", "resources", "assets", "actions", "poses", "animations"}
 
@@ -86,9 +88,51 @@ def load_pet_registry() -> dict[str, dict]:
     return registry
 
 
-def pet_definition(pet_id: str) -> dict:
+def available_styles(pet_id: str) -> list[str]:
+    """列出宠物的可选画风键;无 styles 块的单风格宠物返回空表。"""
+    styles = pet_definition(pet_id).get("styles")
+    if not isinstance(styles, dict):
+        return []
+    return [key for key, value in styles.items() if isinstance(value, dict)]
+
+
+def _merged_definition(definition: dict, style: str) -> dict:
+    overrides = definition["styles"][style]
+    merged = dict(definition)
+    for key, value in overrides.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = {**merged[key], **value}
+        else:
+            merged[key] = value
+    return merged
+
+
+def pet_definition(pet_id: str, style: str | None = None) -> dict:
     registry = load_pet_registry()
-    return registry.get(pet_id, registry[DEFAULT_PET_ID])
+    definition = registry.get(pet_id, registry[DEFAULT_PET_ID])
+    if style is not None and style in (definition.get("styles") or {}):
+        return _merged_definition(definition, style)
+    return definition
+
+
+def resolve_pet_style(pet_id: str, style_value) -> str | None:
+    """归一化画风值:有效直返;无效/缺失回落默认(新装);单风格宠物 None。"""
+    styles = available_styles(pet_id)
+    if not styles:
+        return None
+    if style_value in styles:
+        return style_value
+    return DEFAULT_STYLE if DEFAULT_STYLE in styles else styles[0]
+
+
+def current_pet_style(pet_id: str, state: dict) -> str | None:
+    """读存档里该宠的当前画风(缺省按新装处理)。"""
+    profile = {}
+    if isinstance(state, dict):
+        raw = state.get("pets", {}).get(pet_definition(pet_id)["id"])
+        if isinstance(raw, dict):
+            profile = raw
+    return resolve_pet_style(pet_id, profile.get("style"))
 
 
 def _candidate_path(definition: dict, value: str | None) -> str | None:
@@ -101,8 +145,8 @@ def _candidate_path(definition: dict, value: str | None) -> str | None:
     return path.as_posix() if path.is_file() else None
 
 
-def pet_asset_path(pet_id: str, scene: str, action: str = "idle") -> str | None:
-    definition = pet_definition(pet_id)
+def pet_asset_path(pet_id: str, scene: str, action: str = "idle", style: str | None = None) -> str | None:
+    definition = pet_definition(pet_id, style)
     scene_definition = definition.get(scene)
     if not isinstance(scene_definition, dict):
         return _candidate_path(definition, definition.get("preview"))
@@ -122,13 +166,13 @@ def pet_asset_path(pet_id: str, scene: str, action: str = "idle") -> str | None:
     return _candidate_path(definition, definition.get("preview"))
 
 
-def pet_avatar_path(pet_id: str) -> str | None:
+def pet_avatar_path(pet_id: str, style: str | None = None) -> str | None:
     """Return the pet's square portrait, falling back to its idle pose."""
-    definition = pet_definition(pet_id)
+    definition = pet_definition(pet_id, style)
     resolved = _candidate_path(definition, definition.get("avatar"))
     if resolved:
         return resolved
-    return pet_asset_path(pet_id, "desktop", "idle")
+    return pet_asset_path(pet_id, "desktop", "idle", style=style)
 
 
 def pet_display_name(pet_id: str, state: dict) -> str:
