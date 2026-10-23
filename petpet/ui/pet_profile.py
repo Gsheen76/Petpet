@@ -1621,27 +1621,15 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
                 text_col.addWidget(button, 0, Qt.AlignHCenter)
             row.addLayout(text_col, 1)
 
-            # 右侧空位：穿上对应套装的小狗待机动画。
-            idle = _OutfitIdleLabel(card)
-            # 等比方形（双比例会拉伸/裁切），帧高直接用 label 实际像素。
-            # 第三十二轮：框 150px（随卡内空间收紧）。
-            idle_px = round(130 * _FIT)
-            idle.setFixedSize(idle_px, idle_px)
-            idle.set_frames(_load_idle_frames(
-                pet_id, idle_px,
-                anim_key=OUTFIT_IDLE_ANIM.get(outfit["id"], ""),
-                style="classic",
-            ))
-            idle.show()
-            row.addWidget(idle, 0, Qt.AlignBottom)
-
-            # 第三十一轮：行宽自适应——文字列实际可用宽 = 卡宽-图-动画-边距，
-            # 若描述实测超 2 行，加高卡让文字放宽后两行完整显示。
+            # 右侧套装小狗动图已删（2026-10-23 用户令「套装界面小狗动图
+            # 删去，然后调整布局」）——原 _OutfitIdleLabel 130² 预览位让给
+            # 文字列与套装图，卡更紧凑。
+            # 行宽自适应（原第三十一轮公式,减去已删的动画框宽）:
+            # 文字列可用宽 = 卡宽-图-边距,描述超 2 行加高卡放宽。
             from PyQt5.QtGui import QFontMetrics
             fm = QFontMetrics(desc_label.font())
-            # 第三十二轮：文字行宽加宽 10 显示px。
             text_w = max(200, card.width() - pixmap_label.width()
-                         - idle.width() - round(60 * _SX * _FIT)
+                         - round(60 * _SX * _FIT)
                          + round(10 / _SX))
             lines_needed = 0
             remaining = outfit.get("description") or ""
@@ -1660,7 +1648,7 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
             )
             self._outfit_widgets.append(
                 {"pixmap": pixmap_label, "button": button,
-                 "idle": idle, "outfit_id": outfit["id"]},
+                 "outfit_id": outfit["id"]},
             )
     # ---- 礼物分栏（2026-09-07 礼物系统轮） ----
 

@@ -656,8 +656,8 @@ class PetNameEditDialog(QDialog):
         cancel = QPushButton("取消")
         cancel.setObjectName("petNameEditSecondary")
         # 2026-10-15 用户令：默认按钮——不想起名的玩家一键用默认宠物名
-        self.default_button = QPushButton(
-            f"默认「{default_name}」" if default_name else "默认")
+        # 2026-10-23 用户令:只写「默认」两字
+        self.default_button = QPushButton("默认")
         self.default_button.setObjectName("petNameEditSecondary")
         self.default_button.setVisible(bool(default_name))
         self.default_button.clicked.connect(self._use_default)
