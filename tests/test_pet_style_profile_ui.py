@@ -73,6 +73,18 @@ class StyleSectionTests(unittest.TestCase):
         # 只读胶囊以内联选中态样式表达"当前即唯一风格"(非 checkable 无 checked 态)
         self.assertIn("#f28f76", chips[0].styleSheet())
 
+    def test_style_row_accepts_mouse_events(self):
+        from PyQt5.QtCore import Qt
+
+        window, _ = self._window()
+        # 回归钉(2026-10-23「点了没反应」真凶):展示行默认
+        # WA_TransparentForMouseEvents 会连子控件禁鼠标——画风行必须豁免
+        self.assertFalse(window._style_section_row.testAttribute(
+            Qt.WA_TransparentForMouseEvents))
+        for chip in window._style_chips.values():
+            self.assertFalse(chip.testAttribute(
+                Qt.WA_TransparentForMouseEvents))
+
     def test_choose_style_calls_transaction(self):
         window, pet = self._window()
         window._style_chips["new"].click()

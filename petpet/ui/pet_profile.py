@@ -1164,6 +1164,13 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
         # 画风节 value 位挂胶囊按钮（替换占位文字;refresh 时按查看对象重建）
         self._style_chips = {}
         self._style_section_row = self._intro_heads.get("style")
+        # 坑位(2026-10-23「点了没反应」真凶):_intro_section 的行带
+        # WA_TransparentForMouseEvents(纯展示行不吃鼠标),且该属性会连
+        # 子控件一起禁鼠标——画风行必须单独关掉,否则胶囊永远收不到点击
+        # (QTest 直投事件的测试探不穿这层,真机才现形)。
+        if self._style_section_row is not None:
+            self._style_section_row.setAttribute(
+                Qt.WA_TransparentForMouseEvents, False)
         self._style_chip_column = self._intro_sections.get("style")
         self._attach_style_chips()
         scroll.setWidget(host)
@@ -1202,6 +1209,7 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
         value_label.hide()
         for style_key, label, clickable in chips_spec:
             chip = FeedbackButton(label)
+            chip.setAttribute(Qt.WA_TransparentForMouseEvents, False)
             chip.setObjectName("styleChip")
             chip.setCheckable(clickable)
             chip.setFlatFeedback(True)
