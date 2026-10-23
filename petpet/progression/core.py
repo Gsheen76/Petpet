@@ -255,7 +255,7 @@ OUTFIT_DEFINITIONS = {
             "happy": "happy_dinosaur",
             "sleep": "sleep_dinosaur",
         },
-        "description": "小恐龙连体套装。",
+        "description": "绿色小恐龙连体套装，穿上后替换待机动画。",
         "pet_id": "lunch_meat",
     },
     "strawberry_suit": {
@@ -276,7 +276,7 @@ OUTFIT_DEFINITIONS = {
             "happy": "happy_strawberry",
             "sleep": "sleep_strawberry",
         },
-        "description": "草莓连帽套装。",
+        "description": "草莓连帽与叶子领结套装，专属待机动画。",
         "pet_id": "lunch_meat",
     },
 }

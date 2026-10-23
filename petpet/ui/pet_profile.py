@@ -1608,12 +1608,19 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
             row.setContentsMargins(8, 6, 10, 6)
             row.setSpacing(12)
 
+            # 参考图完整显示(2026-10-23 用户令):不锁方形——按素材
+            # 实际宽高等比缩放(高封顶行内空间,宽封顶 150),label 贴
+            # 素材实际尺寸,不裁不挤。
             art_label = QLabel()
             art_label.setAlignment(Qt.AlignCenter)
-            art_label.setFixedSize(art_px, art_px)
+            art_box_h = row_h - 16
             if not art.isNull():
-                art_label.setPixmap(art.scaled(
-                    art_px, art_px, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                scaled_art = art.scaled(
+                    150, art_box_h, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                art_label.setPixmap(scaled_art)
+                art_label.setFixedSize(scaled_art.width(), scaled_art.height())
+            else:
+                art_label.setFixedSize(art_px, art_px)
             row.addWidget(art_label, 0, Qt.AlignVCenter)
 
             text_col = QVBoxLayout()
