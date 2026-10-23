@@ -252,6 +252,34 @@ def _outfit_preview_path(pet_id, outfit):
     return candidate if os.path.isfile(candidate) else None
 
 
+def _normalized_rail_icon(path, body_h=96, canvas=118):
+    """侧栏头像内容归一(2026-10-23 用户令「大小统一位置统一」):
+    按素材内容 bbox 裁切后体高统一 body_h、水平居中、底边钉同一地线,
+    画到 canvas² 透明画布——三宠(方狗/竖版兔)观感大小位置一致。"""
+    import numpy as np
+    from PIL import Image as _PILImage
+    try:
+        im = _PILImage.open(path).convert("RGBA")
+    except Exception:
+        return QPixmap()
+    arr = np.array(im)[:, :, 3]
+    ys, xs = np.where(arr > 40)
+    if not len(ys):
+        return QPixmap(path)
+    content = im.crop((xs.min(), ys.min(), xs.max() + 1, ys.max() + 1))
+    scale = body_h / content.height
+    content = content.resize(
+        (max(1, int(content.width * scale)), body_h), _PILImage.LANCZOS)
+    board = _PILImage.new("RGBA", (canvas, canvas), (0, 0, 0, 0))
+    board.paste(content, ((canvas - content.width) // 2,
+                          canvas - 8 - body_h), content)
+    buf = io.BytesIO()
+    board.save(buf, format="PNG")
+    pm = QPixmap()
+    pm.loadFromData(buf.getvalue())
+    return pm
+
+
 def _grayscale_pixmap(path):
     """灰阶化并保留 alpha（PIL+numpy 向量化；Format_Grayscale8 会把透明变黑）。"""
     if not path or not os.path.isfile(path):
@@ -1468,7 +1496,7 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
                 )
             )
             if owned:
-                icon = QPixmap(icon_path) if icon_path else QPixmap()
+                icon = _normalized_rail_icon(icon_path) if icon_path else QPixmap()
             else:
                 icon = _grayscale_pixmap(icon_path) if icon_path else QPixmap()
             card["button"].set_pixmap(icon)
@@ -1593,7 +1621,8 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
                 name_row.addWidget(badge, 0, Qt.AlignVCenter)
             name_row.addStretch(1)
             desc_label = QLabel(outfit.get("description") or "")
-            desc_label.setWordWrap(True)
+            # 2026-10-23 用户令:描述单行显示,超出省略号(不换行)
+            desc_label.setWordWrap(False)
             # 第三十二轮：文字列加宽用控件 min-width（不能给装了控件的
             # layout 做 text_host 包装——reparent 链会同步销毁按钮）。
             name_label.setMinimumWidth(round(250 * _SX * _FIT))
@@ -1631,17 +1660,7 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
             text_w = max(200, card.width() - pixmap_label.width()
                          - round(60 * _SX * _FIT)
                          + round(10 / _SX))
-            lines_needed = 0
-            remaining = outfit.get("description") or ""
-            while remaining and lines_needed < 4:
-                chunk = fm.elidedText(remaining, Qt.ElideNone, text_w)
-                if not chunk:
-                    break
-                lines_needed += 1
-                remaining = remaining[len(chunk):]
-            if lines_needed > 2:
-                extra = (lines_needed - 2) * fm.lineSpacing()
-                card.setMinimumHeight(card_h + extra)
+            # 单行定稿(2026-10-23):描述不换行,不再按行数加高卡
 
             self._outfit_layout.insertWidget(
                 self._outfit_layout.count() - 1, card,
