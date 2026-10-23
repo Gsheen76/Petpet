@@ -1350,8 +1350,8 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
         self._outfit_host = QWidget()
         self._outfit_layout = QVBoxLayout(self._outfit_host)
         # 第五十六轮：左右边距收窄（8/14→2/4），套装卡加宽 16 显示px。
-        self._outfit_layout.setContentsMargins(2, 10, 4, 10)
-        self._outfit_layout.setSpacing(12)
+        self._outfit_layout.setContentsMargins(2, 6, 4, 6)
+        self._outfit_layout.setSpacing(8)
         self._outfit_layout.addStretch(1)
         # 背景在外层 _region_bg（第三十七轮覆盖整块区域）。
         scroll.setWidget(self._outfit_host)
@@ -1557,7 +1557,8 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
                 widget.deleteLater()
         self._outfit_widgets = []
         pet_id = snapshot["id"]
-        card_h = round(215 * _SY * _FIT)
+        # 2026-10-23 用户令:单行化+动图删除后卡收紧,不留大片空白
+        card_h = round(150 * _SY * _FIT)
         for outfit in snapshot["outfits"]:
             art_name = OUTFIT_ART.get(outfit["id"])
             art_path = _pp_asset(art_name) if art_name else None
