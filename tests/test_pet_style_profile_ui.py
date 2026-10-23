@@ -58,12 +58,20 @@ class StyleSectionTests(unittest.TestCase):
         self.assertTrue(window._style_chips["classic"].isChecked())
         self.assertFalse(window._style_chips["new"].isChecked())
 
-    def test_single_style_pet_hides_section(self):
+    def test_single_style_pet_shows_readonly_chip(self):
         window, _ = self._window()
         window._viewing_pet_id = "marshmallow"
         window.refresh()
-        self.assertFalse(
-            window._style_section_row.isVisibleTo(window))
+        # 五节一屏(2026-10-22):单风格宠物也有画风节——一枚只读胶囊恒选中
+        self.assertTrue(window._style_section_row.isVisibleTo(window))
+        self.assertEqual(list(window._style_chips), [])
+        from PyQt5.QtWidgets import QPushButton
+        chips = [c for c in window._style_section_row.findChildren(QPushButton)
+                 if c.objectName() == "styleChip"]
+        self.assertEqual(len(chips), 1)
+        self.assertFalse(chips[0].isCheckable())
+        # 只读胶囊以内联选中态样式表达"当前即唯一风格"(非 checkable 无 checked 态)
+        self.assertIn("#f28f76", chips[0].styleSheet())
 
     def test_choose_style_calls_transaction(self):
         window, pet = self._window()

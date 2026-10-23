@@ -1120,6 +1120,8 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
         "attrs": "icon_paw_attributes.png",
         "personality": "icon_leaf_personality.png",
         "gifts": "icon_star_level.png",
+        # 画风节图标=rename 铅笔复制件(风格/装扮语义,零新素材)
+        "style": "icon_brush_style.png",
     }
 
     def _build_intro_page(self):
@@ -1140,58 +1142,68 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
         # 第五十四轮：图标竖跨两行（左），节名/数值两行文字（右）。
         # 偏好轮：等级节删除（等级随宠物卡/状态卡展示），改为「偏好」
         # 节置底，显示该宠物每档的最爱礼物（registry gift_preferences）。
+        # 五节一屏（2026-10-22 用户令）：画风并入节表且**每宠都有**
+        # （单风格宠物显示一枚只读按钮标注当前风格），节间不塞弹簧——
+        # 五节+固定间隙整体落在视口内不滚动。
         sections = (
             ("好感", "affection"),
             ("属性", "attrs"),
             ("性格", "personality"),
             ("偏好", "gifts"),
+            ("画风", "style"),
         )
         for title, key in sections:
             row, value = self._intro_section(title, key, k)
             layout.addWidget(row)
             self._intro_heads[key] = row
             self._intro_sections[key] = value
-            # 第七十一轮：模块间隙 = 最小 8px + 均摊剩余空间，
-            # 四模块铺满内容区（原尾部堆一堆空白不美观）。
             layout.addSpacing(8)
-            layout.addStretch(1)
-        # 画风节（2026-10-21 风格切换轮）：双风格宠物显示「经典/新装」
-        # 胶囊二选一；单风格宠物(棉花糖)不渲染。
-        self._style_section_row = self._build_style_section(k)
-        if self._style_section_row is not None:
-            layout.addWidget(self._style_section_row)
-            layout.addSpacing(8)
-            layout.addStretch(1)
+        layout.addStretch(1)
+        # 画风节 value 位挂胶囊按钮（替换占位文字;refresh 时按查看对象重建）
+        self._style_chips = {}
+        self._style_section_row = self._intro_heads.get("style")
+        self._style_chip_column = self._intro_sections.get("style")
+        self._attach_style_chips()
         scroll.setWidget(host)
         return scroll
 
-    def _build_style_section(self, k):
-        """画风切换节：图标省略,标题 + 两枚 checkable 胶囊(flat 反馈)。"""
-        styles = pet_registry.available_styles(self._active_pet_id())
-        if not styles:
-            self._style_chips = {}
-            return None
-        row = QWidget()
-        h = QHBoxLayout(row)
-        h.setContentsMargins(0, 0, 0, 0)
-        h.setSpacing(6)
-        title_label = QLabel("画风")
-        title_label.setStyleSheet(
-            f"font-family:'{APP_FONT_FAMILY}';font-size:{round(27 * k)}px;"
-            "font-weight:600;color:#d29a38;background:transparent;"
-        )
-        h.addWidget(title_label, 0, Qt.AlignVCenter)
-        h.addSpacing(10)
+    def _attach_style_chips(self):
+        """画风节按钮行：双风格=经典/新装可切胶囊;单风格=一枚只读胶囊。
+
+        胶囊挂进 value 列(占位 QLabel 隐藏),与其它四节同构同高。
+        查看对象切换时旧胶囊销毁重建(双风格↔单风格结构不同)。
+        """
+        value_label = getattr(self, "_style_chip_column", None)
+        if value_label is None:
+            return
+        k = _SX * _FIT
+        styles = pet_registry.available_styles(self._view_pet_id())
+        if styles:
+            chips_spec = [
+                (key, pet_registry.STYLE_LABELS.get(key, key), True)
+                for key in styles
+            ]
+        else:
+            # 单风格宠物(棉花糖):显示当前唯一风格,只读
+            chips_spec = [(None, pet_registry.STYLE_LABELS.get("new", "新装"), False)]
+        # 重建:清旧胶囊(查看对象切换时双↔单风格结构不同)
+        column = value_label.parentWidget().layout()
+        stale = [c for c in value_label.parentWidget().findChildren(
+            FeedbackButton) if c.objectName() == "styleChip"]
+        for chip in stale:
+            chip.setParent(None)
+            chip.deleteLater()
         self._style_chips = {}
         # QSS min/max-height 是内容盒(AGENTS 坑位):border 2×2+padding 2×2
         # 共 +8,widget 定高按目标视觉高 52 反推 44。
         chip_h = round(44 * k)
-        for style_key in styles:
-            chip = FeedbackButton(pet_registry.STYLE_LABELS.get(style_key, style_key))
+        value_label.hide()
+        for style_key, label, clickable in chips_spec:
+            chip = FeedbackButton(label)
             chip.setObjectName("styleChip")
-            chip.setCheckable(True)
+            chip.setCheckable(clickable)
             chip.setFlatFeedback(True)
-            chip.setCursor(Qt.PointingHandCursor)
+            chip.setCursor(Qt.PointingHandCursor if clickable else Qt.ArrowCursor)
             chip.setFixedHeight(chip_h)
             chip.setStyleSheet(
                 "QPushButton#styleChip{"
@@ -1203,12 +1215,21 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
                 "QPushButton#styleChip:checked{background:#f28f76;"
                 "color:#fff9ee;border-color:#f28f76;}"
             )
-            chip.clicked.connect(
-                lambda _checked, key=style_key: self._choose_pet_style(key))
-            self._style_chips[style_key] = chip
-            h.addWidget(chip, 0, Qt.AlignVCenter)
-        h.addStretch(1)
-        return row
+            if clickable:
+                chip.clicked.connect(
+                    lambda _checked, key=style_key: self._choose_pet_style(key))
+                self._style_chips[style_key] = chip
+            else:
+                # 只读胶囊:非 checkable 的 setChecked 是 no-op——直接
+                # 内联选中态样式(珊瑚底奶油字)表达"当前即唯一风格"
+                chip.setStyleSheet(
+                    "QPushButton#styleChip{"
+                    f"font-family:'{APP_FONT_FAMILY}';font-size:{round(24 * k)}px;"
+                    "font-weight:600;color:#fff9ee;background:#f28f76;"
+                    "border:2px solid #f28f76;border-radius:"
+                    f"{chip_h // 2}px;padding:2px 26px;}}"
+                )
+            column.addWidget(chip, 0, Qt.AlignVCenter)
 
     def _choose_pet_style(self, style_key):
         """切画风经 PetWindow 转发器走 TrayApp 事务,成功后面板整体刷新。"""
@@ -1472,10 +1493,10 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
         else:
             self._intro_sections["gifts"].setText("还没有特别的偏好")
 
-        # 画风节随查看对象显隐与选中同步(2026-10-21 风格切换轮)
+        # 画风节随查看对象重建+选中态同步(2026-10-22 五节一屏轮:每宠
+        # 都有画风节;查看对象切换时双↔单风格胶囊结构不同须重建)
         if getattr(self, "_style_section_row", None) is not None:
-            dual = bool(snapshot.get("available_styles"))
-            self._style_section_row.setVisible(dual)
+            self._attach_style_chips()
             self._sync_style_chips(snapshot.get("style"))
 
     def _refresh_outfits(self, snapshot):

@@ -333,15 +333,15 @@ class ProfileWindowShellTests(unittest.TestCase):
         html = self._intro_text(window)
         # 偏好轮：等级节删除，「偏好」节置底显示每档最爱礼物。
         self.assertNotIn("烟花", window._name_label.styleSheet())
-        for key in ("affection", "attrs", "personality", "gifts"):
+        for key in ("affection", "attrs", "personality", "gifts", "style"):
             self.assertIn(key, window._intro_sections)
         self.assertNotIn("level", window._intro_sections)
         self.assertIn("甜心曲奇", html, "偏好节应显示午餐肉档一最爱")
         self.assertIn("肉肉罐头", html)
         self.assertIn("爱心礼盒", html)
-        # 偏好节应排在最后（置底）。
+        # 五节一屏（2026-10-22）：画风节置底。
         self.assertEqual(
-            list(window._intro_sections)[-1], "gifts",
+            list(window._intro_sections)[-1], "style",
         )
 
     def test_intro_icon_spans_title_and_value_rows(self):
