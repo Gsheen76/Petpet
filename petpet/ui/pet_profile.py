@@ -280,6 +280,39 @@ def _normalized_rail_icon(path, body_h=96, canvas=118):
     return pm
 
 
+def _normalized_preview_frames(frames, height):
+    """主预览帧归一(2026-10-23):按首帧内容 bbox 定统一缩放(体高恒定
+    height*0.72)、水平居中、底边钉画布同地线——三宠大小位置一致。"""
+    if not frames:
+        return frames
+    from PyQt5.QtGui import QImage, QPainter
+    from PyQt5.QtCore import QRect
+    import numpy as _np
+    first = frames[0].toImage()
+    w, h = first.width(), first.height()
+    ptr = first.constBits()
+    ptr.setsize(first.byteCount())
+    arr = _np.frombuffer(ptr, _np.uint8).reshape(h, w, 4)[:, :, 3]
+    ys, xs = _np.where(arr > 50)
+    if not len(ys):
+        return frames
+    body_h = ys.max() - ys.min() + 1
+    target_h = int(height * 0.72)
+    scale = target_h / body_h
+    out = []
+    for pm in frames:
+        canvas = QPixmap(w, h)
+        canvas.fill(Qt.transparent)
+        painter = QPainter(canvas)
+        painter.drawPixmap(
+            (w - int(pm.width() * scale)) // 2,
+            ys.max() + 1 - target_h,
+            int(pm.width() * scale), target_h, pm)
+        painter.end()
+        out.append(canvas)
+    return out
+
+
 def _grayscale_pixmap(path):
     """灰阶化并保留 alpha（PIL+numpy 向量化；Format_Grayscale8 会把透明变黑）。"""
     if not path or not os.path.isfile(path):
@@ -1379,22 +1412,16 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
     def _start_idle_animation(self):
         """加载当前宠物 idle 动画帧并按 8fps 循环播放。"""
         view_id = self._view_pet_id()
-        # 2026-10-14 高个宠适配：棉花糖耳朵几乎顶满画布上缘（内容 y32-606），
-        # 预览框 430 高按 410 缩放在框顶截断耳尖——预览高度单独 ×0.86，
-        # 耳尖完整落在框内（用户令「适当调整缩小一点」）
-        preview_h = (
-            round(IDLE_FRAME_HEIGHT * 0.86) if view_id == "marshmallow"
-            else IDLE_FRAME_HEIGHT
-        )
-        self._idle_frames = _load_idle_frames(
-            view_id, preview_h,
-            style=pet_registry.current_pet_style(view_id, self.pet.state),
-        )
-        # 待机动画竖向微调（2026-09-15 五调）：冰淇凌再下一点、
-        # 午餐肉上一点（自统一 +20 基础上分化）。
-        offset_y = 34 if view_id == "ice_cream" else 10
-        self._idle_label.setGeometry(
-            _R(*IDLE_PREVIEW_RECT).translated(0, offset_y))
+        # 2026-10-23 用户令「待机动画大小统一位置统一」:废弃分宠高度
+        # ×0.86/垂直偏移 hack——三宠帧统一归一化(体高恒定+水平居中+
+        # 底边钉同一地线),标签恒位,切宠无大小/位置跳动。
+        preview_h = IDLE_FRAME_HEIGHT
+        self._idle_frames = _normalized_preview_frames(
+            _load_idle_frames(
+                view_id, preview_h,
+                style=pet_registry.current_pet_style(view_id, self.pet.state),
+            ), preview_h)
+        self._idle_label.setGeometry(_R(*IDLE_PREVIEW_RECT))
         self._idle_index = 0
         if self._idle_frames:
             self._idle_label.setPixmap(self._idle_frames[0])
