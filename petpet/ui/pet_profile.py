@@ -2021,6 +2021,7 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
         snapshot = pet_profile_snapshot(self.pet.state, self._view_pet_id())
         dialog = _NAME_DIALOG_FACTORY(
             snapshot["name"], self._commit_name, self.window(),
+            default_name=snapshot["default_name"],
         )
         self._name_dialog = dialog
         dialog.exec_()

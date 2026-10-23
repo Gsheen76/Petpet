@@ -702,8 +702,14 @@ class PetNameEditDialog(QDialog):
             QPushButton#petNameEditSecondary {
                 background:#fffdf9; color:#7d5a4c; border:1px solid #e7cec1;
             }
+            QPushButton#petNameEditSecondary:hover {
+                background:#fdeae2; border-color:#f2c4b4;
+            }
             QPushButton#petNameEditPrimary {
                 background:#f8dcd7; color:#704b3c; border:1px solid #efc4bb;
+            }
+            QPushButton#petNameEditPrimary:hover {
+                background:#f5c9c2; border-color:#eeada2;
             }
         """)
 
