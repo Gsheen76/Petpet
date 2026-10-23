@@ -622,8 +622,9 @@ class _OutfitIdleLabel(QLabel):
 
 class _AvatarButton(QWidget):
     """宠物头像按钮：整幅绘制不裁切；悬停=头像放大到全幅，按压=内缩+
-    压暗（纯缩放反馈，2026-09-28 用户定稿统一）。选中（当前宠物）的
-    淡琥珀虚线描边是语义状态、非按压时常驻。"""
+    压暗（纯缩放反馈，2026-09-28 用户定稿统一）。选中态不带任何框/圈
+    （2026-10-23 用户令「选中的不要圈起来，未选中的保持透明」）——
+    当前查看对象由名牌 tag 标示，头像本身选中/未选中均无附加绘制。"""
 
     clicked = pyqtSignal()
 
@@ -686,31 +687,9 @@ class _AvatarButton(QWidget):
                 box.x() + (box.width() - scaled.width()) // 2,
                 box.y() + (box.height() - scaled.height()) // 2, scaled,
             )
-        radius = max(6, round(16 * _FIT))
-        pen_w = max(3, round(4 * _FIT))
-        if self.selected:
-            # 选中（当前宠物）：淡琥珀虚线常驻描边（语义状态）。
-            # 框贴头像实际素材矩形+2px（2026-09-29 用户两轮定稿：
-            # 「框太大、与分栏素材重合、留空不合理」——按钮矩形远
-            # 大于头像素材时按按钮画框会空一圈，改按 KeepAspectRatio
-            # 居中后的素材实际框）。
-            painter.setPen(
-                QPen(QColor(230, 183, 110, 200), pen_w, Qt.DotLine)
-            )
-            painter.setBrush(Qt.NoBrush)
-            if not self._pixmap.isNull():
-                art_w = scaled.width()
-                art_h = scaled.height()
-            else:
-                art_w, art_h = w - 4, h - 4
-            pad = 2
-            fx = (w - art_w) // 2 - pad
-            fy = (h - art_h) // 2 - pad
-            painter.drawRoundedRect(
-                fx + pen_w // 2, fy + pen_w // 2,
-                art_w + 2 * pad - pen_w, art_h + 2 * pad - pen_w,
-                radius, radius,
-            )
+        # 选中态虚线圈已删(2026-10-23 用户令):选中/未选中头像均不加
+        # 任何框/圈/底——查看对象由名牌 tag 标示(历史版本曾用淡琥珀
+        # 虚线常驻描边,两轮定稿后 2026-10-23 终版移除)。
 
 
 class _ArtButton(QWidget):
