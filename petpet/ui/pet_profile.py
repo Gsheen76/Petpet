@@ -1133,7 +1133,8 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
         host = QWidget()
         # 背景在外层 _region_bg（第三十七轮覆盖整块区域）。
         layout = QVBoxLayout(host)
-        layout.setContentsMargins(24, 18, 24, 14)
+        # 五节一屏不拥挤(2026-10-23 用户令):上下边距收窄换节距翻倍
+        layout.setContentsMargins(24, 6, 24, 4)
         layout.setSpacing(6)
         k = _SX * _FIT
 
@@ -1157,7 +1158,8 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
             layout.addWidget(row)
             self._intro_heads[key] = row
             self._intro_sections[key] = value
-            layout.addSpacing(8)
+            # 节距 8→12(收窄的上下边距换呼吸感,五节仍一屏不滚)
+            layout.addSpacing(11)
         layout.addStretch(1)
         # 画风节 value 位挂胶囊按钮（替换占位文字;refresh 时按查看对象重建）
         self._style_chips = {}
@@ -1221,7 +1223,8 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
                 self._style_chips[style_key] = chip
             else:
                 # 只读胶囊:非 checkable 的 setChecked 是 no-op——直接
-                # 内联选中态样式(珊瑚底奶油字)表达"当前即唯一风格"
+                # 内联选中态样式(珊瑚底奶油字)表达"当前即唯一风格";
+                # 点击也给气泡反馈(任何点击必有反应,2026-10-23 用户令)
                 chip.setStyleSheet(
                     "QPushButton#styleChip{"
                     f"font-family:'{APP_FONT_FAMILY}';font-size:{round(24 * k)}px;"
@@ -1229,14 +1232,24 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
                     "border:2px solid #f28f76;border-radius:"
                     f"{chip_h // 2}px;padding:2px 26px;}}"
                 )
+                chip.clicked.connect(
+                    lambda _checked: self._say_style_feedback(
+                        f"{pet_registry.pet_display_name(self._view_pet_id(), self.pet.state)}"
+                        " 只有一套装扮哦"))
             column.addWidget(chip, 0, Qt.AlignVCenter)
 
     def _choose_pet_style(self, style_key):
-        """切画风经 PetWindow 转发器走 TrayApp 事务,成功后面板整体刷新。"""
+        """切画风经 PetWindow 转发器走 TrayApp 事务,成功后面板整体刷新。
+
+        任何点击必有反馈(2026-10-23 用户令「点了没反应」):同款再点/
+        非出勤宠/单风格只读,三种场景都走宠物气泡提示。
+        """
         pet_id = self._view_pet_id()
         current = pet_registry.current_pet_style(pet_id, self.pet.state)
+        label = pet_registry.STYLE_LABELS.get(style_key, style_key)
         if current == style_key:
             self._sync_style_chips(current)
+            self._say_style_feedback(f"已经是{label}打扮啦")
             return
         handler = getattr(self.pet, "set_pet_style", None)
         if not callable(handler):
@@ -1244,8 +1257,23 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
         result = handler(pet_id, style_key)
         if isinstance(result, dict) and result.get("ok") is False:
             self._sync_style_chips(current)
+            self._say_style_feedback("TA 只有一套装扮哦")
             return
         self.refresh()
+        if pet_id == self._active_pet_id():
+            self._say_style_feedback(f"换上{label}打扮啦")
+        else:
+            name = pet_registry.pet_display_name(pet_id, self.pet.state)
+            self._say_style_feedback(f"已为{name}换上{label}打扮,TA 出场时就穿上啦")
+
+    def _say_style_feedback(self, message):
+        """画风切换反馈:经出勤宠气泡说出(失败静默,反馈不拖垮主流程)。"""
+        say = getattr(self.pet, "say", None)
+        if callable(say):
+            try:
+                say(message, 1800)
+            except Exception:
+                pass
         # 预览动画帧随画风重建(refresh 只刷静态值不重建帧)
         try:
             self._start_idle_animation()
