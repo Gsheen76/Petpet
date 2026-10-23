@@ -500,29 +500,24 @@ class ProfileWindowShellTests(unittest.TestCase):
         self.assertFalse(hasattr(window, "_attr_bars"))
 
     def test_outfit_button_inside_card_bottom(self):
-        """第二十八轮：按钮在描述小字正下方（文字列内，卡下半部）。"""
+        """套装页重做(2026-10-23):按钮右贴行内、垂直居中(弃卡内下方位)。"""
         window, _ = self._window()
         window._show_tab("套装")
         window.show()
         self.app.processEvents()
         from PyQt5.QtTest import QTest
-        widget = window._outfit_widgets[0]
-        button = widget["button"]
-        # deleteLater 在事件循环中生效：强制跑两轮事件后再取最终引用。
         QTest.qWait(50)
         self.app.processEvents()
-        for _ in range(3):
-            try:
-                int(button.winId())
-                break
-            except RuntimeError:
-                widget = window._outfit_widgets[0]
-                button = widget["button"]
-                self.app.processEvents()
+        widget = window._outfit_widgets[0]
+        button = widget["button"]
         card = button.parentWidget()
-        btn_y = button.mapTo(card, button.rect().topLeft()).y()
-        self.assertGreater(btn_y, card.height() * 0.35,
-                           "按钮位于描述文字下方（卡下半部）")
+        row_center = card.height() / 2
+        button_center = button.y() + button.height() / 2
+        # 垂直居中(±8px 容差)且在卡右半区
+        self.assertLess(abs(button_center - row_center), 8,
+                        "按钮应垂直居中于行")
+        self.assertGreater(button.x(), card.width() * 0.5,
+                           "按钮应贴行右侧")
 
     def test_outfit_page_scrolls_vertically_only(self):
         window, _ = self._window()

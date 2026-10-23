@@ -280,13 +280,13 @@ def _normalized_rail_icon(path, body_h=96, canvas=118):
     return pm
 
 
-def _normalized_preview_frames(frames, height):
-    """主预览帧归一(2026-10-23):按首帧内容 bbox 定统一缩放(体高恒定
-    height*0.72)、水平居中、底边钉画布同地线——三宠大小位置一致。"""
+def _normalized_preview_frames(frames, width, height):
+    """主预览帧归一 v2(2026-10-23 重做,用户否 v1):锚定映射法——按首帧
+    内容 bbox 定单尺度 scale,整帧等比缩放后平移,使「身体水平中心→
+    画布中线、首帧底边→距底 12px 地线」;单一 scale 保形不压扁,
+    帧内动作本体保留,三宠大小位置恒一。"""
     if not frames:
         return frames
-    from PyQt5.QtGui import QImage, QPainter
-    from PyQt5.QtCore import QRect
     import numpy as _np
     first = frames[0].toImage()
     w, h = first.width(), first.height()
@@ -296,18 +296,20 @@ def _normalized_preview_frames(frames, height):
     ys, xs = _np.where(arr > 50)
     if not len(ys):
         return frames
-    body_h = ys.max() - ys.min() + 1
-    target_h = int(height * 0.72)
-    scale = target_h / body_h
+    body_h = int(ys.max()) - int(ys.min()) + 1
+    body_cx = (int(xs.min()) + int(xs.max())) / 2.0
+    ground = int(ys.max()) + 1
+    scale = (height * 0.72) / body_h
+    dx = int(width / 2 - body_cx * scale)
+    dy = int(height - 12 - ground * scale)
+    dw, dh = int(w * scale), int(h * scale)
     out = []
     for pm in frames:
-        canvas = QPixmap(w, h)
+        canvas = QPixmap(width, height)
         canvas.fill(Qt.transparent)
         painter = QPainter(canvas)
-        painter.drawPixmap(
-            (w - int(pm.width() * scale)) // 2,
-            ys.max() + 1 - target_h,
-            int(pm.width() * scale), target_h, pm)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        painter.drawPixmap(dx, dy, dw, dh, pm)
         painter.end()
         out.append(canvas)
     return out
@@ -1416,11 +1418,12 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
         # ×0.86/垂直偏移 hack——三宠帧统一归一化(体高恒定+水平居中+
         # 底边钉同一地线),标签恒位,切宠无大小/位置跳动。
         preview_h = IDLE_FRAME_HEIGHT
+        rect = _R(*IDLE_PREVIEW_RECT)
         self._idle_frames = _normalized_preview_frames(
             _load_idle_frames(
                 view_id, preview_h,
                 style=pet_registry.current_pet_style(view_id, self.pet.state),
-            ), preview_h)
+            ), rect.width(), rect.height())
         self._idle_label.setGeometry(_R(*IDLE_PREVIEW_RECT))
         self._idle_index = 0
         if self._idle_frames:
@@ -1576,7 +1579,8 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
             self._sync_style_chips(snapshot.get("style"))
 
     def _refresh_outfits(self, snapshot):
-        """套装页（第二十七轮）：商店同款横版卡（左图右文+卡内装备钮）。"""
+        """套装页重做(2026-10-23 用户令「拆了重新做」):弃大卡,紧凑行式
+        ——套装图 96² | 名+经典限定 | 单行描述 | 装备键右贴,行高~120。"""
         while self._outfit_layout.count() > 1:
             item = self._outfit_layout.takeAt(0)
             widget = item.widget()
@@ -1584,55 +1588,45 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
                 widget.deleteLater()
         self._outfit_widgets = []
         pet_id = snapshot["id"]
-        # 2026-10-23 用户令:单行化+动图删除后卡收紧,不留大片空白
-        card_h = round(150 * _SY * _FIT)
+        row_h = round(120 * _SY * _FIT)
+        art_px = round(96 * _FIT)
         for outfit in snapshot["outfits"]:
             art_name = OUTFIT_ART.get(outfit["id"])
             art_path = _pp_asset(art_name) if art_name else None
             if not art_path:
                 art_path = _outfit_preview_path(pet_id, outfit)
+            art = QPixmap(art_path) if art_path else QPixmap()
+
             card = QWidget()
-            card.setMinimumHeight(card_h)
-            # 套装外围框（第五十二轮恢复）：暖棕虚线圆角。
-            # 第五十五轮：选择器收窄到卡片本体——裸 QWidget 会把虚线框
-            # 传染给卡内图片/动画等 QLabel 子控件（用户指出两处内框删除）。
-            card.setObjectName("outfitCard")
+            card.setObjectName("outfitRow")
             card.setStyleSheet(
-                "QWidget#outfitCard{background:transparent;"
-                f"border:2px dashed #d6a880;border-radius:16px;}}"
+                "QWidget#outfitRow{background:#fdf6ec;"
+                "border:2px solid #f0dcc4;border-radius:14px;}"
             )
+            card.setFixedHeight(row_h)
             row = QHBoxLayout(card)
-            row.setContentsMargins(12, 8, 12, 8)
+            row.setContentsMargins(8, 6, 10, 6)
             row.setSpacing(12)
 
-            pixmap_label = QLabel()
-            pixmap_label.setAlignment(Qt.AlignCenter)
-            # 图定框等比（防按高缩放过宽挤爆文字行）。
-            pixmap_label.setFixedSize(
-                round(150 * _SX * _FIT), round((card_h - 16) * _SY * _FIT),
-            )
-            art = QPixmap(art_path) if art_path else QPixmap()
+            art_label = QLabel()
+            art_label.setAlignment(Qt.AlignCenter)
+            art_label.setFixedSize(art_px, art_px)
             if not art.isNull():
-                pixmap_label.setPixmap(art.scaled(
-                    pixmap_label.width(), pixmap_label.height(),
-                    Qt.KeepAspectRatio, Qt.SmoothTransformation,
-                ))
-            row.addWidget(pixmap_label)
+                art_label.setPixmap(art.scaled(
+                    art_px, art_px, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            row.addWidget(art_label, 0, Qt.AlignVCenter)
 
             text_col = QVBoxLayout()
-            text_col.setContentsMargins(0, 6, 0, 6)
-            text_col.setSpacing(6)
+            text_col.setContentsMargins(0, 2, 0, 2)
+            text_col.setSpacing(4)
+            name_row = QHBoxLayout()
+            name_row.setSpacing(8)
             name_label = QLabel(outfit["name"])
             name_label.setStyleSheet(
                 f"font-family:'{APP_FONT_FAMILY}';"
-                f"font-size:{round(26 * _SX * _FIT)}px;font-weight:600;"
+                f"font-size:{round(25 * _SX * _FIT)}px;font-weight:600;"
                 "color:#a8742c;background:transparent;border:0;"
             )
-            # 经典限定角标（2026-10-21 风格切换轮）：查看对象处于新装
-            # 画风时套装不生效,卡片名旁标注;切回经典即消失。
-            name_row = QHBoxLayout()
-            name_row.setContentsMargins(0, 0, 0, 0)
-            name_row.setSpacing(10)
             name_row.addWidget(name_label)
             style_limited = (
                 bool(snapshot.get("available_styles"))
@@ -1642,29 +1636,25 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
                 badge = QLabel("经典限定")
                 badge.setStyleSheet(
                     f"font-family:'{APP_FONT_FAMILY}';"
-                    f"font-size:{round(18 * _SX * _FIT)}px;font-weight:600;"
-                    "color:#fff9ee;background:#f28f76;border-radius:10px;"
-                    "padding:2px 12px;"
+                    f"font-size:{round(16 * _SX * _FIT)}px;font-weight:600;"
+                    "color:#fff9ee;background:#f28f76;border-radius:9px;"
+                    "padding:1px 10px;"
                 )
                 name_row.addWidget(badge, 0, Qt.AlignVCenter)
             name_row.addStretch(1)
             desc_label = QLabel(outfit.get("description") or "")
-            # 2026-10-23 用户令:描述单行显示,超出省略号(不换行)
             desc_label.setWordWrap(False)
-            # 第三十二轮：文字列加宽用控件 min-width（不能给装了控件的
-            # layout 做 text_host 包装——reparent 链会同步销毁按钮）。
-            name_label.setMinimumWidth(round(250 * _SX * _FIT))
-            desc_label.setMinimumWidth(round(250 * _SX * _FIT))
-            # 描述字号（第二十八轮：19→23）。
             desc_label.setStyleSheet(
                 f"font-family:'{APP_FONT_FAMILY}';"
-                f"font-size:{round(23 * _SX * _FIT)}px;"
+                f"font-size:{round(21 * _SX * _FIT)}px;"
                 "color:#b08a5e;background:transparent;border:0;"
             )
             text_col.addLayout(name_row)
             text_col.addWidget(desc_label)
             text_col.addStretch(1)
-            # 装备按钮（第二十八轮）：描述小字正下方空出处。
+            row.addLayout(text_col, 1)
+
+            # 装备键右贴(贴图键,纯缩放反馈)
             equip_asset = OUTFIT_EQUIP_BUTTON.get(outfit["id"])
             button = None
             if equip_asset and not art.isNull():
@@ -1672,31 +1662,19 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
                     card, _pp_pixmap(equip_asset),
                     lambda oid=outfit["id"]: self._toggle_outfit(oid),
                 )
-                btn_w = round(190 * _SX * _FIT)
-                btn_h = round(60 * _SY * _FIT)
+                btn_w = round(150 * _SX * _FIT)
+                btn_h = round(52 * _SY * _FIT)
                 button.setFixedSize(btn_w, btn_h)
-                text_col.addWidget(button, 0, Qt.AlignHCenter)
-            row.addLayout(text_col, 1)
-
-            # 右侧套装小狗动图已删（2026-10-23 用户令「套装界面小狗动图
-            # 删去，然后调整布局」）——原 _OutfitIdleLabel 130² 预览位让给
-            # 文字列与套装图，卡更紧凑。
-            # 行宽自适应（原第三十一轮公式,减去已删的动画框宽）:
-            # 文字列可用宽 = 卡宽-图-边距,描述超 2 行加高卡放宽。
-            from PyQt5.QtGui import QFontMetrics
-            fm = QFontMetrics(desc_label.font())
-            text_w = max(200, card.width() - pixmap_label.width()
-                         - round(60 * _SX * _FIT)
-                         + round(10 / _SX))
-            # 单行定稿(2026-10-23):描述不换行,不再按行数加高卡
+                row.addWidget(button, 0, Qt.AlignVCenter)
 
             self._outfit_layout.insertWidget(
                 self._outfit_layout.count() - 1, card,
             )
             self._outfit_widgets.append(
-                {"pixmap": pixmap_label, "button": button,
+                {"pixmap": art_label, "button": button,
                  "outfit_id": outfit["id"]},
             )
+
     # ---- 礼物分栏（2026-09-07 礼物系统轮） ----
 
     def _build_gift_page(self):
