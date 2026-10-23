@@ -624,7 +624,8 @@ class _AvatarButton(QWidget):
     """宠物头像按钮：整幅绘制不裁切；悬停=头像放大到全幅，按压=内缩+
     压暗（纯缩放反馈，2026-09-28 用户定稿统一）。选中态不带任何框/圈
     （2026-10-23 用户令「选中的不要圈起来，未选中的保持透明」）——
-    当前查看对象由名牌 tag 标示，头像本身选中/未选中均无附加绘制。"""
+    当前查看对象由名牌 tag 标示；未选中头像半透明 0.65 区分
+    （2026-10-23 用户令），选中/悬停恢复全彩。"""
 
     clicked = pyqtSignal()
 
@@ -677,16 +678,21 @@ class _AvatarButton(QWidget):
             box = QRect(0, 0, w, h)
         else:
             box = QRect(2, 2, w - 4, h - 4)
-        # 头像整幅等比居中（不裁切）。
+        # 头像整幅等比居中（不裁切）。未选中=半透明 0.65 区分
+        # （2026-10-23 用户令「未选中半透明」;规范下限 0.65 保可辨识,
+        # 悬停/选中恢复全彩）。
         if not self._pixmap.isNull():
             scaled = self._pixmap.scaled(
                 box.width(), box.height(),
                 Qt.KeepAspectRatio, Qt.SmoothTransformation,
             )
+            if not self.selected and not self._hovered:
+                painter.setOpacity(0.65)
             painter.drawPixmap(
                 box.x() + (box.width() - scaled.width()) // 2,
                 box.y() + (box.height() - scaled.height()) // 2, scaled,
             )
+            painter.setOpacity(1.0)
         # 选中态虚线圈已删(2026-10-23 用户令):选中/未选中头像均不加
         # 任何框/圈/底——查看对象由名牌 tag 标示(历史版本曾用淡琥珀
         # 虚线常驻描边,两轮定稿后 2026-10-23 终版移除)。
