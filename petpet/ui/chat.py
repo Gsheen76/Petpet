@@ -1023,7 +1023,10 @@ class ChatWindow(KeepAliveTopLevelWindow):
         # 内容框,同款百分比相对内容计算(经典满幅姿势内容≈画布,行为
         # 与原裁一致)。
         box = self._assistant_content_box(image)
-        if box is not None:
+        # 守卫:仅留白画布(内容高<85% 画布高)才走内容相对裁——经典
+        # 满幅姿势(内容≈画布,如午餐肉经典 idle 94%)保持 2026-09-12
+        # 用户定稿的原画布算法,观感分毫不动。
+        if box is not None and box[3] < image.height() * 0.85:
             x0, y0, cw, ch = box
             square = abs(cw - ch) <= min(cw, ch) * 0.2
             if square:
