@@ -2408,6 +2408,10 @@ class PetWindow(QWidget):
             self._active_animation = None
 
     def _trigger_drag_land(self):
+        # 睡姿拖放(2026-10-25):睡眠中被放下不播回稳动画,保持睡姿
+        if (self.__dict__.get("_dragging_asleep")
+                and self.state.get("sleeping")):
+            return
         """松手落地 → 播放回稳动画（Part 2，只播一次）。"""
         self._drag_anim_state = None  # 清除 falling
         if getattr(self, "_drag_land_played", False):
@@ -2490,6 +2494,7 @@ class PetWindow(QWidget):
             return
         if e.button() == Qt.LeftButton and self.dragging:
             self.dragging = False
+            self.__dict__.pop("_dragging_asleep", None)
             self.setCursor(Qt.ArrowCursor)
             # 2026-10-12 三态拖拽：清理
             if hasattr(self, "_drag_stop_timer"):
