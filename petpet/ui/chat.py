@@ -1018,6 +1018,20 @@ class ChatWindow(KeepAliveTopLevelWindow):
         """
         if self.pet_id in PET_HEADSHOT_AVATARS:
             return _assistant_head_rect(image)
+        # 内容 bbox 相对裁切(2026-10-25 用户令「头像太小」):新装 idle
+        # 姿势是 62% 留白方画布,按画布裁会裁出大片背景——先取不透明
+        # 内容框,同款百分比相对内容计算(经典满幅姿势内容≈画布,行为
+        # 与原裁一致)。
+        box = self._assistant_content_box(image)
+        if box is not None:
+            x0, y0, cw, ch = box
+            square = abs(cw - ch) <= min(cw, ch) * 0.2
+            if square:
+                edge = min(cw, ch)
+                return QRect(x0 + (cw - edge) // 2, y0 + (ch - edge) // 2,
+                             edge, edge)
+            edge = min(cw, max(1, int(ch * 0.68)))
+            return QRect(x0 + (cw - edge) // 2, y0, edge, edge)
         square_image = (
             abs(image.width() - image.height())
             <= min(image.width(), image.height()) * 0.2
@@ -1037,6 +1051,26 @@ class ChatWindow(KeepAliveTopLevelWindow):
             edge,
             edge,
         )
+
+    @staticmethod
+    def _assistant_content_box(image, threshold=40):
+        """不透明内容 bbox(x, y, w, h);空图返回 None。"""
+        if image.isNull() or image.width() <= 0 or image.height() <= 0:
+            return None
+        import numpy as _np
+        fmt = QImage.Format_RGBA8888
+        if image.format() != fmt:
+            image = image.convertToFormat(fmt)
+        ptr = image.constBits()
+        ptr.setsize(image.byteCount())
+        arr = _np.frombuffer(ptr, _np.uint8).reshape(
+            image.height(), image.width(), 4)
+        ys, xs = _np.where(arr[:, :, 3] > threshold)
+        if not len(ys):
+            return None
+        return (int(xs.min()), int(ys.min()),
+                int(xs.max()) - int(xs.min()) + 1,
+                int(ys.max()) - int(ys.min()) + 1)
 
     def _avatar_pixmap(self, role, size=60):
         """Build a circular desktop-pet or player avatar pixmap."""
