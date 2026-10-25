@@ -43,15 +43,21 @@ def app(monkeypatch):
 
 
 def test_set_pet_style_updates_state_and_surfaces(app):
+    # 2026-10-26 流畅度轮:重载/表面刷新移 QTimer.singleShot(0) 下一拍
+    # ——断言前跑一轮事件循环
+    from PyQt5.QtWidgets import QApplication
+    _qapp = QApplication.instance() or QApplication([])
     result = app.set_pet_style("lunch_meat", "classic")
+    _qapp.processEvents()
     assert result["ok"] is True
     assert app.state["pets"]["lunch_meat"]["style"] == "classic"
     assert app.pet.refreshed == ["lunch_meat"]
-    # 该宠的双风格缓存全部清理,别的宠不受影响
-    assert ("lunch_meat", "new") not in app.pet._pet_assets_cache
-    assert ("lunch_meat", "classic") not in app.pet._pet_assets_cache
+    # 2026-10-26 缓存复用契约:不再清双风格条目(键含风格,资产不可变,
+    # 目标风格命中即秒切);别的宠不受影响
     assert ("ice_cream", "new") in app.pet._pet_assets_cache
-    assert app._saved and app._saved[-1] is app.state
+    # processEvents 会排干其他用例遗留的单拍定时器(含别的 state 引用)
+    # ——断言本状态的同步存档在场即可,不锚最后一条
+    assert any(x is app.state for x in app._saved)
     assert app.home_scene_window.calls == 1
 
 
@@ -71,8 +77,11 @@ def test_set_pet_style_single_style_pet_rejected(app):
 
 
 def test_set_pet_style_non_active_pet_only_writes_state(app):
+    from PyQt5.QtWidgets import QApplication
+    _qapp = QApplication.instance() or QApplication([])
     result = app.set_pet_style("ice_cream", "new")
     assert result["ok"] is True
     assert app.state["pets"]["ice_cream"]["style"] == "new"
-    # 非出勤宠不动桌面表面
+    # 非出勤宠不动桌面表面(重活虽延后,仍不触碰桌面)
+    _qapp.processEvents()
     assert app.pet.refreshed == []

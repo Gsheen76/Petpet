@@ -1826,14 +1826,39 @@ class TrayApp:
         if pet_id != self.state.get("active_pet_id"):
             return {"ok": True, "pet_id": pet_id, "style": style}
 
-        cache = getattr(self.pet, "_pet_assets_cache", None)
-        if isinstance(cache, dict):
-            for key in [k for k in cache
-                        if isinstance(k, tuple) and k[0] == pet_id]:
-                del cache[key]
-        refresh_assets = getattr(self.pet, "refresh_pet_assets", None)
-        if callable(refresh_assets):
-            refresh_assets(pet_id)
+        # 重活移下一拍(2026-10-26 流畅度轮):桌面全量重载(帧解码
+        # ~200ms)不再冻在点击释放事件里——缓存清理/重载/表面刷新整段
+        # 延后,写档已在上面同步完成,状态一致性不受影响。
+        def _heavy_refresh():
+            # 缓存复用(2026-10-26 流畅度轮):缓存键含风格,目标风格
+            # 命中即秒切(来回切换不再每次全量重解码);未命中才走
+            # 全量重载(旧风格条目留给 LRU 自然淘汰,资产不可变无脏数据)
+            cache = getattr(self.pet, "_pet_assets_cache", None)
+            target_key = (pet_id, style)
+            swapped = False
+            if isinstance(cache, dict) and target_key in cache:
+                swap = getattr(self.pet, "switch_pet_assets", None)
+                if callable(swap):
+                    try:
+                        swap(pet_id)
+                        swapped = True
+                    except Exception:
+                        swapped = False
+            if not swapped:
+                refresh_assets = getattr(self.pet, "refresh_pet_assets", None)
+                if callable(refresh_assets):
+                    refresh_assets(pet_id)
+            self._refresh_style_surfaces(pet_id)
+            try:
+                self.pet.update()
+            except Exception:
+                pass
+
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(0, _heavy_refresh)
+        return {"ok": True, "pet_id": pet_id, "style": style}
+
+    def _refresh_style_surfaces(self, pet_id):
 
         home = getattr(self.pet, "home_scene_window", None)
         if home is None:
@@ -1861,11 +1886,6 @@ class TrayApp:
                 attribute,
                 method,
             )
-        try:
-            self.pet.update()
-        except Exception:
-            pass
-        return {"ok": True, "pet_id": pet_id, "style": style}
 
     def _handle_bubble_action(self, action):
         """Handle app-level actions from the secondary bubble canvas."""

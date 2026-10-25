@@ -1315,6 +1315,11 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
             self._sync_style_chips(current)
             self._say_style_feedback("TA 只有一套装扮哦")
             return
+        # 重活移下一拍(2026-10-26 流畅度轮):面板重建+预览帧重载不再
+        # 冻在释放事件里(实测单击 234ms 卡顿主组成);气泡即时反馈
+        QTimer.singleShot(0, lambda: self._after_style_switch(pet_id, label))
+
+    def _after_style_switch(self, pet_id, label):
         self.refresh()
         if pet_id == self._active_pet_id():
             self._say_style_feedback(f"换上{label}打扮啦")
