@@ -1031,8 +1031,10 @@ class ChatWindow(KeepAliveTopLevelWindow):
             square = abs(cw - ch) <= min(cw, ch) * 0.2
             if square:
                 edge = min(cw, ch)
-                return QRect(x0 + (cw - edge) // 2, y0 + (ch - edge) // 2,
-                             edge, edge)
+                # 顶部偏置(2026-10-25 用户令「定位有偏差」):居中会截到
+                # 肚子——头像语义=头胸入框,贴内容顶再留 4% 耳余量
+                return QRect(x0 + (cw - edge) // 2,
+                             y0 + max(0, int(ch * 0.04)), edge, edge)
             edge = min(cw, max(1, int(ch * 0.68)))
             return QRect(x0 + (cw - edge) // 2, y0, edge, edge)
         square_image = (
@@ -1101,6 +1103,9 @@ class ChatWindow(KeepAliveTopLevelWindow):
         canvas.fill(Qt.transparent)
         painter = QPainter(canvas)
         painter.setRenderHint(QPainter.Antialiasing, True)
+        # SmoothPixmapTransform(2026-10-25 用户令「非常糊」):大裁切框缩到
+        # 60px 必须平滑插值,默认快速插值在 ~10x 缩放下发糊
+        painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
         path = QPainterPath()
         path.addEllipse(QRectF(0, 0, size, size))
         painter.setClipPath(path)
