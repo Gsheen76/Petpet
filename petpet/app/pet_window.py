@@ -126,6 +126,8 @@ class PetWindow(QWidget):
     ANIMATION_MAX_SOURCE_PIXELS = 16_777_216
     PRELOADED_ANIMATIONS = (
         "idle", "pet", "eat", "play", "sleep", "dig_reward", "drag",
+        "sleep_fall", "sleep_loop", "sleep_wake",
+        # 三段式睡眠键(2026-10-25):装载缺失时静默跳过,不影响其他宠物
         # 2026-10-15 落地停顿根治：drag_land/drag_hover/drag_sway 不在
         # 预载清单——_trigger_drag_land 调 trigger_animation→
         # _animation_duration_ms→_ensure_animation_loaded 同步磁盘读帧
@@ -1799,6 +1801,31 @@ class PetWindow(QWidget):
             return variant
         return None
 
+    def _sleep_phase_animation(self, key):
+        """三段式睡眠键是否已装载(sleep_fall/sleep_loop/sleep_wake)。"""
+        return key if (key in self.__dict__.get("_animation_frame_paths", {})
+                       or key in self.__dict__.get("animation_frames", {})) else None
+
+    def _start_sleep_phase(self):
+        """入睡前播入睡段(有则播,无则直接由状态门接管整段 sleep)。"""
+        fall = self._sleep_phase_animation("sleep_fall")
+        if fall:
+            try:
+                self.trigger_animation(fall)
+            except Exception:
+                pass
+
+    def _play_sleep_wake_phase(self):
+        """醒来播起床段一遍(拖拽摇醒不打断拖拽动画)。"""
+        if self.__dict__.get("dragging"):
+            return
+        wake = self._sleep_phase_animation("sleep_wake")
+        if wake:
+            try:
+                self.trigger_animation(wake)
+            except Exception:
+                pass
+
     def _current_animation_name(self):
         if self._animation_override:
             return self._animation_override
@@ -1823,6 +1850,10 @@ class PetWindow(QWidget):
             sleep_variant = self._outfit_action_variant("sleep")
             if sleep_variant:
                 return sleep_variant
+            # 三段式睡眠(2026-10-25 用户令分帧 000-007入睡/008-023循环/
+            # 024-031起床):睡着期间恒显循环段;无三段键的宠物照旧整段
+            if self._sleep_phase_animation("sleep_loop"):
+                return "sleep_loop"
             return "sleep"
         if self.dragging:
             # 2026-10-12 用户定稿四态拖拽
@@ -2824,6 +2855,9 @@ class PetWindow(QWidget):
         self._auto_sleep_target_x = None
         self.state["sleeping"] = True
         self.state["sleep_mode"] = "auto"
+        _phase = getattr(self, "_start_sleep_phase", None)
+        if callable(_phase):
+            _phase()
         progression.record_sleep(self.state, "auto")
         self.state["x"] = self.x()
         self.state["y"] = self.y()
@@ -2873,6 +2907,9 @@ class PetWindow(QWidget):
         self.state["sleep_mode"] = None
         self._auto_sleep_phase = None
         self._auto_sleep_target_x = None
+        _phase = getattr(self, "_play_sleep_wake_phase", None)
+        if callable(_phase):
+            _phase()
         self.behavior = "idle"
         self.behavior_until = time.time() + 1.2
         self.next_behavior_at = self.behavior_until + random.uniform(2, 5)
@@ -3536,11 +3573,17 @@ class PetWindow(QWidget):
             self.behavior = "idle"; self.target_vx = 0; self.vx = 0
             self.say("晚安主人，睡饱了我就自己醒来啦～", 2400)
             self.play_sound("sleep")
+            _phase = getattr(self, "_start_sleep_phase", None)
+            if callable(_phase):
+                _phase()
         else:
             self.state["sleep_mode"] = None
             self._auto_sleep_snooze_until = time.time() + 45.0
             self.say("醒来啦！又可以陪主人了～", 2000)
             self.play_sound("bark")
+            _phase = getattr(self, "_play_sleep_wake_phase", None)
+            if callable(_phase):
+                _phase()
         _dependency("save_state")(self.state)
         self.refresh_pose_from_state()
 
