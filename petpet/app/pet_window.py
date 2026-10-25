@@ -2329,6 +2329,9 @@ class PetWindow(QWidget):
             return
         self.dragging = True
         self._grab_started_at = time.time()
+        # 睡姿拖放旗标(2026-10-25):睡着被抓起保持睡姿(显示走状态门
+        # 睡眠分支),落地回稳与释放清理据此判定
+        self._dragging_asleep = bool(self.state.get("sleeping"))
         self.drag_offset = press - self.frameGeometry().topLeft()
         self.last_drag_pos = press
         self.last_drag_t = time.time()
@@ -3608,6 +3611,19 @@ class PetWindow(QWidget):
         self._animation_override = None
         self._active_animation = None
         self._animation_started_at = time.monotonic()
+        # 三段式睡眠被抓起后摇醒(2026-10-25 用户令):先播起床动画,
+        # override 播完自动落进 drag 判定(override 期间压过 dragging
+        # 分支);无三段键宠物照旧直接醒进 drag
+        if self.dragging:
+            _phase_key = getattr(self, "_sleep_phase_animation", None)
+            if callable(_phase_key):
+                _wake_key = _phase_key("sleep_wake")
+                if _wake_key:
+                    try:
+                        self.trigger_animation(_wake_key)
+                    except Exception:
+                        pass
+        self.__dict__.pop("_dragging_asleep", None)
         self.behavior = "drag" if self.dragging else "idle"
         # 卡顿修复（2026-09-30）：say()（SpeechBubble 新建原生窗 ~25ms）
         # 与 save_state（同步写盘 ~9ms）从 mouseMoveEvent 拖拽路径

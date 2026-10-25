@@ -48,3 +48,60 @@ class SleepPhaseTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_shake_wake_during_asleep_drag_plays_wake_anim_first():
+    """拖拽中摇醒(2026-10-25 用户令):三段式宠物先播起床动画再进 drag。"""
+    from unittest.mock import Mock
+
+    from PyQt5.QtWidgets import QApplication
+
+    _app = QApplication.instance() or QApplication([])
+    window = PetWindow.__new__(PetWindow)
+    window.state = {"sleeping": True, "sleep_mode": "manual"}
+    window.dragging = False
+    window.dragging = True
+    window._wake_shake = Mock()
+    window._current_pet_id = "lunch_meat"
+    window.__dict__["_drag_anim_state"] = None
+    window.__dict__["_dragging_asleep"] = True
+    window.__dict__["_animation_frame_paths"] = {"sleep_wake": ["p"]}
+    window.__dict__["animation_frames"] = {}
+    window.trigger_animation = Mock()
+    window._animation_override = None
+    window._active_animation = None
+    window._animation_override_token = 0
+    window.say = Mock()
+    window.play_sound = Mock()
+    window.update = Mock()
+    window._outfit_action_variant = Mock(return_value=None)
+
+    class _Dep:
+        def __call__(self, name):
+            return lambda *a, **k: None
+
+    from petpet.app import pet_window as pw
+    original = pw._dependency
+
+    def _fake_dep(name):
+        if name == "save_state":
+            return lambda st: None
+        if name == "QTimer":
+            qtimer = Mock()
+            qtimer.singleShot = lambda *a, **k: None
+            return qtimer
+        if name == "POSE":
+            return {"idle": 0, "drag": 1}
+        if name == "sounds":
+            return Mock()
+        return original(name)
+
+    pw._dependency = _fake_dep
+    try:
+        result = window.wake_from_shake()
+    finally:
+        pw._dependency = original
+    assert result is not False
+    assert window.state["sleeping"] is False
+    window.trigger_animation.assert_called_once_with("sleep_wake")
+    assert window.behavior == "drag"
