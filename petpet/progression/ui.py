@@ -3069,9 +3069,9 @@ class ShopWindow(CozyProgressWindow):
         layout.addLayout(info, 1)
 
         if active:
-            status_badge = _status_badge_label("🐾 使用中", "active")
+            status_badge = _status_badge_label("使用中", "active")
         elif owned:
-            status_badge = _status_badge_label("🐾 已拥有", "owned")
+            status_badge = _status_badge_label("已拥有", "owned")
         else:
             status_badge = _status_badge_label("🔒 待解锁", None)
         status_pixmap = status_badge.pixmap()
@@ -3237,7 +3237,8 @@ class ShopWindow(CozyProgressWindow):
                 (pet_id, text, f"outfitPet_{pet_id}",
                  self.outfit_pet_id == pet_id, self._set_outfit_pet)
                 for pet_id, text in (
-                    ("lunch_meat", "午餐肉"), ("ice_cream", "冰淇淋"))
+                    ("lunch_meat", "午餐肉"), ("ice_cream", "冰淇淋"),
+                    ("marshmallow", "棉花糖"))
             ],
             "outfitPetSelector",
         )
@@ -3255,7 +3256,10 @@ class ShopWindow(CozyProgressWindow):
             empty.setProperty("placeholderCard", True)
             empty_layout = QVBoxLayout(empty)
             empty_layout.setContentsMargins(18, 14, 18, 14)
-            empty_title = QLabel("🌷 冰淇淋套装正在准备")
+            pet_names = {"lunch_meat": "午餐肉", "ice_cream": "冰淇淋",
+                         "marshmallow": "棉花糖"}
+            empty_title = QLabel(
+                f"{pet_names.get(self.outfit_pet_id, 'TA')}的套装正在准备")
             empty_title.setObjectName("cardTitle")
             empty_note = QLabel(
                 "后续会继续补充新的完整套装，已购买的套装可以随时切换。"
@@ -3274,7 +3278,7 @@ class ShopWindow(CozyProgressWindow):
         upcoming.setObjectName("placeholderCard")
         upcoming_layout = QVBoxLayout(upcoming)
         upcoming_layout.setContentsMargins(18, 14, 18, 14)
-        upcoming_title = QLabel("🌷 更多套装正在准备")
+        upcoming_title = QLabel("更多套装正在准备")
         upcoming_title.setObjectName("cardTitle")
         upcoming_note = QLabel(
             "后续会继续补充新的完整套装，已购买的套装可以随时切换。"
@@ -3321,14 +3325,14 @@ class ShopWindow(CozyProgressWindow):
         info = QVBoxLayout()
         info.setSpacing(7)
         title_row = QHBoxLayout()
-        title = QLabel(f"{definition['icon']} {definition['name']}")
+        title = QLabel(definition['name'])
         title.setObjectName("cardTitle")
         title_row.addWidget(title)
         title_row.addStretch(1)
         if equipped:
-            badge = _status_badge_label("🐾 使用中", "active")
+            badge = _status_badge_label("使用中", "active")
         else:
-            badge = _status_badge_label("🐾 已拥有", "owned")
+            badge = _status_badge_label("已拥有", "owned")
             if not badge.pixmap().isNull():
                 placeholder = QPixmap(badge.pixmap().size())
                 placeholder.fill(Qt.transparent)
@@ -3425,9 +3429,9 @@ class ShopWindow(CozyProgressWindow):
         )
         title.setObjectName("cardTitle")
         if equipped:
-            badge = _status_badge_label("🐾 使用中", "active")
+            badge = _status_badge_label("使用中", "active")
         elif owned:
-            badge = _status_badge_label("🐾 已拥有", "owned")
+            badge = _status_badge_label("已拥有", "owned")
         else:
             badge = _status_badge_label(definition["category_name"], None)
         if badge.pixmap().isNull():
@@ -3709,7 +3713,7 @@ class ShopWindow(CozyProgressWindow):
         slot_layout = QHBoxLayout(slot)
         slot_layout.setContentsMargins(0, 0, 0, 0)
         if owned:
-            owned_label = _status_badge_label("🐾 已拥有", "owned")
+            owned_label = _status_badge_label("已拥有", "owned")
             slot_layout.addWidget(owned_label, 0, Qt.AlignRight | Qt.AlignVCenter)
         else:
             button = FeedbackButton("免费领取" if price == 0 else "购买")
@@ -3797,7 +3801,7 @@ class ShopWindow(CozyProgressWindow):
         layout.setSpacing(10)
 
         top = QHBoxLayout()
-        title = QLabel(f"{definition['icon']} {definition['name']}")
+        title = QLabel(definition['name'])
         title.setObjectName("cardTitle")
         level_badge = QLabel(f"Lv.{level} / {maximum}")
         level_badge.setObjectName("levelBadge")

@@ -236,7 +236,11 @@ def test_outfit_pet_selector_is_framed_and_switches_checked_state(shop_window):
     # 允许 1px 布局取整差，奇数宽度两列分 318/317）。
     shop_window.show()
     QApplication.processEvents()
-    assert abs(lunch_button.width() - ice_button.width()) <= 1
+    # 三宠选项(2026-10-25 用户令新增棉花糖):等分铺满整行
+    mm_button = shop_window.findChild(ui.QPushButton, "outfitPet_marshmallow")
+    assert mm_button is not None and mm_button.isChecked() is False
+    assert (abs(lunch_button.width() - ice_button.width()) <= 1
+            and abs(lunch_button.width() - mm_button.width()) <= 1)
 
     ice_button.click()
     QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
@@ -256,7 +260,7 @@ def test_ice_cream_outfit_page_uses_framed_preparation_card(shop_window):
     empty = shop_window.findChild(ui.QFrame, "outfitEmptyCard")
     assert empty is not None
     texts = [label.text() for label in empty.findChildren(ui.QLabel)]
-    assert "🌷 冰淇淋套装正在准备" in texts
+    assert "冰淇淋的套装正在准备" in texts
     assert "后续会继续补充新的完整套装，已购买的套装可以随时切换。" in texts
 
 
