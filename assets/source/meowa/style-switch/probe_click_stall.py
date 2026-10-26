@@ -2,6 +2,11 @@
 """点击链取证探针:双响与卡顿根因测量(真实平台)。
 量:①每次 play_click 调用时刻+调用方 ②事件循环最大滞后 ③load_settings
 每次磁盘读耗时 ④重动作(切宠/切页)单击全程 wall。"""
+# SANDBOX(2026-10-26 数据事故):裸脚本构造宠物链前必须隔离真实存档
+import os as _os, tempfile as _tf
+if _os.environ.get("PETPET_PROBE_SANDBOX", "1") == "1":
+    _os.environ["LOCALAPPDATA"] = _tf.mkdtemp(prefix="petpet_probe_")
+
 import os
 import sys
 import time

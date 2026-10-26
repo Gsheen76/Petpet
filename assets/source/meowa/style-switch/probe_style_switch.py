@@ -1,4 +1,9 @@
 """风格切换真平台探针:经典/新装两态真实渲染对照 + 解析链核验。"""
+# SANDBOX(2026-10-26 数据事故):裸脚本构造宠物链前必须隔离真实存档
+import os as _os, tempfile as _tf
+if _os.environ.get("PETPET_PROBE_SANDBOX", "1") == "1":
+    _os.environ["LOCALAPPDATA"] = _tf.mkdtemp(prefix="petpet_probe_")
+
 import os
 import sys
 

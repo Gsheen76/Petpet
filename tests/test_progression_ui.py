@@ -65,7 +65,8 @@ class ProgressionWindowUiTests(unittest.TestCase):
             base = QColor.fromRgba(
                 image.pixel(10, window.height() // 2)
             )
-            self.assertGreater(base.alpha(), 240)
+            # 水彩底边缘软过渡样点 alpha 可至 ~210——意图=非透窗,放宽
+            self.assertGreater(base.alpha(), 180)
             # 2026-10-26 水彩大底图:暖晕边缘样点降到 ~210——阈值随新
             # 风格放宽(意图不变:实底非透明,只挡黑/透明回归)
             self.assertGreater(base.red(), 190)
