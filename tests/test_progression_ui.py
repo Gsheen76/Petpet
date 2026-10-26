@@ -66,8 +66,10 @@ class ProgressionWindowUiTests(unittest.TestCase):
                 image.pixel(10, window.height() // 2)
             )
             self.assertGreater(base.alpha(), 240)
-            self.assertGreater(base.red(), 240)
-            self.assertGreater(base.green(), 220)
+            # 2026-10-26 水彩大底图:暖晕边缘样点降到 ~210——阈值随新
+            # 风格放宽(意图不变:实底非透明,只挡黑/透明回归)
+            self.assertGreater(base.red(), 190)
+            self.assertGreater(base.green(), 170)
 
     def test_progression_window_opens_centred_on_the_screen(self):
         records = RecordsWindow(self.pet, Mock())
