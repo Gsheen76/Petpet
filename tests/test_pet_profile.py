@@ -133,8 +133,7 @@ class ProfileWindowShellTests(unittest.TestCase):
         self.assertEqual((module.ART_W, module.ART_H), (1085, 1450))
         self.assertEqual((module.UNIFIED_W, module.UNIFIED_H), (850, 960))
         window, _ = self._window()
-        # 2026-10-26 横幅贴纸轮:窗口=卡 960+上沟 26=986(上伸下补,高度不锁)
-        self.assertEqual((window.width(), window.height()), (850, 986))
+        self.assertEqual((window.width(), window.height()), (850, 960))
 
     def test_resolve_scale_fits_small_screens(self):
         from PyQt5.QtCore import QRect

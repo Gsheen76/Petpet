@@ -49,11 +49,6 @@ _ASSET_DIR = os.path.join(
 # 小屏放不下时按等比因子整体收缩（下限 0.55），保持 850:960 比例。
 ART_W, ART_H = 1085, 1450
 UNIFIED_W, UNIFIED_H = 850, 960
-# 左上角横幅贴纸骑跨(2026-10-26 用户令:横幅像贴纸贴在左上角可超出
-# 页面边界,页面跳出规整矩形):卡片上缘内收,全部内容同步下移保对位。
-CARD_POKE_TOP = 26   # 卡片上缘内收(显示 px)——上缘透明区
-STICKER_POKE_UP = 18  # 贴纸伸出卡片上缘深度(显示 px)
-
 _SX = UNIFIED_W / ART_W
 _SY = UNIFIED_H / ART_H
 _FIT = 1.0
@@ -123,13 +118,8 @@ OUTFIT_IDLE_HEIGHT = 160   # 第二十九轮：缩小 20%（200×0.8）
 
 
 def _R(x, y, w, h):
-    """艺术稿坐标 → 实际画布几何（横纵各自缩放铺满统一尺寸）。
-
-    2026-10-26 横幅贴纸轮:y 统一加 CARD_POKE_TOP——卡片上缘内收后,
-    所有部件与背景同步下移,画布内相对对位不变。
-    """
-    return QRect(round(x * _SX * _FIT),
-                 round(y * _SY * _FIT + CARD_POKE_TOP * _FIT),
+    """艺术稿坐标 → 实际画布几何（横纵各自缩放铺满统一尺寸）。"""
+    return QRect(round(x * _SX * _FIT), round(y * _SY * _FIT),
                  round(w * _SX * _FIT), round(h * _SY * _FIT))
 
 
@@ -921,22 +911,8 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
         except (RuntimeError, AttributeError):
             screen = None
         _FIT = _resolve_scale(screen)
-        # 高度补偿(2026-10-26 用户令「上面伸出多少下面补多少,不是高度
-        # 锁死」):窗口 = 卡高 960 + 上沟 26 = 986,卡内容空间分毫未压。
-        self.setFixedSize(round(UNIFIED_W * _FIT),
-                          round(UNIFIED_H * _FIT)
-                          + round(CARD_POKE_TOP * _FIT))
+        self.setFixedSize(round(UNIFIED_W * _FIT), round(UNIFIED_H * _FIT))
         self._background = _pp_pixmap("new_background.png", ART_W, ART_H)
-        # 横幅贴纸(2026-10-26 v2):原背景横幅同款同角度+叠层贴纸边
-        self._banner_sticker = _pp_pixmap("banner_sticker.png", 330, 157)
-        # 框内标题(用户令:同款可爱圆润字体,框里对应位置)——幼圆渲染
-        self._banner_title = _ArtTitle("宠物档案", self, font_px=30)
-        # v3 微调(2026-10-26):标题水平铺满贴纸内区居中,垂直贴框心
-        self._banner_title.setGeometry(
-            round(14 * _FIT) + round(40 * _FIT),
-            round(CARD_POKE_TOP * _FIT) - round(STICKER_POKE_UP * _FIT)
-            + round(44 * _FIT),
-            round(250 * _FIT), round(66 * _FIT))
         # 头像列表 rail（宠物系统独立背景板，叠加在背景左侧）。
         self._rail = _pp_pixmap("pet_avatar_rail.png", RAIL_AT[2], RAIL_AT[3])
         # 素材逐个接入（base_UI 已于第六轮撤下）。
@@ -2124,22 +2100,13 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
         painter.setRenderHint(QPainter.Antialiasing)
         clip = QPainterPath()
         radius = CORNER_RADIUS * _SX * _FIT
-        card_y = round(CARD_POKE_TOP * _FIT)
-        clip.addRoundedRect(0, card_y, self.width(),
-                            self.height() - card_y, radius, radius)
+        clip.addRoundedRect(0, 0, self.width(), self.height(),
+                            radius, radius)
         painter.setClipPath(clip)
         if not self._background.isNull():
-            painter.drawPixmap(0, card_y, self._background)
+            painter.drawPixmap(0, 0, self._background)
         if not self._rail.isNull():
             painter.drawPixmap(_R(*RAIL_AT).topLeft(), self._rail)
-        # 横幅贴纸骑跨上缘(2026-10-26):不受卡片裁剪,顶=卡片缘-伸出
-        if not self._banner_sticker.isNull():
-            painter.setClipping(False)
-            sticker_x = round(14 * _FIT)
-            sticker_y = card_y - round(STICKER_POKE_UP * _FIT)
-            painter.drawPixmap(sticker_x, sticker_y,
-                               round(330 * _FIT), round(157 * _FIT),
-                               self._banner_sticker)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
