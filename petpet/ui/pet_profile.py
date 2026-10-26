@@ -921,10 +921,21 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
         except (RuntimeError, AttributeError):
             screen = None
         _FIT = _resolve_scale(screen)
-        self.setFixedSize(round(UNIFIED_W * _FIT), round(UNIFIED_H * _FIT))
+        # 高度补偿(2026-10-26 用户令「上面伸出多少下面补多少,不是高度
+        # 锁死」):窗口 = 卡高 960 + 上沟 26 = 986,卡内容空间分毫未压。
+        self.setFixedSize(round(UNIFIED_W * _FIT),
+                          round(UNIFIED_H * _FIT)
+                          + round(CARD_POKE_TOP * _FIT))
         self._background = _pp_pixmap("new_background.png", ART_W, ART_H)
-        # 横幅贴纸(2026-10-26):叠层浮起样式,骑跨卡片上缘
-        self._banner_sticker = _pp_pixmap("banner_sticker.png", 320, 104)
+        # 横幅贴纸(2026-10-26 v2):原背景横幅同款同角度+叠层贴纸边
+        self._banner_sticker = _pp_pixmap("banner_sticker.png", 330, 157)
+        # 框内标题(用户令:同款可爱圆润字体,框里对应位置)——幼圆渲染
+        self._banner_title = _ArtTitle("宠物档案", self, font_px=30)
+        self._banner_title.setGeometry(
+            round(14 * _FIT) + round(46 * _FIT),
+            round(CARD_POKE_TOP * _FIT) - round(STICKER_POKE_UP * _FIT)
+            + round(52 * _FIT),
+            round(230 * _FIT), round(54 * _FIT))
         # 头像列表 rail（宠物系统独立背景板，叠加在背景左侧）。
         self._rail = _pp_pixmap("pet_avatar_rail.png", RAIL_AT[2], RAIL_AT[3])
         # 素材逐个接入（base_UI 已于第六轮撤下）。
@@ -2123,8 +2134,10 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
         # 横幅贴纸骑跨上缘(2026-10-26):不受卡片裁剪,顶=卡片缘-伸出
         if not self._banner_sticker.isNull():
             painter.setClipping(False)
+            sticker_x = round(14 * _FIT)
             sticker_y = card_y - round(STICKER_POKE_UP * _FIT)
-            painter.drawPixmap(round(18 * _FIT), sticker_y,
+            painter.drawPixmap(sticker_x, sticker_y,
+                               round(330 * _FIT), round(157 * _FIT),
                                self._banner_sticker)
 
     def mousePressEvent(self, event):
