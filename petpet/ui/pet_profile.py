@@ -931,11 +931,12 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
         self._banner_sticker = _pp_pixmap("banner_sticker.png", 330, 157)
         # 框内标题(用户令:同款可爱圆润字体,框里对应位置)——幼圆渲染
         self._banner_title = _ArtTitle("宠物档案", self, font_px=30)
+        # v3 微调(2026-10-26):标题水平铺满贴纸内区居中,垂直贴框心
         self._banner_title.setGeometry(
-            round(14 * _FIT) + round(46 * _FIT),
+            round(14 * _FIT) + round(40 * _FIT),
             round(CARD_POKE_TOP * _FIT) - round(STICKER_POKE_UP * _FIT)
-            + round(52 * _FIT),
-            round(230 * _FIT), round(54 * _FIT))
+            + round(44 * _FIT),
+            round(250 * _FIT), round(66 * _FIT))
         # 头像列表 rail（宠物系统独立背景板，叠加在背景左侧）。
         self._rail = _pp_pixmap("pet_avatar_rail.png", RAIL_AT[2], RAIL_AT[3])
         # 素材逐个接入（base_UI 已于第六轮撤下）。
