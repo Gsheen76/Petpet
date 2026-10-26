@@ -167,8 +167,10 @@ class SettingsWindow(KeepAliveTopLevelWindow):
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setObjectName("settingsWindow")
         self.setWindowTitle("温馨设置")
+        # 五面板美化(2026-10-26):设置专属水彩底图
+        from petpet.app.paths import PANELS_UI_DIR
         self._background_pixmap = QPixmap(
-            os.path.join(SHOP_UI_DIR, "background.png")
+            os.path.join(PANELS_UI_DIR, "panel_bg_settings.png")
         )
         self._build_ui()
         self._apply_font()

@@ -51,6 +51,7 @@ from petpet.app.paths import (
     GIFTS_UI_DIR,
     OUTFITS_DIR,
     POSES_DIR,
+    PANELS_UI_DIR,
     SHOP_UI_DIR,
 )
 from petpet.app.fonts import APP_FONT_FAMILY
@@ -72,6 +73,28 @@ from petpet.home.rendering import (
 
 def _shop_asset(name):
     return os.path.join(SHOP_UI_DIR, name)
+
+
+def _panel_asset(name):
+    """五面板专属水彩素材(2026-10-26 美化轮:设置/小游戏/成就/记录/每日)。"""
+    return os.path.join(PANELS_UI_DIR, name)
+
+
+# 水彩胶囊按钮皮肤(2026-10-26 美化轮):softButton 专属增补,仅挂在
+# 五个目标窗口(商店/装修窗不挂);border-image 九宫拉伸,:hover 换深一档,
+# 无 :pressed(按键规范)。
+def _watercolor_button_style():
+    normal = _panel_asset("btn_pill_normal.png").replace(chr(92), "/")
+    hover = _panel_asset("btn_pill_hover.png").replace(chr(92), "/")
+    return (
+        "QPushButton#softButton {"
+        "border-image: url(" + normal + ") 22 22 22 22 stretch;"
+        "color:#704b3c;font-weight:600;border:0;"
+        "}"
+        "QPushButton#softButton:hover {"
+        "border-image: url(" + hover + ") 22 22 22 22 stretch;"
+        "}"
+    )
 
 
 def _shop_pixmap(name, height):
@@ -1256,8 +1279,13 @@ class CozyProgressWindow(KeepAliveTopLevelWindow):
         self.pet = pet
         self._drag_offset = None
         self.shop_theme = bool(shop_theme)
+        # 底图路由(2026-10-26 美化轮):子类可用 BACKGROUND_ASSET 换专属
+        # 水彩底图(默认=商店底图);WATERCOLOR_BUTTONS=True 追加 softButton
+        # 水彩皮肤增补——仅五个目标面板启用,商店/装修不受影响。
+        bg_asset = getattr(type(self), "BACKGROUND_ASSET", "background.png")
         self._background_pixmap = (
-            QPixmap(_shop_asset("background.png"))
+            QPixmap(_panel_asset(bg_asset) if bg_asset != "background.png"
+                    else _shop_asset(bg_asset))
             if self.shop_theme else QPixmap()
         )
         self.setWindowFlags(
@@ -1270,6 +1298,8 @@ class CozyProgressWindow(KeepAliveTopLevelWindow):
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setObjectName("cozyProgressWindow")
         style = PANEL_STYLE + (SHOP_THEME_STYLE if self.shop_theme else "")
+        if self.shop_theme and getattr(type(self), "WATERCOLOR_BUTTONS", False):
+            style += _watercolor_button_style()
         self.setStyleSheet(style)
 
         screen = QApplication.primaryScreen().availableGeometry()
@@ -1560,6 +1590,9 @@ class _WeekBarChart(QWidget):
 
 
 class DailyWindow(CozyProgressWindow):
+    # 五面板美化(2026-10-26):专属水彩底图+softButton 水彩皮肤
+    BACKGROUND_ASSET = "panel_bg_daily.png"
+    WATERCOLOR_BUTTONS = True
     """「每日」独立窗（2026-09-25 用户定稿：签到/日历/今日任务完全独立，
     不再寄居记录窗页签）。排版：签到横幅卡 → 日历卡 → 今日任务卡。"""
 
@@ -1904,6 +1937,8 @@ class DailyWindow(CozyProgressWindow):
         self.refresh()
 
 class RecordsWindow(CozyProgressWindow):
+    # 五面板美化(2026-10-26):专属水彩底图
+    BACKGROUND_ASSET = "panel_bg_records.png"
     def __init__(self, pet, save_callback):
         self.save_callback = save_callback
         self.record_pet_id = None
@@ -2228,6 +2263,9 @@ ACHIEVEMENT_OTHER_GROUP = ("other", "其它")
 
 
 class AchievementsWindow(CozyProgressWindow):
+    # 五面板美化(2026-10-26):专属水彩底图+softButton 水彩皮肤
+    BACKGROUND_ASSET = "panel_bg_achievements.png"
+    WATERCOLOR_BUTTONS = True
     def __init__(self, pet, save_callback):
         self.save_callback = save_callback
         self.achievement_filter = "all"

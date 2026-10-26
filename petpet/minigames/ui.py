@@ -274,6 +274,9 @@ class CoinCatchCanvas(QWidget):
 
 
 class CoinCatchGameWindow(CozyProgressWindow):
+    # 五面板美化(2026-10-26):游戏专属水彩底图+softButton 水彩皮肤
+    BACKGROUND_ASSET = "panel_bg_games.png"
+    WATERCOLOR_BUTTONS = True
     def __init__(self, pet, save_callback, finished_callback=None):
         self.save_callback = save_callback
         self.finished_callback = finished_callback
@@ -294,6 +297,7 @@ class CoinCatchGameWindow(CozyProgressWindow):
         self.canvas.round_finished.connect(self._finish_round)
         self.content_layout.addWidget(self.canvas, 1)
         self.start_button = FeedbackButton("开始游戏")
+        self.start_button.setObjectName("softButton")
         self.start_button.clicked.connect(self._start_round)
         self.content_layout.addWidget(self.start_button)
         self.refresh()
@@ -674,6 +678,9 @@ class ShellShuffleCanvas(QWidget):
 
 
 class LuckyPawsGameWindow(CozyProgressWindow):
+    # 五面板美化(2026-10-26):游戏专属水彩底图+softButton 水彩皮肤
+    BACKGROUND_ASSET = "panel_bg_games.png"
+    WATERCOLOR_BUTTONS = True
     TOTAL_ROUNDS = 3
     ROUND_CONFIG = {
         1: {"reward": 10, "swap_count": 5, "swap_duration": 0.58,
@@ -717,6 +724,7 @@ class LuckyPawsGameWindow(CozyProgressWindow):
         self.content_layout.addWidget(self.canvas, 1)
 
         self.start_button = FeedbackButton("开始游戏")
+        self.start_button.setObjectName("softButton")
         self.start_button.clicked.connect(self._start_game)
         self.content_layout.addWidget(self.start_button)
         self.refresh()
@@ -817,6 +825,9 @@ class LuckyPawsGameWindow(CozyProgressWindow):
 
 
 class MiniGameHubWindow(CozyProgressWindow):
+    # 五面板美化(2026-10-26):游戏专属水彩底图+softButton 水彩皮肤
+    BACKGROUND_ASSET = "panel_bg_games.png"
+    WATERCOLOR_BUTTONS = True
     """Game picker for an extensible collection of Pet-coin games."""
 
     def __init__(self, pet, save_callback):
@@ -906,6 +917,7 @@ class MiniGameHubWindow(CozyProgressWindow):
         text_layout.addWidget(best_label, 0, Qt.AlignLeft)
         layout.addLayout(text_layout, 1)
         button = FeedbackButton("开始")
+        button.setObjectName("softButton")
         button.clicked.connect(
             lambda _checked=False, selected=game_id:
             self._open_game(selected)
@@ -1026,6 +1038,9 @@ class _MemoryCardGrid(QWidget):
 
 
 class MemoryMatchGameWindow(CozyProgressWindow):
+    # 五面板美化(2026-10-26):游戏专属水彩底图+softButton 水彩皮肤
+    BACKGROUND_ASSET = "panel_bg_games.png"
+    WATERCOLOR_BUTTONS = True
     """记忆翻牌（2026-09-26）：8 对图标，步数效率计币。"""
 
     def __init__(self, pet, save_callback, finished_callback=None):
@@ -1048,6 +1063,7 @@ class MemoryMatchGameWindow(CozyProgressWindow):
         self.info_label.setObjectName("muted")
         self.content_layout.addWidget(self.info_label)
         self.replay_button = FeedbackButton("再玩一局")
+        self.replay_button.setObjectName("softButton")
         self.replay_button.clicked.connect(self._restart)
         self.content_layout.addWidget(self.replay_button)
         self.status_label.setText("点两张一样的卡片配对吧！")
