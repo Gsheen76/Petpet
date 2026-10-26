@@ -147,8 +147,10 @@ class ChatWindow(KeepAliveTopLevelWindow):
         self.setObjectName("chat")
         # Same page footprint as the shop/records/settings panels.
         self.setFixedSize(850, 960)
+        # 聊天专属水彩底图(2026-10-26 用户令:聊天界面也要制作)
+        from petpet.app.paths import PANELS_UI_DIR
         self._background_pixmap = QPixmap(
-            os.path.join(SHOP_UI_DIR, "background.png")
+            os.path.join(PANELS_UI_DIR, "panel_bg_chat.png")
         )
         self._apply_style()
 
