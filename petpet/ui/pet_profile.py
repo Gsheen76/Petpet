@@ -49,10 +49,10 @@ _ASSET_DIR = os.path.join(
 # 小屏放不下时按等比因子整体收缩（下限 0.55），保持 850:960 比例。
 ART_W, ART_H = 1085, 1450
 UNIFIED_W, UNIFIED_H = 850, 960
-# 名牌骑跨上缘(2026-10-26 用户令「上方加透明区域,背景左上角名牌块
-# 伸出页面边界框」):卡片画布顶部留透明沟,名牌整组上移骑跨卡片上缘。
-CARD_POKE_TOP = 30   # 上缘透明沟(显示 px)
-CARD_POKE_UP = 16    # 名牌伸出卡片上缘的深度(显示 px)
+# 名牌骑跨边界(2026-10-26 用户令「页面不再规整矩形,名牌可超出页面
+# 边界框」):卡片画布右侧留透明沟,名牌右段伸进沟里跨过卡片边缘。
+CARD_POKE_GUTTER = 30   # 右缘透明沟(显示 px)
+CARD_POKE_OUT = 16      # 名牌伸出卡片边的深度(显示 px)
 _SX = UNIFIED_W / ART_W
 _SY = UNIFIED_H / ART_H
 _FIT = 1.0
@@ -1042,8 +1042,19 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
         art_h = 72
         art_w = round(art_h * (1075 / 379))
         row_cy = NAME_PLATE_AT[1] + NAME_PLATE_AT[3] // 2 + 4
+        # 避让骑跨右移的名牌(2026-10-26):陪伴钮左移进名牌让出的旧位,
+        # 右缘 = 名牌新左缘 - 16。
+        _plate_r = _R(*NAME_PLATE_AT)
+        _poke_dx = (self.width() - round(CARD_POKE_GUTTER * _FIT)
+                    + round(CARD_POKE_OUT * _FIT)
+                    - (_plate_r.x() + _plate_r.width()))
+        _plate_new_left = _plate_r.x() + _poke_dx
+        _comp_w = round((art_w + 12) * _SX * _FIT)
+        _comp_left_display = _plate_new_left - 16 - _comp_w
+        # 反算 art 坐标喂 set_art_rect(其内部走 _R 换算)
+        _comp_left_art = _comp_left_display / (_SX * _FIT)
         self._companion_button.set_art_rect((
-            NAME_PLATE_AT[0] + NAME_PLATE_AT[2] + 16,
+            _comp_left_art,
             row_cy - art_h // 2 - 6,
             art_w + 12, art_h + 12,
         ))
@@ -1057,31 +1068,30 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
 
         # 图3：名字牌（rename_bg）+ 艺术字名字 + 改名钮（change_name 素材，
         # 第二十一轮：与关闭键同款 _ArtButton 交互——悬浮放大/点击缩小还原）。
-        # 名牌骑跨上缘(2026-10-26 用户令):整组(牌+名字+改名钮)垂直
-        # 平移——牌顶 = 卡片上缘 - CARD_POKE_UP(伸进上缘透明沟)。
+        # 名牌骑跨右缘(2026-10-26):整组(牌+名字+改名钮)水平平移,
+        # 右缘 = 卡片边 + CARD_POKE_OUT(伸进透明沟)。
         plate_r = _R(*NAME_PLATE_AT)
         art_r = _R(*NAME_ART_AT)
         btn_r = _R(*RENAME_BUTTON_AT)
-        poke_dy = (round(CARD_POKE_TOP * _FIT)
-                   - round(CARD_POKE_UP * _FIT) - plate_r.y())
-        self._plate_poke_dy = poke_dy
+        poke_dx = (self.width() - round(CARD_POKE_GUTTER * _FIT)
+                   + round(CARD_POKE_OUT * _FIT)
+                   - (plate_r.x() + plate_r.width()))
         self._pixmap_label(
             "rename_bg.png", *NAME_PLATE_AT).setGeometry(
-            plate_r.x(), plate_r.y() + poke_dy,
+            plate_r.x() + poke_dx, plate_r.y(),
             plate_r.width(), plate_r.height())
         self._name_label = _ArtTitle("", self, font_px=28)
         self._name_label.setGeometry(
-            art_r.x(), art_r.y() + poke_dy,
-            art_r.width(), art_r.height())
+            art_r.x() + poke_dx, art_r.y(), art_r.width(), art_r.height())
         self._rename_button = _ArtButton(
             self, _pp_pixmap("rename_icon.png"), self._open_name_dialog,
             margin=3,
         )
+        _rb_rect = QRect(btn_r.x() + poke_dx, btn_r.y(),
+                         btn_r.width(), btn_r.height())
         self._rename_button.set_art_rect((
-            RENAME_BUTTON_AT[0], RENAME_BUTTON_AT[1],
+            _rb_rect.x(), _rb_rect.y(),
             RENAME_BUTTON_AT[2], RENAME_BUTTON_AT[3]))
-        self._rename_button.move(
-            btn_r.x(), btn_r.y() + poke_dy)
 
         # 第三十七轮：背景图直接覆盖原分栏+内容整块区域；两枚素材
         # 分栏按钮（参考图裁切）附着在背景图上方选择当前栏目。
@@ -2121,14 +2131,13 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
         painter.setRenderHint(QPainter.Antialiasing)
         clip = QPainterPath()
         radius = CORNER_RADIUS * _SX * _FIT
-        card_y = round(CARD_POKE_TOP * _FIT)
-        clip.addRoundedRect(0, card_y, self.width(),
-                            self.height() - card_y, radius, radius)
+        card_w = self.width() - round(CARD_POKE_GUTTER * _FIT)
+        clip.addRoundedRect(0, 0, card_w, self.height(),
+                            radius, radius)
         painter.setClipPath(clip)
         if not self._background.isNull():
             painter.drawPixmap(
-                0, card_y, self._background.width(),
-                self.height() - card_y, self._background)
+                0, 0, card_w, self.height(), self._background)
         if not self._rail.isNull():
             painter.drawPixmap(_R(*RAIL_AT).topLeft(), self._rail)
 
