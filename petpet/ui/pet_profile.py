@@ -70,7 +70,7 @@ RAIL_AT = (51, 230, 200, 992)
 SHOP_TIP_AT = (56, 1238, 192, 113)   # 改稿7：累计右移 4px（改稿6 右1 + 本轮右3）、上移 15px
 # 「我的伙伴」(2026-10-30 用户令:移入背景左上角标签内,适当旋转)
 # 标签面约 art x20-570/y8-165 → 标题居中其上,微倾 -4°
-RAIL_TITLE_AT = (10 - 40, 55 + 3, 500, 110)
+RAIL_TITLE_AT = (-60, 60, 520, 130)
 PET_CARD_SLOTS = ((76, 272), (76, 470), (76, 668))  # 每卡头像左上（烟花上移80、奶油上移200、右移10，显示px 换算；2026-10-14 第三位=棉花糖）
 PET_CARD_SIZE = (150, 150)
 PET_CARD_NAME_AT = (-20, 156, 190, 36)       # 名字（相对卡，卡下，略宽于卡居中）
@@ -388,11 +388,15 @@ class _ArtTitle(QWidget):
     可选旋转(2026-10-30 用户令「适当旋转一点」):paintEvent 绕中心转。
     """
 
-    def __init__(self, text, parent=None, font_px=38, rotation=0):
+    def __init__(self, text, parent=None, font_px=38, rotation=0,
+                 hero=False):
         super().__init__(parent)
         self._text = text
         self._font_px = font_px
         self._rotation = rotation
+        # hero=大标题模式(2026-10-30 用户令「更像大标题,更美观,风格一致」):
+        # 厚白描边+双层底影+微字间距,海报级层次感
+        self._hero = hero
         self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
 
     def setText(self, text):
@@ -414,6 +418,25 @@ class _ArtTitle(QWidget):
         font.setBold(True)
         font.setPixelSize(max(1, round(self._font_px * _SX * _FIT)))
         painter.setFont(font)
+        if self._hero:
+            # 大标题(2026-10-30):厚白边(4px 全向)→暖棕主体→深棕底影,
+            # 三层叠出海报纸级层次
+            painter.setPen(QPen(QColor(255, 252, 246), 6,
+                                Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+            for dx, dy in ((-3, 0), (3, 0), (0, -3), (0, 3),
+                           (-3, -3), (3, -3), (-3, 3), (3, 3),
+                           (-3, 0), (3, 0), (0, -3), (0, 3)):
+                painter.drawText(self.rect().adjusted(dx, dy, dx, dy),
+                                 Qt.AlignCenter, self._text)
+            # 深棕底影(厚)
+            painter.setPen(QColor(180, 120, 85))
+            painter.drawText(self.rect().adjusted(0, 4, 0, 4),
+                             Qt.AlignCenter, self._text)
+            # 主体暖棕(亮于普通模式)
+            painter.setPen(QColor("#8a4a2f"))
+            painter.drawText(self.rect().adjusted(0, -1, 0, -1),
+                             Qt.AlignCenter, self._text)
+            return
         # 底部浅影
         painter.setPen(QColor(240, 205, 170))
         painter.drawText(self.rect().adjusted(0, 3, 0, 3),
@@ -1010,7 +1033,8 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
     def _build_content(self):
         # 图1：左栏「我的伙伴与套装」标题 + rail 上双宠切换卡
         # （头像 + 卡下名字 + 卡内底部「使用中」pill，恢复自参考图）。
-        self._rail_title = _ArtTitle("我的伙伴", self, font_px=40, rotation=-4)
+        self._rail_title = _ArtTitle("我的伙伴", self, font_px=48,
+                                     rotation=-4, hero=True)
         self._rail_title.setGeometry(_R(*RAIL_TITLE_AT))
         for index, pet_id in enumerate(pet_registry.load_pet_registry()):
             if index >= len(PET_CARD_SLOTS):

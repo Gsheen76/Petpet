@@ -402,7 +402,7 @@ class ProfileWindowShellTests(unittest.TestCase):
         from petpet.ui.pet_profile import RAIL_TITLE_AT
 
         # 2026-10-30 用户令:标题移入背景左上角标签内
-        self.assertAlmostEqual(RAIL_TITLE_AT[0], -30, delta=2)
+        self.assertAlmostEqual(RAIL_TITLE_AT[0], -60, delta=2)
 
     def test_card_positions_restored(self):
         from petpet.ui.pet_profile import PET_CARD_SLOTS, RAIL_AT
