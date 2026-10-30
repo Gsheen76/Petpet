@@ -70,7 +70,7 @@ RAIL_AT = (51, 230, 200, 992)
 SHOP_TIP_AT = (56, 1238, 192, 113)   # 改稿7：累计右移 4px（改稿6 右1 + 本轮右3）、上移 15px
 # 「我的伙伴」(2026-10-30 用户令:移入背景左上角标签内,适当旋转)
 # 标签面约 art x20-570/y8-165 → 标题居中其上,微倾 -4°
-RAIL_TITLE_AT = (-60, 60, 520, 130)
+RAIL_TITLE_AT = (-70, 50, 520, 130)
 PET_CARD_SLOTS = ((76, 272), (76, 470), (76, 668))  # 每卡头像左上（烟花上移80、奶油上移200、右移10，显示px 换算；2026-10-14 第三位=棉花糖）
 PET_CARD_SIZE = (150, 150)
 PET_CARD_NAME_AT = (-20, 156, 190, 36)       # 名字（相对卡，卡下，略宽于卡居中）
@@ -1033,8 +1033,8 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
     def _build_content(self):
         # 图1：左栏「我的伙伴与套装」标题 + rail 上双宠切换卡
         # （头像 + 卡下名字 + 卡内底部「使用中」pill，恢复自参考图）。
-        self._rail_title = _ArtTitle("我的伙伴", self, font_px=48,
-                                     rotation=-4, hero=True)
+        self._rail_title = _ArtTitle("我的伙伴", self, font_px=42,
+                                     rotation=-4)
         self._rail_title.setGeometry(_R(*RAIL_TITLE_AT))
         for index, pet_id in enumerate(pet_registry.load_pet_registry()):
             if index >= len(PET_CARD_SLOTS):
