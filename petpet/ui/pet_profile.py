@@ -254,7 +254,7 @@ def _outfit_preview_path(pet_id, outfit):
     return candidate if os.path.isfile(candidate) else None
 
 
-def _normalized_rail_icon(path, body_h=110, canvas=118):
+def _normalized_rail_icon(path, body_h=102, canvas=118):
     """侧栏头像内容归一(2026-10-23 用户令「大小统一位置统一」):
     按素材内容 bbox 裁切后体高统一 body_h、水平居中、底边钉同一地线,
     画到 canvas² 透明画布——三宠(方狗/竖版兔)观感大小位置一致。"""
@@ -269,6 +269,10 @@ def _normalized_rail_icon(path, body_h=110, canvas=118):
     if not len(ys):
         return QPixmap(path)
     content = im.crop((xs.min(), ys.min(), xs.max() + 1, ys.max() + 1))
+    # 窄体宠视觉补偿(2026-10-30 用户令「兔子有点小」):瘦高体型按同高
+    # 等比会显小——宽<高×0.92 时 boost 1.08 使视觉体量与宽体宠一致
+    if content.width < content.height * 0.92:
+        body_h = int(body_h * 1.08)
     scale = body_h / content.height
     content = content.resize(
         (max(1, int(content.width * scale)), body_h), _PILImage.LANCZOS)
@@ -659,7 +663,7 @@ class _TabButton(QWidget):
             )
             # 未选中透明度（2026-09-15 用户定稿 0.50）。
             if not (self.checked or self._hovered or self._pressed):
-                painter.setOpacity(0.50)
+                painter.setOpacity(0.60)
             painter.drawPixmap(
                 rect.x() + (rect.width() - scaled.width()) // 2,
                 rect.y() + (rect.height() - scaled.height()) // 2,
@@ -743,8 +747,9 @@ class _AvatarButton(QWidget):
     def _refresh_outlined(self):
         """按当前选中态烘焙描边版(2026-10-30 用户令:区分选中/未选中
         框色——选中暖棕 200,未选中柔灰 120)。"""
-        color = (QColor(200, 130, 80, 200) if self.selected
-                 else QColor(170, 150, 130, 120))
+        # 淡色描边(2026-10-30):选中淡暖棕,未选中更淡灰
+        color = (QColor(215, 165, 125, 150) if self.selected
+                 else QColor(190, 175, 160, 90))
         self._outlined = self._make_outlined(self._pixmap, color=color)
 
     @staticmethod
@@ -823,7 +828,7 @@ class _AvatarButton(QWidget):
                 Qt.KeepAspectRatio, Qt.SmoothTransformation,
             )
             if not self.selected and not self._hovered:
-                painter.setOpacity(0.50)
+                painter.setOpacity(0.60)
             # 描边版 pixmap 代替原像(严格贴形,2026-10-30)
             source = self._outlined if not self._outlined.isNull() else scaled
             draw_x = box.x() + (box.width() - source.width()) // 2
