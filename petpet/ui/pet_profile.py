@@ -729,6 +729,7 @@ class _AvatarButton(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._pixmap = QPixmap()
+        self._outlined = QPixmap()
         self._hovered = False
         self._pressed = False
         self.selected = False  # 当前使用宠物：常驻描边
@@ -736,7 +737,36 @@ class _AvatarButton(QWidget):
 
     def set_pixmap(self, pixmap):
         self._pixmap = pixmap
+        self._outlined = self._make_outlined(pixmap)
         self.update()
+
+    @staticmethod
+    def _make_outlined(pixmap, border=3, color=QColor(190, 130, 90, 180)):
+        """严格贴形描边(2026-10-30 用户令「严格头像边缘」):
+        剪影(纯色+同 alpha)12 方向偏移叠出轮廓,再叠原像——描边
+        沿头像实际轮廓而非圆角矩形。"""
+        if pixmap.isNull():
+            return pixmap
+        pad = border
+        canvas = QPixmap(pixmap.width() + pad * 2,
+                         pixmap.height() + pad * 2)
+        canvas.fill(Qt.transparent)
+        sil = QPixmap(pixmap.size())
+        sil.fill(color)
+        sp = QPainter(sil)
+        sp.setCompositionMode(QPainter.CompositionMode_DestinationIn)
+        sp.drawPixmap(0, 0, pixmap)
+        sp.end()
+        cp = QPainter(canvas)
+        cp.setRenderHint(QPainter.SmoothPixmapTransform)
+        import math
+        for deg in range(0, 360, 30):
+            dx = pad + round(border * math.cos(math.radians(deg)))
+            dy = pad + round(border * math.sin(math.radians(deg)))
+            cp.drawPixmap(dx, dy, sil)
+        cp.drawPixmap(pad, pad, pixmap)
+        cp.end()
+        return canvas
 
     def enterEvent(self, event):
         self._hovered = True
@@ -785,21 +815,12 @@ class _AvatarButton(QWidget):
             )
             if not self.selected and not self._hovered:
                 painter.setOpacity(0.65)
-            draw_x = box.x() + (box.width() - scaled.width()) // 2
-            draw_y = box.y() + (box.height() - scaled.height()) // 2
-            painter.drawPixmap(draw_x, draw_y, scaled)
+            # 描边版 pixmap 代替原像(严格贴形,2026-10-30)
+            source = self._outlined if not self._outlined.isNull() else scaled
+            draw_x = box.x() + (box.width() - source.width()) // 2
+            draw_y = box.y() + (box.height() - source.height()) // 2
+            painter.drawPixmap(draw_x, draw_y, source)
             painter.setOpacity(1.0)
-            # 头像描边(2026-10-30 用户令):暖棕细边勾出头像轮廓,
-            # 常态 3px 半透明、悬浮加粗 4px——纯描边不加底框不加圈
-            pen_w = 4 if self._hovered else 3
-            painter.setPen(QPen(
-                QColor(190, 130, 90, 200 if self._hovered else 160),
-                pen_w, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
-            painter.setBrush(Qt.NoBrush)
-            painter.drawRoundedRect(
-                draw_x + pen_w // 2, draw_y + pen_w // 2,
-                scaled.width() - pen_w, scaled.height() - pen_w,
-                14, 14)
         # 选中态虚线圈已删(2026-10-23 用户令):选中/未选中头像均不加
         # 任何框/圈/底——查看对象由名牌 tag 标示(历史版本曾用淡琥珀
         # 虚线常驻描边,两轮定稿后 2026-10-23 终版移除)。

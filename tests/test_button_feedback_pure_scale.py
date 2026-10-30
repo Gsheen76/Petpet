@@ -182,7 +182,7 @@ class AvatarButtonPureScaleTests(unittest.TestCase):
         # 2026-10-30 用户令「头像加描边」:暖棕描边笔触可入余量 1px
         self.assertLessEqual(normal[0], 2, "常态头像应留 ≥0px 余量(描边可入 1px)")
         self.assertEqual(hovered[0], 0, "悬浮应放大到全幅（无余量）")
-        self.assertEqual(pressed[0], 2, "按压应还原常态（2026-09-28 终版：按压效果删除）")
+        self.assertLessEqual(pressed[0], 2, "按压应还原常态(描边可入 1px)")
         # 悬浮帧不得引入白色洗盖（顶部不得出现近白不透明像素）。
         btn._hovered = True
         arr = _array(self._grab(btn))
