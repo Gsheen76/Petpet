@@ -277,8 +277,10 @@ def _normalized_rail_icon(path, body_h=98, canvas=118):
     content = content.resize(
         (max(1, int(content.width * scale)), body_h), _PILImage.LANCZOS)
     board = _PILImage.new("RGBA", (canvas, canvas), (0, 0, 0, 0))
+    # 2026-10-30 用户令「确保同一位置」:垂直居中(底钉制兔顶4 vs 犬顶12
+    # 高差8px 感知为歪;居中制三宠视觉中心恒=画布中心)
     board.paste(content, ((canvas - content.width) // 2,
-                          canvas - 8 - body_h), content)
+                          (canvas - body_h) // 2), content)
     buf = io.BytesIO()
     board.save(buf, format="PNG")
     pm = QPixmap()
