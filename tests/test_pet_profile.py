@@ -401,8 +401,8 @@ class ProfileWindowShellTests(unittest.TestCase):
     def test_card_positions_round_twenty(self):
         from petpet.ui.pet_profile import RAIL_TITLE_AT
 
-        # 第二十六轮：标题左移 20 显示px（x24→-2）。
-        self.assertAlmostEqual(RAIL_TITLE_AT[0], -2, delta=2)
+        # 2026-10-30 用户令:标题移入背景左上角标签内
+        self.assertAlmostEqual(RAIL_TITLE_AT[0], 40, delta=2)
 
     def test_card_positions_restored(self):
         from petpet.ui.pet_profile import PET_CARD_SLOTS, RAIL_AT
