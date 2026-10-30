@@ -254,7 +254,7 @@ def _outfit_preview_path(pet_id, outfit):
     return candidate if os.path.isfile(candidate) else None
 
 
-def _normalized_rail_icon(path, body_h=96, canvas=118):
+def _normalized_rail_icon(path, body_h=110, canvas=118):
     """侧栏头像内容归一(2026-10-23 用户令「大小统一位置统一」):
     按素材内容 bbox 裁切后体高统一 body_h、水平居中、底边钉同一地线,
     画到 canvas² 透明画布——三宠(方狗/竖版兔)观感大小位置一致。"""
@@ -737,16 +737,25 @@ class _AvatarButton(QWidget):
 
     def set_pixmap(self, pixmap):
         self._pixmap = pixmap
-        self._outlined = self._make_outlined(pixmap)
+        self._refresh_outlined()
         self.update()
 
+    def _refresh_outlined(self):
+        """按当前选中态烘焙描边版(2026-10-30 用户令:区分选中/未选中
+        框色——选中暖棕 200,未选中柔灰 120)。"""
+        color = (QColor(200, 130, 80, 200) if self.selected
+                 else QColor(170, 150, 130, 120))
+        self._outlined = self._make_outlined(self._pixmap, color=color)
+
     @staticmethod
-    def _make_outlined(pixmap, border=3, color=QColor(190, 130, 90, 180)):
+    def _make_outlined(pixmap, border=3, color=None):
         """严格贴形描边(2026-10-30 用户令「严格头像边缘」):
         剪影(纯色+同 alpha)12 方向偏移叠出轮廓,再叠原像——描边
         沿头像实际轮廓而非圆角矩形。"""
         if pixmap.isNull():
             return pixmap
+        if color is None:
+            color = QColor(200, 130, 80, 200)
         pad = border
         canvas = QPixmap(pixmap.width() + pad * 2,
                          pixmap.height() + pad * 2)
@@ -814,7 +823,7 @@ class _AvatarButton(QWidget):
                 Qt.KeepAspectRatio, Qt.SmoothTransformation,
             )
             if not self.selected and not self._hovered:
-                painter.setOpacity(0.65)
+                painter.setOpacity(0.50)
             # 描边版 pixmap 代替原像(严格贴形,2026-10-30)
             source = self._outlined if not self._outlined.isNull() else scaled
             draw_x = box.x() + (box.width() - source.width()) // 2
@@ -1604,6 +1613,7 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
                 icon = _grayscale_pixmap(icon_path) if icon_path else QPixmap()
             card["button"].set_pixmap(icon)
             card["button"].selected = pet_id == view_id
+            card["button"]._refresh_outlined()
             # 2026-10-14 用户定稿：未拥有的宠物卡不仅灰显，而且禁止
             # 点击（禁用后无悬停/按压反馈、无手型、不发 clicked）
             card["button"].setEnabled(owned)
