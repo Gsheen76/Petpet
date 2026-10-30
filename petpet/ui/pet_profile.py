@@ -70,7 +70,7 @@ RAIL_AT = (51, 230, 200, 992)
 SHOP_TIP_AT = (56, 1238, 192, 113)   # 改稿7：累计右移 4px（改稿6 右1 + 本轮右3）、上移 15px
 # 「我的伙伴」(2026-10-30 用户令:移入背景左上角标签内,适当旋转)
 # 标签面约 art x20-570/y8-165 → 标题居中其上,微倾 -4°
-RAIL_TITLE_AT = (-70, 50, 520, 130)
+RAIL_TITLE_AT = (-70, 55, 520, 130)
 PET_CARD_SLOTS = ((76, 272), (76, 470), (76, 668))  # 每卡头像左上（烟花上移80、奶油上移200、右移10，显示px 换算；2026-10-14 第三位=棉花糖）
 PET_CARD_SIZE = (150, 150)
 PET_CARD_NAME_AT = (-20, 156, 190, 36)       # 名字（相对卡，卡下，略宽于卡居中）
@@ -447,8 +447,8 @@ class _ArtTitle(QWidget):
                        (-2, -2), (2, -2), (-2, 2), (2, 2)):
             painter.drawText(self.rect().adjusted(dx, dy, dx, dy),
                              Qt.AlignCenter, self._text)
-        # 主体棕字
-        painter.setPen(QColor("#9a5b3f"))
+        # 主体(默认棕,可实例覆盖)
+        painter.setPen(getattr(self, '_main_color', QColor("#9a5b3f")))
         painter.drawText(self.rect(), Qt.AlignCenter, self._text)
 
 
@@ -1035,6 +1035,8 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
         # （头像 + 卡下名字 + 卡内底部「使用中」pill，恢复自参考图）。
         self._rail_title = _ArtTitle("我的伙伴", self, font_px=42,
                                      rotation=-4)
+        # 用户令「换个颜色」——主体换珊瑚红(面板主题色系,白边保持)
+        self._rail_title._main_color = QColor("#c4553a")
         self._rail_title.setGeometry(_R(*RAIL_TITLE_AT))
         for index, pet_id in enumerate(pet_registry.load_pet_registry()):
             if index >= len(PET_CARD_SLOTS):
