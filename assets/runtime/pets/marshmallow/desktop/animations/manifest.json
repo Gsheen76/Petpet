@@ -215,36 +215,6 @@
       118.0
     ]
   },
-  "sleep": {
-    "folder": "sleep",
-    "fps": 8,
-    "loop": true,
-    "fallback": "sleep",
-    "scale": 1.0,
-    "anchor_bottom": false,
-    "saturation": 1.0,
-    "brightness": 1.0,
-    "frame_durations_ms": [
-      400.0,
-      400.0,
-      400.0,
-      400.0,
-      400.0,
-      400.0,
-      400.0,
-      400.0,
-      400.0,
-      400.0,
-      400.0,
-      400.0,
-      400.0,
-      400.0,
-      400.0,
-      400.0,
-      400.0,
-      400.0
-    ]
-  },
   "drag": {
     "folder": "drag",
     "fps": 8,
@@ -337,6 +307,74 @@
       130.0,
       130.0,
       130.0
+    ]
+  },
+  "sleep_fall": {
+    "folder": "sleep_fall",
+    "fps": 8,
+    "loop": false,
+    "fallback": "idle",
+    "scale": 1.0,
+    "anchor_bottom": false,
+    "saturation": 1.0,
+    "brightness": 1.0,
+    "frame_durations_ms": [
+      125,
+      125,
+      125,
+      125,
+      125,
+      125,
+      125,
+      125
+    ]
+  },
+  "sleep_loop": {
+    "folder": "sleep_loop",
+    "fps": 8,
+    "loop": true,
+    "fallback": "idle",
+    "scale": 1.0,
+    "anchor_bottom": false,
+    "saturation": 1.0,
+    "brightness": 1.0,
+    "frame_durations_ms": [
+      125,
+      125,
+      125,
+      125,
+      125,
+      125,
+      125,
+      125,
+      125,
+      125,
+      125,
+      125,
+      125,
+      125,
+      125,
+      125
+    ]
+  },
+  "sleep_wake": {
+    "folder": "sleep_wake",
+    "fps": 8,
+    "loop": false,
+    "fallback": "idle",
+    "scale": 1.0,
+    "anchor_bottom": false,
+    "saturation": 1.0,
+    "brightness": 1.0,
+    "frame_durations_ms": [
+      125,
+      125,
+      125,
+      125,
+      125,
+      125,
+      125,
+      125
     ]
   }
 }
