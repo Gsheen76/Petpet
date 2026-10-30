@@ -78,7 +78,7 @@ PET_CARD_TAG_AT = (12, 118, 142, 34)         # 使用中 pill（已按指示停�
 
 # 图2 待机动画：粉垫 x340-940 y430-570（虚线圆中心 ~640,360）。
 IDLE_PREVIEW_RECT = (415, 140, 450, 430)
-IDLE_FRAME_HEIGHT = 410
+IDLE_FRAME_HEIGHT = 600  # 2026-10-30 清晰度:高载低显=下采样锐于上采样
 IDLE_FPS = 8
 
 # 图3 名字牌（rename_bg 323x63）+ 改名钮（change_name 94x55）：
@@ -306,8 +306,10 @@ def _normalized_preview_frames(frames, width, height):
     body_cx = (int(xs.min()) + int(xs.max())) / 2.0
     ground = int(ys.max()) + 1
     scale = (height * 0.72) / body_h
+    # 2026-10-30 清晰度:画布 2×目标——标签下采样显示(锐于画布=标签)
+    width, height = width * 2, height * 2
     dx = int(width / 2 - body_cx * scale)
-    dy = int(height - 12 - ground * scale)
+    dy = int(height - 24 - ground * scale)
     dw, dh = int(w * scale), int(h * scale)
     out = []
     for pm in frames:
@@ -377,8 +379,11 @@ def _load_idle_frames(pet_id, height, anim_key="idle", style=None):
         for name in names:
             pixmap = QPixmap(os.path.join(frame_dir, name))
             if not pixmap.isNull():
+                # 2026-10-30 清晰度:预览帧直接缩到目标像素(不走
+                # art×_SX×_FIT 换算——那条链是为画布坐标设计的,
+                # 预览走标签原生分辨率避免二次缩放模糊)
                 frames.append(pixmap.scaledToHeight(
-                    round(height * _SX * _FIT), Qt.SmoothTransformation,
+                    round(height), Qt.SmoothTransformation,
                 ))
     except (OSError, ValueError):
         pass
@@ -1505,7 +1510,10 @@ class PetProfileWindow(KeepAliveTopLevelWindow):
         # 2026-10-23 用户令「待机动画大小统一位置统一」:废弃分宠高度
         # ×0.86/垂直偏移 hack——三宠帧统一归一化(体高恒定+水平居中+
         # 底边钉同一地线),标签恒位,切宠无大小/位置跳动。
-        preview_h = IDLE_FRAME_HEIGHT
+        preview_h = (
+            round(IDLE_FRAME_HEIGHT * 0.86) if view_id == "marshmallow"
+            else IDLE_FRAME_HEIGHT
+        )
         rect = _R(*IDLE_PREVIEW_RECT)
         self._idle_frames = _normalized_preview_frames(
             _load_idle_frames(
