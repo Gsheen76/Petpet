@@ -785,11 +785,21 @@ class _AvatarButton(QWidget):
             )
             if not self.selected and not self._hovered:
                 painter.setOpacity(0.65)
-            painter.drawPixmap(
-                box.x() + (box.width() - scaled.width()) // 2,
-                box.y() + (box.height() - scaled.height()) // 2, scaled,
-            )
+            draw_x = box.x() + (box.width() - scaled.width()) // 2
+            draw_y = box.y() + (box.height() - scaled.height()) // 2
+            painter.drawPixmap(draw_x, draw_y, scaled)
             painter.setOpacity(1.0)
+            # 头像描边(2026-10-30 用户令):暖棕细边勾出头像轮廓,
+            # 常态 3px 半透明、悬浮加粗 4px——纯描边不加底框不加圈
+            pen_w = 4 if self._hovered else 3
+            painter.setPen(QPen(
+                QColor(190, 130, 90, 200 if self._hovered else 160),
+                pen_w, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawRoundedRect(
+                draw_x + pen_w // 2, draw_y + pen_w // 2,
+                scaled.width() - pen_w, scaled.height() - pen_w,
+                14, 14)
         # 选中态虚线圈已删(2026-10-23 用户令):选中/未选中头像均不加
         # 任何框/圈/底——查看对象由名牌 tag 标示(历史版本曾用淡琥珀
         # 虚线常驻描边,两轮定稿后 2026-10-23 终版移除)。
