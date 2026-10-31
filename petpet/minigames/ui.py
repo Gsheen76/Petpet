@@ -297,7 +297,7 @@ class CoinCatchGameWindow(CozyProgressWindow):
         self.canvas.round_finished.connect(self._finish_round)
         self.content_layout.addWidget(self.canvas, 1)
         self.start_button = FeedbackButton("开始游戏")
-        self.start_button.setObjectName("softButton")
+        self.start_button.setObjectName("skinGameCoin")
         self.start_button.clicked.connect(self._start_round)
         self.content_layout.addWidget(self.start_button)
         self.refresh()
@@ -724,7 +724,7 @@ class LuckyPawsGameWindow(CozyProgressWindow):
         self.content_layout.addWidget(self.canvas, 1)
 
         self.start_button = FeedbackButton("开始游戏")
-        self.start_button.setObjectName("softButton")
+        self.start_button.setObjectName("skinGamePaw")
         self.start_button.clicked.connect(self._start_game)
         self.content_layout.addWidget(self.start_button)
         self.refresh()
@@ -917,7 +917,7 @@ class MiniGameHubWindow(CozyProgressWindow):
         text_layout.addWidget(best_label, 0, Qt.AlignLeft)
         layout.addLayout(text_layout, 1)
         button = FeedbackButton("开始")
-        button.setObjectName("softButton")
+        button.setObjectName("skinStart")
         button.clicked.connect(
             lambda _checked=False, selected=game_id:
             self._open_game(selected)
@@ -1063,7 +1063,7 @@ class MemoryMatchGameWindow(CozyProgressWindow):
         self.info_label.setObjectName("muted")
         self.content_layout.addWidget(self.info_label)
         self.replay_button = FeedbackButton("再玩一局")
-        self.replay_button.setObjectName("softButton")
+        self.replay_button.setObjectName("skinReplay")
         self.replay_button.clicked.connect(self._restart)
         self.content_layout.addWidget(self.replay_button)
         self.status_label.setText("点两张一样的卡片配对吧！")

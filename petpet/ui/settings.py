@@ -33,7 +33,7 @@ from petpet.app import autostart, backup
 from petpet.app.fonts import APP_FONT_FAMILY
 from petpet.app.paths import SHOP_UI_DIR
 from petpet.app.settings import DEFAULT_SETTINGS, save_settings
-from petpet.progression.ui import FeedbackButton
+from petpet.progression.ui import FeedbackButton, _watercolor_button_style
 from petpet.ui.common import KeepAliveTopLevelWindow
 from petpet.ui.common import (
     center_window_on_screen, independent_pixel_font, pet_screen_rect,
@@ -361,7 +361,7 @@ class SettingsWindow(KeepAliveTopLevelWindow):
             QScrollBar::sub-line:vertical {{
                 height:0;
             }}
-        """)
+        """ + _watercolor_button_style())
         self.setFont(independent_pixel_font(body_fs))
         if hasattr(self, "title_label"):
             self.title_label.setFont(independent_pixel_font(title_fs, QFont.Bold))
@@ -452,10 +452,11 @@ class SettingsWindow(KeepAliveTopLevelWindow):
         btn_row = QHBoxLayout()
         btn_row.setSpacing(14)
         reset_btn = FeedbackButton("恢复全部默认值")
-        reset_btn.setObjectName("reset")
+        reset_btn.setObjectName("skinReset")
         reset_btn.setMinimumHeight(44)
         reset_btn.clicked.connect(self.reset_defaults)
         ok_btn = FeedbackButton("保存并立即应用")
+        ok_btn.setObjectName("skinSave")
         ok_btn.setMinimumHeight(44)
         ok_btn.clicked.connect(self.apply)
         btn_row.addWidget(reset_btn)
@@ -493,12 +494,15 @@ class SettingsWindow(KeepAliveTopLevelWindow):
         row_layout.setContentsMargins(0, 0, 0, 0)
         row_layout.setSpacing(10)
         backup_btn = FeedbackButton("一键备份")
+        backup_btn.setObjectName("skinBackup")
         backup_btn.setMinimumHeight(38)
         backup_btn.clicked.connect(self.backup_now)
         export_btn = FeedbackButton("导出副本…")
+        export_btn.setObjectName("skinExport")
         export_btn.setMinimumHeight(38)
         export_btn.clicked.connect(self.export_backup)
         restore_btn = FeedbackButton("从备份恢复…")
+        restore_btn.setObjectName("skinRestore")
         restore_btn.setMinimumHeight(38)
         restore_btn.clicked.connect(self.restore_backup)
         row_layout.addWidget(backup_btn)

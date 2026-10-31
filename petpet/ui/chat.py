@@ -11,7 +11,7 @@ from petpet.chat.memory import (
     format_chat_export,
     render_profile_facts,
 )
-from petpet.progression.ui import FeedbackButton
+from petpet.progression.ui import FeedbackButton, _watercolor_button_style
 from petpet.app.paths import SHOP_UI_DIR
 from petpet.app.pets import (
     current_pet_style,
@@ -249,13 +249,11 @@ class ChatWindow(KeepAliveTopLevelWindow):
                 border:2px solid #dfa48e;
                 background:#ffffff;
             }}
-            QPushButton#send {{
-                background:#e8917a; color:#fff; border:0;
-                border-radius:15px;
-                padding:10px 23px; font-weight:700; font-size:{fs}px;
+            QPushButton#skinSend {{
+                min-width:170px;
+                padding-left:26px;
             }}
-            QPushButton#send:hover {{ background:#e19179; }}
-            QPushButton#send:disabled {{ background:#ccb9ae; }}
+            QPushButton#skinSend:disabled {{ color:#a98d7f; }}
             QFrame#chatTools {{
                 background:#f8f2ed;
                 border:1px solid #eaded5;
@@ -323,7 +321,7 @@ class ChatWindow(KeepAliveTopLevelWindow):
                 font-size:{fs+2}px; font-weight:800; color:#70483c;
                 padding:7px 12px;
             }}
-        """)
+        """ + _watercolor_button_style())
 
         # Runtime settings refreshes must only restyle the existing widgets.
         if getattr(self, "_ui_built", False):
@@ -443,7 +441,8 @@ class ChatWindow(KeepAliveTopLevelWindow):
         self.input.returnPressed.connect(self.send)
         self.send_btn = FeedbackButton("发送")
         self.send_btn.setQssHover(True)
-        self.send_btn.setObjectName("send")
+        # 功能专属水彩皮肤(2026-10-31):纸飞机主题龛
+        self.send_btn.setObjectName("skinSend")
         self.send_btn.setCursor(Qt.PointingHandCursor)
         # 流式期间同一颗键变「停止」（2026-09-12）；旁边加重新生成键。
         self.send_btn.clicked.connect(self._send_or_stop)

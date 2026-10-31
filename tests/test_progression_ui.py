@@ -323,7 +323,8 @@ class ProgressionWindowUiTests(unittest.TestCase):
         self.windows = [achievements]
 
         achievements.refresh()
-        soft = achievements.findChild(QPushButton, "softButton")
+        # 2026-10-31 按钮批产:一键领取换 skinClaimAll 福袋皮肤
+        soft = achievements.findChild(QPushButton, "skinClaimAll")
         self.assertIsNotNone(soft)
         self.assertFalse(soft.isEnabled())
         self.assertEqual(soft.text(), "暂无")

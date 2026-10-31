@@ -83,10 +83,48 @@ def _panel_asset(name):
 # 水彩胶囊按钮皮肤(2026-10-26 美化轮):softButton 专属增补,仅挂在
 # 五个目标窗口(商店/装修窗不挂);border-image 九宫拉伸,:hover 换深一档,
 # 无 :pressed(按键规范)。
+#
+# 功能专属皮肤族(2026-10-31 按钮批产轮):每个功能键一个专属设计——
+# 左端 ~96px 主题龛(物件水彩插画)+中部晕染留白,九宫左切片 96 固定
+# 保主题不拉伸;hover/checked 态由拆版工具本地派生(亮度-8%/饱和+6%),
+# 不烧积分。min-width/padding-left 让短文案让位主题龛。
+WATERCOLOR_SKINS = {
+    # objectName: (常态文件, hover 文件, 用途)——文件名写字面,守卫可命中
+    "skinClaim": ("btn_claim.png", "btn_claim_hover.png", "每日任务领取(金币堆)"),
+    "skinClaimAll": ("btn_claim_all.png", "btn_claim_all_hover.png", "一键领取(福袋)"),
+    "skinCheckin": ("btn_checkin.png", "btn_checkin_hover.png", "每日签到(日历对勾)"),
+    "skinReplay": ("btn_replay.png", "btn_replay_hover.png", "再玩一次/重新生成(循环环)"),
+    "skinStart": ("btn_start.png", "btn_start_hover.png", "小游戏开始-通用(珊瑚球)"),
+    "skinGameCoin": ("btn_game_coin.png", "btn_game_coin_hover.png", "接金币开始(金币布袋)"),
+    "skinGamePaw": ("btn_game_paw.png", "btn_game_paw_hover.png", "幸运爪开始(四叶爪垫)"),
+    "skinSend": ("btn_send.png", "btn_send_hover.png", "聊天发送/停止(纸飞机)"),
+    "skinExport": ("btn_export.png", "btn_export_hover.png", "导出(信封下箭头)"),
+    "skinSave": ("btn_save.png", "btn_save_hover.png", "设置保存(盖章对勾)"),
+    "skinReset": ("btn_reset.png", "btn_reset_hover.png", "恢复默认(回旋箭头)"),
+    "skinBackup": ("btn_backup.png", "btn_backup_hover.png", "一键备份(小纸箱)"),
+    "skinRestore": ("btn_restore.png", "btn_restore_hover.png", "从备份恢复(纸箱上箭头)"),
+}
+
+
+def _watercolor_skin_style(object_name, normal_name, hover_name):
+    normal = _panel_asset(normal_name).replace(chr(92), "/")
+    hover = _panel_asset(hover_name).replace(chr(92), "/")
+    return (
+        "QPushButton#" + object_name + " {"
+        "border-image: url(" + normal + ") 22 22 22 96 stretch;"
+        "color:#704b3c;font-weight:600;border:0;"
+        "min-width:190px;padding-left:26px;padding-right:8px;"
+        "}"
+        "QPushButton#" + object_name + ":hover {"
+        "border-image: url(" + hover + ") 22 22 22 96 stretch;"
+        "}"
+    )
+
+
 def _watercolor_button_style():
     normal = _panel_asset("btn_pill_normal.png").replace(chr(92), "/")
     hover = _panel_asset("btn_pill_hover.png").replace(chr(92), "/")
-    return (
+    rules = [
         "QPushButton#softButton {"
         "border-image: url(" + normal + ") 22 22 22 22 stretch;"
         "color:#704b3c;font-weight:600;border:0;"
@@ -94,7 +132,11 @@ def _watercolor_button_style():
         "QPushButton#softButton:hover {"
         "border-image: url(" + hover + ") 22 22 22 22 stretch;"
         "}"
-    )
+    ]
+    for object_name, (normal_name, hover_name, _note) in WATERCOLOR_SKINS.items():
+        rules.append(
+            _watercolor_skin_style(object_name, normal_name, hover_name))
+    return "".join(rules)
 
 
 def _shop_pixmap(name, height):
@@ -1810,6 +1852,7 @@ class DailyWindow(CozyProgressWindow):
         )
         row.addWidget(label, 1)
         button = FeedbackButton()
+        button.setObjectName("skinCheckin")
         if status["available"]:
             button.setText(f"签到 +{status['today_reward']}")
             button.clicked.connect(lambda: self._do_check_in())
@@ -1865,6 +1908,7 @@ class DailyWindow(CozyProgressWindow):
             )
             row.addWidget(label, 1)
             button = FeedbackButton()
+            button.setObjectName("skinClaim")
             if quest["claimed"]:
                 button.setText("已领取")
                 button.setEnabled(False)
@@ -1886,6 +1930,7 @@ class DailyWindow(CozyProgressWindow):
         )
         if ready_count >= 2:  # 只有一条时单独的领取键已足够
             claim_all = FeedbackButton(f"一键领取全部（{ready_count}）")
+            claim_all.setObjectName("skinClaimAll")
             claim_all.clicked.connect(
                 lambda: self._claim_all_ready()
             )
@@ -1898,6 +1943,7 @@ class DailyWindow(CozyProgressWindow):
             bonus = FeedbackButton(
                 f"全部完成！领取 +{progression.DAILY_QUEST_BONUS}"
             )
+            bonus.setObjectName("skinClaimAll")
             bonus.clicked.connect(lambda: self._claim_daily_bonus())
             layout.addWidget(bonus)
         return card
@@ -2307,7 +2353,7 @@ class AchievementsWindow(CozyProgressWindow):
             # 统计行已写「待领取 0 项」，长文案与之重复。
             if claimable else "暂无"
         )
-        claim_all.setObjectName("softButton")
+        claim_all.setObjectName("skinClaimAll")
         claim_all.setEnabled(bool(claimable))
         claim_all.clicked.connect(self._claim_all)
         row.addWidget(info)
