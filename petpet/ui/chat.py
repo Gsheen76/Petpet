@@ -249,11 +249,7 @@ class ChatWindow(KeepAliveTopLevelWindow):
                 border:2px solid #dfa48e;
                 background:#ffffff;
             }}
-            QPushButton#skinSend {{
-                min-width:170px;
-                padding-left:26px;
-            }}
-            QPushButton#skinSend:disabled {{ color:#a98d7f; }}
+
             QFrame#chatTools {{
                 background:#f8f2ed;
                 border:1px solid #eaded5;
@@ -321,7 +317,14 @@ class ChatWindow(KeepAliveTopLevelWindow):
                 font-size:{fs+2}px; font-weight:800; color:#70483c;
                 padding:7px 12px;
             }}
-        """ + _watercolor_button_style())
+        """ + _watercolor_button_style() + (
+            # 聊天行紧凑覆盖(注册表默认 min-width:190 在前,此处后声明生效):
+            # 恢复聊天字号预设 + 禁用态退灰底(不残留彩色纸飞机)
+            "QPushButton#skinSend {min-width:170px;padding-left:26px;"
+            "font-size:%dpx;font-weight:700;}" % int(fs) +
+            "QPushButton#skinSend:disabled {border-image:none;"
+            "background:#ccb9ae;color:#fff;}"
+        ))
 
         # Runtime settings refreshes must only restyle the existing widgets.
         if getattr(self, "_ui_built", False):

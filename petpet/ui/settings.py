@@ -315,8 +315,6 @@ class SettingsWindow(KeepAliveTopLevelWindow):
                 padding:0;
                 font-weight:600;
             }}
-            QPushButton#reset {{ background:#d7b9a6; color:#6d5145; }}
-            QPushButton#reset:hover {{ background:transparent; }}
             QWidget#threeLevelTrack {{
                 background:#fff8ec;
                 border:1px solid #eed3ba;

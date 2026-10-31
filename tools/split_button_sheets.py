@@ -33,34 +33,28 @@ REVIEW_DIR = os.path.join(
 # cell 名单: sheet → [(槽位, 输出名, 族, 派生态)]
 # 族 pill=面板胶囊(高88+hover) tab=页签(+checked) home=家园键(宽500)
 PLAN = {
+    # 2026-10-31 code-review 修正:PLAN 收敛为实际接线集——重跑本工具
+    # 只再产出 runtime 在用的皮肤,不会重建已判放弃/已合成进整图键的格子。
+    # 放弃记录:页签 A4/A5(2026-09-28 页签轻反馈定稿)、B1 记忆翻牌无开始键、
+    # B3/B5 聊天紧凑工具行放不下主题龛;C1-C4 已三段切片/重采样合成进
+    # 商店 switch_pet_button/free_gift_button 与面板 companion_button/
+    # send_gift_button(中间稿存 button_skins_v0/*_pill_src.png)。
     "A": [
         ("A1", "btn_claim", "pill"),        # 金币堆——每日领取
         ("A2", "btn_claim_all", "pill"),    # 福袋——一键领取全部
         ("A3", "btn_checkin", "pill"),      # 日历对勾——签到领取
-        ("A4", "btn_tab_paw", "tab"),       # 爪印——记录按宠页签
-        ("A5", "btn_tab_medal", "tab"),     # 丝带金牌——成就筛选页签
-        ("A6", "btn_replay", "pill"),       # 循环环——再玩一次/聊天↻
-        ("A7", "btn_start", "pill"),        # 珊瑚球——开始游戏
-        ("A8", "btn_game_coin", "pill"),    # 金币布袋——接金币入口
-        ("A9", "btn_game_paw", "pill"),     # 四叶爪垫——幸运爪入口
+        ("A6", "btn_replay", "pill"),       # 循环环——再玩一次
+        ("A7", "btn_start", "pill"),        # 珊瑚球——小游戏开始(通用)
+        ("A8", "btn_game_coin", "pill"),    # 金币布袋——接金币开始
+        ("A9", "btn_game_paw", "pill"),     # 四叶爪垫——幸运爪开始
     ],
     "B": [
-        ("B1", "btn_game_card", "pill"),    # 翻牌对——记忆翻牌入口
         ("B2", "btn_send", "pill"),         # 纸飞机——聊天发送/停止
-        ("B3", "btn_upload", "pill"),       # 云朵上箭头——聊天上传
-        ("B4", "btn_export", "pill"),       # 信封下箭头——导出(设置/聊天)
-        ("B5", "btn_clear", "pill"),        # 淡橡皮——聊天 DEL
+        ("B4", "btn_export", "pill"),       # 信封下箭头——导出副本
         ("B6", "btn_save", "pill"),         # 盖章对勾——设置保存
         ("B7", "btn_reset", "pill"),        # 回旋箭头——恢复默认值
         ("B8", "btn_backup", "pill"),       # 小纸箱——一键备份
         ("B9", "btn_restore", "pill"),      # 纸箱上箭头——从备份恢复
-    ],
-    "C": [
-        ("C1", "btn_gift_box", "pill"),     # 礼盒——商店免费领取/送礼
-        ("C2", "btn_collar", "pill"),       # 格纹项圈——商店切换宠物
-        ("C3", "btn_companion", "pill"),    # 爱心依偎——面板陪我
-        ("C4", "btn_gift_basket", "pill"),  # 礼物篮——面板送礼
-        # C5-C9 备用格不落 runtime(防孤儿守卫), 拆出仅存 source
     ],
     "D": [
         ("D1", "feed", "home"),             # 食盆骨头——家园喂食
@@ -75,12 +69,9 @@ PLAN = {
     ],
 }
 
-HOME_KEYS = {"feed", "play", "sleep", "shop", "pets", "decorate", "exit", "pet"}
-
-
-def bands(mask, axis):
-    """沿 axis 的投影分段 (lit→band)。返回 [(start, end), ...]"""
-    proj = mask.sum(axis=axis // 2 * 0 + (1 if axis == 0 else 0))
+def row_bands(mask):
+    """行投影分段 (lit→band)。返回 [(start, end), ...]"""
+    proj = mask.sum(axis=1)
     lit = proj > 0
     out, start = [], None
     for i, v in enumerate(lit):
@@ -104,7 +95,7 @@ def split_sheet(path):
     im = Image.open(path).convert("RGBA")
     arr = np.array(im)
     mask = arr[:, :, 3] > 12
-    rows = bands(mask, axis=0)
+    rows = row_bands(mask)
     if len(rows) != 3:
         raise RuntimeError(f"{path}: 行带 {len(rows)} != 3: {rows}")
     w = im.size[0]
